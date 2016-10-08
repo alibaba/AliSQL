@@ -9122,6 +9122,7 @@ get_row_format_name(
 		return("FIXED");
 	case ROW_TYPE_PAGE:
 	case ROW_TYPE_NOT_USED:
+	default:
 		break;
 	}
 	return("NOT USED");
@@ -9267,6 +9268,7 @@ create_options_are_invalid(
 	case ROW_TYPE_FIXED:
 	case ROW_TYPE_PAGE:
 	case ROW_TYPE_NOT_USED:
+	default:
 		push_warning(
 			thd, Sql_condition::WARN_LEVEL_WARN,
 			ER_ILLEGAL_HA_CREATE_OPTION,		\
@@ -9640,6 +9642,7 @@ index_bad:
 	case ROW_TYPE_NOT_USED:
 	case ROW_TYPE_FIXED:
 	case ROW_TYPE_PAGE:
+	default:
 		push_warning(
 			thd, Sql_condition::WARN_LEVEL_WARN,
 			ER_ILLEGAL_HA_CREATE_OPTION,

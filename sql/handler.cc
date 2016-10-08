@@ -1862,7 +1862,7 @@ int ha_recover(HASH *commit_list)
   if (info.commit_list)
     sql_print_information("Starting crash recovery...");
 
-#ifndef WILL_BE_DELETED_LATER
+#if (0)
   /*
     for now, only InnoDB supports 2pc. It means we can always safely
     rollback all pending transactions, without risking inconsistent data

@@ -2530,7 +2530,8 @@ int TC_LOG_MMAP::open(const char *opt_name)
   inited=2;
 
   npages=(uint)file_length/tc_log_page_size;
-  DBUG_ASSERT(npages >= 3);             // to guarantee non-empty pool
+  if (npages < 3)             // to guarantee non-empty pool
+      goto err;
   if (!(pages=(PAGE *)my_malloc(npages*sizeof(PAGE), MYF(MY_WME|MY_ZEROFILL))))
     goto err;
   inited=3;
@@ -2541,9 +2542,9 @@ int TC_LOG_MMAP::open(const char *opt_name)
     pg->state=PS_POOL;
     mysql_mutex_init(key_PAGE_lock, &pg->lock, MY_MUTEX_INIT_FAST);
     mysql_cond_init(key_PAGE_cond, &pg->cond, 0);
-    pg->start=(my_xid *)(data + i*tc_log_page_size);
-    pg->end=(my_xid *)(pg->start + tc_log_page_size);
+    pg->ptr= pg->start=(my_xid *)(data + i*tc_log_page_size);
     pg->size=pg->free=tc_log_page_size/sizeof(my_xid);
+    pg->end= pg->start + pg->size;
   }
   pages[0].size=pages[0].free=
                 (tc_log_page_size-TC_LOG_HEADER_SIZE)/sizeof(my_xid);
@@ -2569,14 +2570,25 @@ int TC_LOG_MMAP::open(const char *opt_name)
 
   syncing= 0;
   active=pages;
+  DBUG_ASSERT(npages >= 2);
   pool=pages+1;
-  pool_last=pages+npages-1;
+  pool_last_ptr= &((pages+npages-1)->next);
 
   return 0;
 
 err:
   close();
   return 1;
+}
+
+/**
+  Get the total amount of potentially usable slots for XIDs in TC log.
+*/
+
+uint TC_LOG_MMAP::size() const
+{
+      return (tc_log_page_size-TC_LOG_HEADER_SIZE)/sizeof(my_xid) +
+             (npages - 1) * (tc_log_page_size/sizeof(my_xid));
 }
 
 /**
@@ -2596,13 +2608,11 @@ void TC_LOG_MMAP::get_active_from_pool()
   PAGE **p, **best_p=0;
   int best_free;
 
-  if (syncing)
-    mysql_mutex_lock(&LOCK_pool);
-
+  mysql_mutex_lock(&LOCK_pool);
   do
   {
     best_p= p= &pool;
-    if ((*p)->waiters == 0) // can the first page be used ?
+    if ((*p)->waiters == 0 && (*p)->free > 0) // can the first page be used ?
       break;                // yes - take it.
 
     best_free=0;            // no - trying second strategy
@@ -2617,20 +2627,21 @@ void TC_LOG_MMAP::get_active_from_pool()
   }
   while ((*best_p == 0 || best_free == 0) && overflow());
 
+  mysql_mutex_assert_owner(&LOCK_active);
   active=*best_p;
+
+  /* Unlink the page from the pool. */
+  if (!(*best_p)->next)
+    pool_last_ptr= best_p;
+  *best_p=(*best_p)->next;
+  mysql_mutex_unlock(&LOCK_pool);
+
+  mysql_mutex_lock(&active->lock);
   if (active->free == active->size) // we've chosen an empty page
   {
-    tc_log_cur_pages_used++;
+    thread_safe_increment(tc_log_cur_pages_used, &LOCK_status);
     set_if_bigger(tc_log_max_pages_used, tc_log_cur_pages_used);
   }
-
-  if ((*best_p)->next)              // unlink the page from the pool
-    *best_p=(*best_p)->next;
-  else
-    pool_last=*best_p;
-
-  if (syncing)
-    mysql_mutex_unlock(&LOCK_pool);
 }
 
 /**
@@ -2663,7 +2674,7 @@ TC_LOG::enum_result TC_LOG_MMAP::commit(THD *thd, bool all)
   my_xid xid= thd->transaction.xid_state.xid.get_my_xid();
 
   if (all && xid)
-    if ((cookie= log_xid(thd, xid)))
+    if (!(cookie= log_xid(thd, xid)))
       DBUG_RETURN(RESULT_ABORTED);    // Failed to log the transaction
 
   if (ha_commit_low(thd, all))
@@ -2725,9 +2736,17 @@ int TC_LOG_MMAP::log_xid(THD *thd, my_xid xid)
   /* no active page ? take one from the pool */
   if (active == 0)
     get_active_from_pool();
+  else
+    mysql_mutex_lock(&active->lock);
 
   p=active;
-  mysql_mutex_lock(&p->lock);
+
+  /*
+     p->free is always > 0 here because to decrease it one needs
+     to take p->lock and before it one needs to take LOCK_active.
+     But checked that active->free > 0 under LOCK_active and
+     haven't release it ever since
+  */
 
   /* searching for an empty slot */
   while (*p->ptr)
@@ -2742,37 +2761,49 @@ int TC_LOG_MMAP::log_xid(THD *thd, my_xid xid)
   p->free--;
   p->state= PS_DIRTY;
 
-  /* to sync or not to sync - this is the question */
-  mysql_mutex_unlock(&LOCK_active);
-  mysql_mutex_lock(&LOCK_sync);
   mysql_mutex_unlock(&p->lock);
-
+  mysql_mutex_lock(&LOCK_sync);
   if (syncing)
   {                                          // somebody's syncing. let's wait
+    mysql_mutex_unlock(&LOCK_active);
+    mysql_mutex_lock(&p->lock);
     p->waiters++;
     /*
       note - it must be while (), not do ... while () here
       as p->state may be not PS_DIRTY when we come here
     */
     while (p->state == PS_DIRTY && syncing)
+    {
+      mysql_mutex_unlock(&p->lock);
       mysql_cond_wait(&p->cond, &LOCK_sync);
+      mysql_mutex_lock(&p->lock);
+    }
     p->waiters--;
     err= p->state == PS_ERROR;
     if (p->state != PS_DIRTY)                   // page was synced
     {
+      mysql_mutex_unlock(&LOCK_sync);
       if (p->waiters == 0)
         mysql_cond_signal(&COND_pool);       // in case somebody's waiting
-      mysql_mutex_unlock(&LOCK_sync);
+      mysql_mutex_unlock(&p->lock);
       goto done;                             // we're done
     }
-  }                                          // page was not synced! do it now
-  DBUG_ASSERT(active == p && syncing == 0);
-  mysql_mutex_lock(&LOCK_active);
-  syncing=p;                                 // place is vacant - take it
+    DBUG_ASSERT(!syncing);
+    mysql_mutex_unlock(&p->lock);
+    syncing = p;
+    mysql_mutex_unlock(&LOCK_sync);
+
+    mysql_mutex_lock(&LOCK_active);
+  }
+  else
+  {
+    syncing= p;                               // place is vacant - take it
+    mysql_mutex_unlock(&LOCK_sync);
+  }
+
   active=0;                                  // page is not active anymore
   mysql_cond_broadcast(&COND_active);        // in case somebody's waiting
   mysql_mutex_unlock(&LOCK_active);
-  mysql_mutex_unlock(&LOCK_sync);
   err= sync();
 
 done:
@@ -2789,22 +2820,32 @@ int TC_LOG_MMAP::sync()
     sit down and relax - this can take a while...
     note - no locks are held at this point
   */
-  err= my_msync(fd, syncing->start, 1, MS_SYNC);
+  err= my_msync(fd, syncing->start, syncing->size * sizeof(my_xid), MS_SYNC);
 
   /* page is synced. let's move it to the pool */
   mysql_mutex_lock(&LOCK_pool);
-  pool_last->next=syncing;
-  pool_last=syncing;
+  (*pool_last_ptr)= syncing;
+  pool_last_ptr= &(syncing->next);
   syncing->next=0;
   syncing->state= err ? PS_ERROR : PS_POOL;
-  mysql_cond_broadcast(&syncing->cond);      // signal "sync done"
   mysql_cond_signal(&COND_pool);             // in case somebody's waiting
   mysql_mutex_unlock(&LOCK_pool);
 
   /* marking 'syncing' slot free */
   mysql_mutex_lock(&LOCK_sync);
+  mysql_cond_broadcast(&syncing->cond);      // signal "sync done"
   syncing=0;
-  mysql_cond_signal(&active->cond);        // wake up a new syncer
+
+  /*
+     we check the "active" pointer without LOCK_active. Still, it's safe -
+     "active" can change from NULL to not NULL any time, but it
+     will take LOCK_sync before waiting on active->cond. That is, it can never
+     miss a signal.
+     And "active" can change to NULL only by the syncing thread
+     (the thread that will send a signal below)
+  */
+  if (active)
+      mysql_cond_signal(&active->cond);        // wake up a new syncer
   mysql_mutex_unlock(&LOCK_sync);
   return err;
 }
@@ -2821,9 +2862,9 @@ int TC_LOG_MMAP::unlog(ulong cookie, my_xid xid)
 
   DBUG_ASSERT(*x == xid);
   DBUG_ASSERT(x >= p->start && x < p->end);
-  *x=0;
 
   mysql_mutex_lock(&p->lock);
+  *x=0;
   p->free++;
   DBUG_ASSERT(p->free <= p->size);
   set_if_smaller(p->ptr, x);
