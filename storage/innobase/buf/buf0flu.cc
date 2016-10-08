@@ -130,60 +130,6 @@ buf_flush_validate_skip(
 }
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
-/*******************************************************************//**
-Sets hazard pointer during flush_list iteration. */
-UNIV_INLINE
-void
-buf_flush_set_hp(
-/*=============*/
-	buf_pool_t*		buf_pool,/*!< in/out: buffer pool instance */
-	const buf_page_t*	bpage)	/*!< in: buffer control block */
-{
-	ut_ad(buf_flush_list_mutex_own(buf_pool));
-	ut_ad(buf_pool->flush_list_hp == NULL || bpage == NULL);
-	ut_ad(!bpage || buf_page_in_file(bpage));
-	ut_ad(!bpage || bpage->in_flush_list);
-	ut_ad(!bpage || buf_pool_from_bpage(bpage) == buf_pool);
-
-	buf_pool->flush_list_hp = bpage;
-}
-
-/*******************************************************************//**
-Checks if the given block is a hazard pointer
-@return true if bpage is hazard pointer */
-UNIV_INLINE
-bool
-buf_flush_is_hp(
-/*============*/
-	buf_pool_t*		buf_pool,/*!< in: buffer pool instance */
-	const buf_page_t*	bpage)	/*!< in: buffer control block */
-{
-	ut_ad(buf_flush_list_mutex_own(buf_pool));
-
-	return(buf_pool->flush_list_hp == bpage);
-}
-
-/*******************************************************************//**
-Whenever we move a block in flush_list (either to remove it or to
-relocate it) we check the hazard pointer set by some other thread
-doing the flush list scan. If the hazard pointer is the same as the
-one we are about going to move then we set it to NULL to force a rescan
-in the thread doing the batch. */
-UNIV_INLINE
-void
-buf_flush_update_hp(
-/*================*/
-	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
-	buf_page_t*	bpage)		/*!< in: buffer control block */
-{
-	ut_ad(buf_flush_list_mutex_own(buf_pool));
-
-	if (buf_flush_is_hp(buf_pool, bpage)) {
-		buf_flush_set_hp(buf_pool, NULL);
-		MONITOR_INC(MONITOR_FLUSH_HP_RESCAN);
-	}
-}
-
 /******************************************************************//**
 Insert a block in the flush_rbt and returns a pointer to its
 predecessor or NULL if no predecessor. The ordering is maintained
@@ -582,6 +528,10 @@ buf_flush_remove(
 
 	buf_flush_list_mutex_enter(buf_pool);
 
+	/* Important that we adjust the hazard pointer before removing
+	the bpage from flush list. */
+	buf_pool->flush_hp.adjust(bpage);
+
 	switch (buf_page_get_state(bpage)) {
 	case BUF_BLOCK_POOL_WATCH:
 	case BUF_BLOCK_ZIP_PAGE:
@@ -622,7 +572,6 @@ buf_flush_remove(
 	ut_a(buf_flush_validate_skip(buf_pool));
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
-	buf_flush_update_hp(buf_pool, bpage);
 	buf_flush_list_mutex_exit(buf_pool);
 }
 
@@ -673,6 +622,10 @@ buf_flush_relocate_on_flush_list(
 		prev_b = buf_flush_insert_in_flush_rbt(dpage);
 	}
 
+	/* Important that we adjust the hazard pointer before removing
+	the bpage from the flush list. */
+	buf_pool->flush_hp.adjust(bpage);
+
 	/* Must be done after we have removed it from the flush_rbt
 	because we assert on in_flush_list in comparison function. */
 	ut_d(bpage->in_flush_list = FALSE);
@@ -701,7 +654,6 @@ buf_flush_relocate_on_flush_list(
 	ut_a(buf_flush_validate_low(buf_pool));
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
-	buf_flush_update_hp(buf_pool, bpage);
 	buf_flush_list_mutex_exit(buf_pool);
 }
 
@@ -968,7 +920,10 @@ buf_flush_write_block_low(
 	if (sync) {
 		ut_ad(flush_type == BUF_FLUSH_SINGLE_PAGE);
 		fil_flush(buf_page_get_space(bpage));
-		buf_page_io_complete(bpage);
+
+		/* true means we want to evict this page from the
+		LRU list as well. */
+		buf_page_io_complete(bpage, true);
 	}
 
 	/* Increment the counter of I/O operations used
@@ -1062,10 +1017,10 @@ buf_flush_page(
 			rw_lock_s_lock_gen(rw_lock, BUF_IO_WRITE);
                 }
 
-                /* Even though bpage is not protected by any mutex at this
-                point, it is safe to access bpage, because it is io_fixed and
-                oldest_modification != 0.  Thus, it cannot be relocated in the
-                buffer pool or removed from flush_list or LRU_list. */
+		/* Even though bpage is not protected by any mutex at this
+		point, it is safe to access bpage, because it is io_fixed and
+		oldest_modification != 0.  Thus, it cannot be relocated in the
+		buffer pool or removed from flush_list or LRU_list. */
 
                 buf_flush_write_block_low(bpage, flush_type, sync);
         }
@@ -1428,9 +1383,11 @@ The calling thread is not allowed to own any latches on pages!
 It attempts to make 'max' blocks available in the free list. Note that
 it is a best effort attempt and it is not guaranteed that after a call
 to this function there will be 'max' blocks in the free list.
-@return number of blocks for which the write request was queued. */
+@return pair of numbers where first number is the blocks for which
+flush request is queued and second is the number of blocks that were
+clean and simply evicted from the LRU. */
 static
-ulint
+std::pair<ulint, ulint>
 buf_flush_LRU_list_batch(
 /*=====================*/
 	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
@@ -1438,94 +1395,56 @@ buf_flush_LRU_list_batch(
 					blocks in the free_list */
 {
 	buf_page_t*	bpage;
-	ulint		count = 0;
 	ulint		scanned = 0;
+	ulint		evict_count = 0;
+	ulint		flush_count = 0;
 	ulint		free_len = UT_LIST_GET_LEN(buf_pool->free);
 	ulint		lru_len = UT_LIST_GET_LEN(buf_pool->LRU);
 
 	ut_ad(buf_pool_mutex_own(buf_pool));
 
-	bpage = UT_LIST_GET_LAST(buf_pool->LRU);
-	while (bpage != NULL && count < max
-	       && free_len < srv_LRU_scan_depth
-	       && lru_len > BUF_LRU_MIN_LEN) {
+	for (bpage = UT_LIST_GET_LAST(buf_pool->LRU);
+	     bpage != NULL && (flush_count + evict_count) < max
+	     && free_len < srv_LRU_scan_depth
+	     && lru_len > BUF_LRU_MIN_LEN;
+	     ++scanned,
+	     bpage = buf_pool->lru_hp.get()) {
+
+		buf_page_t* prev = UT_LIST_GET_PREV(LRU, bpage);
+		buf_pool->lru_hp.set(prev);
 
 		ib_mutex_t* block_mutex = buf_page_get_mutex(bpage);
-		ibool	 evict;
-
 		mutex_enter(block_mutex);
-		evict = buf_flush_ready_for_replace(bpage);
+		bool	evict = buf_flush_ready_for_replace(bpage);
 		mutex_exit(block_mutex);
 
-		++scanned;
-
-		/* If the block is ready to be replaced we try to
-		free it i.e.: put it on the free list.
-		Otherwise we try to flush the block and its
-		neighbors. In this case we'll put it on the
-		free list in the next pass. We do this extra work
-		of putting blocks to the free list instead of
-		just flushing them because after every flush
-		we have to restart the scan from the tail of
-		the LRU list and if we don't clear the tail
-		of the flushed pages then the scan becomes
-		O(n*n). */
 		if (evict) {
+			/* block is ready for eviction i.e., it is
+			clean and is not IO-fixed or buffer fixed. */
 			if (buf_LRU_free_page(bpage, true)) {
-				/* buf_pool->mutex was potentially
-				released and reacquired. */
-				bpage = UT_LIST_GET_LAST(buf_pool->LRU);
-			} else {
-				bpage = UT_LIST_GET_PREV(LRU, bpage);
+				++evict_count;
 			}
 		} else {
-			ulint		space;
-			ulint		offset;
-			buf_page_t*	prev_bpage;
-
-			prev_bpage = UT_LIST_GET_PREV(LRU, bpage);
-
-			/* Save the previous bpage */
-
-			if (prev_bpage != NULL) {
-				space = prev_bpage->space;
-				offset = prev_bpage->offset;
-			} else {
-				space = ULINT_UNDEFINED;
-				offset = ULINT_UNDEFINED;
-			}
-
-			if (!buf_flush_page_and_try_neighbors(
-				bpage, BUF_FLUSH_LRU, max, &count)) {
-
-				bpage = prev_bpage;
-			} else {
-				/* buf_pool->mutex was released.
-				reposition the iterator. Note: the
-				prev block could have been repositioned
-				too but that should be rare. */
-
-				if (prev_bpage != NULL) {
-
-					ut_ad(space != ULINT_UNDEFINED);
-					ut_ad(offset != ULINT_UNDEFINED);
-
-					prev_bpage = buf_page_hash_get(
-						buf_pool, space, offset);
-				}
-
-				bpage = prev_bpage;
-			}
+			/* Block is ready for flush. Dispatch an IO
+			request. The IO helper thread will put it on
+			free list in IO completion routine. */
+			buf_flush_page_and_try_neighbors(
+				bpage, BUF_FLUSH_LRU, max, &flush_count);
 		}
+
+		ut_ad(!mutex_own(block_mutex));
+		ut_ad(buf_pool_mutex_own(buf_pool));
 
 		free_len = UT_LIST_GET_LEN(buf_pool->free);
 		lru_len = UT_LIST_GET_LEN(buf_pool->LRU);
 	}
 
+	buf_pool->lru_hp.set(NULL);
+
 	/* We keep track of all flushes happening as part of LRU
 	flush. When estimating the desired rate at which flush_list
 	should be flushed, we factor in this value. */
-	buf_lru_flush_page_count += count;
+	buf_lru_flush_page_count += flush_count;
 
 	ut_ad(buf_pool_mutex_own(buf_pool));
 
@@ -1537,34 +1456,40 @@ buf_flush_LRU_list_batch(
 			scanned);
 	}
 
-	return(count);
+	return(std::make_pair(flush_count, evict_count));
 }
 
 /*******************************************************************//**
 Flush and move pages from LRU or unzip_LRU list to the free list.
 Whether LRU or unzip_LRU is used depends on the state of the system.
-@return number of blocks for which either the write request was queued
-or in case of unzip_LRU the number of blocks actually moved to the
-free list */
+@return pair of numbers where first number is the blocks for which
+flush request is queued and second is the number of blocks that were
+uncompressed frames in unzip_LRU and were simply evicted or blocks
+that were part of LRU and were clean and simply evicted from the LRU. */
 static
-ulint
+std::pair<ulint, ulint>
 buf_do_LRU_batch(
 /*=============*/
 	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
 	ulint		max)		/*!< in: desired number of
 					blocks in the free_list */
 {
-	ulint	count = 0;
+	ulint			count = 0;
+	std::pair<ulint, ulint>	res;
 
 	if (buf_LRU_evict_from_unzip_LRU(buf_pool)) {
-		count += buf_free_from_unzip_LRU_list_batch(buf_pool, max);
+		count = buf_free_from_unzip_LRU_list_batch(buf_pool, max);
 	}
 
 	if (max > count) {
-		count += buf_flush_LRU_list_batch(buf_pool, max - count);
+		res = buf_flush_LRU_list_batch(buf_pool, max - count);
 	}
 
-	return(count);
+	/* Add evicted pages from unzip_LRU to the evicted pages from
+	the simple LRU. */
+	res.second += count;
+
+	return(res);
 }
 
 /*******************************************************************//**
@@ -1606,6 +1531,7 @@ buf_do_flush_list_batch(
 	for (buf_page_t* bpage = UT_LIST_GET_LAST(buf_pool->flush_list);
 	     count < min_n && bpage != NULL && len > 0
 	     && bpage->oldest_modification < lsn_limit;
+	     bpage = buf_pool->flush_hp.get(),
 	     ++scanned) {
 
 		buf_page_t*	prev;
@@ -1614,8 +1540,7 @@ buf_do_flush_list_batch(
 		ut_ad(bpage->in_flush_list);
 
 		prev = UT_LIST_GET_PREV(list, bpage);
-		buf_flush_set_hp(buf_pool, prev);
-
+		buf_pool->flush_hp.set(prev);
 		buf_flush_list_mutex_exit(buf_pool);
 
 #ifdef UNIV_DEBUG
@@ -1626,23 +1551,12 @@ buf_do_flush_list_batch(
 
 		buf_flush_list_mutex_enter(buf_pool);
 
-		ut_ad(flushed || buf_flush_is_hp(buf_pool, prev));
+		ut_ad(flushed || buf_pool->flush_hp.is_hp(prev));
 
-		if (!buf_flush_is_hp(buf_pool, prev)) {
-			/* The hazard pointer was reset by some other
-			thread. Restart the scan. */
-			ut_ad(buf_flush_is_hp(buf_pool, NULL));
-			bpage = UT_LIST_GET_LAST(buf_pool->flush_list);
-			len = UT_LIST_GET_LEN(buf_pool->flush_list);
-		} else {
-			bpage = prev;
-			--len;
-			buf_flush_set_hp(buf_pool, NULL);
-		}
-
-		ut_ad(!bpage || bpage->in_flush_list);
+		--len;
 	}
 
+	buf_pool->flush_hp.set(NULL);
 	buf_flush_list_mutex_exit(buf_pool);
 
 	MONITOR_INC_VALUE_CUMULATIVE(MONITOR_FLUSH_BATCH_SCANNED,
@@ -1661,9 +1575,15 @@ NOTE 1: in the case of an LRU flush the calling thread may own latches to
 pages: to avoid deadlocks, this function must be written so that it cannot
 end up waiting for these latches! NOTE 2: in the case of a flush list flush,
 the calling thread is not allowed to own any latches on pages!
-@return number of blocks for which the write request was queued */
+@return pair of numbers:
+  In case of LRU list:
+    First number = pages flushed
+    Second number = pages evicted
+  In case of flush list:
+    First number = pages flushed
+    Second number = 0 */
 static
-ulint
+std::pair<ulint, ulint>
 buf_flush_batch(
 /*============*/
 	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
@@ -1680,7 +1600,7 @@ buf_flush_batch(
 					(if their number does not exceed
 					min_n), otherwise ignored */
 {
-	ulint		count	= 0;
+	std::pair<ulint, ulint>	res;
 
 	ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
 #ifdef UNIV_SYNC_DEBUG
@@ -1694,10 +1614,11 @@ buf_flush_batch(
 	the flush functions. */
 	switch (flush_type) {
 	case BUF_FLUSH_LRU:
-		count = buf_do_LRU_batch(buf_pool, min_n);
+		res = buf_do_LRU_batch(buf_pool, min_n);
 		break;
 	case BUF_FLUSH_LIST:
-		count = buf_do_flush_list_batch(buf_pool, min_n, lsn_limit);
+		res.first = buf_do_flush_list_batch(buf_pool, min_n, lsn_limit);
+		res.second = 0;
 		break;
 	default:
 		ut_error;
@@ -1706,15 +1627,15 @@ buf_flush_batch(
 	buf_pool_mutex_exit(buf_pool);
 
 #ifdef UNIV_DEBUG
-	if (buf_debug_prints && count > 0) {
+	if (buf_debug_prints && res.first > 0) {
 		fprintf(stderr, flush_type == BUF_FLUSH_LRU
 			? "Flushed %lu pages in LRU flush\n"
 			: "Flushed %lu pages in flush list flush\n",
-			(ulong) count);
+			(ulong) res.first);
 	}
 #endif /* UNIV_DEBUG */
 
-	return(count);
+	return(res);
 }
 
 /******************************************************************//**
@@ -1829,48 +1750,6 @@ buf_flush_wait_batch_end(
 }
 
 /*******************************************************************//**
-This utility flushes dirty blocks from the end of the LRU list and also
-puts replaceable clean pages from the end of the LRU list to the free
-list.
-NOTE: The calling thread is not allowed to own any latches on pages!
-@return true if a batch was queued successfully. false if another batch
-of same type was already running. */
-static
-bool
-buf_flush_LRU(
-/*==========*/
-	buf_pool_t*	buf_pool,	/*!< in/out: buffer pool instance */
-	ulint		min_n,		/*!< in: wished minimum mumber of blocks
-					flushed (it is not guaranteed that the
-					actual number is that big, though) */
-	ulint*		n_processed)	/*!< out: the number of pages
-					which were processed is passed
-					back to caller. Ignored if NULL */
-{
-	ulint		page_count;
-
-	if (n_processed) {
-		*n_processed = 0;
-	}
-
-	if (!buf_flush_start(buf_pool, BUF_FLUSH_LRU)) {
-		return(false);
-	}
-
-	page_count = buf_flush_batch(buf_pool, BUF_FLUSH_LRU, min_n, 0);
-
-	buf_flush_end(buf_pool, BUF_FLUSH_LRU);
-
-	buf_flush_common(BUF_FLUSH_LRU, page_count);
-
-	if (n_processed) {
-		*n_processed = page_count;
-	}
-
-	return(true);
-}
-
-/*******************************************************************//**
 This utility flushes dirty blocks from the end of the flush list of
 all buffer pool instances.
 NOTE: The calling thread is not allowed to own any latches on pages!
@@ -1912,8 +1791,8 @@ buf_flush_list(
 
 	/* Flush to lsn_limit in all buffer pool instances */
 	for (i = 0; i < srv_buf_pool_instances; i++) {
-		buf_pool_t*	buf_pool;
-		ulint		page_count = 0;
+		buf_pool_t*		buf_pool;
+		std::pair<ulint, ulint>	res;
 
 		buf_pool = buf_pool_from_array(i);
 
@@ -1933,23 +1812,23 @@ buf_flush_list(
 			continue;
 		}
 
-		page_count = buf_flush_batch(
+		res = buf_flush_batch(
 			buf_pool, BUF_FLUSH_LIST, min_n, lsn_limit);
 
 		buf_flush_end(buf_pool, BUF_FLUSH_LIST);
 
-		buf_flush_common(BUF_FLUSH_LIST, page_count);
+		buf_flush_common(BUF_FLUSH_LIST, res.first);
 
 		if (n_processed) {
-			*n_processed += page_count;
+			*n_processed += res.first;
 		}
 
-		if (page_count) {
+		if (res.first) {
 			MONITOR_INC_VALUE_CUMULATIVE(
 				MONITOR_FLUSH_BATCH_TOTAL_PAGE,
 				MONITOR_FLUSH_BATCH_COUNT,
 				MONITOR_FLUSH_BATCH_PAGES,
-				page_count);
+				res.first);
 		}
 	}
 
@@ -1957,12 +1836,12 @@ buf_flush_list(
 }
 
 /******************************************************************//**
-This function picks up a single dirty page from the tail of the LRU
-list, flushes it, removes it from page_hash and LRU list and puts
-it on the free list. It is called from user threads when they are
-unable to find a replaceable page at the tail of the LRU list i.e.:
-when the background LRU flushing in the page_cleaner thread is not
-fast enough to keep pace with the workload.
+This function picks up a single page from the tail of the LRU
+list, flushes it (if it is dirty), removes it from page_hash and LRU
+list and puts it on the free list. It is called from user threads when
+they are unable to find a replaceable page at the tail of the LRU
+list i.e.: when the background LRU flushing in the page_cleaner thread
+is not fast enough to keep pace with the workload.
 @return TRUE if success. */
 UNIV_INTERN
 ibool
@@ -1972,84 +1851,67 @@ buf_flush_single_page_from_LRU(
 {
 	ulint		scanned;
 	buf_page_t*	bpage;
+	ibool		freed;
 
 	buf_pool_mutex_enter(buf_pool);
 
-	for (bpage = UT_LIST_GET_LAST(buf_pool->LRU), scanned = 1;
+	for (bpage = buf_pool->single_scan_itr.start(),
+	     scanned = 0, freed = FALSE;
 	     bpage != NULL;
-	     bpage = UT_LIST_GET_PREV(LRU, bpage), ++scanned) {
+	     ++scanned, bpage = buf_pool->single_scan_itr.get()) {
 
-		ib_mutex_t*	block_mutex = buf_page_get_mutex(bpage);
+		ut_ad(buf_pool_mutex_own(buf_pool));
 
+		buf_page_t* prev = UT_LIST_GET_PREV(LRU, bpage);
+		buf_pool->single_scan_itr.set(prev);
+
+		ib_mutex_t* block_mutex = buf_page_get_mutex(bpage);
 		mutex_enter(block_mutex);
 
-		if (buf_flush_ready_for_flush(bpage, BUF_FLUSH_SINGLE_PAGE)) {
-
-			/* The following call will release the buffer pool
-			and block mutex. */
-
-			ibool	flushed = buf_flush_page(
-				buf_pool, bpage, BUF_FLUSH_SINGLE_PAGE, true);
-
-			if (flushed) {
-				/* buf_flush_page() will release the
-				block mutex */
+		if (buf_flush_ready_for_replace(bpage)) {
+			/* block is ready for eviction i.e., it is
+			clean and is not IO-fixed or buffer fixed. */
+			mutex_exit(block_mutex);
+			if (buf_LRU_free_page(bpage, true)) {
+				buf_pool_mutex_exit(buf_pool);
+				freed = TRUE;
 				break;
 			}
+		} else if (buf_flush_ready_for_flush(
+				bpage, BUF_FLUSH_SINGLE_PAGE)) {
+			/* Block is ready for flush. Dispatch an IO
+			request. We'll put it on free list in IO
+			completion routine. The following call, if
+			successful, will release the buffer pool and
+			block mutex. */
+			freed = buf_flush_page(buf_pool, bpage,
+					       BUF_FLUSH_SINGLE_PAGE, true);
+			if (freed) {
+				/* block and buffer pool mutex have
+				already been reelased. */
+				break;
+			}
+			mutex_exit(block_mutex);
+		} else {
+			mutex_exit(block_mutex);
 		}
-
-		mutex_exit(block_mutex);
 	}
 
-	MONITOR_INC_VALUE_CUMULATIVE(
-		MONITOR_LRU_SINGLE_FLUSH_SCANNED,
-		MONITOR_LRU_SINGLE_FLUSH_SCANNED_NUM_CALL,
-		MONITOR_LRU_SINGLE_FLUSH_SCANNED_PER_CALL,
-		scanned);
-
-	if (bpage == NULL) {
+	if (!freed) {
 		/* Can't find a single flushable page. */
+		ut_ad(!bpage);
 		buf_pool_mutex_exit(buf_pool);
-		return(FALSE);
 	}
 
-
-	ibool	freed = FALSE;
-
-	/* At this point the page has been written to the disk.
-	As we are not holding buffer pool or block mutex therefore
-	we cannot use the bpage safely. It may have been plucked out
-	of the LRU list by some other thread or it may even have
-	relocated in case of a compressed page. We need to start
-	the scan of LRU list again to remove the block from the LRU
-	list and put it on the free list. */
-	buf_pool_mutex_enter(buf_pool);
-
-	for (bpage = UT_LIST_GET_LAST(buf_pool->LRU);
-	     bpage != NULL;
-	     bpage = UT_LIST_GET_PREV(LRU, bpage)) {
-
-		ib_mutex_t*	block_mutex = buf_page_get_mutex(bpage);
-
-		mutex_enter(block_mutex);
-
-		ibool	ready = buf_flush_ready_for_replace(bpage);
-
-		mutex_exit(block_mutex);
-
-		if (ready) {
-			bool	evict_zip;
-
-			evict_zip = !buf_LRU_evict_from_unzip_LRU(buf_pool);;
-
-			freed = buf_LRU_free_page(bpage, evict_zip);
-
-			break;
-		}
+	if (scanned) {
+		MONITOR_INC_VALUE_CUMULATIVE(
+			MONITOR_LRU_SINGLE_FLUSH_SCANNED,
+			MONITOR_LRU_SINGLE_FLUSH_SCANNED_NUM_CALL,
+			MONITOR_LRU_SINGLE_FLUSH_SCANNED_PER_CALL,
+			scanned);
 	}
 
-	buf_pool_mutex_exit(buf_pool);
-
+	ut_ad(!buf_pool_mutex_own(buf_pool));
 	return(freed);
 }
 
@@ -2059,18 +1921,19 @@ Clears up tail of the LRU lists:
 * Flush dirty pages at the tail of LRU to the disk
 The depth to which we scan each buffer pool is controlled by dynamic
 config parameter innodb_LRU_scan_depth.
-@return total pages flushed */
+@return total pages processed. */
 UNIV_INTERN
 ulint
 buf_flush_LRU_tail(void)
 /*====================*/
 {
-	ulint	total_flushed = 0;
+	ulint	total_processed = 0;
 
 	for (ulint i = 0; i < srv_buf_pool_instances; i++) {
 
 		buf_pool_t*	buf_pool = buf_pool_from_array(i);
-		ulint		scan_depth;
+		std::pair<ulint, ulint>	res;
+		ulint	scan_depth;
 
 		/* srv_LRU_scan_depth can be arbitrarily large value.
 		We cap it with current LRU size. */
@@ -2080,47 +1943,40 @@ buf_flush_LRU_tail(void)
 
 		scan_depth = ut_min(srv_LRU_scan_depth, scan_depth);
 
-		/* We divide LRU flush into smaller chunks because
-		there may be user threads waiting for the flush to
-		end in buf_LRU_get_free_block(). */
-		for (ulint j = 0;
-		     j < scan_depth;
-		     j += PAGE_CLEANER_LRU_BATCH_CHUNK_SIZE) {
-
-			ulint	n_flushed = 0;
-
-			/* Currently page_cleaner is the only thread
-			that can trigger an LRU flush. It is possible
-			that a batch triggered during last iteration is
-			still running, */
-			if (buf_flush_LRU(buf_pool,
-					  PAGE_CLEANER_LRU_BATCH_CHUNK_SIZE,
-					  &n_flushed)) {
-
-				/* Allowed only one batch per
-				buffer pool instance. */
-				buf_flush_wait_batch_end(
-					buf_pool, BUF_FLUSH_LRU);
-			}
-
-			if (n_flushed) {
-				total_flushed += n_flushed;
-			} else {
-				/* Nothing to flush */
-				break;
-			}
+		/* Currently page_cleaner is the only thread
+		that can trigger an LRU flush. It is possible
+		that a batch triggered during last iteration is
+		still running, */
+		if (!buf_flush_start(buf_pool, BUF_FLUSH_LRU)) {
+			continue;
 		}
+
+		res = buf_flush_batch(buf_pool, BUF_FLUSH_LRU, scan_depth, 0);
+
+		buf_flush_end(buf_pool, BUF_FLUSH_LRU);
+
+		buf_flush_common(BUF_FLUSH_LRU, res.first);
+
+		if (res.first) {
+			MONITOR_INC_VALUE_CUMULATIVE(
+				MONITOR_LRU_BATCH_FLUSH_TOTAL_PAGE,
+				MONITOR_LRU_BATCH_FLUSH_COUNT,
+				MONITOR_LRU_BATCH_FLUSH_PAGES,
+				res.first);
+		}
+
+		if (res.second) {
+			MONITOR_INC_VALUE_CUMULATIVE(
+				MONITOR_LRU_BATCH_EVICT_TOTAL_PAGE,
+				MONITOR_LRU_BATCH_EVICT_COUNT,
+				MONITOR_LRU_BATCH_EVICT_PAGES,
+				res.second);
+		}
+
+		total_processed += (res.first + res.second);
 	}
 
-	if (total_flushed) {
-		MONITOR_INC_VALUE_CUMULATIVE(
-			MONITOR_LRU_BATCH_TOTAL_PAGE,
-			MONITOR_LRU_BATCH_COUNT,
-			MONITOR_LRU_BATCH_PAGES,
-			total_flushed);
-	}
-
-	return(total_flushed);
+	return(total_processed);
 }
 
 /*********************************************************************//**
