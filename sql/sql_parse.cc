@@ -1112,6 +1112,61 @@ static my_bool deny_updates_if_read_only_option(THD *thd,
 }
 
 /**
+  RDS:
+  Avoid too many statements run concurrently, high watermark part.
+  If *thread_running* touch thread_running_high_watermark, stmt will be
+  rejected.
+
+  @param  thd  connection handle
+
+  @retval
+    FALSE   query continues.
+  @retval
+    TRUE    query rejected.
+*/
+
+static my_bool thread_running_control_high(THD *thd)
+{
+  ulong tr, tr_high;
+  DBUG_ENTER("thread_running_control_high");
+
+  tr= num_thread_running;
+  tr_high= thread_running_high_watermark;
+
+  /*
+    The follow case can get through:
+    case 1: thread_running <= thread_running_high_watermark.
+    case 2: this query is in a active transaction.
+    case 3: not a COM_QUERY or COM_STMT_EXECUTE command.
+    case 4: non-select query when thread_running_ctl_mode isn't "SELECTS".
+      thread_running_ctl_mode: 0 -> SELECTS, 1 -> ALL.
+    case 5 6 7 8: commit, rollback, super user, slave threads
+  */
+  if ((!tr_high || tr <= tr_high) ||                   // case 1
+      thd->transaction.is_active() ||                  // case 2
+      (thd->get_command() != COM_QUERY &&
+       thd->get_command() != COM_STMT_EXECUTE) ||      // case 3
+      (thd->lex->sql_command != SQLCOM_SELECT &&
+       thread_running_ctl_mode == 0) ||                // case 4
+      thd->lex->sql_command == SQLCOM_COMMIT ||        // case 5
+      thd->lex->sql_command == SQLCOM_ROLLBACK ||      // case 6
+      thd->security_ctx->master_access & SUPER_ACL ||  // case 7
+      thd->slave_thread)                               // case 8
+    DBUG_RETURN(FALSE);
+
+  DBUG_EXECUTE_IF("thread_running_change_before_doublecheck", sleep(2););
+
+  /* If the running thread is higher than high watermark, reject it. */
+  if ((ulong)num_thread_running > tr_high)
+  {
+    __sync_add_and_fetch(&thread_rejected, 1);
+    DBUG_RETURN(TRUE);
+  }
+
+  DBUG_RETURN(FALSE);
+}
+
+/**
   Perform one connection-level (COM_XXXX) command.
 
   @param command         type of command to perform
@@ -2561,6 +2616,13 @@ mysql_execute_command(THD *thd)
   if (lex->sql_command != SQLCOM_SET_OPTION)
     DEBUG_SYNC(thd,"before_execute_sql_command");
 #endif
+
+  /* RDS: thread_running high watermark check. */
+  if (thread_running_control_high(thd))
+  {
+    my_error(ER_RDS_SERVER_THREAD_RUNNING_TOO_HIGH, MYF(0));
+    goto error;
+  }
 
   /*
     Check if we are in a read-only transaction and we're trying to

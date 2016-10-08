@@ -226,6 +226,8 @@ extern "C" MYSQL_PLUGIN_IMPORT CHARSET_INFO *system_charset_info;
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *files_charset_info ;
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *national_charset_info;
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *table_alias_charset;
+extern ulong thread_running_high_watermark;
+extern ulong thread_running_ctl_mode;
 
 /**
   Character set of the buildin error messages loaded from errmsg.sys.
@@ -738,6 +740,7 @@ extern mysql_rwlock_t LOCK_sys_init_connect, LOCK_sys_init_slave;
 extern mysql_rwlock_t LOCK_system_variables_hash;
 extern mysql_cond_t COND_manager;
 extern int32 thread_running;
+extern ulong thread_rejected;
 extern my_atomic_rwlock_t thread_running_lock;
 extern my_atomic_rwlock_t slave_open_temp_tables_lock;
 

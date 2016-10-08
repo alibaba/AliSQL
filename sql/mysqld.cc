@@ -504,6 +504,7 @@ uint lower_case_table_names;
 ulong tc_heuristic_recover= 0;
 int32 num_thread_running;
 ulong thread_created;
+ulong thread_rejected;
 ulong back_log, connect_timeout, concurrency, server_id;
 ulong table_cache_size, table_def_size;
 ulong table_cache_instances;
@@ -657,6 +658,10 @@ const char *in_left_expr_name= "<left expr>";
 /** name of additional condition */
 const char *in_additional_cond= "<IN COND>";
 const char *in_having_cond= "<IN HAVING>";
+
+/* RDS: thread throughput control */
+ulong thread_running_high_watermark= 0;
+ulong thread_running_ctl_mode= 0;
 
 my_decimal decimal_zero;
 /** Number of connection errors when selecting on the listening port */
@@ -4035,6 +4040,9 @@ int init_common_variables()
   if (back_log == 0 && (back_log= 50 + max_connections / 5) > 900)
     back_log= 900;
 
+  /* RDS : set to max_connections if thread_running_high_watermark is 0 */
+  if (thread_running_high_watermark == 0)
+    thread_running_high_watermark= max_connections;
   unireg_init(opt_specialflag); /* Set up extern variabels */
   if (!(my_default_lc_messages=
         my_locale_by_name(lc_messages)))
@@ -8124,6 +8132,7 @@ SHOW_VAR status_vars[]= {
   {"Threads_connected",        (char*) &connection_count,       SHOW_INT},
   {"Threads_created",        (char*) &thread_created,   SHOW_LONG_NOFLUSH},
   {"Threads_running",          (char*) &num_thread_running,     SHOW_INT},
+  {"Threads_rejected",         (char*) &thread_rejected,        SHOW_LONG_NOFLUSH},
   {"Uptime",                   (char*) &show_starttime,         SHOW_FUNC},
 #ifdef ENABLED_PROFILING
   {"Uptime_since_flush_status",(char*) &show_flushstatustime,   SHOW_FUNC},

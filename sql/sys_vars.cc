@@ -4694,3 +4694,30 @@ static Sys_var_mybool Sys_show_old_temporals(
         ON_CHECK(0), ON_UPDATE(0),
         DEPRECATED(""));
 
+/* BEGIN: thread running control */
+/* no need lock */
+static bool update_tr_high_watermark(sys_var *self, THD *thd, enum_var_type type)
+{
+  if (thread_running_high_watermark == 0)
+    thread_running_high_watermark= max_connections;
+
+  return false;
+}
+
+static Sys_var_ulong Sys_rds_thread_running_high_watermark(
+       "rds_threads_running_high_watermark",
+       "When threads_running exceeds this limit, "
+       "query that isn't in active transaction should quit.",
+       GLOBAL_VAR(thread_running_high_watermark), CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, 50000), DEFAULT(0), BLOCK_SIZE(1),
+       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+       ON_UPDATE(update_tr_high_watermark));
+
+static const char *thread_running_ctl_mode_names[]= {"SELECTS", "ALL", 0};
+static Sys_var_enum Sys_rds_thread_running_ctl_mode(
+       "rds_threads_running_ctl_mode",
+       "Control which statements will be affected by threads running control, "
+       "Values: SELECTS(default), ALL.",
+       GLOBAL_VAR(thread_running_ctl_mode), CMD_LINE(REQUIRED_ARG),
+       thread_running_ctl_mode_names, DEFAULT(0));
+/* END: thread running control */

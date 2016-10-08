@@ -719,6 +719,12 @@ The following options may be given as the first argument:
  --range-alloc-block-size=# 
  Allocation block size for storing ranges during
  optimization
+ --rds-threads-running-ctl-mode=name 
+ Control which statements will be affected by threads
+ running control, Values: SELECTS(default), ALL.
+ --rds-threads-running-high-watermark=# 
+ When threads_running exceeds this limit, query that isn't
+ in active transaction should quit.
  --read-buffer-size=# 
  Each thread that does a sequential scan allocates a
  buffer of this size for each table it scans. If you do
@@ -1244,6 +1250,8 @@ query-cache-type OFF
 query-cache-wlock-invalidate FALSE
 query-prealloc-size 8192
 range-alloc-block-size 4096
+rds-threads-running-ctl-mode SELECTS
+rds-threads-running-high-watermark 151
 read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144
