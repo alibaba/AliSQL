@@ -628,7 +628,17 @@ static uint pack_keys(uchar *keybuff, uint key_count, KEY *keyinfo,
   key_parts=0;
   for (key=keyinfo,end=keyinfo+key_count ; key != end ; key++)
   {
-    int2store(pos, (key->flags ^ HA_NOSAME));
+    /*
+       Replace HA_CLUSTERING with HA_SPATIAL | HA_FULLTEXT to allow storing
+       TokuDB keys without changing the FRM format.
+    */
+    uint16 key_flags= (uint16)key->flags;
+    if (key->flags & HA_CLUSTERING)
+    {
+      key_flags|= HA_SPATIAL;
+      key_flags|= HA_FULLTEXT;
+    }
+    int2store(pos, (key_flags ^ HA_NOSAME));
     int2store(pos+2,key->key_length);
     pos[4]= (uchar) key->user_defined_key_parts;
     pos[5]= (uchar) key->algorithm;

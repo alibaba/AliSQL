@@ -270,7 +270,8 @@ public:
 
 class Key :public Sql_alloc {
 public:
-  enum Keytype { PRIMARY, UNIQUE, MULTIPLE, FULLTEXT, SPATIAL, FOREIGN_KEY};
+  enum Keytype { PRIMARY= 0, UNIQUE= 1, MULTIPLE= 2, FULLTEXT= 4, SPATIAL= 8,
+                 FOREIGN_KEY= 16, CLUSTERING= 32 };
   enum Keytype type;
   KEY_CREATE_INFO key_create_info;
   List<Key_part_spec> columns;

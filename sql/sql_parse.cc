@@ -6661,11 +6661,19 @@ bool add_field_to_list(THD *thd, LEX_STRING *field_name, enum_field_types type,
     lex->alter_info.key_list.push_back(key);
     lex->col_list.empty();
   }
-  if (type_modifier & (UNIQUE_FLAG | UNIQUE_KEY_FLAG))
+  if (type_modifier & (UNIQUE_FLAG | UNIQUE_KEY_FLAG | CLUSTERING_FLAG))
   {
-    Key *key;
+    Key::Keytype keytype;
+    if (type_modifier & (UNIQUE_FLAG | UNIQUE_KEY_FLAG))
+        keytype= Key::UNIQUE;
+    else
+        keytype= Key::MULTIPLE;
+    if (type_modifier & CLUSTERING_FLAG)
+        keytype= (enum Key::Keytype)(keytype | Key::CLUSTERING);
+    DBUG_ASSERT(keytype != Key::MULTIPLE);
+
     lex->col_list.push_back(new Key_part_spec(*field_name, 0));
-    key= new Key(Key::UNIQUE, null_lex_str,
+    Key *key= new Key(keytype, null_lex_str,
                  &default_key_create_info, 0,
                  lex->col_list);
     lex->alter_info.key_list.push_back(key);

@@ -3881,7 +3881,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	break;
     }
 
-    switch (key->type) {
+    switch ((unsigned)key->type) {
     case Key::MULTIPLE:
 	key_info->flags= 0;
 	break;
@@ -3904,6 +3904,24 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     case Key::FOREIGN_KEY:
       key_number--;				// Skip this key
       continue;
+
+    case Key::CLUSTERING | Key::UNIQUE: /* TokuDB */
+    case Key::CLUSTERING | Key::MULTIPLE:
+      if (unlikely(!ha_check_storage_engine_flag(
+                      file->ht, HTON_SUPPORTS_CLUSTERED_KEYS)))
+      {
+          my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+                  ha_resolve_storage_engine_name(file->ht), "CLUSTERING");
+          DBUG_RETURN(TRUE);
+      }
+      if (key->type & Key::UNIQUE)
+          key_info->flags= HA_NOSAME;
+      else
+          key_info->flags= 0;
+      key_info->flags|= HA_CLUSTERING;
+      break;
+    case Key::CLUSTERING:
+      DBUG_ASSERT(0);
     default:
       key_info->flags = HA_NOSAME;
       break;
@@ -4153,7 +4171,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	    key_part_length= min(max_key_length, file->max_key_part_length());
 	    if (max_field_size)
               key_part_length= min(key_part_length, max_field_size);
-	    if (key->type == Key::MULTIPLE)
+	    if (key->type & Key::MULTIPLE)
 	    {
 	      /* not a critical problem */
 	      push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
@@ -4205,7 +4223,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           key->type != Key::FULLTEXT)
       {
         key_part_length= file->max_key_part_length();
-	if (key->type == Key::MULTIPLE)
+	if (key->type & Key::MULTIPLE)
 	{
 	  /* not a critical problem */
 	  push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
@@ -7357,7 +7375,9 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         key_type= Key::FULLTEXT;
       else
         key_type= Key::MULTIPLE;
-      
+      if (key_info->flags & HA_CLUSTERING) /* TokuDB */
+        key_type= (enum Key::Keytype)(key_type | Key::CLUSTERING);
+
       if (index_column_dropped)
       {
         /*

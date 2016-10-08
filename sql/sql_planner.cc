@@ -648,7 +648,8 @@ void Optimize_table_order::best_access_path(
             /* Limit the number of matched rows */
             tmp= records;
             set_if_smaller(tmp, (double) thd->variables.max_seeks_for_key);
-            if (table->covering_keys.is_set(key))
+            if (table->covering_keys.is_set(key)
+                || (table->file->index_flags(key, 0, 0) & HA_CLUSTERED_INDEX))
             {
               /* we can use only index tree */
               tmp= record_count * table->file->index_only_read_time(key, tmp);
@@ -823,7 +824,8 @@ void Optimize_table_order::best_access_path(
 
             /* Limit the number of matched rows */
             set_if_smaller(tmp, (double) thd->variables.max_seeks_for_key);
-            if (table->covering_keys.is_set(key))
+            if (table->covering_keys.is_set(key)
+                || (table->file->index_flags(key, 0, 0) & HA_CLUSTERED_INDEX))
             {
               /* we can use only index tree */
               tmp= record_count * table->file->index_only_read_time(key, tmp);

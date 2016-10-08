@@ -1034,7 +1034,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
   Currently there are 161 shift/reduce conflicts.
   We should not introduce new conflicts any more.
 */
-%expect 161
+%expect 163
 
 /*
    Comments for TOKENS.
@@ -1116,6 +1116,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  CLASS_ORIGIN_SYM              /* SQL-2003-N */
 %token  CLIENT_SYM
 %token  CLOSE_SYM                     /* SQL-2003-R */
+%token  CLUSTERING_SYM                /* TokuDB     */
 %token  COALESCE                      /* SQL-2003-N */
 %token  CODE_SYM
 %token  COLLATE_SYM                   /* SQL-2003-R */
@@ -1786,7 +1787,8 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
         option_type opt_var_type opt_var_ident_type
 
 %type <key_type>
-        normal_key_type opt_unique constraint_key_type fulltext spatial
+        normal_key_type opt_unique_combo_clustering constraint_key_type
+        fulltext spatial unique_opt_clustering unique_combo_clustering unique clustering
 
 %type <key_alg>
         btree_or_rtree
@@ -2437,7 +2439,7 @@ create:
             }
             create_table_set_open_action_and_adjust_tables(lex);
           }
-        | CREATE opt_unique INDEX_SYM ident key_alg ON table_ident
+        | CREATE opt_unique_combo_clustering INDEX_SYM ident key_alg ON table_ident
           {
             if (add_create_index_prepare(Lex, $7))
               MYSQL_YYABORT;
@@ -6337,6 +6339,14 @@ key_def:
         | opt_constraint constraint_key_type opt_ident key_alg
           '(' key_list ')' normal_key_options
           {
+           /* TokuDB */
+            if (($1.length != 0)
+                && ((enum Key::Keytype)$2 == (Key::CLUSTERING | Key::MULTIPLE)))
+            {
+              /* Forbid "CONSTRAINT c CLUSTERING" */
+              my_parse_error(ER(ER_SYNTAX_ERROR));
+              MYSQL_YYABORT;
+            }
             if (add_create_index (Lex, $2, $3.str ? $3 : $1))
               MYSQL_YYABORT;
           }
@@ -6737,16 +6747,22 @@ attribute:
             lex->type|= PRI_KEY_FLAG | NOT_NULL_FLAG;
             lex->alter_info.flags|= Alter_info::ALTER_ADD_INDEX;
           }
-        | UNIQUE_SYM
+        | unique_combo_clustering
           {
             LEX *lex=Lex;
-            lex->type|= UNIQUE_FLAG; 
+            if ($1 & Key::UNIQUE)
+              lex->type|= UNIQUE_FLAG;
+            if ($1 & Key::CLUSTERING)
+              lex->type|= CLUSTERING_FLAG;
             lex->alter_info.flags|= Alter_info::ALTER_ADD_INDEX;
           }
-        | UNIQUE_SYM KEY_SYM
+        | unique_combo_clustering KEY_SYM
           {
             LEX *lex=Lex;
-            lex->type|= UNIQUE_KEY_FLAG; 
+            if ($1 & Key::UNIQUE)
+              lex->type|= UNIQUE_KEY_FLAG;
+            if ($1 & Key::CLUSTERING)
+              lex->type|= CLUSTERING_FLAG;
             lex->alter_info.flags|= Alter_info::ALTER_ADD_INDEX; 
           }
         | COMMENT_SYM TEXT_STRING_sys { Lex->comment= $2; }
@@ -7135,7 +7151,7 @@ normal_key_type:
 
 constraint_key_type:
           PRIMARY_SYM KEY_SYM { $$= Key::PRIMARY; }
-        | UNIQUE_SYM opt_key_or_index { $$= Key::UNIQUE; }
+        | unique_combo_clustering opt_key_or_index { $$= $1; }
         ;
 
 key_or_index:
@@ -7153,10 +7169,44 @@ keys_or_index:
         | INDEX_SYM {}
         | INDEXES {}
         ;
+/* TOKU */
+opt_unique_combo_clustering:
+          /* empty */          { $$= Key::MULTIPLE; }
+        | unique_combo_clustering
+        ;
 
-opt_unique:
-          /* empty */  { $$= Key::MULTIPLE; }
-        | UNIQUE_SYM   { $$= Key::UNIQUE; }
+unique_combo_clustering:
+          clustering
+          {
+            $$= (enum Key::Keytype)($1 | Key::MULTIPLE);
+          }
+        | unique_opt_clustering
+          {
+            $$= $1;
+          }
+        ;
+
+unique_opt_clustering:
+          unique
+          {
+            $$= $1;
+          }
+        | unique clustering
+          {
+            $$= (enum Key::Keytype)($1 | $2);
+          }
+        | clustering unique
+          {
+            $$= (enum Key::Keytype)($1 | $2);
+          }
+        ;
+
+unique:
+          UNIQUE_SYM     { $$= Key::UNIQUE; }
+        ;
+
+clustering:
+          CLUSTERING_SYM { $$= Key::CLUSTERING; }
         ;
 
 fulltext:

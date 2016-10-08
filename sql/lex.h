@@ -112,6 +112,7 @@ static SYMBOL symbols[] = {
   { "CLASS_ORIGIN",     SYM(CLASS_ORIGIN_SYM)},
   { "CLIENT",		SYM(CLIENT_SYM)},
   { "CLOSE",		SYM(CLOSE_SYM)},
+  { "CLUSTERING",       SYM(CLUSTERING_SYM)},   /* TokuDB */
   { "COALESCE",		SYM(COALESCE)},
   { "CODE",             SYM(CODE_SYM)},
   { "COLLATE",		SYM(COLLATE_SYM)},

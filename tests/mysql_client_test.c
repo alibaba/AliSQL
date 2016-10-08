@@ -4676,7 +4676,8 @@ static void test_field_flags()
         fprintf(stdout, "\n  MULTIPLE_KEY_FLAG");
       if (field->flags & AUTO_INCREMENT_FLAG)
         fprintf(stdout, "\n  AUTO_INCREMENT_FLAG");
-
+      if (field->flags & CLUSTERING_FLAG)
+        fprintf(stdout, "\n  CLUSTERING_FLAG");
     }
   }
   mysql_free_result(result);

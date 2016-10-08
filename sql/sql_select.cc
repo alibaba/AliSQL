@@ -2904,6 +2904,27 @@ make_join_readinfo(JOIN *join, ulonglong options, uint no_jbuf_after)
 	    tab->read_first_record= join_read_first;
             tab->type=JT_INDEX_SCAN;      // Read with index_first / index_next
 	  }
+          else if (!(tab->select && tab->select->quick))
+          {
+            DBUG_ASSERT(table->covering_keys.is_clear_all());
+            if (!tab->do_loosescan())
+            {
+              key_map clustering_keys;
+              for (uint i= 0; i < table->s->keys; i++)
+              {
+                if (tab->keys.is_set(i)
+                    && table->file->index_flags(i, 0, 0) & HA_CLUSTERED_INDEX)
+                  clustering_keys.set_bit(i);
+              }
+              uint index= find_shortest_key(table, &clustering_keys);
+              if (index != MAX_KEY)
+              {
+                tab->index= index;
+                tab->read_first_record= join_read_first;
+                tab->type= JT_INDEX_SCAN;
+              }
+            }
+          }
 	}
         if (tab->select && tab->select->quick &&
             tab->select->quick->index != MAX_KEY && ! tab->table->key_read)
@@ -3638,13 +3659,14 @@ uint find_shortest_key(TABLE *table, const key_map *usable_keys)
   {
     /*
      If the primary key is clustered and found shorter key covers all table
-     fields then primary key scan normally would be faster because amount of
-     data to scan is the same but PK is clustered.
+     fields and is not clustering then primary key scan normally would be
+     faster because amount of data to scan is the same but PK is clustered.
      It's safe to compare key parts with table fields since duplicate key
      parts aren't allowed.
      */
     if (best == MAX_KEY ||
-        table->key_info[best].user_defined_key_parts >= table->s->fields)
+        ((table->key_info[best].user_defined_key_parts >= table->s->fields)
+        && !(table->file->index_flags(best, 0, 0) & HA_CLUSTERED_INDEX)))
       best= usable_clustered_pk;
   }
   return best;
@@ -4092,7 +4114,8 @@ test_if_skip_sort_order(JOIN_TAB *tab, ORDER *order, ha_rows select_limit,
         (tab->type == JT_ALL &&
          tab->join->primary_tables > tab->join->const_tables + 1) &&
          ((unsigned) best_key != table->s->primary_key ||
-          !table->file->primary_key_is_clustered()))
+         !table->file->primary_key_is_clustered()) &&
+         !(best_key >= 0 && (table->file->index_flags(best_key, 0, 0) & HA_CLUSTERED_INDEX)))
     {
       can_skip_sorting= false;
       goto fix_ICP;
@@ -5548,7 +5571,9 @@ test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER *order, TABLE *table,
 
       bool is_covering= table->covering_keys.is_set(nr) ||
                         (nr == table->s->primary_key &&
-                        table->file->primary_key_is_clustered());
+                        table->file->primary_key_is_clustered()) ||
+                        (table->file->index_flags(nr, 0, 0)
+                        & HA_CLUSTERED_INDEX);
       
       /* 
         Don't use an index scan with ORDER BY without limit.
