@@ -170,6 +170,8 @@ toku_os_get_number_processors(void) {
     return sysconf(_SC_NPROCESSORS_CONF);
 }
 
+int toku_cpu_nums;
+
 int
 toku_os_get_number_active_processors(void) {
     int n = sysconf(_SC_NPROCESSORS_ONLN);
@@ -184,6 +186,8 @@ toku_os_get_number_active_processors(void) {
         }
     }
 #endif
+    if (toku_cpu_nums > 0 && toku_cpu_nums < n)
+        n = toku_cpu_nums;
     return n;
 }
 

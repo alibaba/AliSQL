@@ -387,6 +387,7 @@ static void print_db_env_struct (void) {
     STRUCT_SETUP(DB_ENV, log_flush, "int  (*%s) (DB_ENV *, const DB_LSN *)");
     STRUCT_SETUP(DB_ENV, open, "int  (*%s) (DB_ENV *, const char *, uint32_t, int)");
     STRUCT_SETUP(DB_ENV, set_cachesize, "int  (*%s) (DB_ENV *, uint32_t, uint32_t, int)");
+    STRUCT_SETUP(DB_ENV, set_cpunums, "int  (*%s) (DB_ENV *, int)");
     STRUCT_SETUP(DB_ENV, set_data_dir, "int  (*%s) (DB_ENV *, const char *)");
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR == 1
     STRUCT_SETUP(DB_ENV, set_errcall, "void (*%s) (DB_ENV *, void (*)(const char *, char *))");

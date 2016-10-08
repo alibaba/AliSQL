@@ -183,6 +183,7 @@ SELECT MAX(c1) FROM t3;
 --sleep 2
 --let $innodb_status =`show engine tokudb status`
 show status like '%tokudb_rows%';
+show variables like 'tokudb_cpu_nums';
 
 #Restart the server to cover TC_LOG_MMAP recover logic
 --disable_reconnect

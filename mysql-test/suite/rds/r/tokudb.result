@@ -281,6 +281,9 @@ Tokudb_rows_inserted	41
 Tokudb_rows_read	98
 Tokudb_rows_deleted	8
 Tokudb_rows_updated	19
+show variables like 'tokudb_cpu_nums';
+Variable_name	Value
+tokudb_cpu_nums	0
 # Restart server.
 DROP TABLE t1;
 DROP TABLE t2;

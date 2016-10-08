@@ -1262,6 +1262,14 @@ env_set_cachesize(DB_ENV * env, uint32_t gbytes, uint32_t bytes, int ncache) {
     return 0;
 }
 
+static int
+env_set_cpunums(DB_ENV * env, int nums) {
+    (void)env;
+    extern int toku_cpu_nums;
+    toku_drd_unsafe_set(&toku_cpu_nums, nums);
+    return 0;
+}
+
 static int env_dbremove(DB_ENV * env, DB_TXN *txn, const char *fname, const char *dbname, uint32_t flags);
 
 static int
@@ -2599,6 +2607,7 @@ toku_env_create(DB_ENV ** envp, uint32_t flags) {
     USENV(cleaner_get_period);
     USENV(cleaner_set_iterations);
     USENV(cleaner_get_iterations);
+    USENV(set_cpunums);
     USENV(set_cachesize);
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 3
     USENV(get_cachesize);

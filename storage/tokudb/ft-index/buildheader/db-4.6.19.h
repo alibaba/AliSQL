@@ -1713,6 +1713,7 @@ struct __db {
 	int  (*set_bt_prefix)
 		__P((DB *, size_t (*)(DB *, const DBT *, const DBT *)));
 	int  (*set_cachesize) __P((DB *, uint32_t, uint32_t, int));
+	int  (*set_cpunums) __P((DB *, int));
 	int  (*set_dup_compare)
 		__P((DB *, int (*)(DB *, const DBT *, const DBT *)));
 	int  (*set_encrypt) __P((DB *, const char *, uint32_t));
@@ -2402,6 +2403,7 @@ struct __db_env {
 	int  (*set_app_dispatch)
 		__P((DB_ENV *, int (*)(DB_ENV *, DBT *, DB_LSN *, db_recops)));
 	int  (*set_cachesize) __P((DB_ENV *, uint32_t, uint32_t, int));
+	int  (*set_cpunums) __P((DB_ENV *, int));
 	int  (*set_cache_max) __P((DB_ENV *, uint32_t, uint32_t));
 	int  (*set_data_dir) __P((DB_ENV *, const char *));
 	int  (*set_encrypt) __P((DB_ENV *, const char *, uint32_t));

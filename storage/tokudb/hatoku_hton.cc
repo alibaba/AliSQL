@@ -252,6 +252,7 @@ static uint32_t tokudb_env_flags = 0;
 static my_bool tokudb_directio = FALSE;
 static my_bool tokudb_checkpoint_on_flush_logs = FALSE;
 static ulonglong tokudb_cache_size = 0;
+static int tokudb_cpu_nums = 0;
 static ulonglong tokudb_max_lock_memory = 0;
 static char *tokudb_home;
 static char *tokudb_tmp_dir;
@@ -511,6 +512,17 @@ static int tokudb_init_func(void *p) {
             goto error; 
         }
     }
+
+    if (tokudb_cpu_nums) {
+        DBUG_PRINT("info", ("tokudb_cpu_nums: %d\n", tokudb_cpu_nums));
+        r = db_env->set_cpunums(db_env, tokudb_cpu_nums);
+        if (r) {
+            DBUG_PRINT("info", ("set_cpunums %d\n", r));
+            goto error;
+        }
+    }
+
+
     if (tokudb_max_lock_memory == 0) {
         tokudb_max_lock_memory = tokudb_cache_size/8;
     }
@@ -1463,6 +1475,10 @@ static MYSQL_SYSVAR_ULONGLONG(cache_size, tokudb_cache_size,
     PLUGIN_VAR_READONLY, "TokuDB cache table size", NULL, NULL, 0,
     0, ~0ULL, 0);
 
+static MYSQL_SYSVAR_INT(cpu_nums, tokudb_cpu_nums,
+    PLUGIN_VAR_READONLY, "TokuDB CPU nums", NULL, NULL, 0,
+    0, 0, 0);
+
 static MYSQL_SYSVAR_ULONGLONG(max_lock_memory, tokudb_max_lock_memory, PLUGIN_VAR_READONLY, "TokuDB max memory for locks", NULL, NULL, 0, 0, ~0ULL, 0);
 static MYSQL_SYSVAR_ULONG(debug, tokudb_debug, 0, "TokuDB Debug", NULL, NULL, 0, 0, ~0UL, 0);
 
@@ -1492,6 +1508,7 @@ static MYSQL_SYSVAR_UINT(fsync_log_period, tokudb_fsync_log_period, 0, "TokuDB f
 
 static struct st_mysql_sys_var *tokudb_system_variables[] = {
     MYSQL_SYSVAR(cache_size),
+    MYSQL_SYSVAR(cpu_nums),
     MYSQL_SYSVAR(max_lock_memory),
     MYSQL_SYSVAR(data_dir),
     MYSQL_SYSVAR(log_dir),
