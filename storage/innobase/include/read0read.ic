@@ -35,11 +35,12 @@ read_view_validate(
 	const read_view_t*	view)	/*!< in: view to validate */
 {
 	ut_ad(mutex_own(&trx_sys->mutex));
+	ut_ad(view->max_descr >= view->n_descr);
+	ut_ad(view->descriptors == NULL || view->max_descr > 0);
 
-	/* Check that the view->trx_ids array is in descending order. */
-	for (ulint i = 1; i < view->n_trx_ids; ++i) {
-
-		ut_a(view->trx_ids[i] < view->trx_ids[i - 1]);
+	/* Check that the view->descriptors array is in ascending order. */
+	for (ulint i = 1; i < view->n_descr; ++i) {
+		ut_a(view->descriptors[i] > view->descriptors[i - 1]);
 	}
 
 	return(true);
@@ -92,31 +93,11 @@ read_view_sees_trx_id(
 	} else if (trx_id >= view->low_limit_id) {
 
 		return(false);
-	} else {
-		ulint	lower = 0;
-		ulint	upper = view->n_trx_ids - 1;
-
-		ut_a(view->n_trx_ids > 0);
-
-		do {
-			ulint		mid	= (lower + upper) >> 1;
-			trx_id_t	mid_id	= view->trx_ids[mid];
-
-			if (mid_id == trx_id) {
-				return(FALSE);
-			} else if (mid_id < trx_id) {
-				if (mid > 0) {
-					upper = mid - 1;
-				} else {
-					break;
-				}
-			} else {
-				lower = mid + 1;
-			}
-		} while (lower <= upper);
 	}
 
-	return(true);
+	/* Do a binary search over this view's descriptors array */
+	return(trx_find_descriptor(view->descriptors, view->n_descr,
+				   trx_id) == NULL);
 }
 
 /*********************************************************************//**

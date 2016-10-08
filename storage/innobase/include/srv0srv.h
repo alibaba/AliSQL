@@ -362,6 +362,9 @@ extern ulong	srv_max_purge_lag_delay;
 extern ulong	srv_replication_delay;
 /*-------------------------------------------*/
 
+extern ulint	srv_read_views_memory;
+extern ulint	srv_descriptors_memory;
+
 extern my_bool	srv_print_innodb_monitor;
 extern my_bool	srv_print_innodb_lock_monitor;
 extern ibool	srv_print_innodb_tablespace_monitor;
@@ -856,6 +859,9 @@ struct export_var_t{
 	ulint innodb_truncated_status_writes;	/*!< srv_truncated_status_writes */
 	ulint innodb_available_undo_logs;       /*!< srv_available_undo_logs */
 	ulint innodb_buffered_aio_submitted;
+	ulint innodb_read_views_memory;		/*!< srv_read_views_memory */
+	ulint innodb_descriptors_memory;	/*!< srv_descriptors_memory */
+
 #ifdef UNIV_DEBUG
 	ulint innodb_purge_trx_id_age;		/*!< rw_max_trx_id - purged trx_id */
 	ulint innodb_purge_view_trx_id_age;	/*!< rw_max_trx_id

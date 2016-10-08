@@ -1,0 +1,2 @@
+--query_cache_size=1M
+--query_cache_type=1

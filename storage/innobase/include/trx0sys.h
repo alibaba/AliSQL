@@ -183,6 +183,16 @@ UNIV_INLINE
 trx_id_t
 trx_sys_get_max_trx_id(void);
 /*========================*/
+/*****************************************************************//**
+Find a slot for a given trx ID in a descriptors array.
+@return slot pointer */
+UNIV_INLINE
+trx_id_t*
+trx_find_descriptor(
+/*================*/
+	const trx_id_t*	descriptors,	/*!< in: descriptors array */
+	ulint		n_descr,	/*!< in: array size */
+	trx_id_t	trx_id);	/*!< in: trx id */
 
 #ifdef UNIV_DEBUG
 /* Flag to control TRX_RSEG_N_SLOTS behavior debugging. */
@@ -231,14 +241,26 @@ trx_id_t
 trx_rw_min_trx_id(void);
 /*===================*/
 /****************************************************************//**
-Checks if a rw transaction with the given id is active. Caller must hold
-trx_sys->mutex in shared mode. If the caller is not holding
+Returns pointer to a transaction instance if a rw transaction with the given id
+is active. Caller must hold trx_sys->mutex. If the caller is not holding
 lock_sys->mutex, the transaction may already have been committed.
-@return	transaction instance if active, or NULL;
+@return transaction instance if active, or NULL;
 the pointer must not be dereferenced unless lock_sys->mutex was
 acquired before calling this function and is still being held */
 UNIV_INLINE
 trx_t*
+trx_rw_get_active_trx_by_id(
+/*========================*/
+	trx_id_t	trx_id,		/*!< in: trx id of the transaction */
+	ibool*		corrupt);	/*!< in: NULL or pointer to a flag
+					that will be set if corrupt */
+/****************************************************************//**
+Checks if a rw transaction with the given id is active. Caller must hold
+trx_sys->mutex. If the caller is not holding lock_sys->mutex, the
+transaction may already have been committed.
+@return	true if a rw transaction with the given id is active. */
+UNIV_INLINE
+bool
 trx_rw_is_active_low(
 /*=================*/
 	trx_id_t	trx_id,		/*!< in: trx id of the transaction */
@@ -248,11 +270,9 @@ trx_rw_is_active_low(
 Checks if a rw transaction with the given id is active. If the caller is
 not holding lock_sys->mutex, the transaction may already have been
 committed.
-@return	transaction instance if active, or NULL;
-the pointer must not be dereferenced unless lock_sys->mutex was
-acquired before calling this function and is still being held */
+@return	true if a rw transaction with the given id is active. */
 UNIV_INLINE
-trx_t*
+bool
 trx_rw_is_active(
 /*=============*/
 	trx_id_t	trx_id,		/*!< in: trx id of the transaction */
@@ -598,6 +618,8 @@ identifier is added to this 64-bit constant. */
 	 | TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW)
 /* @} */
 
+#define TRX_DESCR_ARRAY_INITIAL_SIZE	1000
+
 #ifndef UNIV_HOTBACKUP
 /** The transaction system central memory data structure. */
 struct trx_sys_t{
@@ -618,6 +640,18 @@ struct trx_sys_t{
 	trx_id_t	max_trx_id;	/*!< The smallest number not yet
 					assigned as a transaction id or
 					transaction number */
+	char		pad1[64];	/*!< Ensure max_trx_id does not share
+					cache line with other fields. */
+	trx_id_t*	descriptors;	/*!< Array of trx descriptors */
+	ulint		descr_n_max;	/*!< The current size of the descriptors
+					array. */
+	char		pad2[64];	/*!< Ensure static descriptor fields
+					do not share cache line with
+					descr_n_used */
+	ulint		descr_n_used;	/*!< Number of used elements in the
+					descriptors array. */
+	char		pad3[64];	/*!< Ensure descriptors do not share
+					cache line with other fields */
 #ifdef UNIV_DEBUG
 	trx_id_t	rw_max_trx_id;	/*!< Max trx id of read-write transactions
 					which exist or existed */
@@ -626,6 +660,8 @@ struct trx_sys_t{
 					memory read-write transactions, sorted
 					on trx id, biggest first. Recovered
 					transactions are always on this list. */
+	char		pad4[64];	/*!< Ensure list base nodes do not
+					share cache line with other fields */
 	trx_list_t	ro_trx_list;	/*!< List of active and committed in
 					memory read-only transactions, sorted
 					on trx id, biggest first. NOTE:
@@ -633,6 +669,8 @@ struct trx_sys_t{
 					is not necessary. We should exploit
 					this and increase concurrency during
 					add/remove. */
+	char		pad5[64];	/*!< Ensure list base nodes do not
+					share cache line with other fields */
 	trx_list_t	mysql_trx_list;	/*!< List of transactions created
 					for MySQL. All transactions on
 					ro_trx_list are on mysql_trx_list. The
@@ -645,6 +683,15 @@ struct trx_sys_t{
 					mysql_trx_list may additionally contain
 					transactions that have not yet been
 					started in InnoDB. */
+	char		pad6[64];	/*!< Ensure list base nodes do not
+					share cache line with other fields */
+	trx_list_t	trx_serial_list;
+					/*!< trx->no ordered list of
+					transactions in either TRX_PREPARED or
+					TRX_ACTIVE which have already been
+					assigned a serialization number */
+	char		pad7[64];	/*!< Ensure list base nodes do not
+					share cache line with other fields */
 	trx_rseg_t*	const rseg_array[TRX_SYS_N_RSEGS];
 					/*!< Pointer array to rollback
 					segments; NULL if slot not in use;

@@ -152,7 +152,8 @@ trx_purge_sys_create(
 	purge_sys->query = trx_purge_graph_build(
 		purge_sys->trx, n_purge_threads);
 
-	purge_sys->view = read_view_purge_open(purge_sys->heap);
+	purge_sys->view = read_view_purge_open(purge_sys->prebuilt_clone,
+					       purge_sys->prebuilt_view);
 }
 
 /************************************************************************
@@ -172,6 +173,9 @@ trx_purge_sys_close(void)
 	sess_close(purge_sys->sess);
 
 	purge_sys->sess = NULL;
+
+	read_view_free(purge_sys->prebuilt_view);
+	read_view_free(purge_sys->prebuilt_clone);
 
 	purge_sys->view = NULL;
 
@@ -1200,7 +1204,8 @@ trx_purge(
 
 	mem_heap_empty(purge_sys->heap);
 
-	purge_sys->view = read_view_purge_open(purge_sys->heap);
+	purge_sys->view = read_view_purge_open(purge_sys->prebuilt_clone,
+					       purge_sys->prebuilt_view);
 
 	rw_lock_x_unlock(&purge_sys->latch);
 

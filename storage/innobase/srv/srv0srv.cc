@@ -374,6 +374,13 @@ static ulint		srv_n_rows_read_old		= 0;
 UNIV_INTERN ulint	srv_truncated_status_writes	= 0;
 UNIV_INTERN ulint	srv_available_undo_logs         = 0;
 
+/* Ensure status variables are on separate cache lines */
+
+#define CACHE_LINE_SIZE 64
+#define CACHE_ALIGNED __attribute__ ((aligned (CACHE_LINE_SIZE)))
+UNIV_INTERN ulint	srv_read_views_memory CACHE_ALIGNED	= 0;
+UNIV_INTERN ulint	srv_descriptors_memory CACHE_ALIGNED	= 0;
+
 /* Set the following to 0 if you want InnoDB to write messages on
 stderr on startup/shutdown. */
 UNIV_INTERN ibool	srv_print_verbose_log		= TRUE;
@@ -1467,6 +1474,12 @@ srv_export_innodb_status(void)
 	export_vars.innodb_column_compressed = srv_column_compressed;
 
 	export_vars.innodb_column_decompressed = srv_column_decompressed;
+
+	export_vars.innodb_read_views_memory =
+		os_atomic_increment_lint(&srv_read_views_memory, 0);
+
+	export_vars.innodb_descriptors_memory =
+		os_atomic_increment_lint(&srv_descriptors_memory, 0);
 
 #ifdef UNIV_DEBUG
 	rw_lock_s_lock(&purge_sys->latch);

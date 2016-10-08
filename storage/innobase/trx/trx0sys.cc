@@ -509,6 +509,15 @@ trx_sys_init_at_db_start(void)
 
 	mtr_start(&mtr);
 
+	/* Allocate the trx descriptors array */
+	trx_sys->descriptors = static_cast<trx_id_t*>(
+		ut_malloc(sizeof(trx_id_t) *
+			  TRX_DESCR_ARRAY_INITIAL_SIZE));
+	trx_sys->descr_n_max = TRX_DESCR_ARRAY_INITIAL_SIZE;
+	trx_sys->descr_n_used = 0;
+	srv_descriptors_memory = TRX_DESCR_ARRAY_INITIAL_SIZE *
+		sizeof(trx_id_t);
+
 	sys_header = trx_sysf_get(&mtr);
 
 	if (srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN) {
@@ -1216,8 +1225,6 @@ trx_sys_close(void)
 
 		view = UT_LIST_GET_NEXT(view_list, prev_view);
 
-		/* Views are allocated from the trx_sys->global_read_view_heap.
-		So, we simply remove the element here. */
 		UT_LIST_REMOVE(view_list, trx_sys->view_list, prev_view);
 	}
 
@@ -1227,6 +1234,9 @@ trx_sys_close(void)
 	ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
 
 	mutex_free(&trx_sys->mutex);
+
+	ut_ad(trx_sys->descr_n_used == 0);
+	ut_free(trx_sys->descriptors);
 
 	mem_free(trx_sys);
 

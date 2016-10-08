@@ -1705,12 +1705,15 @@ lock_rec_other_trx_holds_expl(
 						containing the record */
 {
 	trx_t* holds = NULL;
+	trx_t* impl_trx = NULL;
 
 	lock_mutex_enter();
 
-	if (trx_t *impl_trx = trx_rw_is_active(trx_id, NULL)) {
+	mutex_enter(&trx_sys->mutex);
+	impl_trx = trx_rw_get_active_trx_by_id(trx_id, NULL);
+
+	if (impl_trx != NULL) {
 		ulint heap_no = page_rec_get_heap_no(rec);
-		mutex_enter(&trx_sys->mutex);
 
 		for (trx_t* t = UT_LIST_GET_FIRST(trx_sys->rw_trx_list);
 		     t != NULL;
@@ -1727,8 +1730,8 @@ lock_rec_other_trx_holds_expl(
 			}
 		}
 
-		mutex_exit(&trx_sys->mutex);
         }
+	mutex_exit(&trx_sys->mutex);
 
 	lock_mutex_exit();
 
@@ -5596,7 +5599,7 @@ lock_rec_queue_validate(
 		if the check and assertion are covered by the lock mutex. */
 
 		trx_id = lock_clust_rec_some_has_impl(rec, index, offsets);
-		impl_trx = trx_rw_is_active_low(trx_id, NULL);
+		impl_trx = trx_rw_get_active_trx_by_id(trx_id, NULL);
 
 		ut_ad(lock_mutex_own());
 		/* impl_trx cannot be committed until lock_mutex_exit()
@@ -6094,7 +6097,9 @@ lock_rec_convert_impl_to_expl(
 		/* If the transaction is still active and has no
 		explicit x-lock set on the record, set one for it */
 
-		impl_trx = trx_rw_is_active(trx_id, NULL);
+		mutex_enter(&trx_sys->mutex);
+		impl_trx = trx_rw_get_active_trx_by_id(trx_id, NULL);
+		mutex_exit(&trx_sys->mutex);
 
 		/* impl_trx cannot be committed until lock_mutex_exit()
 		because lock_trx_release_locks() acquires lock_sys->mutex */

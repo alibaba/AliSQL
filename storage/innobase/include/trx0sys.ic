@@ -368,16 +368,16 @@ trx_rw_min_trx_id(void)
 }
 
 /****************************************************************//**
-Checks if a rw transaction with the given id is active. Caller must hold
-trx_sys->mutex. If the caller is not holding lock_sys->mutex, the
-transaction may already have been committed.
-@return	transaction instance if active, or NULL;
+Returns pointer to a transaction instance if a rw transaction with the given id
+is active. Caller must hold trx_sys->mutex. If the caller is not holding
+lock_sys->mutex, the transaction may already have been committed.
+@return transaction instance if active, or NULL;
 the pointer must not be dereferenced unless lock_sys->mutex was
 acquired before calling this function and is still being held */
 UNIV_INLINE
 trx_t*
-trx_rw_is_active_low(
-/*=================*/
+trx_rw_get_active_trx_by_id(
+/*========================*/
 	trx_id_t	trx_id,		/*!< in: trx id of the transaction */
 	ibool*		corrupt)	/*!< in: NULL or pointer to a flag
 					that will be set if corrupt */
@@ -412,29 +412,58 @@ trx_rw_is_active_low(
 }
 
 /****************************************************************//**
+Checks if a rw transaction with the given id is active. Caller must hold
+trx_sys->mutex. If the caller is not holding lock_sys->mutex, the
+transaction may already have been committed.
+@return	true if a rw transaction with the given id is active. */
+UNIV_INLINE
+bool
+trx_rw_is_active_low(
+/*=================*/
+	trx_id_t	trx_id,		/*!< in: trx id of the transaction */
+	ibool*		corrupt)	/*!< in: NULL or pointer to a flag
+					that will be set if corrupt */
+{
+	ut_ad(mutex_own(&trx_sys->mutex));
+
+	if (UNIV_UNLIKELY(trx_id >= trx_sys->max_trx_id)) {
+
+		/* There must be corruption: we let the caller handle the
+		diagnostic prints in this case. */
+
+		if (corrupt != NULL) {
+			*corrupt = TRUE;
+		}
+
+		return(false);
+	}
+
+	return(trx_find_descriptor(trx_sys->descriptors, trx_sys->descr_n_used,
+				   trx_id) != NULL);
+}
+
+/****************************************************************//**
 Checks if a rw transaction with the given id is active. If the caller is
 not holding lock_sys->mutex, the transaction may already have been
 committed.
-@return	transaction instance if active, or NULL;
-the pointer must not be dereferenced unless lock_sys->mutex was
-acquired before calling this function and is still being held */
+@return	true if a rw transaction with the given id is active. */
 UNIV_INLINE
-trx_t*
+bool
 trx_rw_is_active(
 /*=============*/
 	trx_id_t	trx_id,		/*!< in: trx id of the transaction */
 	ibool*		corrupt)	/*!< in: NULL or pointer to a flag
 					that will be set if corrupt */
 {
-	trx_t*		trx;
+	bool	res;
 
 	mutex_enter(&trx_sys->mutex);
 
-	trx = trx_rw_is_active_low(trx_id, corrupt);
+	res = trx_rw_is_active_low(trx_id, corrupt);
 
 	mutex_exit(&trx_sys->mutex);
 
-	return(trx);
+	return(res);
 }
 
 /*****************************************************************//**
@@ -508,5 +537,28 @@ trx_sys_get_n_rw_trx(void)
 	mutex_exit(&trx_sys->mutex);
 
 	return(n_trx);
+}
+
+/*************************************************************//**
+Find a slot for a given trx ID in a descriptors array.
+@return: slot pointer */
+UNIV_INLINE
+trx_id_t*
+trx_find_descriptor(
+/*================*/
+	const trx_id_t*	descriptors,	/*!< in: descriptors array */
+	ulint		n_descr,	/*!< in: array size */
+	trx_id_t	trx_id)		/*!< in: trx id */
+{
+	ut_ad(descriptors != trx_sys->descriptors ||
+	      mutex_own(&trx_sys->mutex));
+
+	if (UNIV_UNLIKELY(n_descr == 0)) {
+
+		return(NULL);
+	}
+
+	return((trx_id_t *) bsearch(&trx_id, descriptors, n_descr,
+				    sizeof(trx_id_t), trx_descr_cmp));
 }
 #endif /* !UNIV_HOTBACKUP */

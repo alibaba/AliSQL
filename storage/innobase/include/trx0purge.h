@@ -160,6 +160,11 @@ struct trx_purge_t{
 					to the task queue */
 	volatile ulint	n_completed;	/*!< Count of total tasks completed */
 
+	read_view_t*	prebuilt_clone;	/*!< Pre-built view which is used as a
+					temporary clone of the oldest view in
+					read_view_purge_open() */
+	read_view_t*	prebuilt_view;	/*!< Pre-built view array */
+
 	/*------------------------------*/
 	/* The following two fields form the 'purge pointer' which advances
 	during a purge, and which is used in history list truncation */
