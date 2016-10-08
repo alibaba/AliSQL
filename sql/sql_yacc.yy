@@ -2441,10 +2441,11 @@ create:
             if (add_create_index_prepare(Lex, $7))
               MYSQL_YYABORT;
           }
-          '(' key_list ')' normal_key_options
+          '(' key_list ')' opt_wait normal_key_options
           {
             if (add_create_index(Lex, $2, $4))
               MYSQL_YYABORT;
+            Lex->wait_time= $12;
           }
           opt_index_lock_algorithm { }
         | CREATE fulltext INDEX_SYM ident init_key_options ON
@@ -2453,10 +2454,11 @@ create:
             if (add_create_index_prepare(Lex, $7))
               MYSQL_YYABORT;
           }
-          '(' key_list ')' fulltext_key_options
+          '(' key_list ')' opt_wait fulltext_key_options
           {
             if (add_create_index(Lex, $2, $4))
               MYSQL_YYABORT;
+            Lex->wait_time= $12;
           }
           opt_index_lock_algorithm { }
         | CREATE spatial INDEX_SYM ident init_key_options ON
@@ -2465,10 +2467,11 @@ create:
             if (add_create_index_prepare(Lex, $7))
               MYSQL_YYABORT;
           }
-          '(' key_list ')' spatial_key_options
+          '(' key_list ')' opt_wait spatial_key_options
           {
             if (add_create_index(Lex, $2, $4))
               MYSQL_YYABORT;
+            Lex->wait_time= $12;
           }
           opt_index_lock_algorithm { }
         | CREATE DATABASE opt_if_not_exists ident
@@ -7303,7 +7306,7 @@ string_list:
 */
 
 alter:
-          ALTER opt_ignore TABLE_SYM table_ident
+          ALTER opt_ignore TABLE_SYM table_ident opt_wait
           {
             THD *thd= YYTHD;
             LEX *lex= thd->lex;
@@ -7327,6 +7330,7 @@ alter:
             lex->no_write_to_binlog= 0;
             lex->create_info.storage_media= HA_SM_DEFAULT;
             lex->create_last_non_select_table= lex->last_table();
+            lex->wait_time= $5;
             DBUG_ASSERT(!lex->m_sql_cmd);
             if (lex->ignore)
             {
@@ -8424,7 +8428,7 @@ optimize:
             /* Will be overriden during execution. */
             YYPS->m_lock_type= TL_UNLOCK;
           }
-          table_list
+          table_list opt_wait
           {
             THD *thd= YYTHD;
             LEX* lex= thd->lex;
@@ -8432,6 +8436,7 @@ optimize:
             lex->m_sql_cmd= new (thd->mem_root) Sql_cmd_optimize_table();
             if (lex->m_sql_cmd == NULL)
               MYSQL_YYABORT;
+            lex->wait_time= $6;
           }
         ;
 
@@ -8473,15 +8478,16 @@ table_to_table_list:
         ;
 
 table_to_table:
-          table_ident TO_SYM table_ident
+          table_ident opt_wait TO_SYM table_ident
           {
             LEX *lex=Lex;
             SELECT_LEX *sl= lex->current_select;
             if (!sl->add_table_to_list(lex->thd, $1,NULL,TL_OPTION_UPDATING,
                                        TL_IGNORE, MDL_EXCLUSIVE) ||
-                !sl->add_table_to_list(lex->thd, $3,NULL,TL_OPTION_UPDATING,
+                !sl->add_table_to_list(lex->thd, $4,NULL,TL_OPTION_UPDATING,
                                        TL_IGNORE, MDL_EXCLUSIVE))
               MYSQL_YYABORT;
+            lex->wait_time= $2;
           }
         ;
 
@@ -11785,9 +11791,12 @@ drop:
             YYPS->m_lock_type= TL_UNLOCK;
             YYPS->m_mdl_type= MDL_EXCLUSIVE;
           }
-          table_list opt_restrict
-          {}
-        | DROP INDEX_SYM ident ON table_ident {}
+          table_list opt_wait opt_restrict
+          {
+            LEX *lex= Lex;
+            lex->wait_time= $7;
+          }
+        | DROP INDEX_SYM ident ON table_ident opt_wait {}
           {
             LEX *lex=Lex;
             Alter_drop *ad= new Alter_drop(Alter_drop::KEY, $3.str);
@@ -11802,6 +11811,7 @@ drop:
                                                         TL_READ_NO_INSERT,
                                                         MDL_SHARED_UPGRADABLE))
               MYSQL_YYABORT;
+            lex->wait_time= $6;
           }
           opt_index_lock_algorithm {}
         | DROP DATABASE if_exists ident
@@ -12372,7 +12382,7 @@ truncate:
             YYPS->m_lock_type= TL_WRITE;
             YYPS->m_mdl_type= MDL_EXCLUSIVE;
           }
-          table_name
+          table_name opt_wait
           {
             THD *thd= YYTHD;
             LEX* lex= thd->lex;
@@ -12380,6 +12390,7 @@ truncate:
             lex->m_sql_cmd= new (thd->mem_root) Sql_cmd_truncate_table();
             if (lex->m_sql_cmd == NULL)
               MYSQL_YYABORT;
+            lex->wait_time= $5;
           }
         ;
 

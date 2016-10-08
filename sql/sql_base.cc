@@ -2288,9 +2288,14 @@ bool wait_while_table_is_used(THD *thd, TABLE *table,
                        table->s->table_name.str, (ulong) table->s,
                        table->db_stat, table->s->version));
 
+  ulong m_timeout;
+  if (thd->lex->wait_time == ULONG_MAX)
+    m_timeout= thd->variables.lock_wait_timeout;
+  else
+    m_timeout= thd->lex->wait_time;
+
   if (thd->mdl_context.upgrade_shared_lock(
-             table->mdl_ticket, MDL_EXCLUSIVE,
-             thd->variables.lock_wait_timeout))
+             table->mdl_ticket, MDL_EXCLUSIVE, m_timeout))
     DBUG_RETURN(TRUE);
 
   tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN,
@@ -4909,8 +4914,14 @@ lock_table_names(THD *thd,
   TABLE_LIST *table;
   MDL_request global_request;
   Hash_set<TABLE_LIST, schema_set_get_key> schema_set;
+  ulong m_timeout;
 
   DBUG_ASSERT(!thd->locked_tables_mode);
+
+  if (thd->lex->wait_time == ULONG_MAX)
+    m_timeout= lock_wait_timeout;
+  else
+    m_timeout= thd->lex->wait_time;
 
   for (table= tables_start; table && table != tables_end;
        table= table->next_global)
@@ -4967,7 +4978,7 @@ lock_table_names(THD *thd,
     mdl_requests.push_front(&global_request);
   }
 
-  if (thd->mdl_context.acquire_locks(&mdl_requests, lock_wait_timeout))
+  if (thd->mdl_context.acquire_locks(&mdl_requests, m_timeout))
     return TRUE;
 
   return FALSE;

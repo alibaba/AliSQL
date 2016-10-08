@@ -6548,6 +6548,11 @@ static bool mysql_inplace_alter_table(THD *thd,
   bool reopen_tables= false;
 
   DBUG_ENTER("mysql_inplace_alter_table");
+  ulong m_timeout;
+  if (thd->lex->wait_time == ULONG_MAX)
+    m_timeout= thd->variables.lock_wait_timeout;
+  else
+    m_timeout= thd->lex->wait_time;
 
   /*
     Upgrade to EXCLUSIVE lock if:
@@ -6593,7 +6598,7 @@ static bool mysql_inplace_alter_table(THD *thd,
       of table by other threads during main phase of in-place ALTER TABLE.
     */
     if (thd->mdl_context.upgrade_shared_lock(table->mdl_ticket, MDL_EXCLUSIVE,
-                                             thd->variables.lock_wait_timeout))
+                                             m_timeout))
       goto cleanup;
 
     tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN_KEEP_SHARE,
@@ -6611,7 +6616,7 @@ static bool mysql_inplace_alter_table(THD *thd,
        alter_info->requested_lock == Alter_info::ALTER_TABLE_LOCK_SHARED) &&
       thd->mdl_context.upgrade_shared_lock(table->mdl_ticket,
                                            MDL_SHARED_NO_WRITE,
-                                           thd->variables.lock_wait_timeout))
+                                           m_timeout))
   {
     goto cleanup;
   }
@@ -8570,13 +8575,19 @@ bool mysql_alter_table(THD *thd,char *new_db, char *new_name,
         wait_while_table_is_used(thd, table, HA_EXTRA_FORCE_REOPEN))
       goto err_new_table_cleanup;
 
+    ulong m_timeout;
+    if (thd->lex->wait_time == ULONG_MAX)
+      m_timeout= thd->variables.lock_wait_timeout;
+    else
+      m_timeout= thd->lex->wait_time;
+
     /*
       Otherwise upgrade to SHARED_NO_WRITE.
       Note that under LOCK TABLES, we will already have SHARED_NO_READ_WRITE.
     */
     if (alter_info->requested_lock != Alter_info::ALTER_TABLE_LOCK_EXCLUSIVE &&
         thd->mdl_context.upgrade_shared_lock(mdl_ticket, MDL_SHARED_NO_WRITE,
-                                             thd->variables.lock_wait_timeout))
+                                             m_timeout))
       goto err_new_table_cleanup;
 
     DEBUG_SYNC(thd, "alter_table_copy_after_lock_upgrade");
