@@ -395,6 +395,11 @@ UNIV_INTERN ib_mutex_t	srv_innodb_monitor_mutex;
 /* Mutex for locking srv_monitor_file. Not created if srv_read_only_mode */
 UNIV_INTERN ib_mutex_t	srv_monitor_file_mutex;
 
+/* Column compressed counter. */
+UNIV_INTERN ulint	srv_column_compressed		= 0;
+/* Column decompressed counter. */
+UNIV_INTERN ulint	srv_column_decompressed		= 0;
+
 #ifdef UNIV_PFS_MUTEX
 # ifndef HAVE_ATOMIC_BUILTINS
 /* Key to register server_mutex with performance schema */
@@ -1458,6 +1463,10 @@ srv_export_innodb_status(void)
 		srv_truncated_status_writes;
 
 	export_vars.innodb_available_undo_logs = srv_available_undo_logs;
+
+	export_vars.innodb_column_compressed = srv_column_compressed;
+
+	export_vars.innodb_column_decompressed = srv_column_decompressed;
 
 #ifdef UNIV_DEBUG
 	rw_lock_s_lock(&purge_sys->latch);

@@ -12,5 +12,15 @@ There should be *no* long test name listed below:
 select variable_name as `There should be *no* variables listed below:` from t2
 left join t1 on variable_name=test_name where test_name is null ORDER BY variable_name;
 There should be *no* variables listed below:
+INNODB_RDS_COLUMN_COMPRESSION_LEVEL
+INNODB_RDS_COLUMN_COMPRESSION_LEVEL
+INNODB_RDS_COLUMN_ZIP_MEM_USE_HEAP
+INNODB_RDS_COLUMN_ZIP_MEM_USE_HEAP
+INNODB_RDS_COLUMN_ZIP_THRESHOLD
+INNODB_RDS_COLUMN_ZIP_THRESHOLD
+INNODB_RDS_COLUMN_ZLIB_STRATEGY
+INNODB_RDS_COLUMN_ZLIB_STRATEGY
+INNODB_RDS_COLUMN_ZLIB_WRAP
+INNODB_RDS_COLUMN_ZLIB_WRAP
 drop table t1;
 drop table t2;

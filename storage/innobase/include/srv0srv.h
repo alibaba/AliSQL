@@ -394,6 +394,9 @@ extern ulint	srv_available_undo_logs;
 extern	ulint	srv_mem_pool_size;
 extern	ulint	srv_lock_table_size;
 
+extern ulint	srv_column_compressed;
+extern ulint	srv_column_decompressed;
+
 #ifdef UNIV_DEBUG
 extern	ibool	srv_print_thread_releases;
 extern	ibool	srv_print_lock_waits;
@@ -854,6 +857,8 @@ struct export_var_t{
 	ulint innodb_purge_view_trx_id_age;	/*!< rw_max_trx_id
 						- purged view's min trx_id */
 #endif /* UNIV_DEBUG */
+	ulint innodb_column_compressed;           /*!< srv_column_compressed */
+	ulint innodb_column_decompressed;         /*!< srv_column_decompressed */
 };
 
 /** Thread slot in the thread table.  */

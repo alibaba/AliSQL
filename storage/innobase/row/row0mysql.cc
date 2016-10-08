@@ -65,10 +65,22 @@ Created 9/17/2000 Heikki Tuuri
 #include "my_sys.h"
 #include "ha_prototypes.h"
 #include <algorithm>
+#include "zlib.h"
+#include "zutil.h"
 
 /** Provide optional 4.x backwards compatibility for 5.0 and above */
 UNIV_INTERN ibool	row_rollback_on_timeout	= FALSE;
 
+/* Compression level to be used by zlib for compress-format blob column, Settable by user*/
+UNIV_INTERN uint	column_zip_level = DEFAULT_COMPRESSION_LEVEL;
+UNIV_INTERN uint	column_zip_zlib_strategy = Z_DEFAULT_STRATEGY;
+/* Compress the column if the data length exceeds this value.*/
+UNIV_INTERN ulong	column_zip_threshold = 96;
+/* determine if zlib needs to compute adler32 value for the compressed data,
+this variables is similar to page_zip_zlib_wrap, but only used by compressed blob column*/
+UNIV_INTERN my_bool	column_zip_zlib_wrap = TRUE;
+
+UNIV_INTERN my_bool	column_zip_mem_use_heap = FALSE;
 /** Chain node of the list of tables to drop in the background. */
 struct row_mysql_drop_t{
 	char*				table_name;	/*!< table name */
@@ -115,6 +127,9 @@ the magic table names.
 	((str1_len) == sizeof(str2_onstack) \
 	 && memcmp(str1, str2_onstack, sizeof(str2_onstack)) == 0)
 
+/*blob that execeed 96bytes will be compressed (if column_format = compressed)
+ TODO: this value can be defined as a column attribute, So user can specify a
+ suitable value according to data characteristics*/
 /*******************************************************************//**
 Determine if the given name is a name reserved for MySQL system tables.
 @return	TRUE if name is a MySQL system table name */
@@ -171,6 +186,18 @@ row_mysql_prebuilt_free_blob_heap(
 	mem_heap_free(prebuilt->blob_heap);
 	prebuilt->blob_heap = NULL;
 }
+/*******************************************************************//**
+Frees the compress heap in prebuilt when no longer needed. */
+UNIV_INTERN
+void
+row_mysql_prebuilt_free_compress_heap(
+/*==============================*/
+	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct of a
+					ha_innobase:: table handle */
+{
+	mem_heap_free(prebuilt->compress_heap);
+	prebuilt->compress_heap = NULL;
+}
 
 /*******************************************************************//**
 Stores a >= 5.0.3 format true VARCHAR length to dest, in the MySQL row
@@ -199,6 +226,317 @@ row_mysql_store_true_var_len(
 	mach_write_to_1(dest, len);
 
 	return(dest + 1);
+}
+
+#define COLUMN_COMPRESS_PREFIX_MAX_LEN 5
+#define COLUMN_COMPRESS_HEADER_LEN 1
+#define COLUMN_COMPRESS_FLAG_MASK (0x80)
+#define COLUMN_COMPRESS_FLAG 7  /*flag to mark if the column is compressed , bit 8*/
+#define COLUMN_COMPRESS_DATA_LEN_MASK (0x60)
+#define COLUMN_COMPRESS_DATA_LEN  5 /*store bytes used to express the column length, bit 7,6*/
+#define COLUMN_COMPRESS_ALG_MASK (0x1C)
+#define COLUMN_COMPRESS_ALG 2    /*store compression algorithm, default 0, bit 5,4,3*/
+#define COLUMN_COMPRESS_WRAP_MASK (0x02)
+#define COLUMN_COMPRESS_WRAP 1  /*identify if adler32 is calculated, bit 2*/
+
+static void
+column_set_compress_header(
+	byte *data,
+	my_bool compressed,
+	ulint lenlen,
+	uint alg,
+	my_bool wrap)
+{
+	data[0] &= 0x00;
+	data[0] |= (compressed << COLUMN_COMPRESS_FLAG);
+	data[0] |= (lenlen << COLUMN_COMPRESS_DATA_LEN);
+	data[0] |= (alg << COLUMN_COMPRESS_ALG);
+	data[0] |= (wrap << COLUMN_COMPRESS_WRAP);
+}
+
+static void
+column_get_compress_header(
+	const byte* data,
+	my_bool* compressed,
+	ulint* lenlen,
+	uint* alg,
+	my_bool* wrap)
+{
+	*compressed = ((data[0] & COLUMN_COMPRESS_FLAG_MASK) >> COLUMN_COMPRESS_FLAG);
+	*lenlen = ((data[0] & COLUMN_COMPRESS_DATA_LEN_MASK) >> COLUMN_COMPRESS_DATA_LEN);
+	*alg = ((data[0] & COLUMN_COMPRESS_ALG_MASK) >> COLUMN_COMPRESS_ALG);
+	*wrap = ((data[0] & COLUMN_COMPRESS_WRAP_MASK) >> COLUMN_COMPRESS_WRAP);
+}
+
+static
+void*
+column_zip_zalloc(
+/*============*/
+	void*   opaque, /*!< in/out: memory heap */
+	uInt    items,  /*!< in: number of items to allocate */
+	uInt    size)   /*!< in: size of an item in bytes */
+{
+	return(mem_heap_zalloc(static_cast<mem_heap_t*>(opaque), items * size));
+}
+
+/**********************************************************************//**
+Deallocate memory for zlib. */
+static
+void
+column_zip_free(
+/*==========*/
+	 void*   opaque __attribute__((unused)), /*!< in: memory heap */
+	 void*   address __attribute__((unused)))/*!< in: object to free */
+{
+}
+
+/**********************************************************************//**
+Configure the zlib allocator to use the given memory heap. */
+UNIV_INTERN
+void
+column_zip_set_alloc(
+/*===============*/
+	void*           stream,  /*!< in/out: zlib stream */
+	mem_heap_t*     heap)   /*!< in: memory heap to use */
+{
+	z_stream*       strm = static_cast<z_stream*>(stream);
+
+	if (column_zip_mem_use_heap) {
+		strm->zalloc = column_zip_zalloc;
+		strm->zfree = column_zip_free;
+		strm->opaque = heap;
+	} else {
+		strm->zalloc = (alloc_func)0;
+		strm->zfree = (free_func)0;
+		strm->opaque = (voidpf)0;
+	}
+}
+
+/*******************************************************************//**
+Compress column data using zlib
+@return pointer to the compressed data */
+byte*
+row_compress_column(
+	const byte* data,       /*!< in: data in mysql(uncompressed) format */
+	ulint* len,             /*!< in: data length; out: length of compressed data*/
+	ulint lenlen,           /*!< in: bytes used to store the lenght of data*/
+	row_prebuilt_t* prebuilt)/*!< in: use prebuilt->compress_heap only here*/
+{
+	int err = 0;
+	ulint comp_len = *len;
+	ulint buf_len = *len+COLUMN_COMPRESS_PREFIX_MAX_LEN;
+	byte* buf;
+	byte* ptr;
+	z_stream        c_stream;
+	my_bool wrap = column_zip_zlib_wrap;
+
+	int window_bits = wrap ? MAX_WBITS : -MAX_WBITS;
+	srv_column_compressed++;
+
+	if (!prebuilt->compress_heap) {
+		prebuilt->compress_heap =
+			mem_heap_create(max(UNIV_PAGE_SIZE, buf_len));
+	}
+
+	buf = static_cast<byte*>(mem_heap_zalloc(
+			   prebuilt->compress_heap,buf_len));
+
+	if (*len < column_zip_threshold ||
+	    column_zip_level == 0)
+		goto do_not_compress;
+
+	ptr = buf + COLUMN_COMPRESS_HEADER_LEN + lenlen;
+
+	/*init deflate object*/
+	c_stream.next_in = (Bytef*)data;
+	c_stream.avail_in = *len;
+	c_stream.next_out = ptr;
+	c_stream.avail_out = comp_len;
+
+	column_zip_set_alloc(&c_stream, prebuilt->compress_heap);
+
+	err = deflateInit2(&c_stream, column_zip_level,
+			   Z_DEFLATED, window_bits, DEF_MEM_LEVEL, column_zip_zlib_strategy);
+	ut_a(err == Z_OK);
+
+	err = deflate(&c_stream, Z_FINISH);
+	if (err != Z_STREAM_END) {
+		deflateEnd(&c_stream);
+		if (err == Z_OK)
+			err = Z_BUF_ERROR;
+	} else {
+		comp_len = c_stream.total_out;
+		err = deflateEnd(&c_stream);
+	}
+
+	switch(err) {
+	case Z_OK:
+		break;
+	case Z_BUF_ERROR:
+		/* data after compress is larger than uncompressed data*/
+		break;
+	default:
+		ib_logf(IB_LOG_LEVEL_ERROR, "failed to compress the "
+			"column for table %s, error:%d",
+			prebuilt->table->name, err);
+	}
+
+	/* make sure the compressed data size is smaller than uncmpressed data*/
+	if (err == Z_OK && *len > (comp_len + COLUMN_COMPRESS_HEADER_LEN + lenlen))
+	{
+		column_set_compress_header(buf, 1, lenlen-1, 0, wrap);
+		ptr = buf+1;
+		/*store the uncompressed data length*/
+		switch(lenlen) {
+		case 1:
+			mach_write_to_1(ptr, *len);
+			break;
+		case 2:
+			mach_write_to_2(ptr, *len);
+			break;
+		case 3:
+			mach_write_to_3(ptr, *len);
+			break;
+		case 4:
+			mach_write_to_4(ptr, *len);
+			break;
+		default:
+			ut_a(0);
+		}
+
+		*len = comp_len+COLUMN_COMPRESS_HEADER_LEN+lenlen;
+		return buf;
+	}
+
+do_not_compress:
+	ptr = buf;
+	column_set_compress_header(ptr, 0, 0, 0, 0);
+	ptr += COLUMN_COMPRESS_HEADER_LEN;
+	memcpy(ptr, data, *len);
+	*len += COLUMN_COMPRESS_HEADER_LEN;
+	return buf;
+}
+
+/*******************************************************************//**
+Uncompress column data using zlib
+@return pointer to the uncompressed data */
+const byte*
+row_decompress_column(
+	const byte* data,       /*!< in: data in innodb(compressed) format */
+	ulint* len,             /*!< in: data length; out: length of decompressed data*/
+	row_prebuilt_t* prebuilt) /*!< in: use prebuilt->compress_heap only here*/
+{
+	ulint buf_len = 0;
+	byte* buf;
+	int err = 0;
+	int window_bits = 0;
+	z_stream d_stream;
+	srv_column_decompressed++;
+	my_bool is_compress = 0;
+	my_bool wrap = 0;
+	ulint lenlen = 0;
+	uint alg = 0;
+
+	column_get_compress_header(data, &is_compress, &lenlen, &alg, &wrap);
+
+	ut_a(alg == 0);
+	ut_a(lenlen<4);
+
+	data += COLUMN_COMPRESS_HEADER_LEN;
+	if (!is_compress) { /* column not compressed */
+		*len -= COLUMN_COMPRESS_HEADER_LEN;
+		return data;
+	}
+
+	lenlen++;
+
+	ulint comp_len = *len - COLUMN_COMPRESS_HEADER_LEN - lenlen;
+
+	ulint uncomp_len = 0;
+	switch(lenlen) {
+	case 1:
+		uncomp_len = mach_read_from_1(data);
+		break;
+	case 2:
+		uncomp_len = mach_read_from_2(data);
+		break;
+	case 3:
+		uncomp_len = mach_read_from_3(data);
+		break;
+	case 4:
+		uncomp_len = mach_read_from_4(data);
+		break;
+	default:
+		ut_a(0);
+	}
+
+	data += lenlen;
+
+	/* data is compressed, decompress it*/
+	if (!prebuilt->compress_heap) {
+		prebuilt->compress_heap =
+			mem_heap_create(max(UNIV_PAGE_SIZE, uncomp_len));
+	}
+
+	buf_len = uncomp_len;
+	buf = static_cast<byte*>(mem_heap_zalloc(
+				 prebuilt->compress_heap, buf_len));
+
+	/* init d_stream */
+	d_stream.next_in = (Bytef *)data;
+	d_stream.avail_in = comp_len;
+	d_stream.next_out = buf;
+	d_stream.avail_out = buf_len;
+
+	column_zip_set_alloc(&d_stream, prebuilt->compress_heap);
+
+	window_bits = wrap ? MAX_WBITS : -MAX_WBITS;
+	err = inflateInit2(&d_stream, window_bits);
+	ut_a(err == Z_OK);
+
+	err = inflate(&d_stream, Z_FINISH);
+
+	if (err != Z_STREAM_END) {
+		inflateEnd(&d_stream);
+		if (err == Z_BUF_ERROR && d_stream.avail_in == 0)
+			err = Z_DATA_ERROR;
+	} else {
+		buf_len = d_stream.total_out;
+		err = inflateEnd(&d_stream);
+	}
+
+	switch(err) {
+	case Z_OK:
+		break;
+	case Z_BUF_ERROR:
+		ib_logf(IB_LOG_LEVEL_ERROR, "zlib buf error, this shouldn't happen");
+		break;
+	default:
+		ib_logf(IB_LOG_LEVEL_ERROR, "failed to decompress "
+			"column, error:%d", err);
+	}
+
+	if (err == Z_OK)
+	{
+		*len = buf_len;
+		if (buf_len != uncomp_len)
+		{
+			ib_logf(IB_LOG_LEVEL_ERROR,
+				"The length of decompress data is mismatch with "
+				"orignal column for table %s, data may be "
+				"corrupted!", prebuilt->table->name);
+			ut_a(0);
+		}
+
+		return buf;
+	}
+
+	ib_logf(IB_LOG_LEVEL_ERROR,
+		"failed to decompress column for table %s, "
+		"this shouldn't happen!, assert here!",
+		prebuilt->table->name);
+
+	ut_a(0);
 }
 
 /*******************************************************************//**
@@ -241,10 +579,12 @@ row_mysql_store_blob_ref(
 				to 4 bytes */
 	const void*	data,	/*!< in: BLOB data; if the value to store
 				is SQL NULL this should be NULL pointer */
-	ulint		len)	/*!< in: BLOB length; if the value to store
+	ulint		len,	/*!< in: BLOB length; if the value to store
 				is SQL NULL this should be 0; remember
 				also to set the NULL bit in the MySQL record
 				header! */
+	row_prebuilt_t* prebuilt, /*<! in: use prebuilt->compress_heap only here*/
+	my_bool need_decompress) /*<! in: compressed column formate*/
 {
 	/* MySQL might assume the field is set to zero except the length and
 	the pointer fields */
@@ -260,9 +600,18 @@ row_mysql_store_blob_ref(
 	ut_a(col_len - 8 > 2 || len < 256 * 256);
 	ut_a(col_len - 8 > 3 || len < 256 * 256 * 256);
 
+	const byte *ptr = NULL;
+
+	if (need_decompress)
+		ptr = row_decompress_column((const byte*)data, &len, prebuilt);
+
+	if (ptr)
+		memcpy(dest + col_len - 8, &ptr, sizeof ptr);
+	else
+		memcpy(dest + col_len - 8, &data, sizeof data);
+
 	mach_write_to_n_little_endian(dest, col_len - 8, len);
 
-	memcpy(dest + col_len - 8, &data, sizeof data);
 }
 
 /*******************************************************************//**
@@ -275,14 +624,23 @@ row_mysql_read_blob_ref(
 	ulint*		len,		/*!< out: BLOB length */
 	const byte*	ref,		/*!< in: BLOB reference in the
 					MySQL format */
-	ulint		col_len)	/*!< in: BLOB reference length
+	ulint		col_len,	/*!< in: BLOB reference length
 					(not BLOB length) */
+	row_prebuilt_t* prebuilt,       /*!< in: use prebuilt->compress_heap only here*/
+	my_bool need_compress)          /*!< compressed column format*/
 {
-	byte*	data;
+	byte*	data = NULL;
+	byte*   ptr = NULL;
 
 	*len = mach_read_from_n_little_endian(ref, col_len - 8);
 
 	memcpy(&data, ref + col_len - 8, sizeof data);
+
+	if (need_compress) {
+		ptr = row_compress_column(data, len, col_len - 8, prebuilt);
+		if (ptr)
+			data = ptr;
+	}
 
 	return(data);
 }
@@ -366,7 +724,9 @@ row_mysql_store_col_in_innobase_format(
 					necessarily the length of the actual
 					payload data; if the column is a true
 					VARCHAR then this is irrelevant */
-	ulint		comp)		/*!< in: nonzero=compact format */
+	ulint		comp,		/*!< in: nonzero=compact format */
+	row_prebuilt_t* prebuilt,	/*!< in: use prebuilt->compress_heap only here*/
+	my_bool  compressed)		/*!< compressed column format*/
 {
 	const byte*	ptr	= mysql_data;
 	const dtype_t*	dtype;
@@ -418,9 +778,12 @@ row_mysql_store_col_in_innobase_format(
 				/* In a MySQL key value, lenlen is always 2 */
 				lenlen = 2;
 			}
-
-			ptr = row_mysql_read_true_varchar(&col_len, mysql_data,
+			const byte* tmp_ptr = row_mysql_read_true_varchar(&col_len, mysql_data,
 							  lenlen);
+			if (compressed)
+				ptr = row_compress_column(tmp_ptr, &col_len, lenlen, prebuilt);
+			else
+				ptr = tmp_ptr;
 		} else {
 			/* Remove trailing spaces from old style VARCHAR
 			columns. */
@@ -502,7 +865,7 @@ row_mysql_store_col_in_innobase_format(
 		}
 	} else if (type == DATA_BLOB && row_format_col) {
 
-		ptr = row_mysql_read_blob_ref(&col_len, mysql_data, col_len);
+		ptr = row_mysql_read_blob_ref(&col_len, mysql_data, col_len, prebuilt, compressed);
 	}
 
 	dfield_set_data(dfield, ptr, col_len);
@@ -560,7 +923,7 @@ row_mysql_convert_row_to_innobase(
 			TRUE, /* MySQL row format data */
 			mysql_rec + templ->mysql_col_offset,
 			templ->mysql_col_len,
-			dict_table_is_comp(prebuilt->table));
+			dict_table_is_comp(prebuilt->table), prebuilt, templ->compressed);
 next_column:
 		;
 	}
@@ -904,6 +1267,10 @@ row_prebuilt_free(
 
 	if (prebuilt->blob_heap) {
 		mem_heap_free(prebuilt->blob_heap);
+	}
+
+	if (prebuilt->compress_heap) {
+		mem_heap_free(prebuilt->compress_heap);
 	}
 
 	if (prebuilt->old_vers_heap) {
@@ -1331,6 +1698,9 @@ row_insert_for_mysql(
 
 		return(DB_READ_ONLY);
 	}
+
+	if (UNIV_LIKELY_NULL(prebuilt->compress_heap))
+		mem_heap_empty(prebuilt->compress_heap);
 
 	trx->op_info = "inserting";
 

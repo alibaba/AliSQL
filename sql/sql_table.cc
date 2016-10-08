@@ -3415,6 +3415,20 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
   for (field_no=0; (sql_field=it++) ; field_no++)
   {
     const CHARSET_INFO *save_cs;
+    /* check if the column is compressible.*/
+    if ((sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED)
+        && !(sql_field->sql_type == MYSQL_TYPE_TINY_BLOB ||
+             sql_field->sql_type == MYSQL_TYPE_MEDIUM_BLOB ||
+             sql_field->sql_type == MYSQL_TYPE_BLOB ||
+             sql_field->sql_type == MYSQL_TYPE_LONG_BLOB ||
+             sql_field->sql_type == MYSQL_TYPE_VARCHAR))
+    {
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+                          ER_DEFINED_COMPRESS_COLUMN, ER(ER_DEFINED_COMPRESS_COLUMN),
+                          sql_field->field_name);
+      /* silently change the column format to default*/
+      sql_field->set_column_format(COLUMN_FORMAT_TYPE_DEFAULT);
+    }
 
     /*
       Initialize length from its original value (number of characters),
@@ -4003,6 +4017,14 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	  DBUG_RETURN(TRUE);
 	}
       }
+      /* compressed column is not allowed to be defined as a key part*/
+      if (sql_field->column_format() ==
+          COLUMN_FORMAT_TYPE_COMPRESSED)
+      {
+        my_error(ER_BLOB_KEY_WITH_COMPRESS, MYF(0), column->field_name.str);
+        DBUG_RETURN(TRUE);
+      }
+
       cols2.rewind();
       if (key->type == Key::FULLTEXT)
       {

@@ -7112,3 +7112,9 @@ ER_SLAVE_HAS_MORE_GTIDS_THAN_MASTER
 #
 #  End of 5.6 error messages.
 #
+
+ER_BLOB_KEY_WITH_COMPRESS
+  eng "Compressed BLOB/TEXT/VARCHAR/VARBINARY column '%-.192s' used in key list is not allowed"
+
+ER_DEFINED_COMPRESS_COLUMN
+  eng "Can not define column '%-.192s' in compressed format, silently change column_format to default"

@@ -7552,7 +7552,11 @@ Field *Field_varstring::new_key_field(MEM_ROOT *root,
 uint Field_varstring::is_equal(Create_field *new_field)
 {
   if (new_field->sql_type == real_type() &&
-      new_field->charset == field_charset)
+      new_field->charset == field_charset &&
+      /* rebuilt table while changing column format from/to compressed*/
+      (!((new_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED ||
+          column_format() == COLUMN_FORMAT_TYPE_COMPRESSED) &&
+          new_field->column_format() != column_format())))
   {
     if (new_field->length == max_display_length())
       return IS_EQUAL_YES;
@@ -8226,7 +8230,11 @@ uint Field_blob::is_equal(Create_field *new_field)
 {
   return ((new_field->sql_type == get_blob_type_from_length(max_data_length()))
           && new_field->charset == field_charset &&
-          new_field->pack_length == pack_length());
+          new_field->pack_length == pack_length() &&
+          /* rebuilt table while changing column format from/to compressed*/
+          (!((new_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED ||
+              column_format() == COLUMN_FORMAT_TYPE_COMPRESSED) &&
+              new_field->column_format() != column_format())));
 }
 
 
