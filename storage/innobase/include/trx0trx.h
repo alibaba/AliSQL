@@ -44,12 +44,14 @@ Created 3/26/1996 Heikki Tuuri
 extern sess_t*	trx_dummy_sess;
 
 /********************************************************************//**
-Releases the search latch if trx has reserved it. */
+In XtraDB it is impossible for a transaction to own a search latch outside of
+InnoDB code, so there is nothing to release on demand.  We keep this function to
+simplify maintenance.*/
 UNIV_INLINE
 void
 trx_search_latch_release_if_reserved(
 /*=================================*/
-	trx_t*		trx); /*!< in: transaction */
+	trx_t*	   trx __attribute__((unused))); /*!< in: transaction */
 /******************************************************************//**
 Set detailed error message for the transaction. */
 UNIV_INTERN
@@ -814,8 +816,8 @@ struct trx_t{
 					flush the log in
 					trx_commit_complete_for_mysql() */
 	ulint		duplicates;	/*!< TRX_DUP_IGNORE | TRX_DUP_REPLACE */
-	ulint		has_search_latch;
-					/*!< TRUE if this trx has latched the
+	bool		has_search_latch;
+					/*!< true if this trx has latched any
 					search system latch in S-mode */
 	ulint		search_latch_timeout;
 					/*!< If we notice that someone is
@@ -1133,10 +1135,7 @@ but does NOT protect:
 
 Bear in mind (3) and (4) when using the hash index.
 */
-extern rw_lock_t*	btr_search_latch_temp;
-
-/** The latch protecting the adaptive search system */
-#define btr_search_latch	(*btr_search_latch_temp)
+extern rw_lock_t*	btr_search_latch_arr;
 
 #ifndef UNIV_NONINL
 #include "trx0trx.ic"

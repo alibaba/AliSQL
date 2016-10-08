@@ -43,6 +43,7 @@ Created 10/21/1995 Heikki Tuuri
 #include "srv0start.h"
 #include "fil0fil.h"
 #include "buf0buf.h"
+#include "btr0types.h"
 #include "srv0mon.h"
 #ifndef UNIV_HOTBACKUP
 # include "os0sync.h"

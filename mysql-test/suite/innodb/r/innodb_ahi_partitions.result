@@ -1,0 +1,33 @@
+SELECT @@GLOBAL.innodb_adaptive_hash_index;
+@@GLOBAL.innodb_adaptive_hash_index
+1
+SELECT @@GLOBAL.innodb_adaptive_hash_index_parts;
+@@GLOBAL.innodb_adaptive_hash_index_parts
+4
+SET GLOBAL innodb_monitor_enable=module_adaptive_hash;
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT, c CHAR(200), UNIQUE INDEX b(b)) ENGINE=InnoDB;
+CREATE TABLE t2 (a INT PRIMARY KEY, b INT, c CHAR(200), UNIQUE INDEX b(b)) ENGINE=InnoDB;
+CREATE TABLE t3 (a INT PRIMARY KEY, b INT, c CHAR(200), UNIQUE INDEX b(b)) ENGINE=InnoDB;
+Filling tables
+Querying
+SELECT COUNT >= 6 as should_be_1 FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME = 'adaptive_hash_pages_added';
+should_be_1
+1
+SELECT COUNT >= 6 as should_be_1 FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME = 'adaptive_hash_rows_added';
+should_be_1
+1
+SELECT COUNT > 0 as should_be_1 FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME = 'adaptive_hash_searches';
+should_be_1
+1
+SELECT COUNT(*) > 0 AS should_be_1 FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE PAGE_STATE LIKE "MEMORY";
+should_be_1
+1
+SELECT COUNT(*) >= 6 AS should_be_1 FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE IS_HASHED LIKE "YES";
+should_be_1
+1
+SET GLOBAL innodb_monitor_disable=module_adaptive_hash;
+DROP TABLE t1, t2, t3;
+SET GLOBAL innodb_monitor_enable=default;
+SET GLOBAL innodb_monitor_disable=default;

@@ -1228,7 +1228,20 @@ srv_printf_innodb_monitor(
 	      "-------------------------------------\n", file);
 	ibuf_print(file);
 
-	ha_print_info(file, btr_search_sys->hash_index);
+	/* Calculate AHI constant and variable memory allocations */
+
+	ut_ad(btr_search_sys->hash_tables);
+
+	for (uint i = 0; i < btr_search_index_num; i++) {
+		rw_lock_s_lock(&(btr_search_latch_arr[i]));
+		hash_table_t* ht = btr_search_sys->hash_tables[i];
+
+		ut_ad(ht);
+		ut_ad(ht->heap);
+		fprintf(file, "AHI PARTITION %d: ", i+1);
+		ha_print_info(file, ht);
+		rw_lock_s_unlock(&(btr_search_latch_arr[i]));
+	}
 
 	fprintf(file,
 		"%.2f hash searches/s, %.2f non-hash searches/s\n",

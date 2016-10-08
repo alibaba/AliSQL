@@ -1480,20 +1480,21 @@ thd_to_trx(
 }
 
 /********************************************************************//**
-Call this function when mysqld passes control to the client. That is to
-avoid deadlocks on the adaptive hash S-latch possibly held by thd. For more
-documentation, see handler.cc.
-@return	0 */
+In InnoDB it is impossible for a transaction to own a search latch outside of
+InnoDB code, so there is nothing to release on demand.  We keep this function to
+simplify maintenance.
+@return 0 */
 static
 int
 innobase_release_temporary_latches(
 /*===============================*/
-	handlerton*	hton,	/*!< in: handlerton */
-	THD*		thd)	/*!< in: MySQL thread */
+	handlerton*	hton __attribute__((unused)),	/*!< in: handlerton */
+	THD*		thd __attribute__((unused)))	/*!< in: MySQL thread */
 {
+#ifdef UNIV_DEBUG
 	DBUG_ASSERT(hton == innodb_hton_ptr);
 
-	if (!innodb_inited) {
+	if (!innodb_inited || thd == NULL) {
 
 		return(0);
 	}
@@ -1501,8 +1502,12 @@ innobase_release_temporary_latches(
 	trx_t*	trx = thd_to_trx(thd);
 
 	if (trx != NULL) {
+#ifdef UNIV_SYNC_DEBUG
+		ut_ad(!btr_search_own_any());
+#endif
 		trx_search_latch_release_if_reserved(trx);
 	}
+#endif
 
 	return(0);
 }
@@ -3686,9 +3691,7 @@ innobase_commit(
 	/* Since we will reserve the trx_sys->mutex, we have to release
 	the search system latch first to obey the latching order. */
 
-	if (trx->has_search_latch) {
-		trx_search_latch_release_if_reserved(trx);
-	}
+	trx_search_latch_release_if_reserved(trx);
 
 	/* Transaction is deregistered only in a commit or a rollback. If
 	it is deregistered we know there cannot be resources to be freed
@@ -4902,12 +4905,7 @@ ha_innobase::open(
 
 	thd = ha_thd();
 
-	/* Under some cases MySQL seems to call this function while
-	holding btr_search_latch. This breaks the latching order as
-	we acquire dict_sys->mutex below and leads to a deadlock. */
-	if (thd != NULL) {
-		innobase_release_temporary_latches(ht, thd);
-	}
+	innobase_release_temporary_latches(ht, thd);
 
 	normalize_table_name(norm_name, name);
 
@@ -5310,9 +5308,8 @@ ha_innobase::close()
 	DBUG_ENTER("ha_innobase::close");
 
 	thd = ha_thd();
-	if (thd != NULL) {
-		innobase_release_temporary_latches(ht, thd);
-	}
+
+	innobase_release_temporary_latches(ht, thd);
 
 	row_prebuilt_free(prebuilt, FALSE);
 
@@ -16214,6 +16211,13 @@ static MYSQL_SYSVAR_BOOL(adaptive_hash_index, btr_search_enabled,
   "Disable with --skip-innodb-adaptive-hash-index.",
   NULL, innodb_adaptive_hash_index_update, TRUE);
 
+/* btr_search_index_num is constrained to machine word size for historical
+reasons. This limitation can be easily removed later. */
+static MYSQL_SYSVAR_ULONG(adaptive_hash_index_parts, btr_search_index_num,
+  PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+  "Number of InnoDB adaptive hash index partitions",
+  NULL, NULL, 8, 1, 512, 0);
+
 static MYSQL_SYSVAR_ULONG(replication_delay, srv_replication_delay,
   PLUGIN_VAR_RQCMDARG,
   "Replication thread delay (ms) on the slave server if "
@@ -16873,6 +16877,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(stats_persistent_sample_pages),
   MYSQL_SYSVAR(stats_auto_recalc),
   MYSQL_SYSVAR(adaptive_hash_index),
+  MYSQL_SYSVAR(adaptive_hash_index_parts),
   MYSQL_SYSVAR(stats_method),
   MYSQL_SYSVAR(replication_delay),
   MYSQL_SYSVAR(status_file),

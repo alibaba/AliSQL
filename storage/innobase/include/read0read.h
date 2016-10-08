@@ -34,6 +34,7 @@ Created 2/16/1997 Heikki Tuuri
 #include "trx0trx.h"
 #include "trx0sys.h"
 #include "read0types.h"
+#include "btr0types.h"
 
 /*********************************************************************//**
 Opens a read view where exactly the transactions serialized before this

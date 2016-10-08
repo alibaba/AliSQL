@@ -39,6 +39,7 @@ Created 2011/04/18 Sunny Bains
 
 #include "srv0srv.h"
 #include "sync0sync.h"
+#include "btr0types.h"
 #include "trx0trx.h"
 
 #include "mysql/plugin.h"

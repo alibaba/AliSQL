@@ -1,0 +1,14 @@
+# A sys_vars suite test for innodb_adaptive_hash_index_parts.
+
+--source include/have_innodb.inc
+
+SELECT @@GLOBAL.innodb_adaptive_hash_index_parts;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET @@GLOBAL.innodb_adaptive_hash_index_parts=1;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@LOCAL.innodb_adaptive_hash_index_parts;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@SESSION.innodb_adaptive_hash_index_parts;

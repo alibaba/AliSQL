@@ -486,8 +486,9 @@ btr_cur_search_to_nth_level(
 
 # ifdef UNIV_SEARCH_PERF_STAT
 	info->n_searches++;
-# endif
-	if (rw_lock_get_writer(&btr_search_latch) == RW_LOCK_NOT_LOCKED
+#endif
+	if (rw_lock_get_writer(btr_search_get_latch(cursor->index)) ==
+	    RW_LOCK_NOT_LOCKED
 	    && latch_mode <= BTR_MODIFY_LEAF
 	    && info->last_hash_succ
 	    && !estimate
@@ -523,7 +524,7 @@ btr_cur_search_to_nth_level(
 
 	if (has_search_latch) {
 		/* Release possible search latch to obey latching order */
-		rw_lock_s_unlock(&btr_search_latch);
+		rw_lock_s_unlock(btr_search_get_latch(cursor->index));
 	}
 
 	/* Store the position of the tree latch we push to mtr so that we
@@ -819,7 +820,7 @@ func_exit:
 
 	if (has_search_latch) {
 
-		rw_lock_s_lock(&btr_search_latch);
+		rw_lock_s_lock(btr_search_get_latch(cursor->index));
 	}
 }
 
@@ -2042,13 +2043,13 @@ btr_cur_update_in_place(
 			btr_search_update_hash_on_delete(cursor);
 		}
 
-		rw_lock_x_lock(&btr_search_latch);
+		rw_lock_x_lock(btr_search_get_latch(cursor->index));
 	}
 
 	row_upd_rec_in_place(rec, index, offsets, update, page_zip);
 
 	if (is_hashed) {
-		rw_lock_x_unlock(&btr_search_latch);
+		rw_lock_x_unlock(btr_search_get_latch(cursor->index));
 	}
 
 	btr_cur_update_in_place_log(flags, rec, index, update,

@@ -1773,6 +1773,7 @@ err_len:
 
 	(*index)->id = id;
 	(*index)->page = mach_read_from_4(field);
+	btr_search_index_init(*index);
 	ut_ad((*index)->page);
 
 	return(NULL);

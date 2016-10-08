@@ -39,6 +39,7 @@ Created 9/5/1995 Heikki Tuuri
 #include "sync0rw.h"
 #include "buf0buf.h"
 #include "srv0srv.h"
+#include "btr0types.h"
 #include "buf0types.h"
 #include "os0sync.h" /* for HAVE_ATOMIC_BUILTINS */
 #ifdef UNIV_SYNC_DEBUG
@@ -1148,7 +1149,6 @@ sync_thread_add_level(
 	case SYNC_ANY_LATCH:
 	case SYNC_FILE_FORMAT_TAG:
 	case SYNC_DOUBLEWRITE:
-	case SYNC_SEARCH_SYS:
 	case SYNC_THREADS:
 	case SYNC_LOCK_SYS:
 	case SYNC_LOCK_WAIT_SYS:
@@ -1181,6 +1181,24 @@ sync_thread_add_level(
 			ut_a(sync_thread_levels_contain(array, SYNC_LOCK_SYS));
 		}
 		break;
+	case SYNC_SEARCH_SYS: {
+		/* Verify the lock order inside the split btr_search_latch
+		array */
+		bool found_current = false;
+		for (ulint i = 0; i < btr_search_index_num; i++) {
+			if (&btr_search_latch_arr[i] == latch) {
+				found_current = true;
+			} else if (found_current) {
+				ut_ad(!rw_lock_own(&btr_search_latch_arr[i],
+						   RW_LOCK_SHARED));
+				ut_ad(!rw_lock_own(&btr_search_latch_arr[i],
+						   RW_LOCK_EX));
+			}
+		}
+		ut_ad(found_current);
+
+		/* fallthrough */
+	}
 	case SYNC_BUF_FLUSH_LIST:
 	case SYNC_BUF_POOL:
 		/* We can have multiple mutexes of this type therefore we

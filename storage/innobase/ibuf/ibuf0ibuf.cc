@@ -52,6 +52,7 @@ UNIV_INTERN my_bool	srv_ibuf_disable_background_merge;
 #include "btr0cur.h"
 #include "btr0pcur.h"
 #include "btr0btr.h"
+#include "btr0sea.h"
 #include "row0upd.h"
 #include "sync0sync.h"
 #include "dict0boot.h"
@@ -587,6 +588,7 @@ ibuf_init_at_db_start(void)
 	dict_mem_index_add_field(index, "DUMMY_COLUMN", 0);
 
 	index->id = DICT_IBUF_ID_MIN + IBUF_SPACE_ID;
+	btr_search_index_init(index);
 
 	error = dict_index_add_to_cache(table, index,
 					FSP_IBUF_TREE_ROOT_PAGE_NO, FALSE);

@@ -41,29 +41,30 @@ struct btr_search_t;
 
 #ifndef UNIV_HOTBACKUP
 
-/** @brief The latch protecting the adaptive search system
+/** @brief The array of latches protecting the adaptive search partitions
 
-This latch protects the
-(1) hash index;
+These latch protect the
+(1) hash index from the corresponding AHI partition;
 (2) columns of a record to which we have a pointer in the hash index;
 
-but does NOT protect:
+but do NOT protect:
 
 (3) next record offset field in a record;
 (4) next or previous records on the same page.
 
-Bear in mind (3) and (4) when using the hash index.
+Bear in mind (3) and (4) when using the hash indexes.
 */
-extern rw_lock_t*	btr_search_latch_temp;
+
+extern rw_lock_t*	btr_search_latch_arr;
 
 #endif /* UNIV_HOTBACKUP */
-
-/** The latch protecting the adaptive search system */
-#define btr_search_latch	(*btr_search_latch_temp)
 
 /** Flag: has the search system been enabled?
 Protected by btr_search_latch. */
 extern char	btr_search_enabled;
+
+/** Number of adaptive hash index partitions */
+extern ulint	btr_search_index_num;
 
 #ifdef UNIV_BLOB_DEBUG
 # include "buf0types.h"

@@ -98,6 +98,33 @@ ha_create_func(
 	return(table);
 }
 
+#ifdef UNIV_SYNC_DEBUG
+/*************************************************************//**
+Verifies that the specified hash table is a part of adaptive hash index and
+that its corresponding latch is X-latched by the current thread.  */
+static
+bool
+ha_assert_btr_x_locked(
+/*===================*/
+	const hash_table_t* table)	/*!<in: hash table to check */
+{
+	ulint i;
+
+	ut_ad(table->adaptive);
+
+	for (i = 0; i < btr_search_index_num; i++) {
+		if (btr_search_sys->hash_tables[i] == table) {
+			break;
+		}
+	}
+
+	ut_ad(i < btr_search_index_num);
+	ut_ad(rw_lock_own(&btr_search_latch_arr[i], RW_LOCK_EX));
+
+	return(true);
+}
+#endif /* UNIV_SYNC_DEBUG */
+
 /*************************************************************//**
 Empties a hash table and frees the memory heaps. */
 UNIV_INTERN
@@ -112,8 +139,7 @@ ha_clear(
 	ut_ad(table);
 	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 #ifdef UNIV_SYNC_DEBUG
-	ut_ad(!table->adaptive
-	       || rw_lock_own(&btr_search_latch, RW_LOCK_EXCLUSIVE));
+	ut_ad(!table->adaptive || ha_assert_btr_x_locked(table));
 #endif /* UNIV_SYNC_DEBUG */
 
 	/* Free the memory heaps. */
@@ -274,7 +300,7 @@ ha_delete_hash_node(
 	ut_ad(table);
 	ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 #ifdef UNIV_SYNC_DEBUG
-	ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EX));
+	ut_ad(ha_assert_btr_x_locked(table));
 #endif /* UNIV_SYNC_DEBUG */
 	ut_ad(btr_search_enabled);
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
@@ -313,7 +339,7 @@ ha_search_and_update_if_found_func(
 	ut_a(new_block->frame == page_align(new_data));
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
 #ifdef UNIV_SYNC_DEBUG
-	ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EX));
+	ut_ad(ha_assert_btr_x_locked(table));
 #endif /* UNIV_SYNC_DEBUG */
 
 	if (!btr_search_enabled) {
