@@ -16941,6 +16941,7 @@ mysql_declare_plugin(innobase)
   NULL, /* reserved */
   0,    /* flags */
 },
+i_s_innodb_rseg,
 i_s_innodb_trx,
 i_s_innodb_locks,
 i_s_innodb_lock_waits,

@@ -56,6 +56,7 @@ Created July 18, 2007 Vasil Dimov
 #include "fts0priv.h"
 #include "btr0btr.h"
 #include "page0zip.h"
+#include "trx0rseg.h"
 
 /** structure associates a name string with a file page type and/or buffer
 page state. */
@@ -620,14 +621,13 @@ fill_innodb_trx_from_cache(
 		/* trx_requested_lock_id */
 		/* trx_wait_started */
 		if (row->trx_wait_started != 0) {
-
 			OK(field_store_string(
 				   fields[IDX_TRX_REQUESTED_LOCK_ID],
 				   trx_i_s_create_lock_id(
 					   row->requested_lock_row,
 					   lock_id, sizeof(lock_id))));
-			/* field_store_string() sets it no notnull */
 
+			/* field_store_string() sets it no notnull */
 			OK(field_store_time_t(
 				   fields[IDX_TRX_WAIT_STARTED],
 				   (time_t) row->trx_wait_started));
@@ -754,6 +754,181 @@ innodb_trx_init(
 static struct st_mysql_information_schema	i_s_info =
 {
 	MYSQL_INFORMATION_SCHEMA_INTERFACE_VERSION
+};
+
+/* Fields of the dynamic table information_schema.innodb_rseg. */
+static ST_FIELD_INFO i_s_innodb_rseg_fields_info[] =
+{
+	{STRUCT_FLD(field_name,   "rseg_id"),
+		STRUCT_FLD(field_length, MY_INT64_NUM_DECIMAL_DIGITS),
+		STRUCT_FLD(field_type,		MYSQL_TYPE_LONGLONG),
+		STRUCT_FLD(value,        0),
+		STRUCT_FLD(field_flags,	MY_I_S_UNSIGNED),
+		STRUCT_FLD(old_name,     ""),
+		STRUCT_FLD(open_method,	SKIP_OPEN_TABLE)},
+
+	{STRUCT_FLD(field_name,		"space_id"),
+		STRUCT_FLD(field_length,	MY_INT64_NUM_DECIMAL_DIGITS),
+		STRUCT_FLD(field_type,		MYSQL_TYPE_LONGLONG),
+		STRUCT_FLD(value,        0),
+		STRUCT_FLD(field_flags,	MY_I_S_UNSIGNED),
+		STRUCT_FLD(old_name,     ""),
+		STRUCT_FLD(open_method,	SKIP_OPEN_TABLE)},
+
+	{STRUCT_FLD(field_name,		"zip_size"),
+		STRUCT_FLD(field_length,	MY_INT64_NUM_DECIMAL_DIGITS),
+		STRUCT_FLD(field_type,		MYSQL_TYPE_LONGLONG),
+		STRUCT_FLD(value,        0),
+		STRUCT_FLD(field_flags,	MY_I_S_UNSIGNED),
+		STRUCT_FLD(old_name,     ""),
+		STRUCT_FLD(open_method,	SKIP_OPEN_TABLE)},
+
+	{STRUCT_FLD(field_name,		"page_no"),
+		STRUCT_FLD(field_length,	MY_INT64_NUM_DECIMAL_DIGITS),
+		STRUCT_FLD(field_type,		MYSQL_TYPE_LONGLONG),
+		STRUCT_FLD(value,        0),
+		STRUCT_FLD(field_flags,	MY_I_S_UNSIGNED),
+		STRUCT_FLD(old_name,     ""),
+		STRUCT_FLD(open_method,	SKIP_OPEN_TABLE)},
+
+	{STRUCT_FLD(field_name,		"max_size"),
+		STRUCT_FLD(field_length,	MY_INT64_NUM_DECIMAL_DIGITS),
+		STRUCT_FLD(field_type,		MYSQL_TYPE_LONGLONG),
+		STRUCT_FLD(value,        0),
+		STRUCT_FLD(field_flags,	MY_I_S_UNSIGNED),
+		STRUCT_FLD(old_name,     ""),
+		STRUCT_FLD(open_method,	SKIP_OPEN_TABLE)},
+
+	{STRUCT_FLD(field_name,		"curr_size"),
+		STRUCT_FLD(field_length,	MY_INT64_NUM_DECIMAL_DIGITS),
+		STRUCT_FLD(field_type,		MYSQL_TYPE_LONGLONG),
+		STRUCT_FLD(value,        0),
+		STRUCT_FLD(field_flags,	MY_I_S_UNSIGNED),
+		STRUCT_FLD(old_name,     ""),
+		STRUCT_FLD(open_method,	SKIP_OPEN_TABLE)},
+
+	END_OF_ST_FIELD_INFO
+};
+
+/*******************************************************************//**
+Fill the dynamic table INFORMATION_SCHEMA.innodb_rseg
+@return	0 on success */
+static
+int
+i_s_innodb_rseg_fill(
+/*=================*/
+        THD*            thd,    /*!< in: thread */
+        TABLE_LIST*     tables, /*!< in/out: tables to fill */
+        Item*           cond)
+{
+	TABLE *table;
+	int status;
+
+	status = 0;
+	table = (TABLE *) tables->table;
+	DBUG_ENTER("i_s_innodb_rseg_fill");
+
+	/* Deny access to user without PROCESS_ACL privilege */
+	if (check_global_access(thd, PROCESS_ACL)) {
+		DBUG_RETURN(0);
+	}
+
+	RETURN_IF_INNODB_NOT_STARTED(tables->schema_table_name);
+	/* Since rseg_array is a static array, so we don't need trx_sys->mutex.
+		And we only estimate the size of rseg, also avoid rseg->mutex contention.
+	*/
+	for (ulint i = 0; i < TRX_SYS_N_RSEGS; ++i) {
+		const trx_rseg_t* rseg = trx_sys->rseg_array[i];
+
+		if (rseg != NULL) {
+			table->field[0]->store(rseg->id);
+			table->field[1]->store(rseg->space);
+			table->field[2]->store(rseg->zip_size);
+			table->field[3]->store(rseg->page_no);
+			table->field[4]->store(rseg->max_size);
+			table->field[5]->store(rseg->curr_size);
+
+			if (schema_table_store_record(thd, table)) {
+				status = 1;     // no cover line.
+				break;
+			}
+		}
+	}
+
+	DBUG_RETURN(status);
+}
+
+
+/*******************************************************************//**
+Bind the dynamic table INFORMATION_SCHEMA.innodb_rseg
+@return	0 on success */
+static
+int
+innodb_rseg_init(
+/*=============*/
+        void*   p)      /*!< in/out: table schema object */
+{
+	ST_SCHEMA_TABLE*        schema;
+	DBUG_ENTER("innodb_rseg_init");
+
+	schema= (ST_SCHEMA_TABLE*) p;
+
+	schema->fields_info= i_s_innodb_rseg_fields_info;
+	schema->fill_table= i_s_innodb_rseg_fill;
+
+	DBUG_RETURN(0);
+}
+
+UNIV_INTERN struct st_mysql_plugin i_s_innodb_rseg =
+{
+	/* the plugin type (a MYSQL_XXX_PLUGIN value) */
+	/* int */
+	STRUCT_FLD(type, MYSQL_INFORMATION_SCHEMA_PLUGIN),
+
+	/* pointer to type-specific plugin descriptor */
+	/* void* */
+	STRUCT_FLD(info, &i_s_info),
+
+	/* plugin name */
+	/* const char* */
+	STRUCT_FLD(name, "INNODB_RSEG"),
+
+	/* plugin author (for SHOW PLUGINS) */
+	/* const char* */
+	STRUCT_FLD(author, "Aliyun"),
+
+	/* general descriptive text (for SHOW PLUGINS) */
+	/* const char* */
+	STRUCT_FLD(descr, "InnoDB rollback segment information"),
+
+	/* the plugin license (PLUGIN_LICENSE_XXX) */
+	/* int */
+	STRUCT_FLD(license, PLUGIN_LICENSE_GPL),
+
+	/* the function to invoke when plugin is loaded */
+	/* int (*)(void*); */
+	STRUCT_FLD(init, innodb_rseg_init),
+
+	/* the function to invoke when plugin is unloaded */
+	/* int (*)(void*); */
+	STRUCT_FLD(deinit, i_s_common_deinit),
+
+	/* plugin version (for SHOW PLUGINS) */
+	/* unsigned int */
+	STRUCT_FLD(version, INNODB_VERSION_SHORT),
+
+	/* struct st_mysql_show_var* */
+	STRUCT_FLD(status_vars, NULL),
+
+	/* struct st_mysql_sys_var** */
+	STRUCT_FLD(system_vars, NULL),
+
+	/* reserved for dependency checking */
+	STRUCT_FLD(__reserved1, NULL),
+
+	/* plugin flags */
+	/* unsigned long */
+	STRUCT_FLD(flags, 0UL),
 };
 
 UNIV_INTERN struct st_mysql_plugin	i_s_innodb_trx =
