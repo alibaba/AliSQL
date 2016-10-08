@@ -25,6 +25,10 @@ class Master_info;
 
 class Format_description_log_event;
 
+#define barrier() __asm__ __volatile__("" ::: "memory")
+#define MAX_STAGE_COND 128
+#define UNDEF_COND_SLOT -1
+
 /**
   Class for maintaining the commit stages for binary log group commit.
  */
@@ -34,7 +38,7 @@ public:
     friend class Stage_manager;
   public:
     Mutex_queue()
-      : m_first(NULL), m_last(&m_first), group_prepared_engine(NULL)
+      : m_first(NULL), m_last(&m_first), m_last_thd(NULL), group_prepared_engine(NULL)
     {
     }
 
@@ -59,7 +63,7 @@ public:
     }
 
     /** Append a linked list of threads to the queue */
-    bool append(THD *first);
+    bool append(THD *first, int *slot);
 
     /**
        Fetch the entire queue for a stage.
@@ -78,6 +82,8 @@ public:
     */
     THD *m_first;
 
+    /* The last thd object of the queue */
+    THD *m_last_thd;
     /**
        Pointer to the location holding the end of the queue.
 
@@ -91,6 +97,12 @@ public:
       We have to init group_prepared_engine after all plugins are inited.
      */
     engine_lsn_map* group_prepared_engine;
+
+    /**
+      slot inex for allocating m_lock_done/m_cond_done, only changed
+      at first stage.
+     */
+    int cond_index;
 
     /** Lock for protecting the queue. */
     mysql_mutex_t m_lock;
@@ -125,9 +137,13 @@ public:
 #endif
             )
   {
-    mysql_mutex_init(key_LOCK_done, &m_lock_done, MY_MUTEX_INIT_FAST);
-    mysql_cond_init(key_COND_done, &m_cond_done, NULL);
+    for(int i= 0; i< MAX_STAGE_COND; i++)
+    {
+      mysql_mutex_init(key_LOCK_done, &m_lock_done[i], MY_MUTEX_INIT_FAST);
+      mysql_cond_init(key_COND_done, &m_cond_done[i], NULL);
+    }
 #ifndef DBUG_OFF
+    mysql_mutex_init(key_LOCK_done, &m_lock_preempt, MY_MUTEX_INIT_FAST);
     /* reuse key_COND_done 'cos a new PSI object would be wasteful in DBUG_ON */
     mysql_cond_init(key_COND_done, &m_cond_preempt, NULL);
 #endif
@@ -152,8 +168,16 @@ public:
   {
     for (size_t i = 0 ; i < STAGE_COUNTER ; ++i)
       m_queue[i].deinit();
-    mysql_cond_destroy(&m_cond_done);
-    mysql_mutex_destroy(&m_lock_done);
+
+    for(int i= 0; i< MAX_STAGE_COND; i++)
+    {
+      mysql_cond_destroy(&m_cond_done[i]);
+      mysql_mutex_destroy(&m_lock_done[i]);
+    }
+#ifndef DBUG_OFF
+    mysql_cond_destroy(&m_cond_preempt);
+    mysql_mutex_destroy(&m_lock_preempt);
+#endif
   }
 
   /**
@@ -203,11 +227,47 @@ public:
   }
 
   void signal_done(THD *queue) {
-    mysql_mutex_lock(&m_lock_done);
-    for (THD *thd= queue ; thd ; thd = thd->next_to_commit)
-      thd->transaction.flags.pending= false;
-    mysql_mutex_unlock(&m_lock_done);
-    mysql_cond_broadcast(&m_cond_done);
+    THD* node= queue->prev_to_commit;
+    THD* prev_node= NULL;
+
+    while(node)
+    {
+      prev_node= node->prev_to_commit;
+      barrier();
+      node->transaction.flags.pending= false;
+
+      if (node == queue)
+        break;
+
+      node= prev_node;
+    }
+
+    mutex_enter_slot(queue->stage_cond_id);
+    cond_signal_slot(queue->stage_cond_id);
+    mutex_exit_slot(queue->stage_cond_id);
+  }
+
+  void mutex_enter_slot(int slot)
+  {
+    mysql_mutex_lock(&(m_lock_done[slot]));
+  }
+
+  void mutex_exit_slot(int slot)
+  {
+    mysql_mutex_unlock(&(m_lock_done[slot]));
+  }
+
+  void enter_cond_slot(int slot)
+  {
+    struct timespec abstime;
+    set_timespec(abstime, 1);
+
+    mysql_cond_timedwait(&(m_cond_done[slot]), &(m_lock_done[slot]), &abstime);
+  }
+
+  void cond_signal_slot(int slot)
+  {
+    mysql_cond_broadcast(&(m_cond_done[slot]));
   }
 
 private:
@@ -221,14 +281,15 @@ private:
   Mutex_queue m_queue[STAGE_COUNTER];
 
   /** Condition variable to indicate that the commit was processed */
-  mysql_cond_t m_cond_done;
-
+  mysql_cond_t m_cond_done[MAX_STAGE_COND];
   /** Mutex used for the condition variable above */
-  mysql_mutex_t m_lock_done;
+  mysql_mutex_t m_lock_done[MAX_STAGE_COND];
+
 #ifndef DBUG_OFF
   /** Flag is set by Leader when it starts waiting for follower's all-clear */
   bool leader_await_preempt_status;
 
+  mysql_mutex_t m_lock_preempt;
   /** Condition variable to indicate a follower started waiting for commit */
   mysql_cond_t m_cond_preempt;
 #endif

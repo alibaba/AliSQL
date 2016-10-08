@@ -1374,7 +1374,7 @@ static int binlog_rollback(handlerton *hton, THD *thd, bool all)
 
 
 bool
-Stage_manager::Mutex_queue::append(THD *first)
+Stage_manager::Mutex_queue::append(THD *first, int *slot)
 {
   DBUG_ENTER("Stage_manager::Mutex_queue::append");
   lock();
@@ -1393,6 +1393,33 @@ Stage_manager::Mutex_queue::append(THD *first)
 
   bool empty= (m_first == NULL);
   *m_last= first;
+
+  if (empty)
+  {
+    DBUG_ASSERT(m_first == first);
+    if (first->stage_cond_id == UNDEF_COND_SLOT)
+    {
+      if (unlikely(cond_index < 0))
+      {
+        /* adjust to zero */
+        cond_index= 0;
+      }
+
+      first->stage_cond_id= ((cond_index++)%MAX_STAGE_COND);
+    }
+  }
+  else
+  {
+    first->prev_to_commit= m_last_thd;
+  }
+
+  DBUG_ASSERT(m_first &&
+              (m_first->stage_cond_id != UNDEF_COND_SLOT));
+
+  /* The follower thread will always wait for the leader of
+     current stage. */
+  *slot= m_first->stage_cond_id;
+
   DBUG_PRINT("info", ("m_first: 0x%llx, &m_first: 0x%llx, m_last: 0x%llx",
                        (ulonglong) m_first, (ulonglong) &m_first,
                        (ulonglong) m_last));
@@ -1404,6 +1431,9 @@ Stage_manager::Mutex_queue::append(THD *first)
   while (first->next_to_commit)
     first= first->next_to_commit;
   m_last= &first->next_to_commit;
+
+  m_last_thd= first;
+
   DBUG_PRINT("info", ("m_first: 0x%llx, &m_first: 0x%llx, m_last: 0x%llx",
                         (ulonglong) m_first, (ulonglong) &m_first,
                         (ulonglong) m_last));
@@ -1419,8 +1449,10 @@ Stage_manager::enroll_for(StageID stage, THD *thd, mysql_mutex_t *stage_mutex)
   // If the queue was empty: we're the leader for this batch
   DBUG_PRINT("debug", ("Enqueue 0x%llx to queue for stage %d",
                        (ulonglong) thd, stage));
-  bool leader= m_queue[stage].append(thd);
+  int slot= UNDEF_COND_SLOT;
+  bool leader= m_queue[stage].append(thd, &slot);
 
+  DBUG_ASSERT(slot != UNDEF_COND_SLOT);
   /*
     The stage mutex can be NULL if we are enrolling for the first
     stage.
@@ -1428,6 +1460,8 @@ Stage_manager::enroll_for(StageID stage, THD *thd, mysql_mutex_t *stage_mutex)
   if (stage_mutex)
     mysql_mutex_unlock(stage_mutex);
 
+  if (leader)
+    thd->stage_leader= true;
   /*
     If the queue was not empty, we're a follower and wait for the
     leader to process the queue. If we were holding a mutex, we have
@@ -1436,8 +1470,8 @@ Stage_manager::enroll_for(StageID stage, THD *thd, mysql_mutex_t *stage_mutex)
   if (!leader)
   {
     DEBUG_SYNC(thd, "wait_as_follower");
-    mysql_mutex_lock(&m_lock_done);
 #ifndef DBUG_OFF
+    mysql_mutex_lock(&m_lock_preempt);
     /*
       Leader can be awaiting all-clear to preempt follower's execution.
       With setting the status the follower ensures it won't execute anything
@@ -1446,10 +1480,19 @@ Stage_manager::enroll_for(StageID stage, THD *thd, mysql_mutex_t *stage_mutex)
     thd->transaction.flags.ready_preempt= 1;
     if (leader_await_preempt_status)
       mysql_cond_signal(&m_cond_preempt);
+    mysql_mutex_unlock(&m_lock_preempt);
 #endif
+    mutex_enter_slot(slot);
     while (thd->transaction.flags.pending)
-      mysql_cond_wait(&m_cond_done, &m_lock_done);
-    mysql_mutex_unlock(&m_lock_done);
+      enter_cond_slot(slot);
+    mutex_exit_slot(slot);
+
+    if (thd->stage_leader)
+    {
+      mutex_enter_slot(thd->stage_cond_id);
+      cond_signal_slot(thd->stage_cond_id);
+      mutex_exit_slot(thd->stage_cond_id);
+    }
   }
   return leader;
 }
@@ -1463,7 +1506,10 @@ THD *Stage_manager::Mutex_queue::fetch_and_empty()
                        (ulonglong) m_first, (ulonglong) &m_first,
                        (ulonglong) m_last));
   THD *result= m_first;
+  result->prev_to_commit= m_last_thd;
+
   m_first= NULL;
+  m_last_thd= NULL;
   m_last= &m_first;
   DBUG_PRINT("info", ("m_first: 0x%llx, &m_first: 0x%llx, m_last: 0x%llx",
                        (ulonglong) m_first, (ulonglong) &m_first,
@@ -1488,14 +1534,14 @@ void Stage_manager::clear_preempt_status(THD *head)
 {
   DBUG_ASSERT(head);
 
-  mysql_mutex_lock(&m_lock_done);
+  mysql_mutex_lock(&m_lock_preempt);
   while(!head->transaction.flags.ready_preempt)
   {
     leader_await_preempt_status= true;
-    mysql_cond_wait(&m_cond_preempt, &m_lock_done);
+    mysql_cond_wait(&m_cond_preempt, &m_lock_preempt);
   }
   leader_await_preempt_status= false;
-  mysql_mutex_unlock(&m_lock_done);
+  mysql_mutex_unlock(&m_lock_preempt);
 }
 #endif
 
@@ -7114,6 +7160,9 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
   thd->transaction.flags.xid_written= false;
   thd->transaction.flags.commit_low= !skip_commit;
   thd->transaction.flags.run_hooks= !skip_commit;
+  thd->stage_leader= false;
+  thd->stage_cond_id= UNDEF_COND_SLOT;
+  thd->prev_to_commit= NULL;
 #ifndef DBUG_OFF
   /*
      The group commit Leader may have to wait for follower whose transaction

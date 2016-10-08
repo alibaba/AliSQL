@@ -2944,6 +2944,14 @@ public:
   */
   THD *next_to_commit;
 
+  /* The previous node of commit queue for binary log group commit */
+  THD *prev_to_commit;
+
+  /*stage leader of group commit if true*/
+  bool	stage_leader;
+  /*if this thread is a leader, then allocate a mysql_cond_t for it*/
+  int stage_cond_id;
+
   /**
      Functions to set and get transaction position.
 
