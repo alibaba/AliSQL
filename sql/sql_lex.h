@@ -2349,6 +2349,13 @@ struct LEX: public Query_tables_list
   USER_RESOURCES mqh;
   LEX_RESET_SLAVE reset_slave_info;
   ulong type;
+  /**
+    for LOCK TABLE ... WAIT[n]/NO_WAIT and select ... for update
+    WAIT[n]/NO_WAIT. It's default values is ULONG_MAX; if set
+    NO_WAIT wait_time is 0, if set WAIT n, 0<=n<=LONG_TIMEOUT;
+  */
+  ulong wait_time;
+
   /*
     This variable is used in post-parse stage to declare that sum-functions,
     or functions which have sense only if GROUP BY is present, are allowed.

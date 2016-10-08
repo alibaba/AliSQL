@@ -1414,9 +1414,17 @@ thd_lock_wait_timeout(
 	THD*	thd)	/*!< in: thread handle, or NULL to query
 			the global innodb_lock_wait_timeout */
 {
+	ulong real_time, lock_wait_timeout;
 	/* According to <mysql/plugin.h>, passing thd == NULL
 	returns the global value of the session variable. */
-	return(THDVAR(thd, lock_wait_timeout));
+	lock_wait_timeout = THDVAR(thd, lock_wait_timeout);
+	if (thd == NULL)
+		return(lock_wait_timeout); //no cover line
+	real_time = thd_wait_time(thd);
+	if (real_time == ULONG_MAX)
+		real_time = lock_wait_timeout;
+
+	return real_time;
 }
 
 /******************************************************************//**

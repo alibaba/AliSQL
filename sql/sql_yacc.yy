@@ -1740,6 +1740,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 
 %type <ulong_num>
         ulong_num real_ulong_num merge_insert_types
+	opt_wait
         ws_nweights func_datetime_precision
         ws_level_flag_desc ws_level_flag_reverse ws_level_flags
         opt_ws_levels ws_level_list ws_level_list_item ws_level_number
@@ -8772,16 +8773,17 @@ select_option:
 
 select_lock_type:
           /* empty */
-        | FOR_SYM UPDATE_SYM
+        | FOR_SYM UPDATE_SYM opt_wait
           {
             LEX *lex=Lex;
             if (!lex->describe)
             {
               lex->current_select->set_lock_for_tables(TL_WRITE);
               lex->safe_to_cache_query=0;
+	      lex->wait_time= $3;
             }
           }
-        | LOCK_SYM IN_SYM SHARE_SYM MODE_SYM
+        | LOCK_SYM IN_SYM SHARE_SYM MODE_SYM opt_wait
           {
             LEX *lex=Lex;
             if (!lex->describe)
@@ -8789,6 +8791,7 @@ select_lock_type:
               lex->current_select->
                 set_lock_for_tables(TL_READ_WITH_SHARED_LOCKS);
               lex->safe_to_cache_query=0;
+	      lex->wait_time= $5;
             }
           }
         ;
@@ -15082,9 +15085,41 @@ lock:
             }
             lex->sql_command= SQLCOM_LOCK_TABLES;
           }
-          table_lock_list
-          {}
+          table_lock_list opt_wait
+          {
+            LEX *lex= Lex;
+            lex->wait_time= $5;
+          }
         ;
+
+opt_wait:
+        /* empty */
+        {
+          $$= ULONG_MAX;
+        }
+        | WAIT_SYM
+        {
+          $$= ULONG_MAX;
+        }
+        | WAIT_SYM ulong_num
+        {
+          ulong wait_time= $2;
+
+          if (wait_time > LONG_TIMEOUT)
+          {
+            char buf[22];
+            sprintf(buf, "%ld", wait_time);
+            my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), "wait_time", buf);
+            MYSQL_YYABORT;
+          }
+
+          $$= $2;
+        }
+        | NO_WAIT_SYM
+        {
+          $$= (ulong)0;
+        }
+      ;
 
 table_or_tables:
           TABLE_SYM

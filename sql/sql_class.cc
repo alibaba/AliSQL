@@ -709,6 +709,12 @@ int thd_sql_command(const THD *thd)
 }
 
 extern "C"
+long long thd_wait_time(const THD *thd)
+{
+  return (long long) thd->lex->wait_time;
+}
+
+extern "C"
 int thd_tx_isolation(const THD *thd)
 {
   return (int) thd->tx_isolation;

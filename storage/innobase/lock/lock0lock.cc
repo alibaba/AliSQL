@@ -1880,10 +1880,11 @@ lock_rec_create(
 /*********************************************************************//**
 Enqueues a waiting request for a lock which cannot be granted immediately.
 Checks for deadlocks.
-@return DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED, or
+@return DB_LOCK_WAIT, DB_LOCK_WAIT_TIMEOUT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED, or
 DB_SUCCESS_LOCKED_REC; DB_SUCCESS_LOCKED_REC means that
 there was a deadlock, but another transaction was chosen as a victim,
-and we got the lock immediately: no need to wait then */
+and we got the lock immediately: no need to wait then
+DB_LOCK_WAIT_TIMEOUT means no need to wait */
 static
 dberr_t
 lock_rec_enqueue_waiting(
@@ -1914,6 +1915,11 @@ lock_rec_enqueue_waiting(
 	trx = thr_get_trx(thr);
 
 	ut_ad(trx_mutex_own(trx));
+
+	if (trx->mysql_thd && thd_wait_time(trx->mysql_thd) == 0) {
+		trx->error_state = DB_LOCK_WAIT_TIMEOUT;
+		return(DB_LOCK_WAIT_TIMEOUT);
+	}
 
 	/* Test if there already is some other reason to suspend thread:
 	we do not enqueue a lock request if the query thread should be

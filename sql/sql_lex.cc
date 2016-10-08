@@ -481,6 +481,7 @@ void lex_start(THD *thd)
   lex->nest_level=0 ;
   lex->allow_sum_func= 0;
   lex->in_sum_func= NULL;
+  lex->wait_time= ULONG_MAX;
   /*
     ok, there must be a better solution for this, long-term
     I tried "bzero" in the sql_yacc.yy code, but that for
@@ -3008,6 +3009,7 @@ LEX::LEX()
                          INITIAL_LEX_PLUGIN_LIST_SIZE);
   memset(&mi, 0, sizeof(LEX_MASTER_INFO));
   reset_query_tables_list(TRUE);
+  wait_time= ULONG_MAX;
 }
 
 
