@@ -740,6 +740,9 @@ The following options may be given as the first argument:
  --rds-threads-running-high-watermark=# 
  When threads_running exceeds this limit, query that isn't
  in active transaction should quit.
+ --rds-gtid-precommit 
+ Add gtid into gtid_executed before flushing binlog from
+ cache to file.
  --read-buffer-size=# 
  Each thread that does a sequential scan allocates a
  buffer of this size for each table it scans. If you do
@@ -1284,6 +1287,7 @@ rds-sql-update-filter (No default value)
 rds-tablestat FALSE
 rds-threads-running-ctl-mode SELECTS
 rds-threads-running-high-watermark 151
+rds-gtid-precommit FALSE
 read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144

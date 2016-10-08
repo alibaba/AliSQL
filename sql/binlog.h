@@ -781,6 +781,7 @@ int gtid_empty_group_log_and_cleanup(THD *thd);
 extern const char *log_bin_index;
 extern const char *log_bin_basename;
 extern bool opt_binlog_order_commits;
+extern bool opt_gtid_precommit;
 
 /**
   Turns a relative log binary log path into a full path, based on the

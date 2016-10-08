@@ -32,6 +32,55 @@ void Gtid_state::clear()
   DBUG_VOID_RETURN;
 }
 
+enum_return_status Gtid_state::remove_gtid_on_failure(THD *thd)
+{
+  DBUG_ENTER("Gtid_state::remove_gtid_on_failure");
+  global_sid_lock->assert_some_lock();
+
+  if (thd->owned_gtid.sidno  > 0)
+  {
+    sid_locks.lock(thd->owned_gtid.sidno);
+    /* Remove Gtid from logged_gtid set. */
+    if (logged_gtids._remove_gtid(thd->owned_gtid) != RETURN_STATUS_OK)
+    {
+      sid_locks.unlock(thd->owned_gtid.sidno);
+      /* Print an error message, so people knows a serious error happend.*/
+      sql_print_error("Failed to remove GTID from logged_gtids after a"
+          " serious error happened. Sidno:%d, Gno:%lld",
+          thd->owned_gtid.sidno, thd->owned_gtid.gno);
+
+      RETURN_REPORTED_ERROR;
+    }
+
+    sid_locks.unlock(thd->owned_gtid.sidno);
+    thd->owned_gtid.sidno= 0;
+  }
+
+  RETURN_OK;
+}
+
+enum_return_status Gtid_state::mark_gtid_executed(THD *thd, const Gtid &gtid)
+{
+  DBUG_ENTER("Gtid_state::mark_gtid_executed");
+  // caller must take lock on the SIDNO.
+  global_sid_lock->assert_some_lock();
+  gtid_state->assert_sidno_lock_owner(gtid.sidno);
+  DBUG_ASSERT(!logged_gtids.contains_gtid(gtid));
+  DBUG_ASSERT(thd->owned_gtid.sidno == 0);
+
+  if (logged_gtids._add_gtid(gtid) != RETURN_STATUS_OK)
+    goto err;
+
+  thd->owned_gtid= gtid;
+
+  RETURN_OK;
+
+err:
+  thd->owned_gtid_set.clear();
+  thd->owned_gtid.sidno= 0;
+  RETURN_REPORTED_ERROR;
+}
+
 
 enum_return_status Gtid_state::acquire_ownership(THD *thd, const Gtid &gtid)
 {
@@ -157,6 +206,12 @@ enum_return_status Gtid_state::update_on_flush(THD *thd)
   {
     lock_sidno(thd->owned_gtid.sidno);
     ret= logged_gtids._add_gtid(thd->owned_gtid);
+    if (unlikely(ret != RETURN_STATUS_OK))
+    {
+			/* Print an error message, so users know a serious error happends. */
+      sql_print_error("Failed to add thd->owned_gtid into logged_gtids"
+          " set. Sidno:%d, Gno:%lld", thd->owned_gtid.sidno, thd->owned_gtid.gno);
+    }
   }
 
   /*

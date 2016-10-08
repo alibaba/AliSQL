@@ -62,6 +62,7 @@ static int limit_unsafe_warning_count= 0;
 
 static handlerton *binlog_hton;
 bool opt_binlog_order_commits= true;
+bool opt_gtid_precommit= false;
 
 const char *log_bin_index= 0;
 const char *log_bin_basename= 0;
@@ -6026,7 +6027,7 @@ bool MYSQL_BIN_LOG::write_cache(THD *thd, binlog_cache_data *cache_data)
                         DBUG_SUICIDE();
                       });
 
-      if ((write_error= do_write_cache(cache)))
+      if (write_error= do_write_cache(cache))
         goto err;
 
       if (incident && write_incident(thd, false/*need_lock_log=false*/,
@@ -6043,13 +6044,16 @@ bool MYSQL_BIN_LOG::write_cache(THD *thd, binlog_cache_data *cache_data)
         goto err;
       }
 
-      global_sid_lock->rdlock();
-      if (gtid_state->update_on_flush(thd) != RETURN_STATUS_OK)
+      if (!thd->gtid_precommit)
       {
+        global_sid_lock->rdlock();
+        if (gtid_state->update_on_flush(thd) != RETURN_STATUS_OK)
+        {
+          global_sid_lock->unlock();
+          goto err;
+        }
         global_sid_lock->unlock();
-        goto err;
       }
-      global_sid_lock->unlock();
     }
     update_thd_next_event_pos(thd);
   }
@@ -6066,6 +6070,13 @@ err:
   }
   thd->commit_error= THD::CE_FLUSH_ERROR;
 
+  /* Remove gtid from logged_gtid set if failed. */
+  if (write_error && thd->gtid_precommit)
+  {
+    global_sid_lock->rdlock();
+    gtid_state->remove_gtid_on_failure(thd);
+    global_sid_lock->unlock();
+  }
   DBUG_RETURN(1);
 }
 
@@ -7005,13 +7016,24 @@ MYSQL_BIN_LOG::finish_commit(THD *thd)
   else if (thd->transaction.flags.xid_written)
     dec_prep_xids(thd);
 
-  /*
-    Remove committed GTID from owned_gtids, it was already logged on
-    MYSQL_BIN_LOG::write_cache().
-  */
-  global_sid_lock->rdlock();
-  gtid_state->update_on_commit(thd);
-  global_sid_lock->unlock();
+  if (!thd->gtid_precommit)
+  {
+    /*
+      Remove committed GTID from owned_gtids, it was already logged on
+      MYSQL_BIN_LOG::write_cache().
+    */
+    global_sid_lock->rdlock();
+    gtid_state->update_on_commit(thd);
+    global_sid_lock->unlock();
+  }
+  else
+  {
+    /* Reset gtid_precommit. */
+    thd->gtid_precommit= false;
+    /* Clear gtid owned by current THD. */
+    thd->clear_owned_gtids();
+    thd->variables.gtid_next.set_undefined();
+  }
 
   DBUG_ASSERT(thd->commit_error || !thd->transaction.flags.run_hooks);
   DBUG_ASSERT(!thd_get_cache_mngr(thd)->dbug_any_finalized());
@@ -7163,6 +7185,9 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
   thd->stage_leader= false;
   thd->stage_cond_id= UNDEF_COND_SLOT;
   thd->prev_to_commit= NULL;
+  thd->gtid_precommit= (gtid_mode &&
+                        opt_gtid_precommit &&
+                        thd->variables.gtid_next.type == AUTOMATIC_GROUP);
 #ifndef DBUG_OFF
   /*
      The group commit Leader may have to wait for follower whose transaction

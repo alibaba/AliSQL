@@ -2163,6 +2163,16 @@ public:
     @return RETURN_STATUS_OK or RETURN_STATUS_REPORTED_ERROR.
   */
   enum_return_status acquire_ownership(THD *thd, const Gtid &gtid);
+
+	/**
+	  Remove gtid from logged_gtid set if fail to flush binlog
+    from cache to file.
+	*/
+  enum_return_status remove_gtid_on_failure(THD *thd);
+
+  /* Add gtid into logged_gtid set. */
+  enum_return_status mark_gtid_executed(THD *thd, const Gtid &gtid);
+
   /**
     Update the state after the given thread has flushed cache to binlog.
 

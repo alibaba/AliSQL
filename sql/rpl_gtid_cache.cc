@@ -156,7 +156,11 @@ enum_return_status Group_cache::generate_automatic_gno(THD *thd)
             gtid_state->unlock_sidno(automatic_gtid.sidno);
             RETURN_REPORTED_ERROR;
           }
-          gtid_state->acquire_ownership(thd, automatic_gtid);
+					/* Log gtid into logged_gtid directly. */
+          if (thd->gtid_precommit)
+            gtid_state->mark_gtid_executed(thd, automatic_gtid);
+          else
+            gtid_state->acquire_ownership(thd, automatic_gtid);
           gtid_state->unlock_sidno(automatic_gtid.sidno);
         }
       }

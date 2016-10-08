@@ -3806,6 +3806,13 @@ public:
     gtids, owned_gtid.sidno==-1.
   */
   Gtid owned_gtid;
+
+	/**
+	  If it's true, it means gtid will be added into logged_gtid directly
+		but not owned_gtid. By this way, we can skip to change owned_gtid
+		when flush binlog.
+	*/
+	bool gtid_precommit;
   /**
     If this thread owns a set of GTIDs (i.e., GTID_NEXT_LIST != NULL),
     then this member variable contains the subset of those GTIDs that
