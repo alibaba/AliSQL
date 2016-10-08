@@ -221,11 +221,14 @@ struct st_mysql_value
   int (*val_int)(struct st_mysql_value *, long long *intbuf);
   int (*is_unsigned)(struct st_mysql_value *);
 };
+enum enum_io_type {LOGICAL_READ, PHYSICAL_SYNC_READ, PHYSICAL_ASYNC_READ};
+void thd_add_io_stats(enum enum_io_type io_type);
 int thd_in_lock_tables(const void* thd);
 int thd_tablespace_op(const void* thd);
 long long thd_test_options(const void* thd, long long test_options);
 int thd_sql_command(const void* thd);
 long long thd_wait_time(const void* thd);
+int thd_is_limit_io();
 const char *thd_proc_info(void* thd, const char *info);
 void **thd_ha_data(const void* thd, const struct handlerton *hton);
 void thd_storage_lock_wait(void* thd, long long value);

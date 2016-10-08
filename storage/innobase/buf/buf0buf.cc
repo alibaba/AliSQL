@@ -2735,6 +2735,7 @@ buf_page_get_gen(
 			       FALSE, file, line, NULL));
 #endif
 	buf_pool->stat.n_page_gets++;
+    thd_add_io_stats(LOGICAL_READ);
 	fold = buf_page_address_fold(space, offset);
 	hash_lock = buf_page_hash_lock_get(buf_pool, fold);
 loop:

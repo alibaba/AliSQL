@@ -849,7 +849,7 @@ i_s_innodb_rseg_fill(
 			table->field[5]->store(rseg->curr_size);
 
 			if (schema_table_store_record(thd, table)) {
-				status = 1;     // no cover line.
+				status = 1;
 				break;
 			}
 		}

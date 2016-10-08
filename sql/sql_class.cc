@@ -721,6 +721,31 @@ int thd_tx_isolation(const THD *thd)
 }
 
 extern "C"
+int thd_is_limit_io()
+{
+  THD *thd= current_thd;
+  if (!thd)
+    return 0;
+
+  return (int) (thd->variables.rds_sql_max_iops > 0);
+}
+
+extern "C"
+void thd_add_io_stats(enum enum_io_type io_type)
+{
+  THD *thd= current_thd;
+  if (!thd)
+    return;
+
+  if (io_type == LOGICAL_READ)
+    status_var_increment(thd->status_var.logical_read);
+  else if (io_type == PHYSICAL_SYNC_READ)
+    status_var_increment(thd->status_var.physical_sync_read);
+  else if (io_type == PHYSICAL_ASYNC_READ)
+    status_var_increment(thd->status_var.physical_async_read);
+}
+
+extern "C"
 int thd_tx_is_read_only(const THD *thd)
 {
   return (int) thd->tx_read_only;
@@ -1070,6 +1095,9 @@ THD::THD(bool enable_plugins)
 #endif
 
   prepared_engine= NULL;
+
+  sql_start_us= 0;
+  sql_start_io= 0;
 
   m_token_array= NULL;
   if (max_digest_length > 0)

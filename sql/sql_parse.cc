@@ -6093,6 +6093,13 @@ void THD::reset_for_next_command()
   DBUG_ASSERT(! thd->in_sub_stmt);
   thd->free_list= 0;
   thd->select_number= 1;
+
+  if (thd->variables.rds_sql_max_iops)
+  {
+    thd->sql_start_us= my_micro_time();
+    thd->sql_start_io= thd->status_var.physical_sync_read;
+  }
+
   /*
     Those two lines below are theoretically unneeded as
     THD::cleanup_after_query() should take care of this already.

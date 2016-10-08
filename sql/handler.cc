@@ -2705,7 +2705,7 @@ int handler::ha_rnd_next(uchar *buf)
   DBUG_ASSERT(inited == RND);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, MAX_KEY, 0,
-    { result= rnd_next(buf); })
+    { result= rnd_next(buf); limit_io(ha_thd()); })
   DBUG_RETURN(result);
 }
 
@@ -2731,7 +2731,7 @@ int handler::ha_rnd_pos(uchar *buf, uchar *pos)
   /* DBUG_ASSERT(inited == RND); */
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, MAX_KEY, 0,
-    { result= rnd_pos(buf, pos); })
+    { result= rnd_pos(buf, pos); limit_io(ha_thd()); })
   DBUG_RETURN(result);
 }
 
@@ -2770,7 +2770,7 @@ int handler::ha_index_read_map(uchar *buf, const uchar *key,
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_read_map(buf, key, keypart_map, find_flag); })
+    { result= index_read_map(buf, key, keypart_map, find_flag); limit_io(ha_thd()); })
   DBUG_RETURN(result);
 }
 
@@ -2784,7 +2784,7 @@ int handler::ha_index_read_last_map(uchar *buf, const uchar *key,
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_read_last_map(buf, key, keypart_map); })
+    { result= index_read_last_map(buf, key, keypart_map); limit_io(ha_thd());})
   DBUG_RETURN(result);
 }
 
@@ -2805,7 +2805,7 @@ int handler::ha_index_read_idx_map(uchar *buf, uint index, const uchar *key,
   DBUG_ASSERT(end_range == NULL);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, index, 0,
-    { result= index_read_idx_map(buf, index, key, keypart_map, find_flag); })
+    { result= index_read_idx_map(buf, index, key, keypart_map, find_flag); limit_io(ha_thd());})
   return result;
 }
 
@@ -2830,7 +2830,7 @@ int handler::ha_index_next(uchar * buf)
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_next(buf); })
+    { result= index_next(buf); limit_io(ha_thd()); })
   DBUG_RETURN(result);
 }
 
@@ -2855,7 +2855,7 @@ int handler::ha_index_prev(uchar * buf)
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_prev(buf); })
+    { result= index_prev(buf); limit_io(ha_thd()); })
   DBUG_RETURN(result);
 }
 
@@ -2879,7 +2879,7 @@ int handler::ha_index_first(uchar * buf)
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_first(buf); })
+    { result= index_first(buf); limit_io(ha_thd()); })
   return result;
 }
 
@@ -2903,7 +2903,7 @@ int handler::ha_index_last(uchar * buf)
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_last(buf); })
+    { result= index_last(buf); limit_io(ha_thd()); })
   return result;
 }
 
@@ -2929,7 +2929,7 @@ int handler::ha_index_next_same(uchar *buf, const uchar *key, uint keylen)
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_next_same(buf, key, keylen); })
+    { result= index_next_same(buf, key, keylen); limit_io(ha_thd()); })
   return result;
 }
 
@@ -2957,7 +2957,7 @@ int handler::ha_index_read(uchar *buf, const uchar *key, uint key_len,
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_read(buf, key, key_len, find_flag); })
+    { result= index_read(buf, key, key_len, find_flag); limit_io(ha_thd()); })
   return result;
 }
 
@@ -2983,7 +2983,7 @@ int handler::ha_index_read_last(uchar *buf, const uchar *key, uint key_len)
   DBUG_ASSERT(inited == INDEX);
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_FETCH_ROW, active_index, 0,
-    { result= index_read_last(buf, key, key_len); })
+    { result= index_read_last(buf, key, key_len); limit_io(ha_thd()); })
   return result;
 }
 
@@ -7370,7 +7370,7 @@ int handler::ha_write_row(uchar *buf)
   mark_trx_read_write();
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_WRITE_ROW, MAX_KEY, 0,
-    { error= write_row(buf); })
+    { error= write_row(buf); limit_io(ha_thd()); })
 
   MYSQL_INSERT_ROW_DONE(error);
   if (unlikely(error))
@@ -7402,7 +7402,7 @@ int handler::ha_update_row(const uchar *old_data, uchar *new_data)
   mark_trx_read_write();
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_UPDATE_ROW, active_index, 0,
-    { error= update_row(old_data, new_data);})
+    { error= update_row(old_data, new_data); limit_io(ha_thd()); })
 
   MYSQL_UPDATE_ROW_DONE(error);
   if (unlikely(error))
@@ -7430,7 +7430,7 @@ int handler::ha_delete_row(const uchar *buf)
   mark_trx_read_write();
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_DELETE_ROW, active_index, 0,
-    { error= delete_row(buf);})
+    { error= delete_row(buf); limit_io(ha_thd()); })
 
   MYSQL_DELETE_ROW_DONE(error);
   if (unlikely(error))

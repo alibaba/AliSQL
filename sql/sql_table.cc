@@ -9501,3 +9501,52 @@ static bool check_engine(THD *thd, const char *db_name,
 
   DBUG_RETURN(false);
 }
+
+/*
+   Limit iops used by sql.
+
+   Usage:
+     checking the physical_sync_read when server layer interacted with engine layer.
+     so this function should add into handler interface.
+
+   Attention: we will disable linear read-ahead if set session rds_sql_max_iops.
+*/
+void limit_io(THD *thd)
+{
+  ulong max_iops;
+  longlong delta;
+  ulonglong current_us;
+  ulonglong *start_us;
+  ulonglong *start_io;
+
+  DBUG_ENTER("limit_io");
+
+  if (!thd)
+    DBUG_VOID_RETURN;
+
+  max_iops= thd->variables.rds_sql_max_iops;
+  start_us= &thd->sql_start_us;
+  start_io= &thd->sql_start_io;
+
+  if (!max_iops || !*start_us)
+    DBUG_VOID_RETURN;
+
+  current_us= my_micro_time();
+
+  if ((thd->status_var.physical_sync_read - *start_io) >= max_iops)
+  {
+    delta= current_us - *start_us;
+    if (delta >= 0 && delta < 1000000)
+    {
+      my_sleep(1000000 - delta);
+      *start_us= my_micro_time();
+      status_var_increment(thd->status_var.io_limit_count);
+    }
+    else
+      *start_us= current_us;
+
+    *start_io= thd->status_var.physical_sync_read;
+  }
+
+  DBUG_VOID_RETURN;
+}

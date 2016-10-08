@@ -72,7 +72,13 @@ void set_thd_stage_info(void *thd,
                         const char *calling_func,
                         const char *calling_file,
                         const unsigned int calling_line);
-                        
+
+extern "C"
+void thd_add_io_stats(enum enum_io_type io_type);
+
+extern "C"
+int thd_is_limit_io();
+
 #define THD_STAGE_INFO(thd, stage) \
   (thd)->enter_stage(& stage, NULL, __func__, __FILE__, __LINE__)
 
@@ -568,6 +574,7 @@ typedef struct system_variables
     'COLUMN_TYPE' field.
   */
   my_bool show_old_temporals;
+  ulong rds_sql_max_iops;
 } SV;
 
 
@@ -630,6 +637,10 @@ typedef struct system_status_var
 
   ulonglong bytes_received;
   ulonglong bytes_sent;
+  ulonglong logical_read;
+  ulonglong physical_sync_read;
+  ulonglong physical_async_read;
+  ulonglong io_limit_count;
   /*
     Number of statements sent from the client
   */
@@ -4183,6 +4194,9 @@ public:
     before killing the old slave connection.
   */
   bool duplicate_slave_id;
+
+  ulonglong sql_start_us;
+  ulonglong sql_start_io;
 
   /* Store lsn for engine when preparing finished. */
   engine_lsn_map* prepared_engine;

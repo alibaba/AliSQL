@@ -1895,6 +1895,15 @@ static bool fix_max_relay_log_size(sys_var *self, THD *thd, enum_var_type type)
 #endif
   return false;
 }
+static bool fix_rds_sql_max_iops(sys_var *self, THD *thd, enum_var_type type)
+{
+  if (!thd->variables.rds_sql_max_iops)
+  {
+    thd->sql_start_us= 0;
+    thd->sql_start_io= 0;
+  }
+  return false;
+}
 static Sys_var_ulong Sys_max_relay_log_size(
        "max_relay_log_size",
        "If non-zero: relay log will be rotated automatically when the "
@@ -1955,6 +1964,12 @@ static Sys_var_mybool Sys_named_pipe(
        DEFAULT(FALSE));
 #endif
 
+static Sys_var_ulong Sys_rds_sql_max_iops(
+       "rds_sql_max_iops",
+       "restrict the sql physical iops when sql executing.",
+       SESSION_VAR(rds_sql_max_iops), CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, ULONG_MAX), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+       NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_rds_sql_max_iops));
 
 static bool 
 check_net_buffer_length(sys_var *self, THD *thd,  set_var *var)

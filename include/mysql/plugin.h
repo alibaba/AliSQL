@@ -549,11 +549,14 @@ struct st_mysql_value
 extern "C" {
 #endif
 
+enum enum_io_type {LOGICAL_READ, PHYSICAL_SYNC_READ, PHYSICAL_ASYNC_READ};
+void thd_add_io_stats(enum enum_io_type io_type);
 int thd_in_lock_tables(const MYSQL_THD thd);
 int thd_tablespace_op(const MYSQL_THD thd);
 long long thd_test_options(const MYSQL_THD thd, long long test_options);
 int thd_sql_command(const MYSQL_THD thd);
 long long thd_wait_time(const MYSQL_THD thd);
+int thd_is_limit_io();
 const char *thd_proc_info(MYSQL_THD thd, const char *info);
 void **thd_ha_data(const MYSQL_THD thd, const struct handlerton *hton);
 void thd_storage_lock_wait(MYSQL_THD thd, long long value);

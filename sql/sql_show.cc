@@ -2045,6 +2045,7 @@ public:
   const char *user,*host,*db,*proc_info,*state_info;
   CSET_STRING query_string;
   long long memory_used, query_memory_used;
+  ulonglong logical_read, physical_sync_read, physical_async_read;
 };
 
 // For sorting by thread_id.
@@ -2112,6 +2113,15 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
     field_list.push_back(field= new Item_return_int("Memory_used_by_query",
                                                     MY_INT64_NUM_DECIMAL_DIGITS,
                                                     MYSQL_TYPE_LONGLONG));
+    field_list.push_back(field= new Item_return_int("Logical_read",
+                                                    MY_INT64_NUM_DECIMAL_DIGITS,
+                                                    MYSQL_TYPE_LONGLONG));
+    field_list.push_back(field= new Item_return_int("Physical_sync_read",
+                                                    MY_INT64_NUM_DECIMAL_DIGITS,
+                                                    MYSQL_TYPE_LONGLONG));
+    field_list.push_back(field= new Item_return_int("Physical_async_read",
+                                                    MY_INT64_NUM_DECIMAL_DIGITS,
+                                                    MYSQL_TYPE_LONGLONG));
   }
   if (protocol->send_result_set_metadata(&field_list,
                             Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
@@ -2165,6 +2175,10 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
         thd_info->command=(int) tmp->get_command();
         thd_info->memory_used= tmp->status_var.memory_used;
         thd_info->query_memory_used= tmp->status_var.query_memory_used;
+        thd_info->logical_read= tmp->status_var.logical_read;
+        thd_info->physical_sync_read= tmp->status_var.physical_sync_read;
+        thd_info->physical_async_read= tmp->status_var.physical_async_read;
+
         DBUG_EXECUTE_IF("processlist_acquiring_dump_threads_LOCK_thd_data",
                         {
                          if (thd_info->command == COM_BINLOG_DUMP ||
@@ -2227,6 +2241,9 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
                       thd_info->memory_used : 0);
       protocol->store(thd_info->query_memory_used >0 ?
                       thd_info->query_memory_used : 0);
+      protocol->store(thd_info->logical_read);
+      protocol->store(thd_info->physical_sync_read);
+      protocol->store(thd_info->physical_async_read);
     }
     if (protocol->write())
       break; /* purecov: inspected */

@@ -212,6 +212,13 @@ buf_read_page_low(
 		ut_error;
 	}
 
+    if (sync) {
+        thd_add_io_stats(PHYSICAL_SYNC_READ);
+    }
+    else {
+        thd_add_io_stats(PHYSICAL_ASYNC_READ);
+    }
+
 	if (sync) {
 		/* The i/o is already completed when we arrive from
 		fil_read */
@@ -528,6 +535,12 @@ buf_read_ahead_linear(
 
 	/* check if readahead is disabled */
 	if (!srv_read_ahead_threshold) {
+		return(0);
+	}
+
+	/* disable linear read-ahead triggered by this thread which limited io */
+
+	if (thd_is_limit_io()) {
 		return(0);
 	}
 

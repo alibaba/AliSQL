@@ -8077,6 +8077,10 @@ SHOW_VAR status_vars[]= {
 #endif /*HAVE_QUERY_CACHE*/
   {"Queries",                  (char*) &show_queries,            SHOW_FUNC},
   {"Questions",                (char*) offsetof(STATUS_VAR, questions), SHOW_LONGLONG_STATUS},
+  {"Logical_read",             (char*) offsetof(STATUS_VAR, logical_read), SHOW_LONGLONG_STATUS},
+  {"Physical_sync_read",       (char*) offsetof(STATUS_VAR, physical_sync_read), SHOW_LONGLONG_STATUS},
+  {"Physical_async_read",      (char*) offsetof(STATUS_VAR, physical_async_read), SHOW_LONGLONG_STATUS},
+  {"IO_limit_count",           (char*) offsetof(STATUS_VAR, io_limit_count), SHOW_LONGLONG_STATUS},
   {"Select_full_join",         (char*) offsetof(STATUS_VAR, select_full_join_count), SHOW_LONGLONG_STATUS},
   {"Select_full_range_join",   (char*) offsetof(STATUS_VAR, select_full_range_join_count), SHOW_LONGLONG_STATUS},
   {"Select_range",             (char*) offsetof(STATUS_VAR, select_range_count), SHOW_LONGLONG_STATUS},
