@@ -24,6 +24,7 @@
 #include "mysql/psi/mysql_file.h"          /* MYSQL_FILE */
 #include "sql_list.h"                      /* I_List */
 #include "sql_cmd.h"                       /* SQLCOM_END */
+#include <set>
 
 class THD;
 struct handlerton;
@@ -33,6 +34,144 @@ struct scheduler_functions;
 
 typedef struct st_mysql_const_lex_string LEX_CSTRING;
 typedef struct st_mysql_show_var SHOW_VAR;
+
+typedef std::set<int> engine_set;
+/* Store all engines that support handler::flush_logs into global_trx_engine.*/
+extern engine_set global_trx_engine;
+
+typedef struct lsn_map
+{
+  int       db_type; /* The engine type.*/
+  ulonglong  lsn; /* LSN of prepared log for each engine. */
+} lsn_map;
+
+class engine_lsn_map {
+public:
+  engine_lsn_map()
+  {
+    /* ALways contain trx engine, at least InnoDB.*/
+    DBUG_ASSERT(global_trx_engine.size() != 0);
+    m_count= global_trx_engine.size();
+    m_empty= true;
+
+    maps= (lsn_map **)my_malloc(sizeof(lsn_map*) * m_count,
+        MYF(MY_FAE|MY_ZEROFILL));
+
+    int i= 0;
+    for (engine_set::iterator it= global_trx_engine.begin();
+        it != global_trx_engine.end(); ++it)
+    {
+      maps[i]= (lsn_map *)my_malloc(sizeof(lsn_map),
+          MYF(MY_FAE|MY_ZEROFILL));
+
+      maps[i]->db_type= *it;
+      maps[i]->lsn= 0;
+      i++;
+    }
+  }
+
+  ~engine_lsn_map()
+  {
+   for (int i=0; i<m_count; i++)
+   {
+    my_free(maps[i]);
+    maps[i]= NULL;
+   }
+
+   my_free(maps);
+  }
+
+  lsn_map* get_map_by_type(int db_type)
+  {
+    for (int i=0; i<m_count; i++)
+    {
+      if (maps[i]->db_type == db_type)
+        return maps[i];
+    }
+
+    return NULL;
+  }
+
+  ulonglong get_lsn_by_type(int db_type)
+  {
+    lsn_map* target_map= get_map_by_type(db_type);
+    if (target_map)
+      return target_map->lsn;
+    else
+      return 0;
+  }
+
+  /* If lsn value of current maps is smaller than other_map,
+     then update it. */
+  void compare_and_update(lsn_map** other_map)
+  {
+    DBUG_ASSERT(other_map != NULL);
+
+    for (int i=0; i<m_count; i++)
+    {
+      DBUG_ASSERT(other_map[i] != NULL);
+      DBUG_ASSERT(maps[i] != NULL);
+      DBUG_ASSERT(maps[i]->db_type == other_map[i]->db_type);
+
+      if (other_map[i]->lsn > maps[i]->lsn)
+      {
+        maps[i]->lsn= other_map[i]->lsn;
+
+        m_empty= false;
+      }
+    }
+  }
+
+#ifndef DBUG_OFF
+  /* Return true if lsn in current map is smaller than
+     other_map( or equal to). */
+  bool compare_lt(lsn_map** other_map)
+  {
+    for (int i=0; i<m_count; i++)
+    {
+      if (other_map[i]->lsn < maps[i]->lsn)
+        return false;
+    }
+
+    return true;
+  }
+#endif
+  void clear()
+  {
+    if (m_empty)
+      return;
+
+    for (int i=0; i<m_count; i++)
+    {
+      maps[i]->lsn= 0;
+    }
+
+    m_empty= true;
+  }
+
+  bool is_empty() { return m_empty; }
+
+  lsn_map** get_maps() { return maps; }
+
+  void update_lsn(int db_type, ulonglong lsn)
+  {
+    lsn_map *target_map= get_map_by_type(db_type);
+    DBUG_ASSERT(target_map != NULL);
+
+    target_map->lsn= lsn;
+
+    m_empty= false;
+  }
+
+private:
+  /* If lsn of all elements in maps array is zero. */
+  bool m_empty;
+  /* Elements in maps array. */
+  int m_count;
+  /* Used to store db_type=>lsn. */
+  lsn_map **maps;
+
+};
 
 /*
   This forward declaration is used from C files where the real
@@ -209,7 +348,6 @@ extern ulong max_prepared_stmt_count, prepared_stmt_count;
 extern ulong open_files_limit;
 extern ulong binlog_cache_size, binlog_stmt_cache_size;
 extern ulonglong max_binlog_cache_size, max_binlog_stmt_cache_size;
-extern int32 opt_binlog_max_flush_queue_time;
 extern ulong max_binlog_size, max_relay_log_size;
 extern ulong slave_max_allowed_packet;
 extern ulong opt_binlog_rows_event_max_size;
@@ -602,7 +740,6 @@ extern mysql_cond_t COND_manager;
 extern int32 thread_running;
 extern my_atomic_rwlock_t thread_running_lock;
 extern my_atomic_rwlock_t slave_open_temp_tables_lock;
-extern my_atomic_rwlock_t opt_binlog_max_flush_queue_time_lock;
 
 extern char *opt_ssl_ca, *opt_ssl_capath, *opt_ssl_cert, *opt_ssl_cipher,
             *opt_ssl_key, *opt_ssl_crl, *opt_ssl_crlpath;

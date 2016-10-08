@@ -726,6 +726,12 @@ void thd_inc_row_count(THD *thd)
   thd->get_stmt_da()->inc_current_row_for_warning();
 }
 
+extern "C"
+void thd_store_lsn(THD* thd, ulonglong lsn, int engine_type)
+{
+  DBUG_ASSERT(thd->prepared_engine != NULL);
+  thd->prepared_engine->update_lsn(engine_type, lsn);
+}
 
 /**
   Dumps a text description of a thread, its security context
@@ -1056,6 +1062,8 @@ THD::THD(bool enable_plugins)
 #ifndef DBUG_OFF
   gis_debug= 0;
 #endif
+
+  prepared_engine= NULL;
 
   m_token_array= NULL;
   if (max_digest_length > 0)
@@ -1648,6 +1656,9 @@ THD::~THD()
 #endif
 
   free_root(&main_mem_root, MYF(0));
+
+  if (prepared_engine)
+	  delete prepared_engine;
 
   if (m_token_array != NULL)
   {

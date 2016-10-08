@@ -1382,6 +1382,15 @@ Stage_manager::Mutex_queue::append(THD *first)
   DBUG_PRINT("info", ("m_first: 0x%llx, &m_first: 0x%llx, m_last: 0x%llx",
                        (ulonglong) m_first, (ulonglong) &m_first,
                        (ulonglong) m_last));
+
+  DBUG_ASSERT(first->prepared_engine != NULL);
+  if (unlikely(!group_prepared_engine))
+    group_prepared_engine= new engine_lsn_map();
+
+  if (!first->prepared_engine->is_empty())
+    group_prepared_engine->compare_and_update(
+        first->prepared_engine->get_maps());
+
   bool empty= (m_first == NULL);
   *m_last= first;
   DBUG_PRINT("info", ("m_first: 0x%llx, &m_first: 0x%llx, m_last: 0x%llx",
@@ -1403,35 +1412,6 @@ Stage_manager::Mutex_queue::append(THD *first)
   unlock();
   DBUG_RETURN(empty);
 }
-
-
-std::pair<bool, THD*>
-Stage_manager::Mutex_queue::pop_front()
-{
-  DBUG_ENTER("Stage_manager::Mutex_queue::pop_front");
-  lock();
-  THD *result= m_first;
-  bool more= true;
-  /*
-    We do not set next_to_commit to NULL here since this is only used
-    in the flush stage. We will have to call fetch_queue last here,
-    and will then "cut" the linked list by setting the end of that
-    queue to NULL.
-  */
-  if (result)
-    m_first= result->next_to_commit;
-  if (m_first == NULL)
-  {
-    more= false;
-    m_last = &m_first;
-  }
-  DBUG_ASSERT(m_first || m_last == &m_first);
-  unlock();
-  DBUG_PRINT("return", ("result: 0x%llx, more: %s",
-                        (ulonglong) result, YESNO(more)));
-  DBUG_RETURN(std::make_pair(more, result));
-}
-
 
 bool
 Stage_manager::enroll_for(StageID stage, THD *thd, mysql_mutex_t *stage_mutex)
@@ -1455,6 +1435,7 @@ Stage_manager::enroll_for(StageID stage, THD *thd, mysql_mutex_t *stage_mutex)
   */
   if (!leader)
   {
+    DEBUG_SYNC(thd, "wait_as_follower");
     mysql_mutex_lock(&m_lock_done);
 #ifndef DBUG_OFF
     /*
@@ -1489,6 +1470,15 @@ THD *Stage_manager::Mutex_queue::fetch_and_empty()
                        (ulonglong) m_last));
   DBUG_ASSERT(m_first || m_last == &m_first);
   DBUG_PRINT("return", ("result: 0x%llx", (ulonglong) result));
+
+  /* Restore group_prepared_engine so the caller can extract it from result. */
+  if (!group_prepared_engine->is_empty())
+  {
+    result->prepared_engine->compare_and_update(group_prepared_engine->get_maps());
+    /* Reset group_prepared_engine when the queue is empty. */
+    group_prepared_engine->clear();
+  }
+
   unlock();
   DBUG_RETURN(result);
 }
@@ -6375,6 +6365,17 @@ int MYSQL_BIN_LOG::prepare(THD *thd, bool all)
 {
   DBUG_ENTER("MYSQL_BIN_LOG::prepare");
 
+  /*
+    Set HA_IGNORE_DURABILITY to not flush the prepared record of the
+    transaction to the log of storage engine (for example, InnoDB
+    redo log) during the prepare phase. So that we can flush prepared
+    records of transactions to the log of storage engine in a group
+    right before flushing them to binary log during binlog group
+    commit flush stage. Reset to HA_REGULAR_DURABILITY at the
+    beginning of parsing next command.
+  */
+  thd->durability_property= HA_IGNORE_DURABILITY;
+
   int error= ha_prepare_low(thd, all);
 
   DBUG_RETURN(error);
@@ -6603,6 +6604,7 @@ MYSQL_BIN_LOG::flush_thread_caches(THD *thd)
   binlog rotation should be performed after releasing locks. If rotate
   is not necessary, the variable will not be touched.
 
+  @param curr is the THD passed from the caller.
   @return Error code on error, zero on success
  */
 
@@ -6616,49 +6618,42 @@ MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   int flush_error= 1;
   mysql_mutex_assert_owner(&LOCK_log);
 
-  my_atomic_rwlock_rdlock(&opt_binlog_max_flush_queue_time_lock);
-  const ulonglong max_udelay= my_atomic_load32(&opt_binlog_max_flush_queue_time);
-  my_atomic_rwlock_rdunlock(&opt_binlog_max_flush_queue_time_lock);
-  const ulonglong start_utime= max_udelay > 0 ? my_micro_time() : 0;
+  DEBUG_SYNC(current_thd, "process_as_leader");
 
   /*
-    First we read the queue until it either is empty or the difference
-    between the time we started and the current time is too large.
+    Fetch the entire flush queue and empty it, so that the next batch
+    has a leader. We must do this before invoking ha_flush_logs(...)
+    for guaranteeing to flush prepared records of transactions before
+    flushing them to binary log, which is required by crash recovery.
+  */
+  THD *first_seen= stage_manager.fetch_queue_for(Stage_manager::FLUSH_STAGE);
+  DBUG_ASSERT(first_seen != NULL);
 
-    We remember the first thread we unqueued, because this will be the
-    beginning of the out queue.
-   */
-  bool has_more= true;
-  THD *first_seen= NULL;
-  while ((max_udelay == 0 || my_micro_time() < start_utime + max_udelay) && has_more)
+  /* Do an explicit transaction log group write before flushing binary log
+   * cache to file*/
+  if (!first_seen->prepared_engine->is_empty())
+    ha_flush_logs(NULL, first_seen->prepared_engine);
+
+#ifndef DBUG_OFF
+  for (THD *head= first_seen ; head ; head = head->next_to_commit)
   {
-    std::pair<bool,THD*> current= stage_manager.pop_front(Stage_manager::FLUSH_STAGE);
-    std::pair<int,my_off_t> result= flush_thread_caches(current.second);
-    has_more= current.first;
+    DBUG_ASSERT(head->prepared_engine->compare_lt(
+          first_seen->prepared_engine->get_maps()));
+  }
+#endif
+
+  DBUG_EXECUTE_IF("crash_after_flush_engine_log", DBUG_SUICIDE(););
+
+  /* Flush thread caches to binary log. */
+  for (THD *head= first_seen ; head ; head = head->next_to_commit)
+  {
+    std::pair<int,my_off_t> result= flush_thread_caches(head);
     total_bytes+= result.second;
     if (flush_error == 1)
       flush_error= result.first;
-    if (first_seen == NULL)
-      first_seen= current.second;
-  }
 
-  /*
-    Either the queue is empty, or we ran out of time. If we ran out of
-    time, we have to fetch the entire queue (and flush it) since
-    otherwise the next batch will not have a leader.
-   */
-  if (has_more)
-  {
-    THD *queue= stage_manager.fetch_queue_for(Stage_manager::FLUSH_STAGE);
-    for (THD *head= queue ; head ; head = head->next_to_commit)
-    {
-      std::pair<int,my_off_t> result= flush_thread_caches(head);
-      total_bytes+= result.second;
-      if (flush_error == 1)
-        flush_error= result.first;
-    }
-    if (first_seen == NULL)
-      first_seen= queue;
+    /* Reset prepared_engine for every thd in the queue. */
+    head->prepared_engine->clear();
   }
 
   *out_queue_var= first_seen;
@@ -7168,11 +7163,12 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
     goto commit_stage;
   }
   DEBUG_SYNC(thd, "waiting_in_the_middle_of_flush_stage");
-  flush_error= process_flush_stage_queue(&total_bytes, &do_rotate,
-                                                 &wait_queue);
+  flush_error= process_flush_stage_queue(&total_bytes, &do_rotate, &wait_queue);
 
   if (flush_error == 0 && total_bytes > 0)
     flush_error= flush_cache_to_file(&flush_end_pos);
+
+  DBUG_EXECUTE_IF("crash_after_flush_binlog", DBUG_SUICIDE(););
 
   /*
     If the flush finished successfully, we can call the after_flush

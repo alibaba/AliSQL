@@ -879,7 +879,7 @@ struct handlerton
    void (*drop_database)(handlerton *hton, char* path);
    int (*panic)(handlerton *hton, enum ha_panic_function flag);
    int (*start_consistent_snapshot)(handlerton *hton, THD *thd);
-   bool (*flush_logs)(handlerton *hton);
+   bool (*flush_logs)(handlerton *hton, unsigned long long target_lsn);
    bool (*show_status)(handlerton *hton, THD *thd, stat_print_fn *print, enum ha_stat_type stat);
    uint (*partition_flags)();
    uint (*alter_table_flags)(uint flags);
@@ -3384,7 +3384,7 @@ int ha_finalize_handlerton(st_plugin_int *plugin);
 TYPELIB* ha_known_exts();
 int ha_panic(enum ha_panic_function flag);
 void ha_close_connection(THD* thd);
-bool ha_flush_logs(handlerton *db_type);
+bool ha_flush_logs(handlerton *db_type, engine_lsn_map *engine_map= NULL);
 void ha_drop_database(char* path);
 int ha_create_table(THD *thd, const char *path,
                     const char *db, const char *table_name,

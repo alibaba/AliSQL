@@ -2891,6 +2891,9 @@ pthread_handler_t handle_delayed_insert(void *arg)
 
   mysql_thread_set_psi_id(thd->thread_id);
 
+  if (!thd->prepared_engine)
+    thd->prepared_engine= new engine_lsn_map();
+
   /*
     Wait until the client runs into mysql_cond_wait(),
     where we free it after the table is opened and di linked in the list.

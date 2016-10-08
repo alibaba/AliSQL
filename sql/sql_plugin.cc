@@ -45,6 +45,8 @@ using std::max;
 #define REPORT_TO_LOG  1
 #define REPORT_TO_USER 2
 
+engine_set global_trx_engine;
+
 extern struct st_mysql_plugin *mysql_optional_plugins[];
 extern struct st_mysql_plugin *mysql_mandatory_plugins[];
 
@@ -1142,10 +1144,17 @@ static int plugin_initialize(struct st_plugin_int *plugin)
       goto err;
     }
 
+    handlerton* hton= (handlerton*)plugin->data;
+
+    if (hton->state == SHOW_OPTION_YES
+        && hton->db_type != DB_TYPE_UNKNOWN
+        && hton->flush_logs)
+      global_trx_engine.insert(hton->db_type);
+
     /* FIXME: Need better solution to transfer the callback function
     array to memcached */
     if (strcmp(plugin->name.str, "InnoDB") == 0) {
-      innodb_callback_data = ((handlerton*)plugin->data)->data;
+      innodb_callback_data = hton->data;
     }
   }
   else if (plugin->plugin->init)

@@ -6060,6 +6060,11 @@ void THD::reset_for_next_command()
   thd->durability_property= HA_REGULAR_DURABILITY;
   thd->set_trans_pos(NULL, 0);
 
+  if (unlikely(!thd->prepared_engine))
+    thd->prepared_engine= new engine_lsn_map();
+
+  thd->prepared_engine->clear();
+
   DBUG_PRINT("debug",
              ("is_current_stmt_binlog_format_row(): %d",
               thd->is_current_stmt_binlog_format_row()));

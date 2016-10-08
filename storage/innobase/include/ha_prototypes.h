@@ -437,7 +437,11 @@ ibool
 thd_trx_is_auto_commit(
 /*===================*/
 	THD*	thd);	/*!< in: thread handle, or NULL */
-
+/*******************************************************************//**
+@return the engine type of innodb. */
+UNIV_INTERN
+int
+innobase_get_type(void);
 /*****************************************************************//**
 A wrapper function of innobase_convert_name(), convert a table or
 index name to the MySQL system_charset_info (UTF-8) and quote it if needed.

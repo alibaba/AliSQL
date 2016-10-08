@@ -2215,25 +2215,44 @@ static my_bool flush_handlerton(THD *thd, plugin_ref plugin,
                                 void *arg)
 {
   handlerton *hton= plugin_data(plugin, handlerton *);
-  if (hton->state == SHOW_OPTION_YES && hton->flush_logs && 
-      hton->flush_logs(hton))
+  ulonglong target_lsn= 0;
+
+  if (arg)
+  {
+    /*
+      If arg is not NULL, this means we have specified engine
+      types to do log flushing.
+    */
+    engine_lsn_map* engine_map= (engine_lsn_map *)arg;
+
+    /* Shoudn't be empty.*/
+    DBUG_ASSERT(!engine_map->is_empty());
+
+    target_lsn= engine_map->get_lsn_by_type(hton->db_type);
+
+    if (target_lsn == 0)
+      return FALSE;
+  }
+
+  if (hton->state == SHOW_OPTION_YES && hton->flush_logs &&
+      hton->flush_logs(hton, target_lsn))
     return TRUE;
   return FALSE;
 }
 
 
-bool ha_flush_logs(handlerton *db_type)
+bool ha_flush_logs(handlerton *db_type, engine_lsn_map *engine_map)
 {
   if (db_type == NULL)
   {
     if (plugin_foreach(NULL, flush_handlerton,
-                          MYSQL_STORAGE_ENGINE_PLUGIN, 0))
+                          MYSQL_STORAGE_ENGINE_PLUGIN, (void *)(engine_map)))
       return TRUE;
   }
   else
   {
     if (db_type->state != SHOW_OPTION_YES ||
-        (db_type->flush_logs && db_type->flush_logs(db_type)))
+        (db_type->flush_logs && db_type->flush_logs(db_type, 0)))
       return TRUE;
   }
   return FALSE;

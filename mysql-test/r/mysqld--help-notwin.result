@@ -96,11 +96,6 @@ The following options may be given as the first argument:
  --binlog-ignore-db=name 
  Tells the master that updates to the given database
  should not be logged to the binary log.
- --binlog-max-flush-queue-time=# 
- The maximum time that the binary log group commit will
- keep reading transactions before it flush the
- transactions to the binary log (and optionally sync,
- depending on the value of sync_binlog).
  --binlog-order-commits 
  Issue internal commit calls in the same order as
  transactions are written to the binary log. Default is to
@@ -1047,7 +1042,6 @@ binlog-direct-non-transactional-updates FALSE
 binlog-error-action IGNORE_ERROR
 binlog-format STATEMENT
 binlog-gtid-simple-recovery FALSE
-binlog-max-flush-queue-time 0
 binlog-order-commits TRUE
 binlog-row-event-max-size 8192
 binlog-row-image FULL

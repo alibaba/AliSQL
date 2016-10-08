@@ -47,7 +47,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "ha_prototypes.h"
 #include "srv0mon.h"
 #include "ut0vec.h"
-
 #include<set>
 
 /** Set of table_id */
@@ -1952,6 +1951,7 @@ trx_weight_ge(
 	return(TRX_WEIGHT(a) >= TRX_WEIGHT(b));
 }
 
+
 /****************************************************************//**
 Prepares a transaction. */
 static
@@ -2017,24 +2017,19 @@ trx_prepare(
 	/*--------------------------------------*/
 
 	if (lsn) {
-		/* Depending on the my.cnf options, we may now write the log
-		buffer to the log files, making the prepared state of the
-		transaction durable if the OS does not crash. We may also
-		flush the log files to disk, making the prepared state of the
-		transaction durable also at an OS crash or a power outage.
-
-		The idea in InnoDB's group prepare is that a group of
-		transactions gather behind a trx doing a physical disk write
-		to log files, and when that physical write has been completed,
-		one of those transactions does a write which prepares the whole
-		group. Note that this group prepare will only bring benefit if
-		there are > 2 users in the database. Then at least 2 users can
-		gather behind one doing the physical log write to disk.
-
-		TODO: find out if MySQL holds some mutex when calling this.
-		That would spoil our group prepare algorithm. */
-
-		trx_flush_log_if_needed(lsn, trx);
+		switch (thd_requested_durability(trx->mysql_thd)) {
+		case HA_IGNORE_DURABILITY:
+			/* We set the HA_IGNORE_DURABILITY during prepare phase of
+			  binlog group commit to not flush redo log for every transaction
+			  here. So that we can flush prepared records of transactions to
+			  redo log in a group right before writing them to binary log
+			  during flush stage of binlog group commit. */
+			thd_store_lsn(trx->mysql_thd, lsn, innobase_get_type());
+			break;
+		case HA_REGULAR_DURABILITY:
+			trx_flush_log_if_needed(lsn, trx);
+			break;
+		}
 	}
 }
 

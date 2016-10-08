@@ -898,9 +898,11 @@ static void ndbcluster_reset_slave(THD *thd)
   ndb data to be logged has made it to the binary log to get a deterministic
   behavior on the rotation of the log.
  */
-static bool ndbcluster_flush_logs(handlerton *hton)
+static bool ndbcluster_flush_logs(handlerton *hton, ulonglong target_lsn)
 {
-  ndbcluster_binlog_wait(current_thd);
+  if (target_lsn == 0)
+    ndbcluster_binlog_wait(current_thd);
+
   return FALSE;
 }
 

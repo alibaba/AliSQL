@@ -383,6 +383,7 @@ extern ulong	srv_n_free_tickets_to_enter;
 extern ulong	srv_thread_sleep_delay;
 extern ulong	srv_spin_wait_delay;
 extern ibool	srv_priority_boost;
+extern my_bool  srv_explicit_redo_gc;
 
 extern ulint	srv_truncated_status_writes;
 extern ulint	srv_available_undo_logs;
