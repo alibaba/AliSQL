@@ -3221,6 +3221,10 @@ public:
   // We don't want to load/unload plugins for unit tests.
   bool m_enable_plugins;
 
+#ifndef DBUG_OFF
+  bool enable_unsafe_stmt;
+#endif
+
   THD(bool enable_plugins= true);
 
   /*

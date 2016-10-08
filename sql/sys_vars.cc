@@ -4774,6 +4774,7 @@ static Sys_var_enum Sys_rds_thread_running_ctl_mode(
        GLOBAL_VAR(thread_running_ctl_mode), CMD_LINE(REQUIRED_ARG),
        thread_running_ctl_mode_names, DEFAULT(0));
 /* END: thread running control */
+
 /* BEGIN: sql filter */
 static bool check_sql_filter(sys_var *self, THD *thd, set_var *var)
 {
@@ -4919,3 +4920,12 @@ static Sys_var_mybool Sys_rds_filter_key_cmp_in_order(
        "rds_filter_key_cmp_in_order",
        "If enabled, then match keys stored in filter list in order",
        GLOBAL_VAR(rds_key_cmp_in_order), CMD_LINE(OPT_ARG), DEFAULT(FALSE));
+
+static PolyLock_rwlock PLock_sys_rds_allow_unsafe_stmt_with_gtid(&LOCK_unsafe_stmt);
+static Sys_var_mybool Sys_rds_allow_unsafe_stmt_with_gtid(
+       "rds_allow_unsafe_stmt_with_gtid",
+       "Allow executing CREATE TABLE AS SELECT or mixed engine"
+       " transactions if enabled.",
+       GLOBAL_VAR(opt_rds_allow_unsafe_stmt_with_gtid),
+       CMD_LINE(OPT_ARG), DEFAULT(FALSE),
+       &PLock_sys_rds_allow_unsafe_stmt_with_gtid, NOT_IN_BINLOG);

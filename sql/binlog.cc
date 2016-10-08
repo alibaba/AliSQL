@@ -337,11 +337,9 @@ public:
     return group_cache.is_empty();
   }
 
-#ifndef DBUG_OFF
-  bool dbug_is_finalized() const {
+  bool is_finalized() const {
     return flags.finalized;
   }
-#endif
 
   Rows_log_event *pending() const
   {
@@ -750,9 +748,13 @@ public:
 
 #ifndef DBUG_OFF
   bool dbug_any_finalized() const {
-    return stmt_cache.dbug_is_finalized() || trx_cache.dbug_is_finalized();
+    return stmt_cache.is_finalized() || trx_cache.is_finalized();
   }
 #endif
+
+  bool all_finalized() const {
+    return (stmt_cache.is_finalized() && trx_cache.is_finalized());
+  }
 
   /*
     Convenience method to flush both caches to the binary log.
@@ -769,9 +771,30 @@ public:
   {
     my_off_t stmt_bytes= 0;
     my_off_t trx_bytes= 0;
+    bool  clear_gtid= false;
     DBUG_ASSERT(stmt_cache.has_xid() == 0);
+
+    if (gtid_mode && all_finalized())
+    {
+		  DBUG_ASSERT(thd->gtid_precommit);
+      DBUG_ASSERT(thd->enable_unsafe_stmt);
+			/**
+			  stmt_cache and trx_cache are both not empty. They will generate
+        Gtid seperately. So we need to clear the owned gtid after flushing
+        stmt_cache to avoid some ASSERT later.
+			*/
+      clear_gtid= true;
+    }
+
     if (int error= stmt_cache.flush(thd, &stmt_bytes, wrote_xid))
       return error;
+
+    if (clear_gtid)
+    {
+      thd->clear_owned_gtids();
+      thd->variables.gtid_next.set_undefined();
+    }
+
     if (int error= trx_cache.flush(thd, &trx_bytes, wrote_xid))
       return error;
     *bytes_written= stmt_bytes + trx_bytes;
@@ -1652,6 +1675,19 @@ int MYSQL_BIN_LOG::rollback(THD *thd, bool all)
         rolled back, the trx-cache's content is truncated.
       */
       error= cache_mngr->trx_cache.truncate(thd, all);
+
+      /*
+       If this is a CREATE TABLE ..SEELCT statement, we also need
+       to truncate and reset the stmt cache.
+      */
+      if (!cache_mngr->stmt_cache.is_binlog_empty() && // stmt_cache is not empty
+          thd->lex->sql_command == SQLCOM_CREATE_TABLE &&
+          !(thd->lex->create_info.options & HA_LEX_CREATE_TMP_TABLE) &&
+          thd->lex->select_lex.item_list.elements)
+      {
+        cache_mngr->stmt_cache.reset();
+        stuff_logged= false;
+      }
     }
   }
   else
@@ -6027,7 +6063,7 @@ bool MYSQL_BIN_LOG::write_cache(THD *thd, binlog_cache_data *cache_data)
                         DBUG_SUICIDE();
                       });
 
-      if (write_error= do_write_cache(cache))
+      if ((write_error= do_write_cache(cache)))
         goto err;
 
       if (incident && write_incident(thd, false/*need_lock_log=false*/,
@@ -7185,9 +7221,12 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
   thd->stage_leader= false;
   thd->stage_cond_id= UNDEF_COND_SLOT;
   thd->prev_to_commit= NULL;
+  DBUG_ASSERT(!thd_get_cache_mngr(thd)->all_finalized() ||
+              (thd->variables.gtid_next.type == AUTOMATIC_GROUP));
   thd->gtid_precommit= (gtid_mode &&
-                        opt_gtid_precommit &&
-                        thd->variables.gtid_next.type == AUTOMATIC_GROUP);
+                        ((opt_gtid_precommit &&
+                          thd->variables.gtid_next.type == AUTOMATIC_GROUP) ||
+                         thd_get_cache_mngr(thd)->all_finalized()));
 #ifndef DBUG_OFF
   /*
      The group commit Leader may have to wait for follower whose transaction
@@ -8591,6 +8630,16 @@ bool THD::is_ddl_gtid_compatible() const
       !(lex->create_info.options & HA_LEX_CREATE_TMP_TABLE) &&
       lex->select_lex.item_list.elements)
   {
+    if (opt_rds_allow_unsafe_stmt_with_gtid &&
+        (this->variables.gtid_next.type == AUTOMATIC_GROUP) &&
+        is_current_stmt_binlog_format_row())
+    {
+#ifndef DBUG_OFF
+			THD *tmp_thd= (THD *) this;
+      tmp_thd->enable_unsafe_stmt= true;
+#endif
+      DBUG_RETURN(true);
+    }
     /*
       CREATE ... SELECT (without TEMPORARY) is unsafe because if
       binlog_format=row it will be logged as a CREATE TABLE followed
@@ -8657,6 +8706,19 @@ THD::is_dml_gtid_compatible(bool transactional_table,
       !(non_transactional_tmp_tables && is_current_stmt_binlog_format_row()) &&
       !DBUG_EVALUATE_IF("allow_gtid_unsafe_non_transactional_updates", 1, 0))
   {
+    if (opt_rds_allow_unsafe_stmt_with_gtid &&
+        this->variables.gtid_next.type == AUTOMATIC_GROUP && // Gtid is auto-generated
+        ((lex->sql_command != SQLCOM_UPDATE_MULTI &&
+         lex->sql_command != SQLCOM_DELETE_MULTI) || // Allow multi update only when binlog format is row
+         is_current_stmt_binlog_format_row()))
+    {
+#ifndef DBUG_OFF
+			THD *tmp_thd= (THD *) this;
+      tmp_thd->enable_unsafe_stmt= true;
+#endif
+      DBUG_RETURN(true);
+    }
+
     my_error(ER_GTID_UNSAFE_NON_TRANSACTIONAL_TABLE, MYF(0));
     DBUG_RETURN(false);
   }

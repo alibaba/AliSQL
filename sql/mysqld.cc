@@ -550,6 +550,7 @@ my_bool log_bin_use_v1_row_events= 0;
 bool thread_cache_size_specified= false;
 bool host_cache_size_specified= false;
 bool table_definition_cache_specified= false;
+my_bool opt_rds_allow_unsafe_stmt_with_gtid= FALSE;
 
 Error_log_throttle err_log_throttle(Log_throttle::LOG_THROTTLE_WINDOW_SIZE,
                                     sql_print_error,
@@ -755,6 +756,7 @@ mysql_mutex_t LOCK_des_key_file;
 mysql_rwlock_t LOCK_sys_init_connect, LOCK_sys_init_slave;
 mysql_rwlock_t LOCK_system_variables_hash;
 mysql_rwlock_t LOCK_filter_list;
+mysql_rwlock_t LOCK_unsafe_stmt;
 mysql_cond_t COND_thread_count;
 pthread_t signal_thread;
 pthread_attr_t connection_attrib;
@@ -2031,6 +2033,7 @@ static void clean_up_mutexes()
   mysql_mutex_destroy(&LOCK_global_system_variables);
   mysql_rwlock_destroy(&LOCK_system_variables_hash);
   mysql_rwlock_destroy(&LOCK_filter_list);
+  mysql_rwlock_destroy(&LOCK_unsafe_stmt);
   mysql_mutex_destroy(&LOCK_uuid_generator);
   mysql_mutex_destroy(&LOCK_sql_rand);
   mysql_mutex_destroy(&LOCK_prepared_stmt_count);
@@ -4291,6 +4294,7 @@ static int init_thread_environment()
   mysql_rwlock_init(key_rwlock_LOCK_system_variables_hash,
                     &LOCK_system_variables_hash);
   mysql_rwlock_init(key_rwlock_LOCK_filter_list, &LOCK_filter_list);
+  mysql_rwlock_init(key_rwlock_LOCK_unsafe_stmt, &LOCK_unsafe_stmt);
   mysql_mutex_init(key_LOCK_prepared_stmt_count,
                    &LOCK_prepared_stmt_count, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_sql_slave_skip_counter,
@@ -9555,7 +9559,8 @@ PSI_mutex_key
   key_structure_guard_mutex, key_TABLE_SHARE_LOCK_ha_data,
   key_LOCK_error_messages, key_LOG_INFO_lock, key_LOCK_thread_count,
   key_LOCK_log_throttle_qni, key_rwlock_LOCK_filter_list,
-  key_LOCK_global_table_stats, key_LOCK_global_index_stats;
+  key_LOCK_global_table_stats, key_LOCK_global_index_stats,
+  key_rwlock_LOCK_unsafe_stmt;
 PSI_mutex_key key_LOCK_thd_remove;
 PSI_mutex_key key_RELAYLOG_LOCK_commit;
 PSI_mutex_key key_RELAYLOG_LOCK_commit_queue;
@@ -9650,7 +9655,8 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_log_throttle_qni, "LOCK_log_throttle_qni", PSI_FLAG_GLOBAL},
   { &key_gtid_ensure_index_mutex, "Gtid_state", PSI_FLAG_GLOBAL},
   { &key_LOCK_thread_created, "LOCK_thread_created", PSI_FLAG_GLOBAL },
-  { &key_rwlock_LOCK_filter_list, "LOCK_filter_list", PSI_FLAG_GLOBAL}
+  { &key_rwlock_LOCK_filter_list, "LOCK_filter_list", PSI_FLAG_GLOBAL},
+  { &key_rwlock_LOCK_unsafe_stmt, "LOCK_unsafe_stmt", PSI_FLAG_GLOBAL}
 };
 
 PSI_rwlock_key key_rwlock_LOCK_grant, key_rwlock_LOCK_logger,

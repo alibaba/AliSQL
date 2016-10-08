@@ -3728,7 +3728,9 @@ bool select_insert::send_data(List<Item> &values)
 
   error= write_record(thd, table, &info, &update);
   table->auto_increment_field_not_null= FALSE;
-  
+
+  DEBUG_SYNC(thd, "after_write_something");
+ 
   if (!error)
   {
     if (table->triggers || info.get_duplicate_handling() == DUP_UPDATE)
@@ -4349,10 +4351,13 @@ select_create::binlog_show_create_table(TABLE **tables, uint count)
   if (mysql_bin_log.is_open())
   {
     int errcode= query_error_code(thd, thd->killed == THD::NOT_KILLED);
+    DBUG_ASSERT(!gtid_mode || thd->enable_unsafe_stmt);
+    bool direct_event= (gtid_mode &&
+        (thd->variables.gtid_next.type == AUTOMATIC_GROUP));
     result= thd->binlog_query(THD::STMT_QUERY_TYPE,
                               query.ptr(), query.length(),
                               /* is_trans */ TRUE,
-                              /* direct */ FALSE,
+                              /* direct */ direct_event,
                               /* suppress_use */ FALSE,
                               errcode);
   }
