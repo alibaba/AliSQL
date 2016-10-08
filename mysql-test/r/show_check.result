@@ -120,7 +120,7 @@ Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is
 def	information_schema	TABLES	TABLES	TABLE_NAME	Name	253	64	0	N	1	0	8
 def	information_schema	TABLES	TABLES	ENGINE	Engine	253	64	0	Y	0	0	8
 def	information_schema	TABLES	TABLES	VERSION	Version	8	21	0	Y	32800	0	63
-def	information_schema	TABLES	TABLES	ROW_FORMAT	Row_format	253	10	0	Y	0	0	8
+def	information_schema	TABLES	TABLES	ROW_FORMAT	Row_format	253	20	0	Y	0	0	8
 def	information_schema	TABLES	TABLES	TABLE_ROWS	Rows	8	21	0	Y	32800	0	63
 def	information_schema	TABLES	TABLES	AVG_ROW_LENGTH	Avg_row_length	8	21	0	Y	32800	0	63
 def	information_schema	TABLES	TABLES	DATA_LENGTH	Data_length	8	21	0	Y	32800	0	63
@@ -928,7 +928,7 @@ def	information_schema	TABLES	TABLES	TABLE_SCHEMA	TABLE_SCHEMA	253	192	4	N	1	0	3
 def	information_schema	TABLES	TABLES	TABLE_NAME	TABLE_NAME	253	192	2	N	1	0	33
 def	information_schema	TABLES	TABLES	TABLE_TYPE	TABLE_TYPE	253	192	10	N	1	0	33
 def	information_schema	TABLES	TABLES	ENGINE	ENGINE	253	192	6	Y	0	0	33
-def	information_schema	TABLES	TABLES	ROW_FORMAT	ROW_FORMAT	253	30	5	Y	0	0	33
+def	information_schema	TABLES	TABLES	ROW_FORMAT	ROW_FORMAT	253	60	5	Y	0	0	33
 def	information_schema	TABLES	TABLES	TABLE_COLLATION	TABLE_COLLATION	253	96	17	Y	0	0	33
 def	information_schema	TABLES	TABLES	CREATE_OPTIONS	CREATE_OPTIONS	253	765	0	Y	0	0	33
 def	information_schema	TABLES	TABLES	TABLE_COMMENT	TABLE_COMMENT	253	6144	0	N	1	0	33

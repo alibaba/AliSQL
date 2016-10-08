@@ -3596,7 +3596,7 @@ CREATE TEMPORARY TABLE `TABLES` (
   `TABLE_TYPE` varchar(64) NOT NULL DEFAULT '',
   `ENGINE` varchar(64) DEFAULT NULL,
   `VERSION` bigint(21) unsigned DEFAULT NULL,
-  `ROW_FORMAT` varchar(10) DEFAULT NULL,
+  `ROW_FORMAT` varchar(20) DEFAULT NULL,
   `TABLE_ROWS` bigint(21) unsigned DEFAULT NULL,
   `AVG_ROW_LENGTH` bigint(21) unsigned DEFAULT NULL,
   `DATA_LENGTH` bigint(21) unsigned DEFAULT NULL,
