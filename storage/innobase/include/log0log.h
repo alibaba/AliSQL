@@ -763,6 +763,7 @@ struct log_t{
 					buffer */
 #ifndef UNIV_HOTBACKUP
 	ib_mutex_t		mutex;		/*!< mutex protecting the log */
+	ib_mutex_t		w_mutex;	/*!< mutex to protect log file */
 
 	ib_mutex_t		log_flush_order_mutex;/*!< mutex to serialize access to
 					the flush list when we are putting
@@ -773,8 +774,9 @@ struct log_t{
 					insertions in the flush_list happen
 					in the LSN order. */
 #endif /* !UNIV_HOTBACKUP */
-	byte*		buf_ptr;	/* unaligned log buffer */
 	byte*		buf;		/*!< log buffer */
+	byte*		buf_pair_ptr[2];/*!< unaligned log buffer */
+	byte*		buf_pair[2];	/*!< two buffer for redo copy/write */
 	ulint		buf_size;	/*!< log buffer size in bytes */
 	ulint		max_buf_free;	/*!< recommended maximum value of
 					buf_free, after which the buffer is
@@ -812,11 +814,6 @@ struct log_t{
 	volatile bool	is_extending;	/*!< this is set to true during extend
 					the log buffer size */
 	lsn_t		write_lsn;	/*!< last written lsn */
-	ulint		write_end_offset;/*!< the data in buffer has
-					been written up to this offset
-					when the current write ends:
-					this field will then be copied
-					to buf_next_to_write */
 	lsn_t		current_flush_lsn;/*!< end lsn for the current running
 					write + flush operation */
 	lsn_t		flushed_to_disk_lsn;
@@ -935,6 +932,16 @@ struct log_t{
 /** Release the flush order mutex. */
 # define log_flush_order_mutex_exit() do {		\
 	mutex_exit(&log_sys->log_flush_order_mutex);	\
+} while (0)
+
+#define log_mutex_enter_all() do {     \
+	mutex_enter(&log_sys->w_mutex); \
+	mutex_enter(&log_sys->mutex);   \
+} while (0)
+
+#define log_mutex_exit_all() do {      \
+	mutex_exit(&log_sys->w_mutex);  \
+	mutex_exit(&log_sys->mutex);    \
 } while (0)
 
 #ifdef UNIV_LOG_ARCHIVE

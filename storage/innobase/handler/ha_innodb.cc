@@ -308,6 +308,7 @@ static PSI_mutex_info all_innodb_mutexes[] = {
 	{&server_mutex_key, "server_mutex", 0},
 #  endif /* !HAVE_ATOMIC_BUILTINS */
 	{&log_sys_mutex_key, "log_sys_mutex", 0},
+	{&log_sys_w_mutex_key, "log_sys_w_mutex", 0},
 #  ifdef UNIV_MEM_DEBUG
 	{&mem_hash_mutex_key, "mem_hash_mutex", 0},
 #  endif /* UNIV_MEM_DEBUG */

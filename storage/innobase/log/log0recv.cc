@@ -699,13 +699,13 @@ recv_synchronize_groups(
 
 	log_groups_write_checkpoint_info();
 
-	mutex_exit(&(log_sys->mutex));
+	log_mutex_exit_all();
 
 	/* Wait for the checkpoint write to complete */
 	rw_lock_s_lock(&(log_sys->checkpoint_lock));
 	rw_lock_s_unlock(&(log_sys->checkpoint_lock));
 
-	mutex_enter(&(log_sys->mutex));
+	log_mutex_enter_all();
 }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -1957,7 +1957,7 @@ loop:
 
 		ut_d(recv_no_log_write = TRUE);
 		mutex_exit(&(recv_sys->mutex));
-		mutex_exit(&(log_sys->mutex));
+		log_mutex_exit_all();
 
 		/* Stop the recv_writer thread from issuing any LRU
 		flush batches. */
@@ -1977,7 +1977,7 @@ loop:
 		/* Allow batches from recv_writer thread. */
 		mutex_exit(&recv_sys->writer_mutex);
 
-		mutex_enter(&(log_sys->mutex));
+		log_mutex_enter_all();
 		mutex_enter(&(recv_sys->mutex));
 		ut_d(recv_no_log_write = FALSE);
 
@@ -3058,7 +3058,7 @@ recv_recovery_from_checkpoint_start_func(
 
 	recv_sys->limit_lsn = LIMIT_LSN;
 
-	mutex_enter(&(log_sys->mutex));
+	log_mutex_enter_all();
 
 	/* Look for the latest checkpoint from any of the log groups */
 
@@ -3066,7 +3066,7 @@ recv_recovery_from_checkpoint_start_func(
 
 	if (err != DB_SUCCESS) {
 
-		mutex_exit(&(log_sys->mutex));
+		log_mutex_exit_all();
 
 		return(err);
 	}
@@ -3162,7 +3162,7 @@ recv_recovery_from_checkpoint_start_func(
 		if (recv_sys->scanned_lsn > checkpoint_lsn + capacity
 		    || checkpoint_lsn > recv_sys->scanned_lsn + capacity) {
 
-			mutex_exit(&(log_sys->mutex));
+			log_mutex_exit_all();
 
 			/* The group does not contain enough log: probably
 			an archived log file was missing or corrupt */
@@ -3174,7 +3174,7 @@ recv_recovery_from_checkpoint_start_func(
 					 &group_scanned_lsn);
 		if (recv_sys->scanned_lsn < checkpoint_lsn) {
 
-			mutex_exit(&(log_sys->mutex));
+			log_mutex_exit_all();
 
 			/* The group did not contain enough log: an archived
 			log file was missing or invalid, or the log group
@@ -3292,7 +3292,7 @@ recv_recovery_from_checkpoint_start_func(
 
 	if (recv_sys->recovered_lsn < checkpoint_lsn) {
 
-		mutex_exit(&(log_sys->mutex));
+		log_mutex_exit_all();
 
 		if (recv_sys->recovered_lsn >= LIMIT_LSN) {
 
@@ -3355,7 +3355,7 @@ recv_recovery_from_checkpoint_start_func(
 
 	mutex_exit(&recv_sys->mutex);
 
-	mutex_exit(&log_sys->mutex);
+	log_mutex_exit_all();
 
 	recv_lsn_checks_on = TRUE;
 
@@ -3556,13 +3556,13 @@ recv_reset_logs(
 	MONITOR_SET(MONITOR_LSN_CHECKPOINT_AGE,
 		    (log_sys->lsn - log_sys->last_checkpoint_lsn));
 
-	mutex_exit(&(log_sys->mutex));
+	log_mutex_exit_all();
 
 	/* Reset the checkpoint fields in logs */
 
 	log_make_checkpoint_at(LSN_MAX, TRUE);
 
-	mutex_enter(&(log_sys->mutex));
+	log_mutex_enter_all();
 }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -3913,7 +3913,7 @@ recv_recovery_from_archive_start(
 
 	ret = FALSE;
 
-	mutex_enter(&(log_sys->mutex));
+	log_mutex_enter_all();
 
 	while (!ret) {
 		ret = log_group_recover_from_archive_file(group);
@@ -3938,7 +3938,7 @@ recv_recovery_from_archive_start(
 			recv_sys->scanned_lsn = recv_sys->parse_start_lsn;
 		}
 
-		mutex_exit(&(log_sys->mutex));
+		log_mutex_exit_all();
 
 		err = recv_recovery_from_checkpoint_start(LOG_ARCHIVE,
 							  limit_lsn,
@@ -3949,7 +3949,7 @@ recv_recovery_from_archive_start(
 			return(err);
 		}
 
-		mutex_enter(&(log_sys->mutex));
+		log_mutex_enter_all();
 	}
 
 	if (limit_lsn != LSN_MAX) {
@@ -3959,7 +3959,7 @@ recv_recovery_from_archive_start(
 		recv_reset_logs(0, FALSE, recv_sys->recovered_lsn);
 	}
 
-	mutex_exit(&(log_sys->mutex));
+	log_mutex_exit_all();
 
 	return(DB_SUCCESS);
 }

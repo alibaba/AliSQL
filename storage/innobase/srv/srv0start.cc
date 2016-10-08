@@ -678,10 +678,10 @@ create_log_files(
 	fil_open_log_and_system_tablespace_files();
 
 	/* Create a log checkpoint. */
-	mutex_enter(&log_sys->mutex);
+	log_mutex_enter_all();
 	ut_d(recv_no_log_write = FALSE);
 	recv_reset_logs(lsn);
-	mutex_exit(&log_sys->mutex);
+	log_mutex_exit_all();
 
 	return(DB_SUCCESS);
 }
@@ -713,7 +713,7 @@ create_log_files_rename(
 	ib_logf(IB_LOG_LEVEL_INFO,
 		"Renaming log file %s to %s", logfile0, logfilename);
 
-	mutex_enter(&log_sys->mutex);
+	log_mutex_enter_all();
 	ut_ad(strlen(logfile0) == 2 + strlen(logfilename));
 	ibool success = os_file_rename(
 		innodb_file_log_key, logfile0, logfilename);
@@ -723,7 +723,7 @@ create_log_files_rename(
 
 	/* Replace the first file with ib_logfile0. */
 	strcpy(logfile0, logfilename);
-	mutex_exit(&log_sys->mutex);
+	log_mutex_exit_all();
 
 	fil_open_log_and_system_tablespace_files();
 
@@ -2610,7 +2610,7 @@ files_checked:
 	if (!srv_log_archive_on) {
 		ut_a(DB_SUCCESS == log_archive_noarchivelog());
 	} else {
-		mutex_enter(&(log_sys->mutex));
+		log_mutex_enter_all();
 
 		start_archive = FALSE;
 
@@ -2618,7 +2618,7 @@ files_checked:
 			start_archive = TRUE;
 		}
 
-		mutex_exit(&(log_sys->mutex));
+		log_mutex_exit_all();
 
 		if (start_archive) {
 			ut_a(DB_SUCCESS == log_archive_archivelog());

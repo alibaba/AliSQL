@@ -79,6 +79,7 @@ extern mysql_pfs_key_t	ibuf_bitmap_mutex_key;
 extern mysql_pfs_key_t	ibuf_mutex_key;
 extern mysql_pfs_key_t	ibuf_pessimistic_insert_mutex_key;
 extern mysql_pfs_key_t	log_sys_mutex_key;
+extern mysql_pfs_key_t	log_sys_w_mutex_key;
 extern mysql_pfs_key_t	log_flush_order_mutex_key;
 # ifndef HAVE_ATOMIC_BUILTINS
 extern mysql_pfs_key_t	server_mutex_key;
@@ -702,6 +703,7 @@ or row lock! */
 #define SYNC_TRX_SYS_HEADER	290
 #define	SYNC_PURGE_QUEUE	200
 #define SYNC_LOG		170
+#define SYNC_WRITE_LOG		171
 #define SYNC_LOG_FLUSH_ORDER	147
 #define SYNC_RECV		168
 #define SYNC_FTS_TOKENIZE	167
