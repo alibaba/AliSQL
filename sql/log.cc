@@ -2584,7 +2584,6 @@ err:
 /**
   Get the total amount of potentially usable slots for XIDs in TC log.
 */
-
 uint TC_LOG_MMAP::size() const
 {
       return (tc_log_page_size-TC_LOG_HEADER_SIZE)/sizeof(my_xid) +
@@ -2845,7 +2844,7 @@ int TC_LOG_MMAP::sync()
      (the thread that will send a signal below)
   */
   if (active)
-      mysql_cond_signal(&active->cond);        // wake up a new syncer
+      mysql_cond_signal(&active->cond);
   mysql_mutex_unlock(&LOCK_sync);
   return err;
 }

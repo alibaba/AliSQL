@@ -120,6 +120,7 @@ extern "C" {
 #include "toku_os.h"
 #include "hatoku_defines.h"
 #include "hatoku_cmp.h"
+#include "partitioned_counter.h"
 
 static inline uint get_key_parts(const KEY *key);
 
@@ -3975,6 +3976,8 @@ int ha_tokudb::write_row(uchar * record) {
     if (!error) {
         added_rows++;
         trx->stmt_progress.inserted++;
+        //inserted increment
+        increment_partitioned_counter(toku_row_status.inserted, 1);
         track_progress(thd);
     }
 cleanup:
@@ -4162,6 +4165,8 @@ int ha_tokudb::update_row(const uchar * old_row, uchar * new_row) {
     }    
     else if (!error) {
         trx->stmt_progress.updated++;
+        //updated increment
+        increment_partitioned_counter(toku_row_status.updated, 1);
         track_progress(thd);
     }
 
@@ -4245,6 +4250,8 @@ int ha_tokudb::delete_row(const uchar * record) {
     else {
         deleted_rows++;
         trx->stmt_progress.deleted++;
+        //deleted increment
+        increment_partitioned_counter(toku_row_status.deleted, 1);
         track_progress(thd);
     }
 cleanup:
@@ -4877,6 +4884,8 @@ int ha_tokudb::index_read(uchar * buf, const uchar * key, uint key_len, enum ha_
         TOKUDB_HANDLER_TRACE("error:%d:%d", error, find_flag);
     }
     trx->stmt_progress.queried++;
+    //read increment
+    increment_partitioned_counter(toku_row_status.read, 1);
     track_progress(thd);
 
 cleanup:
@@ -5365,6 +5374,8 @@ int ha_tokudb::get_next(uchar* buf, int direction, DBT* key_to_compare, bool do_
     if (!error) {
         tokudb_trx_data* trx = (tokudb_trx_data *) thd_get_ha_data(ha_thd(), tokudb_hton);
         trx->stmt_progress.queried++;
+        //read increment
+        increment_partitioned_counter(toku_row_status.read, 1);
         track_progress(ha_thd());
     }
 cleanup:
@@ -5447,6 +5458,8 @@ int ha_tokudb::index_first(uchar * buf) {
     }
     if (trx) {
         trx->stmt_progress.queried++;
+        //read increment
+        increment_partitioned_counter(toku_row_status.read, 1);
     }
     track_progress(thd);
     maybe_index_scan = true;    
@@ -5491,6 +5504,8 @@ int ha_tokudb::index_last(uchar * buf) {
 
     if (trx) {
         trx->stmt_progress.queried++;
+        //read increment
+        increment_partitioned_counter(toku_row_status.read, 1);
     }
     track_progress(thd);
     maybe_index_scan = true;

@@ -511,7 +511,7 @@ NULL	information_schema	FILES	LAST_ACCESS_TIME	datetime	NULL	NULL	NULL	NULL	date
 NULL	information_schema	FILES	RECOVER_TIME	bigint	NULL	NULL	NULL	NULL	bigint(4)
 NULL	information_schema	FILES	TRANSACTION_COUNTER	bigint	NULL	NULL	NULL	NULL	bigint(4)
 NULL	information_schema	FILES	VERSION	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
-3.0000	information_schema	FILES	ROW_FORMAT	varchar	10	60	utf8	utf8_general_ci	varchar(10)
+3.0000	information_schema	FILES	ROW_FORMAT	varchar	20	60	utf8	utf8_general_ci	varchar(20)
 NULL	information_schema	FILES	TABLE_ROWS	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
 NULL	information_schema	FILES	AVG_ROW_LENGTH	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
 NULL	information_schema	FILES	DATA_LENGTH	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
@@ -692,7 +692,7 @@ NULL	information_schema	STATISTICS	SUB_PART	bigint	NULL	NULL	NULL	NULL	bigint(3)
 3.0000	information_schema	TABLES	TABLE_TYPE	varchar	64	192	utf8	utf8_general_ci	varchar(64)
 3.0000	information_schema	TABLES	ENGINE	varchar	64	192	utf8	utf8_general_ci	varchar(64)
 NULL	information_schema	TABLES	VERSION	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
-3.0000	information_schema	TABLES	ROW_FORMAT	varchar	10	60	utf8	utf8_general_ci	varchar(10)
+3.0000	information_schema	TABLES	ROW_FORMAT	varchar	20	60	utf8	utf8_general_ci	varchar(20)
 NULL	information_schema	TABLES	TABLE_ROWS	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
 NULL	information_schema	TABLES	AVG_ROW_LENGTH	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
 NULL	information_schema	TABLES	DATA_LENGTH	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
