@@ -437,11 +437,25 @@ ibool
 thd_trx_is_auto_commit(
 /*===================*/
 	THD*	thd);	/*!< in: thread handle, or NULL */
+
 /*******************************************************************//**
 @return the engine type of innodb. */
 UNIV_INTERN
 int
 innobase_get_type(void);
+
+/******************************************************************//**
+Returns true if transaction is read-only up to current SELECT statement.
+This function is different from thd_trx_is_auto_commit() in that
+transaction can be non-auto-commit as long as there is no update statement
+before current SELECT.
+@return true if transacction is read-only */
+UNIV_INTERN
+ibool
+innobase_trx_is_read_only(
+/*======================*/
+	trx_t* trx);	/*!< in: transaction handle */
+
 /*****************************************************************//**
 A wrapper function of innobase_convert_name(), convert a table or
 index name to the MySQL system_charset_info (UTF-8) and quote it if needed.

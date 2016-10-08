@@ -1268,6 +1268,26 @@ innobase_get_type(void)
 	return (innodb_hton_ptr->db_type);
 }
 /******************************************************************//**
+Returns true if transaction is read-only up to current SELECT statement.
+This function is different from thd_trx_is_auto_commit() in that
+transaction can be non-auto-commit as long as there is no update statement
+before current SELECT.
+@return true if transacction is read-only */
+UNIV_INTERN
+ibool
+innobase_trx_is_read_only(
+/*======================*/
+	trx_t* trx)	/*!< in: transaction handle */
+{
+	const THD* thd = (const THD*) trx->mysql_thd;
+	return (thd != NULL
+		&& (!thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)
+		    || (trx->lock.trx_locks.count == 0
+			&& trx->mysql_n_tables_locked == 0))
+		&& thd_is_select(thd));
+}
+
+/******************************************************************//**
 Save some CPU by testing the value of srv_thread_concurrency in inline
 functions. */
 static inline
@@ -12523,6 +12543,10 @@ ha_innobase::external_lock(
 
 	if (trx->n_mysql_tables_in_use == 0) {
 
+		/* Set the n_acquire_tickets_to_enter to zero because it has
+		ended the statement at this moment */
+		trx->n_acquire_tickets_to_enter = 0;
+
 		trx->mysql_n_tables_locked = 0;
 		prebuilt->used_in_HANDLER = FALSE;
 
@@ -16283,6 +16307,16 @@ static MYSQL_SYSVAR_ULONG(concurrency_tickets, srv_n_free_tickets_to_enter,
   "Number of times a thread is allowed to enter InnoDB within the same SQL query after it has once got the ticket",
   NULL, NULL, 5000L, 1L, ~0UL, 0);
 
+static MYSQL_SYSVAR_BOOL(rds_adaptive_tickets_algo, srv_adaptive_tickets_algo,
+  PLUGIN_VAR_RQCMDARG,
+  "Whether to enable the adaptive tickets algorithm",
+  NULL, NULL, FALSE);
+
+static MYSQL_SYSVAR_ULONG(rds_min_concurrency_tickets, srv_min_n_free_tickets_to_enter,
+  PLUGIN_VAR_RQCMDARG,
+  "The lower bound of the concurrency_tickets when rds_adaptive_tickets_algo is enabled",
+  NULL, NULL, 50L, 1L, ~0UL, 0);
+
 static MYSQL_SYSVAR_LONG(file_io_threads, innobase_file_io_threads,
   PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY | PLUGIN_VAR_NOSYSVAR,
   "Number of file I/O threads in InnoDB.",
@@ -16744,6 +16778,8 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(checksums),
   MYSQL_SYSVAR(commit_concurrency),
   MYSQL_SYSVAR(concurrency_tickets),
+  MYSQL_SYSVAR(rds_adaptive_tickets_algo),
+  MYSQL_SYSVAR(rds_min_concurrency_tickets),
   MYSQL_SYSVAR(compression_level),
   MYSQL_SYSVAR(data_file_path),
   MYSQL_SYSVAR(data_home_dir),

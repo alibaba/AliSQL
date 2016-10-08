@@ -47,6 +47,9 @@ Created 2011/04/18 Sunny Bains
 SQL query after it has once got the ticket. */
 UNIV_INTERN ulong	srv_n_free_tickets_to_enter = 500;
 
+UNIV_INTERN my_bool	srv_adaptive_tickets_algo = FALSE;
+UNIV_INTERN ulong	srv_min_n_free_tickets_to_enter = 50;
+
 #ifdef HAVE_ATOMIC_BUILTINS
 /** Maximum sleep delay (in micro-seconds), value of 0 disables it. */
 UNIV_INTERN ulong	srv_adaptive_max_sleep_delay = 150000;
@@ -162,6 +165,36 @@ srv_conc_free(void)
 #endif /* !HAVE_ATOMIC_BUILTINS */
 }
 
+/*********************************************************************//**
+Calculate how many tickets should assigned to current statement.
+If adaptive algorithm(innodb_rds_adaptive_tickets_algo) is disabled,
+return srv_n_free_tickets_to_enter as Oracle does; otherwise tickets number
+is decreased exponentially according to the number of times current statement
+entered innodb to acquire tickets.
+*/
+static inline
+ulint
+srv_conc_calc_tickets(
+/*================*/
+	trx_t* trx)			/*!< in: transaction that wants to
+					enter InnoDB */
+{
+	ulint tickets = srv_n_free_tickets_to_enter;
+	if (!srv_adaptive_tickets_algo) {
+		return tickets;
+	}
+
+	if (innobase_trx_is_read_only(trx)
+	    && tickets > srv_min_n_free_tickets_to_enter) {
+		tickets >>= (trx->n_acquire_tickets_to_enter - 1);
+	}
+
+	return ((tickets < srv_min_n_free_tickets_to_enter)
+		? srv_min_n_free_tickets_to_enter
+		: tickets);
+}
+
+
 #ifdef HAVE_ATOMIC_BUILTINS
 /*********************************************************************//**
 Note that a user thread is entering InnoDB. */
@@ -173,7 +206,8 @@ srv_enter_innodb_with_tickets(
 					to enter InnoDB */
 {
 	trx->declared_to_be_inside_innodb = TRUE;
-	trx->n_tickets_to_enter_innodb = srv_n_free_tickets_to_enter;
+	trx->n_acquire_tickets_to_enter++;
+	trx->n_tickets_to_enter_innodb = srv_conc_calc_tickets(trx);
 }
 
 /*********************************************************************//**
@@ -378,7 +412,8 @@ retry:
 
 		srv_conc.n_active++;
 		trx->declared_to_be_inside_innodb = TRUE;
-		trx->n_tickets_to_enter_innodb = srv_n_free_tickets_to_enter;
+		trx->n_acquire_tickets_to_enter++;
+		trx->n_tickets_to_enter_innodb = srv_conc_calc_tickets(trx);
 
 		os_fast_mutex_unlock(&srv_conc_mutex);
 
@@ -487,7 +522,8 @@ retry:
 	UT_LIST_REMOVE(srv_conc_queue, srv_conc_queue, slot);
 
 	trx->declared_to_be_inside_innodb = TRUE;
-	trx->n_tickets_to_enter_innodb = srv_n_free_tickets_to_enter;
+	trx->n_acquire_tickets_to_enter++;
+	trx->n_tickets_to_enter_innodb = srv_conc_calc_tickets(trx);
 
 	os_fast_mutex_unlock(&srv_conc_mutex);
 }

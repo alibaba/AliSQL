@@ -144,6 +144,8 @@ trx_create(void)
 
 	trx->read_write = true;
 
+	trx->n_acquire_tickets_to_enter = 0;
+
 	heap = mem_heap_create(sizeof(ib_vector_t) + sizeof(void*) * 8);
 	heap_alloc = ib_heap_allocator_create(heap);
 

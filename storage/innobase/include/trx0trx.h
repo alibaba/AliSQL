@@ -858,6 +858,14 @@ struct trx_t{
 					field contains the end offset of the
 					binlog entry */
 	/*------------------------------*/
+	ulint		n_acquire_tickets_to_enter;
+					/*!< number of times the current SQL
+					statement has entered innodb to acquire
+					tickets, increase each time, reset
+					to zero at the end of current SQL
+					statement. This is used for adaptive
+					tickets algorithm */
+	/*------------------------------*/
 	ulint		n_mysql_tables_in_use; /*!< number of Innobase tables
 					used in the processing of the current
 					SQL statement in MySQL */

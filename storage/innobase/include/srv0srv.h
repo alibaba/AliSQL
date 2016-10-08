@@ -388,6 +388,10 @@ extern ulong	srv_spin_wait_delay;
 extern ibool	srv_priority_boost;
 extern my_bool  srv_explicit_redo_gc;
 
+/* Whether to enable adaptive tickets algorithm */
+extern my_bool	srv_adaptive_tickets_algo;
+extern ulong	srv_min_n_free_tickets_to_enter;
+
 extern ulint	srv_truncated_status_writes;
 extern ulint	srv_available_undo_logs;
 
