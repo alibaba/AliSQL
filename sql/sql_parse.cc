@@ -101,6 +101,8 @@
 #include "sql_analyse.h"
 #include "table_cache.h" // table_cache_manager
 
+#include "sql_filter.h"
+
 #include "sql_digest.h"
 
 #include <algorithm>
@@ -416,6 +418,7 @@ void init_update_queries(void)
   sql_command_flags[SQLCOM_SHOW_ENGINE_MUTEX]= CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_ENGINE_LOGS]= CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_PROCESSLIST]= CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_SQL_FILTERS]= CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_GRANTS]=      CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_CREATE_DB]=   CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_CREATE]=  CF_STATUS_COMMAND;
@@ -2097,6 +2100,7 @@ int prepare_schema_table(THD *thd, LEX *lex, Table_ident *table_ident,
   case SCH_COLUMN_PRIVILEGES:
   case SCH_TABLE_CONSTRAINTS:
   case SCH_KEY_COLUMN_USAGE:
+  case SCH_SQL_FILTER_INFO:
   default:
     break;
   }
@@ -2578,8 +2582,6 @@ mysql_execute_command(THD *thd)
   } /* endif unlikely slave */
 #endif
 
-  status_var_increment(thd->status_var.com_stat[lex->sql_command]);
-
   Opt_trace_start ots(thd, all_tables, lex->sql_command, &lex->var_list,
                       thd->query(), thd->query_length(), NULL,
                       thd->variables.character_set_client);
@@ -2588,6 +2590,14 @@ mysql_execute_command(THD *thd)
   Opt_trace_array trace_command_steps(&thd->opt_trace, "steps");
 
   DBUG_ASSERT(thd->transaction.stmt.cannot_safely_rollback() == FALSE);
+
+  if (need_traffic_control(thd, lex->sql_command))
+  {
+    thd->killed= THD::KILL_QUERY;
+    goto error;
+  }
+
+  status_var_increment(thd->status_var.com_stat[lex->sql_command]);
 
   switch (gtid_pre_statement_checks(thd))
   {
@@ -5066,6 +5076,11 @@ create_sp_error:
       my_ok(thd);
     break;
 #endif
+  case SQLCOM_SHOW_SQL_FILTERS:
+    if (check_global_access(thd, SUPER_ACL))
+      break;
+    mysqld_list_sql_filters(thd);
+    break;
   default:
 #ifndef EMBEDDED_LIBRARY
     DBUG_ASSERT(0);                             /* Impossible */
@@ -5097,6 +5112,8 @@ finish:
 
   DBUG_ASSERT(!thd->in_active_multi_stmt_transaction() ||
                thd->in_multi_stmt_transaction_mode());
+
+dec_filter_item_conc(thd, lex->sql_command);
 
   if (! thd->in_sub_stmt)
   {

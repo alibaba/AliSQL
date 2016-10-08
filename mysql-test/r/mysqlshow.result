@@ -102,6 +102,7 @@ Database: information_schema
 | SCHEMA_PRIVILEGES                     |
 | SESSION_STATUS                        |
 | SESSION_VARIABLES                     |
+| SQL_FILTER_INFO                       |
 | STATISTICS                            |
 | TABLES                                |
 | TABLESPACES                           |
@@ -169,6 +170,7 @@ Database: INFORMATION_SCHEMA
 | SCHEMA_PRIVILEGES                     |
 | SESSION_STATUS                        |
 | SESSION_VARIABLES                     |
+| SQL_FILTER_INFO                       |
 | STATISTICS                            |
 | TABLES                                |
 | TABLESPACES                           |

@@ -2266,6 +2266,8 @@ public:
 #endif
   struct st_my_thread_var *mysys_var;
 
+  int filter_id;
+
 private:
   /**
     Type of current query: COM_STMT_PREPARE, COM_QUERY, etc.

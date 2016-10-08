@@ -719,9 +719,20 @@ The following options may be given as the first argument:
  --range-alloc-block-size=# 
  Allocation block size for storing ranges during
  optimization
+ --rds-filter-key-cmp-in-order 
+ If enabled, then match keys stored in filter list in
+ order
  --rds-indexstat     Control INDEX_STATISTICS
+ --rds-reset-all-filter 
+ Delete all sql filters immediately
+ --rds-sql-delete-filter=name 
+ Used to add/remove  a SQL filter item for DELETE
  --rds-sql-max-iops=# 
  restrict the sql physical iops when sql executing.
+ --rds-sql-select-filter=name 
+ Used to add/remove  a SQL filter item for SELECT
+ --rds-sql-update-filter=name 
+ Used to add/remove  a SQL filter item for UPDATE
  --rds-tablestat     Control TABLE_STATISTICS
  --rds-threads-running-ctl-mode=name 
  Control which statements will be affected by threads
@@ -1242,7 +1253,7 @@ performance-schema-max-rwlock-instances -1
 performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
 performance-schema-max-stage-classes 150
-performance-schema-max-statement-classes 168
+performance-schema-max-statement-classes 169
 performance-schema-max-table-handles -1
 performance-schema-max-table-instances -1
 performance-schema-max-thread-classes 50
@@ -1263,8 +1274,13 @@ query-cache-type OFF
 query-cache-wlock-invalidate FALSE
 query-prealloc-size 8192
 range-alloc-block-size 4096
+rds-filter-key-cmp-in-order FALSE
 rds-indexstat FALSE
+rds-reset-all-filter FALSE
+rds-sql-delete-filter (No default value)
 rds-sql-max-iops 0
+rds-sql-select-filter (No default value)
+rds-sql-update-filter (No default value)
 rds-tablestat FALSE
 rds-threads-running-ctl-mode SELECTS
 rds-threads-running-high-watermark 151

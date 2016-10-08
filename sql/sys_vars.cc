@@ -59,11 +59,16 @@
 #include "sql_show.h"                           // opt_ignore_db_dirs
 #include "table_cache.h"                        // Table_cache_manager
 #include "my_aes.h" // my_aes_opmode_names
+#include "sql_filter.h"
 
 #include "log_event.h"
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "../storage/perfschema/pfs_server.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
+
+char *rds_sql_select_filter= NULL;
+char *rds_sql_update_filter= NULL;
+char *rds_sql_delete_filter= NULL;
 
 TYPELIB bool_typelib={ array_elements(bool_values)-1, "", bool_values, 0 };
 
@@ -4749,7 +4754,6 @@ static bool update_tr_high_watermark(sys_var *self, THD *thd, enum_var_type type
 
   return false;
 }
-
 static Sys_var_ulong Sys_rds_thread_running_high_watermark(
        "rds_threads_running_high_watermark",
        "When threads_running exceeds this limit, "
@@ -4767,3 +4771,148 @@ static Sys_var_enum Sys_rds_thread_running_ctl_mode(
        GLOBAL_VAR(thread_running_ctl_mode), CMD_LINE(REQUIRED_ARG),
        thread_running_ctl_mode_names, DEFAULT(0));
 /* END: thread running control */
+/* BEGIN: sql filter */
+static bool check_sql_filter(sys_var *self, THD *thd, set_var *var)
+{
+  return check_sql_filter_valid(var->save_result.string_value.str);
+}
+
+static LIST *modify_filter_list(LIST *filter_list, char *item_str)
+{
+  LIST *tmp_list= NULL;
+
+  if (item_str[0] == '+')
+    tmp_list= add_filter_item(filter_list, item_str);
+  else if (item_str[0] == '-')
+    tmp_list= delete_filter_item(filter_list, item_str);
+
+  return tmp_list;
+}
+
+static bool update_select_filter(sys_var *self, THD *thd, enum_var_type type)
+{
+  if (!rds_sql_select_filter || rds_sql_select_filter[0] == '\0')
+    return false;
+
+  LIST *tmp= modify_filter_list(select_filter_list, rds_sql_select_filter);
+
+  /*
+    error handle for malloc error in add_filter_item
+  */
+  if (rds_sql_select_filter[0] == '+' && NULL == tmp)
+    return true;
+
+  /*
+    deal with the case that delete the last item in delete_filter_item,
+    in this case modify_filter_list return NULL while select_filter_list
+    is illegal.
+  */
+  if (tmp || rds_sql_select_filter[0] == '-')
+    select_filter_list= tmp;
+
+  return false;
+}
+
+static bool update_update_filter(sys_var *self, THD *thd, enum_var_type type)
+{
+  if (!rds_sql_update_filter || rds_sql_update_filter[0] == '\0')
+    return false;
+
+  LIST *tmp= modify_filter_list(update_filter_list, rds_sql_update_filter);
+
+  if (rds_sql_update_filter[0] == '+' && NULL == tmp)
+    return true;
+
+  if (tmp || rds_sql_update_filter[0] == '-')
+    update_filter_list= tmp;
+
+  return false;
+}
+
+static bool update_delete_filter(sys_var *self, THD *thd, enum_var_type type)
+{
+  if (!rds_sql_delete_filter || rds_sql_delete_filter[0] == '\0')
+    return false;
+
+  LIST *tmp= modify_filter_list(delete_filter_list, rds_sql_delete_filter);
+
+  if (rds_sql_delete_filter[0] == '+' && NULL == tmp)
+    return true;
+
+  if (tmp || rds_sql_delete_filter[0] == '-')
+    delete_filter_list= tmp;
+
+  return false;
+}
+
+static bool rds_reset_all_filter_list(sys_var *self, THD *thd, enum_var_type type)
+{
+  if (!rds_reset_all_filter)
+    return false;
+
+  LIST *tmp_select_list= select_filter_list;
+  LIST *tmp_update_list= update_filter_list;
+  LIST *tmp_delete_list= delete_filter_list;
+  select_filter_list= NULL;
+  update_filter_list= NULL;
+  delete_filter_list= NULL;
+
+  reset_filter_list(tmp_select_list);
+  reset_filter_list(tmp_update_list);
+  reset_filter_list(tmp_delete_list);
+
+  rds_reset_all_filter= 0;
+
+  return false;
+}
+
+static PolyLock_rwlock PLock_sys_rds_sql_select_filter(&LOCK_filter_list);
+static Sys_var_charptr Sys_rds_sql_select_filter(
+       "rds_sql_select_filter", "Used to add/remove "
+       " a SQL filter item for SELECT",
+       GLOBAL_VAR(rds_sql_select_filter),
+       CMD_LINE(REQUIRED_ARG),
+       IN_SYSTEM_CHARSET,
+       DEFAULT(0),
+       &PLock_sys_rds_sql_select_filter,
+       NOT_IN_BINLOG,
+       ON_CHECK(check_sql_filter), ON_UPDATE(update_select_filter));
+
+static PolyLock_rwlock PLock_sys_rds_sql_update_filter(&LOCK_filter_list);
+static Sys_var_charptr Sys_rds_sql_update_filter(
+       "rds_sql_update_filter", "Used to add/remove "
+       " a SQL filter item for UPDATE",
+       GLOBAL_VAR(rds_sql_update_filter),
+       CMD_LINE(REQUIRED_ARG),
+       IN_SYSTEM_CHARSET,
+       DEFAULT(0),
+       &PLock_sys_rds_sql_update_filter,
+       NOT_IN_BINLOG,
+       ON_CHECK(check_sql_filter), ON_UPDATE(update_update_filter));
+
+static PolyLock_rwlock PLock_sys_rds_sql_delete_filter(&LOCK_filter_list);
+static Sys_var_charptr Sys_rds_sql_delete_filter(
+       "rds_sql_delete_filter", "Used to add/remove "
+       " a SQL filter item for DELETE",
+       GLOBAL_VAR(rds_sql_delete_filter),
+       CMD_LINE(REQUIRED_ARG),
+       IN_SYSTEM_CHARSET,
+       DEFAULT(0),
+       &PLock_sys_rds_sql_delete_filter,
+       NOT_IN_BINLOG,
+       ON_CHECK(check_sql_filter), ON_UPDATE(update_delete_filter));
+
+static PolyLock_rwlock PLock_rds_reset_all_filter(&LOCK_filter_list);
+static Sys_var_mybool Sys_rds_reset_all_filter(
+       "rds_reset_all_filter", "Delete all sql filters immediately",
+       GLOBAL_VAR(rds_reset_all_filter),
+       CMD_LINE(OPT_ARG), DEFAULT(FALSE),
+       &PLock_rds_reset_all_filter,
+       NOT_IN_BINLOG,
+       NULL,
+       ON_UPDATE(rds_reset_all_filter_list));
+
+static Sys_var_mybool Sys_rds_filter_key_cmp_in_order(
+       "rds_filter_key_cmp_in_order",
+       "If enabled, then match keys stored in filter list in order",
+       GLOBAL_VAR(rds_key_cmp_in_order), CMD_LINE(OPT_ARG), DEFAULT(FALSE));

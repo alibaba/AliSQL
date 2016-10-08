@@ -1556,6 +1556,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  SQL_BUFFER_RESULT
 %token  SQL_CACHE_SYM
 %token  SQL_CALC_FOUND_ROWS
+%token  SQL_FILTERS_SYM
 %token  SQL_NO_CACHE_SYM
 %token  SQL_SMALL_RESULT
 %token  SQL_SYM                       /* SQL-2003-R */
@@ -12618,6 +12619,8 @@ show_param:
           }
         | opt_full PROCESSLIST_SYM
           { Lex->sql_command= SQLCOM_SHOW_PROCESSLIST;}
+	| SQL_FILTERS_SYM
+	  { Lex->sql_command= SQLCOM_SHOW_SQL_FILTERS;}
         | opt_var_type  VARIABLES wild_and_where
           {
             LEX *lex= Lex;
@@ -14432,6 +14435,7 @@ keyword_sp:
         | SQL_BEFORE_GTIDS         {}
         | SQL_CACHE_SYM            {}
         | SQL_BUFFER_RESULT        {}
+        | SQL_FILTERS_SYM          {}
         | SQL_NO_CACHE_SYM         {}
         | SQL_THREAD               {}
         | STARTS_SYM               {}

@@ -136,6 +136,7 @@ SET(SQL_SHARED_SOURCES
   sql_do.cc 
   sql_error.cc
   sql_executor.cc
+  sql_filter.cc
   sql_get_diagnostics.cc
   sql_handler.cc
   sql_help.cc

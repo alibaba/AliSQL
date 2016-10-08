@@ -56,6 +56,7 @@
 #include "sql_tmp_table.h" // Tmp tables
 #include "sql_optimizer.h" // JOIN
 #include "global_threads.h"
+#include "sql_filter.h"
 
 #include <algorithm>
 using std::max;
@@ -2081,6 +2082,108 @@ static const char *thread_state_info(THD *tmp)
     else
       return NULL;
   }
+}
+
+int list_one_sql_filter(THD *thd, LIST *filter_list, const char *type)
+{
+  CHARSET_INFO *cs= system_charset_info;
+  filter_item *item= NULL;
+  Protocol *protocol= thd->protocol;
+
+  while (filter_list)
+  {
+        protocol->prepare_for_resend();
+        item= (filter_item*)filter_list->data;
+        protocol->store(type, cs);
+        protocol->store((longlong)item->id);
+        protocol->store(__sync_fetch_and_add(&(item->cur_conc), 0));
+        protocol->store(item->max_conc);
+        protocol->store((longlong)item->key_num);
+        protocol->store(item->orig_str, cs);
+
+        if (protocol->write())
+                return 1; //no cover line
+
+        filter_list= filter_list->next;
+  }
+
+  return 0;
+}
+
+void mysqld_list_sql_filters(THD *thd)
+{
+  List<Item> field_list;
+  Protocol *protocol= thd->protocol;
+
+  field_list.push_back(new Item_empty_string("type", 21));
+  field_list.push_back(new Item_return_int("item_id", 21, MYSQL_TYPE_LONGLONG));
+  field_list.push_back(new Item_return_int("cur_conc", 21, MYSQL_TYPE_LONGLONG));
+  field_list.push_back(new Item_return_int("max_conc", 21, MYSQL_TYPE_LONGLONG));
+  field_list.push_back(new Item_return_int("key_num", 21, MYSQL_TYPE_LONGLONG));
+  field_list.push_back(new Item_empty_string("key_str", SQL_FILTER_STR_LEN));
+
+  if (protocol->send_result_set_metadata(&field_list, Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
+        return;
+  mysql_rwlock_rdlock(&LOCK_filter_list);
+  if (list_one_sql_filter(thd, select_filter_list, "SELECT")
+          || list_one_sql_filter(thd, update_filter_list, "UPDATE")
+          || list_one_sql_filter(thd, delete_filter_list, "DELETE"))
+  {
+        ;
+  }
+
+  mysql_rwlock_unlock(&LOCK_filter_list);
+  my_eof(thd);
+}
+
+int fill_one_sql_filter(THD *thd, TABLE_LIST *tables, LIST *filter_list, const char *type)
+{
+  CHARSET_INFO *cs= system_charset_info;
+  filter_item *item= NULL;
+  TABLE *table= tables->table;
+  bool ret;
+
+  while (filter_list)
+  {
+    item= (filter_item*)filter_list->data;
+    table->field[0]->store(type, strlen(type), cs);
+    table->field[1]->store(item->id);
+    table->field[2]->store(__sync_fetch_and_add(&item->cur_conc, 0));
+    table->field[3]->store(item->max_conc);
+    table->field[4]->store(item->key_num);
+    table->field[5]->store(item->orig_str,
+                             strlen(item->orig_str), cs);
+
+    ret= schema_table_store_record(thd, table);
+    DBUG_EXECUTE_IF("sql_filter_fil_schema_error",
+                        {
+                          ret= 1;
+                        });
+    if (ret)
+      return 1;
+
+    filter_list= filter_list->next;
+  }
+
+  return 0;
+}
+
+int fill_sql_filter_info(THD *thd, TABLE_LIST *tables, Item *cond)
+{
+  DBUG_ENTER("fill_sql_filter_info");
+
+  mysql_rwlock_rdlock(&LOCK_filter_list);
+  if (fill_one_sql_filter(thd, tables, select_filter_list, "SELECT")
+      || fill_one_sql_filter(thd, tables, update_filter_list, "UPDATE")
+      || fill_one_sql_filter(thd, tables, delete_filter_list, "DELETE"))
+  {
+    mysql_rwlock_unlock(&LOCK_filter_list);
+    my_error(ER_UNKNOWN_ERROR, MYF(0));
+    DBUG_RETURN(1);
+  }
+
+  mysql_rwlock_unlock(&LOCK_filter_list);
+  DBUG_RETURN(0);
 }
 
 void mysqld_list_processes(THD *thd,const char *user, bool verbose)
@@ -8390,6 +8493,18 @@ ST_FIELD_INFO tablespaces_fields_info[]=
 };
 
 
+ST_FIELD_INFO sql_filter_fields_info[] =
+{
+  {"TYPE", 21, MYSQL_TYPE_STRING, 0, 0, "", SKIP_OPEN_TABLE},
+  {"ITEM_ID", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"CUR_CONC", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"MAX_CONC", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"KEY_NUM", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"KEY_STR", SQL_FILTER_STR_LEN, MYSQL_TYPE_STRING, 0, 0, "", SKIP_OPEN_TABLE},
+  {0, 0, MYSQL_TYPE_STRING, 0, 0, "", SKIP_OPEN_TABLE}
+};
+
+
 /** For creating fields of information_schema.OPTIMIZER_TRACE */
 extern ST_FIELD_INFO optimizer_trace_info[];
 
@@ -8465,6 +8580,8 @@ ST_SCHEMA_TABLE schema_tables[]=
    fill_status, make_old_format, 0, 0, -1, 0, 0},
   {"SESSION_VARIABLES", variables_fields_info, create_schema_table,
    fill_variables, make_old_format, 0, 0, -1, 0, 0},
+  {"SQL_FILTER_INFO", sql_filter_fields_info, create_schema_table,
+   fill_sql_filter_info, make_old_format, 0, -1, -1, 0, 0},
   {"STATISTICS", stat_fields_info, create_schema_table, 
    get_all_tables, make_old_format, get_schema_stat_record, 1, 2, 0,
    OPEN_TABLE_ONLY|OPTIMIZE_I_S_TABLE},
