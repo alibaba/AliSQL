@@ -1,0 +1,16 @@
+# clean the error log first
+exec > $MYSQLTEST_VARDIR/log/mysqld.1.err;
+
+# restart the mysqld
+exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect;
+shutdown_server 3;
+source include/wait_until_disconnected.inc;
+
+enable_reconnect;
+exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect;
+source include/wait_until_connected_again.inc;
+
+# mysqld --version/-V
+--exec $MYSQLD --version | grep "malloc library" | wc -l | tr -d ' \t'
+# error log
+--exec grep 'malloc library' $MYSQLTEST_VARDIR/log/mysqld.1.err|wc -l | tr -d ' \t'

@@ -225,7 +225,7 @@ ADD_DEPENDENCIES(sql GenServerSource)
 ADD_DEPENDENCIES(sql GenDigestServerSource)
 DTRACE_INSTRUMENT(sql)
 TARGET_LINK_LIBRARIES(sql ${MYSQLD_STATIC_PLUGIN_LIBS} 
-  mysys mysys_ssl dbug strings vio regex   
+  mysys mysys_ssl dbug strings vio regex ${LIBJEMALLOC}
   ${LIBWRAP} ${LIBCRYPT} ${LIBDL}
   ${SSL_LIBRARIES})
 

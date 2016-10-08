@@ -5673,6 +5673,9 @@ int mysqld_main(int argc, char **argv)
   create_shutdown_thread();
   start_handle_manager();
 
+
+  sql_print_information("[RDS Diagnose] %s is using '%s' malloc library",
+                        my_progname, MALLOC_LIBRARY);
   sql_print_information(ER_DEFAULT(ER_STARTUP),my_progname,server_version,
                         ((mysql_socket_getfd(unix_sock) == INVALID_SOCKET) ? (char*) ""
                                                        : mysqld_unix_port),
@@ -8456,6 +8459,7 @@ mysqld_get_one_option(int optid,
 #ifndef EMBEDDED_LIBRARY
   case 'V':
     print_version();
+    printf("malloc library is: %s\n", MALLOC_LIBRARY);
     exit(0);
 #endif /*EMBEDDED_LIBRARY*/
   case 'W':
