@@ -99,7 +99,7 @@ struct ft_cursor {
     DBT range_lock_left_key, range_lock_right_key;
     bool prefetching;
     bool left_is_neg_infty, right_is_pos_infty;
-    enum cursor_read_type read_type; // true if query is reading from a snapshot, false otherwise
+    bool is_snapshot_read; // true if query is read_committed, false otherwise
     bool is_leaf_mode;
     bool disable_prefetching;
     bool is_temporary;
@@ -176,7 +176,7 @@ static inline void ft_search_finish(ft_search *search) {
 
 
 int toku_ft_cursor_create(FT_HANDLE ft_handle, FT_CURSOR cursor, TOKUTXN txn,
-                          enum cursor_read_type read_type,
+                          bool is_snapshot_read,
                           bool disable_prefetching,
                           bool is_temporary);
 

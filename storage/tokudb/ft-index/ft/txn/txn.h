@@ -135,8 +135,7 @@ static const LSN MAX_LSN = { .lsn = UINT64_MAX };
 typedef enum __TXN_SNAPSHOT_TYPE { 
     TXN_SNAPSHOT_NONE=0,
     TXN_SNAPSHOT_ROOT=1,
-    TXN_SNAPSHOT_CHILD=2,
-    TXN_COPIES_SNAPSHOT=3
+    TXN_SNAPSHOT_CHILD=2
 } TXN_SNAPSHOT_TYPE;
 
 typedef toku::omt<struct tokutxn *> txn_omt_t;
@@ -145,6 +144,14 @@ typedef toku::omt<struct referenced_xid_tuple, struct referenced_xid_tuple *> rx
 
 inline bool txn_pair_is_none(TXNID_PAIR txnid) {
     return txnid.parent_id64 == TXNID_NONE && txnid.child_id64 == TXNID_NONE;
+}
+
+inline bool txn_needs_snapshot(TXN_SNAPSHOT_TYPE snapshot_type, struct tokutxn *parent) {
+    // we need a snapshot if the snapshot type is a child or
+    // if the snapshot type is root and we have no parent.
+    // Cases that we don't need a snapshot: when snapshot type is NONE
+    //  or when it is ROOT and we have a parent
+    return (snapshot_type != TXN_SNAPSHOT_NONE && (parent==NULL || snapshot_type == TXN_SNAPSHOT_CHILD));
 }
 
 struct tokulogger;
@@ -283,9 +290,9 @@ void toku_txn_update_xids_in_txn(struct tokutxn *txn, TXNID xid);
 
 int toku_txn_load_txninfo (struct tokutxn *txn, struct txninfo *info);
 
-int toku_txn_commit_txn (struct tokutxn *txn, int nosync, bool deferCommitMessages,
+int toku_txn_commit_txn (struct tokutxn *txn, int nosync,
                          TXN_PROGRESS_POLL_FUNCTION poll, void *poll_extra);
-int toku_txn_commit_with_lsn(struct tokutxn *txn, int nosync, LSN oplsn, bool deferCommitMessages,
+int toku_txn_commit_with_lsn(struct tokutxn *txn, int nosync, LSN oplsn,
                              TXN_PROGRESS_POLL_FUNCTION poll, void *poll_extra);
 
 int toku_txn_abort_txn(struct tokutxn *txn,
@@ -295,7 +302,7 @@ int toku_txn_abort_with_lsn(struct tokutxn *txn, LSN oplsn,
 
 int toku_txn_discard_txn(struct tokutxn *txn);
 
-void toku_txn_prepare_txn (struct tokutxn *txn, TOKU_XA_XID *xid);
+void toku_txn_prepare_txn (struct tokutxn *txn, TOKU_XA_XID *xid, int nosync);
 // Effect: Do the internal work of preparing a transaction (does not log the prepare record).
 
 void toku_txn_get_prepared_xa_xid(struct tokutxn *txn, TOKU_XA_XID *xa_xid);
@@ -308,14 +315,8 @@ void toku_txn_get_fsync_info(struct tokutxn *ttxn, bool* do_fsync, LSN* do_fsync
 // Complete and destroy a txn
 void toku_txn_close_txn(struct tokutxn *txn);
 
-// remove from txn info from manager
-void toku_txn_remove_from_manager(TOKUTXN txn);
-
 // Remove a txn from any live txn lists
 void toku_txn_complete_txn(struct tokutxn *txn);
-
-// removes references txn is holding
-void note_txn_closing (TOKUTXN txn);
 
 // Free the memory of a txn
 void toku_txn_destroy_txn(struct tokutxn *txn);
@@ -378,7 +379,7 @@ void toku_txn_set_client_id(struct tokutxn *txn, uint64_t client_id);
 // For the above to NOT be true:
 //  - id > context->snapshot_txnid64 OR id is in context's live root transaction list
 //
-int toku_txn_reads_txnid(TXNID txnid, struct tokutxn *txn, bool is_provisional UU());
+int toku_txn_reads_txnid(TXNID txnid, struct tokutxn *txn);
 
 void txn_status_init(void);
 

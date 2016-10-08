@@ -142,7 +142,7 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
     error = toku_open_ft_handle(fname, 1, &ft, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, txn, test_ft_cursor_keycompare);
     assert(error == 0);
 
-    error = toku_txn_commit_txn(txn, true, false, NULL, NULL);
+    error = toku_txn_commit_txn(txn, true, NULL, NULL);
     assert(error == 0);
     toku_txn_close_txn(txn);
 
@@ -161,7 +161,7 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
         toku_ft_insert(ft, &key, &val, txn);
     }
 
-    error = toku_txn_commit_txn(txn, true, false, NULL, NULL);
+    error = toku_txn_commit_txn(txn, true, NULL, NULL);
     assert(error == 0);
     toku_txn_close_txn(txn);
 

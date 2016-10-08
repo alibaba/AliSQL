@@ -616,6 +616,7 @@ typedef enum {
     FT_PRO_RIGHTMOST_LEAF_SHORTCUT_SUCCESS,
     FT_PRO_RIGHTMOST_LEAF_SHORTCUT_FAIL_POS,
     FT_PRO_RIGHTMOST_LEAF_SHORTCUT_FAIL_REACTIVE,
+    FT_CURSOR_SKIP_DELETED_LEAF_ENTRY, // how many deleted leaf entries were skipped by a cursor
     FT_STATUS_NUM_ROWS
 } ft_status_entry;
 
@@ -654,7 +655,7 @@ int toku_upgrade_msn_from_root_to_header(int fd, FT ft) __attribute__((nonnull))
 // When lock_only is true, the callback only does optional lock tree locking.
 typedef int (*FT_GET_CALLBACK_FUNCTION)(uint32_t keylen, const void *key, uint32_t vallen, const void *val, void *extra, bool lock_only);
 
-typedef bool (*FT_CHECK_INTERRUPT_CALLBACK)(void *extra);
+typedef bool (*FT_CHECK_INTERRUPT_CALLBACK)(void *extra, uint64_t deleted_rows);
 
 struct ft_cursor;
 int toku_ft_search(FT_HANDLE ft_handle, ft_search *search, FT_GET_CALLBACK_FUNCTION getf, void *getf_v, struct ft_cursor *ftcursor, bool can_bulk_fetch);

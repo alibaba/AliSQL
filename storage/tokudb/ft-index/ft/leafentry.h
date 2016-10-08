@@ -124,12 +124,6 @@ PATENT RIGHTS GRANT:
         val[]
 */
 
-enum cursor_read_type {
-    C_READ_ANY = 0,
-    C_READ_SNAPSHOT = 1,
-    C_READ_COMMITTED = 2
-};
-
 //
 // enum of possible values for LEAFENTRY->type field
 // LE_CLEAN means that there is a single committed value in a format that saves disk space
@@ -217,7 +211,7 @@ void wbuf_nocrc_LEAFENTRY(struct wbuf *w, LEAFENTRY le);
 int print_klpair (FILE *outf, const void* key, uint32_t keylen, LEAFENTRY v); // Print a leafentry out in human-readable form.
 
 int le_latest_is_del(LEAFENTRY le); // Return true if it is a provisional delete.
-int le_val_is_del(LEAFENTRY le, enum cursor_read_type read_type, TOKUTXN txn); // Returns true if the value that is to be read is empty
+int le_val_is_del(LEAFENTRY le, bool is_snapshot_read, TOKUTXN txn); // Returns true if the value that is to be read is empty
 bool le_is_clean(LEAFENTRY le); //Return how many xids exist (0 does not count)
 bool le_has_xids(LEAFENTRY le, XIDS xids); // Return true transaction represented by xids is still provisional in this leafentry (le's xid stack is a superset or equal to xids)
 void*     le_latest_val (LEAFENTRY le); // Return the latest val (return NULL for provisional deletes)
@@ -232,13 +226,13 @@ uint64_t le_outermost_uncommitted_xid (LEAFENTRY le);
 //      0:  context ignores this entry, id.
 //      TOKUDB_ACCEPT: context accepts id
 //      r|r!=0&&r!=TOKUDB_ACCEPT:  Quit early, return r, because something unexpected went wrong (error case)
-typedef int(*LE_ITERATE_CALLBACK)(TXNID id, TOKUTXN context, bool is_provisional);
+typedef int(*LE_ITERATE_CALLBACK)(TXNID id, TOKUTXN context);
 
 int le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vallenp, TOKUTXN context);
 
 void le_extract_val(LEAFENTRY le,
                     // should we return the entire leafentry as the val?
-                    bool is_leaf_mode, enum cursor_read_type read_type,
+                    bool is_leaf_mode, bool is_snapshot_read,
                     TOKUTXN ttxn, uint32_t *vallen, void **val);
 
 size_t

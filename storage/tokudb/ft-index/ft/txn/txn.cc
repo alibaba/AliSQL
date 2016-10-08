@@ -404,12 +404,12 @@ toku_txn_load_txninfo (TOKUTXN txn, struct txninfo *info) {
     return 0;
 }
 
-int toku_txn_commit_txn(TOKUTXN txn, int nosync, bool deferCommitMessages,
+int toku_txn_commit_txn(TOKUTXN txn, int nosync,
                         TXN_PROGRESS_POLL_FUNCTION poll, void *poll_extra)
 // Effect: Doesn't close the txn, just performs the commit operations.
 //  If release_multi_operation_client_lock is true, then unlock that lock (even if an error path is taken)
 {
-    return toku_txn_commit_with_lsn(txn, nosync, ZERO_LSN, deferCommitMessages,
+    return toku_txn_commit_with_lsn(txn, nosync, ZERO_LSN,
                                     poll, poll_extra);
 }
 
@@ -451,7 +451,7 @@ done:
     return;
 }
 
-int toku_txn_commit_with_lsn(TOKUTXN txn, int nosync, LSN oplsn, bool deferCommitMessages,
+int toku_txn_commit_with_lsn(TOKUTXN txn, int nosync, LSN oplsn,
                              TXN_PROGRESS_POLL_FUNCTION poll, void *poll_extra) 
 {
     // there should be no child when we commit or abort a TOKUTXN
@@ -475,14 +475,11 @@ int toku_txn_commit_with_lsn(TOKUTXN txn, int nosync, LSN oplsn, bool deferCommi
     if (!toku_txn_is_read_only(txn)) {
         toku_log_xcommit(txn->logger, &txn->do_fsync_lsn, 0, txn, txn->txnid);
     }
-    int r = 0;
-    if (!deferCommitMessages) {
-        // If !txn->begin_was_logged, we could skip toku_rollback_commit
-        // but it's cheap (only a number of function calls that return immediately)
-        // since there were no writes.  Skipping it would mean we would need to be careful
-        // in case we added any additional required cleanup into those functions in the future.
-        r = toku_rollback_commit(txn, oplsn);
-    }
+    // If !txn->begin_was_logged, we could skip toku_rollback_commit
+    // but it's cheap (only a number of function calls that return immediately)
+    // since there were no writes.  Skipping it would mean we would need to be careful
+    // in case we added any additional required cleanup into those functions in the future.
+    int r = toku_rollback_commit(txn, oplsn);
     STATUS_INC(TXN_COMMIT, 1);
     return r;
 }
@@ -559,7 +556,7 @@ static void copy_xid (TOKU_XA_XID *dest, TOKU_XA_XID *source) {
     memcpy(dest->data, source->data, source->gtrid_length+source->bqual_length);
 }
 
-void toku_txn_prepare_txn (TOKUTXN txn, TOKU_XA_XID *xa_xid) {
+void toku_txn_prepare_txn (TOKUTXN txn, TOKU_XA_XID *xa_xid, int nosync) {
     if (txn->parent || toku_txn_is_read_only(txn)) {
         // We do not prepare children.
         //
@@ -574,7 +571,7 @@ void toku_txn_prepare_txn (TOKUTXN txn, TOKU_XA_XID *xa_xid) {
     txn->state = TOKUTXN_PREPARING; 
     toku_txn_unlock_state(txn);
     // Do we need to do an fsync?
-    txn->do_fsync = (txn->force_fsync_on_commit || txn->roll_info.num_rollentries>0);
+    txn->do_fsync = txn->force_fsync_on_commit || (!nosync && txn->roll_info.num_rollentries>0);
     copy_xid(&txn->xa_xid, xa_xid);
     // This list will go away with #4683, so we wn't need the ydb lock for this anymore.
     toku_log_xprepare(txn->logger, &txn->do_fsync_lsn, 0, txn, txn->txnid, xa_xid);
@@ -621,14 +618,14 @@ int remove_txn (const FT &h, const uint32_t UU(idx), TOKUTXN const UU(txn))
 }
 
 // for every ft in txn, remove it.
-void note_txn_closing (TOKUTXN txn) {
+static void note_txn_closing (TOKUTXN txn) {
     txn->open_fts.iterate<struct tokutxn, remove_txn>(txn);
 }
 
-void toku_txn_remove_from_manager(TOKUTXN txn) {
-    //assert(txn->roll_info.spilled_rollback_head.b == ROLLBACK_NONE.b);
-    //assert(txn->roll_info.spilled_rollback_tail.b == ROLLBACK_NONE.b);
-    //assert(txn->roll_info.current_rollback.b == ROLLBACK_NONE.b);
+void toku_txn_complete_txn(TOKUTXN txn) {
+    assert(txn->roll_info.spilled_rollback_head.b == ROLLBACK_NONE.b);
+    assert(txn->roll_info.spilled_rollback_tail.b == ROLLBACK_NONE.b);
+    assert(txn->roll_info.current_rollback.b == ROLLBACK_NONE.b);
     assert(txn->num_pin == 0);
     assert(txn->state == TOKUTXN_COMMITTING || txn->state == TOKUTXN_ABORTING || txn->state == TOKUTXN_PREPARING);
     if (txn->parent) {
@@ -643,10 +640,6 @@ void toku_txn_remove_from_manager(TOKUTXN txn) {
         toku_txn_manager_finish_txn(txn->logger->txn_manager, txn);
         txn->child_manager->destroy();
     }
-}
-
-void toku_txn_complete_txn(TOKUTXN txn) {
-    toku_txn_remove_from_manager(txn);
     // note that here is another place we depend on
     // this function being called with the multi operation lock
     note_txn_closing(txn);
@@ -792,7 +785,7 @@ void toku_txn_set_client_id(TOKUTXN txn, uint64_t client_id) {
     txn->client_id = client_id;
 }
 
-int toku_txn_reads_txnid(TXNID txnid, TOKUTXN txn, bool is_provisional UU()) {
+int toku_txn_reads_txnid(TXNID txnid, TOKUTXN txn) {
     int r = 0;
     TXNID oldest_live_in_snapshot = toku_get_oldest_in_live_root_txn_list(txn);
     if (oldest_live_in_snapshot == TXNID_NONE && txnid < txn->snapshot_txnid64) {

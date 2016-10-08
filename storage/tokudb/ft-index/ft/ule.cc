@@ -674,47 +674,6 @@ msg_init_empty_ule(ULE ule) {
     ule_init_empty_ule(ule);
 }
 
-static bool do_implicit_promotion(enum ft_msg_type type, XIDS xids, ULE ule) {
-    if (type == FT_OPTIMIZE || type == FT_OPTIMIZE_FOR_UPGRADE) {
-        return false;
-    }
-    // as part of FT-603, commit messages may now hit a leafentry
-    // after the relevant lock tree locks are released. That is, other messages
-    // may hit the leafentry before this commit message, and as a result,
-    // implicit promotion done by that previous message will have done the
-    // the necessary work.
-    //
-    // So, we don't want to blindly implicitly promote a possibly live transaction
-    // because a commit message is hitting this leafentry late.
-    // Take the following example:
-    //   - Transaction A does a provisional write.
-    //   - Transaction A commits, but the commit message
-    //     is not yet sent.
-    //   - Transaction B does a write, which causes the leafentry to
-    //     commit A via implicit promotion. Now B is on top of the stack
-    //     with a provisional entry
-    //   - Transaction A's commit message hits this leafentry. We don't
-    //     want to use implicit promotion to commit B. That would be a bug.
-    //  Therefore, if we have different transaction stacks in the ule and xids,
-    //  we don't want implicit promotion.
-    //
-    //  On the other hand, if the root TXNID of the ule's provisional stack
-    // matches that of the xids, then we want to run implicit promotion,
-    // because ule_apply_commit depends on it. We don't need to worry about
-    // messages coming out of order, because transactions are associated
-    // with a single thread, and a new child cannot begin work until a previous
-    // child has finished committing.
-    if (type == FT_COMMIT_ANY || type == FT_COMMIT_BROADCAST_TXN) {        
-        TXNID current_msg_xid = toku_xids_get_xid(xids, 0);
-        invariant(current_msg_xid != TXNID_NONE);
-        TXNID current_ule_xid = ule_get_xid(ule, 0);
-        if (current_ule_xid != current_msg_xid) {
-            return false;
-        }
-    }
-    return true;
-}
-
 // Purpose is to modify the unpacked leafentry in our private workspace.
 //
 static void 
@@ -722,7 +681,7 @@ msg_modify_ule(ULE ule, const ft_msg &msg) {
     XIDS xids = msg.xids();
     invariant(toku_xids_get_num_xids(xids) < MAX_TRANSACTION_RECORDS);
     enum ft_msg_type type = msg.type();
-    if (do_implicit_promotion(type, xids, ule)) {
+    if (type != FT_OPTIMIZE && type != FT_OPTIMIZE_FOR_UPGRADE) {
         ule_do_implicit_promotions(ule, xids);
     }
     switch (type) {
@@ -2059,13 +2018,13 @@ uxr_get_txnid(UXR uxr) {
 }
 
 static int
-le_iterate_get_accepted_index(TXNID *xids, uint32_t *index, uint32_t num_xids, LE_ITERATE_CALLBACK f, TOKUTXN context, bool top_is_provisional) {
+le_iterate_get_accepted_index(TXNID *xids, uint32_t *index, uint32_t num_xids, LE_ITERATE_CALLBACK f, TOKUTXN context) {
     uint32_t i;
     int r = 0;
     // if this for loop does not return anything, we return num_xids-1, which should map to T_0
     for (i = 0; i < num_xids - 1; i++) {
         TXNID xid = toku_dtoh64(xids[i]);
-        r = f(xid, context, (i == 0 && top_is_provisional));
+        r = f(xid, context);
         if (r==TOKUDB_ACCEPT) {
             r = 0;
             break; //or goto something
@@ -2141,7 +2100,7 @@ le_iterate_is_del(LEAFENTRY le, LE_ITERATE_CALLBACK f, bool *is_delp, TOKUTXN co
 #if ULE_DEBUG
             ule_verify_xids(&ule, num_interesting, xids);
 #endif
-            r = le_iterate_get_accepted_index(xids, &index, num_interesting, f, context, (num_puxrs != 0));
+            r = le_iterate_get_accepted_index(xids, &index, num_interesting, f, context);
             if (r!=0) goto cleanup;
             invariant(index < num_interesting);
 
@@ -2173,36 +2132,23 @@ cleanup:
     return r;
 }
 
-static int le_iterate_read_committed_callback(TXNID txnid, TOKUTXN txn, bool is_provisional UU()) {
-    if (is_provisional) {
-        return toku_txn_reads_txnid(txnid, txn, is_provisional);
-    }
-    return TOKUDB_ACCEPT;
-}
-
 //
 // Returns true if the value that is to be read is empty.
 //
-int le_val_is_del(LEAFENTRY le, enum cursor_read_type read_type, TOKUTXN txn) {
+int le_val_is_del(LEAFENTRY le, bool is_snapshot_read, TOKUTXN txn) {
     int rval;
-    if (read_type == C_READ_SNAPSHOT || read_type == C_READ_COMMITTED) {
-        LE_ITERATE_CALLBACK f = (read_type == C_READ_SNAPSHOT) ?
-            toku_txn_reads_txnid :
-            le_iterate_read_committed_callback;
+    if (is_snapshot_read) {
         bool is_del = false;
         le_iterate_is_del(
             le,
-            f,
+            toku_txn_reads_txnid,
             &is_del,
             txn
             );
         rval = is_del;
     }
-    else if (read_type == C_READ_ANY) {
-        rval = le_latest_is_del(le);
-    }
     else {
-        invariant(false);
+        rval = le_latest_is_del(le);
     }
     return rval;
 }
@@ -2263,7 +2209,7 @@ le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vall
 #if ULE_DEBUG
             ule_verify_xids(&ule, num_interesting, xids);
 #endif
-            r = le_iterate_get_accepted_index(xids, &index, num_interesting, f, context, (num_puxrs != 0));
+            r = le_iterate_get_accepted_index(xids, &index, num_interesting, f, context);
             if (r!=0) goto cleanup;
             invariant(index < num_interesting);
 
@@ -2329,28 +2275,22 @@ cleanup:
 
 void le_extract_val(LEAFENTRY le,
                     // should we return the entire leafentry as the val?
-                    bool is_leaf_mode, enum cursor_read_type read_type,
+                    bool is_leaf_mode, bool is_snapshot_read,
                     TOKUTXN ttxn, uint32_t *vallen, void **val) {
     if (is_leaf_mode) {
         *val = le;
         *vallen = leafentry_memsize(le);
-    } else if (read_type == C_READ_SNAPSHOT || read_type == C_READ_COMMITTED) {
-        LE_ITERATE_CALLBACK f = (read_type == C_READ_SNAPSHOT) ?
-            toku_txn_reads_txnid :
-            le_iterate_read_committed_callback;
+    } else if (is_snapshot_read) {
         int r = le_iterate_val(
             le,
-            f,
+            toku_txn_reads_txnid,
             val,
             vallen,
             ttxn
             );
         lazy_assert_zero(r);
-    } else if (read_type == C_READ_ANY){
+    } else {
         *val = le_latest_val_and_len(le, vallen);
-    }
-    else {
-        assert(false);
     }
 }
 

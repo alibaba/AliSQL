@@ -98,7 +98,6 @@ PATENT RIGHTS GRANT:
 #include <ft/cachetable/checkpoint.h>
 #include <ft/log_header.h>
 #include <ft/txn/txn_manager.h>
-#include "ft/txn/rollback-apply.h"
 
 
 #include "ydb-internal.h"
@@ -162,16 +161,12 @@ static int toku_txn_commit(DB_TXN * txn, uint32_t flags,
     flags &= ~DB_TXN_NOSYNC;
 
     int r;
-    bool deferCommitMessages = false;
     if (flags!=0) {
+        // frees the tokutxn
         r = toku_txn_abort_txn(db_txn_struct_i(txn)->tokutxn, poll, poll_extra);
     } else {
-        // When committing, we don't immedietely send commit messages,
-        // that happens below. The reason is that when we send the commit messages,
-        // we want the transaction to be removed from live lists so that garbage collection
-        // can happen.
-        deferCommitMessages = true;
-        r = toku_txn_commit_txn(db_txn_struct_i(txn)->tokutxn, nosync, deferCommitMessages,
+        // frees the tokutxn
+        r = toku_txn_commit_txn(db_txn_struct_i(txn)->tokutxn, nosync,
                                 poll, poll_extra);
     }
     if (r!=0 && !toku_env_is_panicked(txn->mgrp)) {
@@ -189,7 +184,7 @@ static int toku_txn_commit(DB_TXN * txn, uint32_t flags,
     // remove the txn from the list of live transactions, and then
     // release the lock tree locks. MVCC requires that toku_txn_complete_txn
     // get called first, otherwise we have bugs, such as #4145 and #4153
-    toku_txn_remove_from_manager(ttxn);
+    toku_txn_complete_txn(ttxn);
     toku_txn_release_locks(txn);
     // this lock must be released after toku_txn_complete_txn and toku_txn_release_locks because
     // this lock must be held until the references to the open FTs is released
@@ -203,15 +198,6 @@ static int toku_txn_commit(DB_TXN * txn, uint32_t flags,
         }
     }
     toku_txn_maybe_fsync_log(logger, do_fsync_lsn, do_fsync);
-    if (deferCommitMessages) {
-        // send commit messages. This does so with the assumption
-        // that message application code in ule.cc can handle the fact
-        // that a commit message may arrive AFTER another message injection
-        // performed the commit via implicit promotion.
-        r = toku_rollback_commit(db_txn_struct_i(txn)->tokutxn, ZERO_LSN);
-    }
-    note_txn_closing (ttxn);    
-
     if (flags!=0) {
         r = EINVAL;
         goto cleanup;
@@ -253,7 +239,7 @@ static int toku_txn_abort(DB_TXN * txn,
     return r;
 }
 
-static int toku_txn_xa_prepare (DB_TXN *txn, TOKU_XA_XID *xid) {
+static int toku_txn_xa_prepare (DB_TXN *txn, TOKU_XA_XID *xid, uint32_t flags) {
     int r = 0;
     if (!txn) {
         r = EINVAL;
@@ -286,9 +272,11 @@ static int toku_txn_xa_prepare (DB_TXN *txn, TOKU_XA_XID *xid) {
         HANDLE_PANICKED_ENV(txn->mgrp);
     }
     assert(!db_txn_struct_i(txn)->child);
+    int nosync;
+    nosync = (flags & DB_TXN_NOSYNC)!=0 || (db_txn_struct_i(txn)->flags&DB_TXN_NOSYNC);
     TOKUTXN ttxn;
     ttxn = db_txn_struct_i(txn)->tokutxn;
-    toku_txn_prepare_txn(ttxn, xid);
+    toku_txn_prepare_txn(ttxn, xid, nosync);
     TOKULOGGER logger;
     logger = txn->mgrp->i->logger;
     LSN do_fsync_lsn;
@@ -305,14 +293,14 @@ exit:
 
 // requires: must hold the multi operation lock. it is
 //           released in toku_txn_xa_prepare before the fsync.
-static int toku_txn_prepare (DB_TXN *txn, uint8_t gid[DB_GID_SIZE]) {
+static int toku_txn_prepare (DB_TXN *txn, uint8_t gid[DB_GID_SIZE], uint32_t flags) {
     TOKU_XA_XID xid;
     TOKU_ANNOTATE_NEW_MEMORY(&xid, sizeof(xid));
     xid.formatID=0x756b6f54; // "Toku"
     xid.gtrid_length=DB_GID_SIZE/2;  // The maximum allowed gtrid length is 64.  See the XA spec in source:/import/opengroup.org/C193.pdf page 20.
     xid.bqual_length=DB_GID_SIZE/2; // The maximum allowed bqual length is 64.
     memcpy(xid.data, gid, DB_GID_SIZE);
-    return toku_txn_xa_prepare(txn, &xid);
+    return toku_txn_xa_prepare(txn, &xid, flags);
 }
 
 static int toku_txn_txn_stat (DB_TXN *txn, struct txn_stat **txn_stat) {
@@ -435,6 +423,15 @@ static int toku_txn_discard(DB_TXN *txn, uint32_t flags) {
     return 0;
 }
 
+static bool toku_txn_is_prepared(DB_TXN *txn) {
+    TOKUTXN ttxn = db_txn_struct_i(txn)->tokutxn;
+    return toku_txn_get_state(ttxn) == TOKUTXN_PREPARING;
+}
+
+static DB_TXN *toku_txn_get_child(DB_TXN *txn) {
+    return db_txn_struct_i(txn)->child;
+}
+
 static inline void txn_func_init(DB_TXN *txn) {
 #define STXN(name) txn->name = locked_txn_ ## name
     STXN(abort);
@@ -451,6 +448,8 @@ static inline void txn_func_init(DB_TXN *txn) {
     SUTXN(discard);
 #undef SUTXN
     txn->id64 = toku_txn_id64;
+    txn->is_prepared = toku_txn_is_prepared;
+    txn->get_child = toku_txn_get_child;
 }
 
 //
@@ -509,8 +508,7 @@ int toku_txn_begin(DB_ENV *env, DB_TXN * stxn, DB_TXN ** txn, uint32_t flags) {
     uint32_t iso_flags = flags & DB_ISOLATION_FLAGS;
     if (!(iso_flags == 0 || 
           iso_flags == DB_TXN_SNAPSHOT || 
-          iso_flags == DB_READ_COMMITTED ||
-          iso_flags == DB_READ_COMMITTED_ALWAYS ||
+          iso_flags == DB_READ_COMMITTED || 
           iso_flags == DB_READ_UNCOMMITTED || 
           iso_flags == DB_SERIALIZABLE || 
           iso_flags == DB_INHERIT_ISOLATION)
@@ -539,9 +537,6 @@ int toku_txn_begin(DB_ENV *env, DB_TXN * stxn, DB_TXN ** txn, uint32_t flags) {
             break;
         case (DB_READ_COMMITTED):
             child_isolation = TOKU_ISO_READ_COMMITTED;
-            break;
-        case (DB_READ_COMMITTED_ALWAYS):
-            child_isolation = TOKU_ISO_READ_COMMITTED_ALWAYS;
             break;
         case (DB_READ_UNCOMMITTED):
             child_isolation = TOKU_ISO_READ_UNCOMMITTED;
@@ -601,11 +596,6 @@ int toku_txn_begin(DB_ENV *env, DB_TXN * stxn, DB_TXN ** txn, uint32_t flags) {
         case(TOKU_ISO_READ_COMMITTED):
         {
             snapshot_type = TXN_SNAPSHOT_CHILD;
-            break;
-        }
-        case(TOKU_ISO_READ_COMMITTED_ALWAYS) :
-        {
-            snapshot_type = TXN_COPIES_SNAPSHOT;
             break;
         }
         default:

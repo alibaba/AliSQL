@@ -767,7 +767,7 @@ c_remove_restriction(DBC *dbc) {
 }
 
 static void
-c_set_check_interrupt_callback(DBC* dbc, bool (*interrupt_callback)(void*), void *extra) {
+c_set_check_interrupt_callback(DBC* dbc, bool (*interrupt_callback)(void*, uint64_t), void *extra) {
     toku_ft_cursor_set_check_interrupt_cb(dbc_ftcursor(dbc), interrupt_callback, extra);
 }
 
@@ -883,22 +883,16 @@ toku_db_cursor_internal(DB * db, DB_TXN * txn, DBC *c, uint32_t flags, int is_te
         dbc_struct_i(c)->iso = txn ? db_txn_struct_i(txn)->iso : TOKU_ISO_SERIALIZABLE;
     }
     dbc_struct_i(c)->rmw = (flags & DB_RMW) != 0;
-    enum cursor_read_type read_type = C_READ_ANY; // default, used in serializable and read uncommitted
+    bool is_snapshot_read = false;
     if (txn) {
-        if (dbc_struct_i(c)->iso == TOKU_ISO_READ_COMMITTED ||
-            dbc_struct_i(c)->iso == TOKU_ISO_SNAPSHOT)
-        {
-            read_type = C_READ_SNAPSHOT;
-        }
-        else if (dbc_struct_i(c)->iso == TOKU_ISO_READ_COMMITTED_ALWAYS) {
-            read_type = C_READ_COMMITTED;
-        }
+        is_snapshot_read = (dbc_struct_i(c)->iso == TOKU_ISO_READ_COMMITTED || 
+                            dbc_struct_i(c)->iso == TOKU_ISO_SNAPSHOT);
     }
     int r = toku_ft_cursor_create(
         db->i->ft_handle, 
         dbc_ftcursor(c),
         txn ? db_txn_struct_i(txn)->tokutxn : NULL,
-        read_type,
+        is_snapshot_read,
         ((flags & DBC_DISABLE_PREFETCHING) != 0),
         is_temporary_cursor != 0
         );

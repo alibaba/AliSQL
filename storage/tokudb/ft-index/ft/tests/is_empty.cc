@@ -121,7 +121,7 @@ static void test_it (int N) {
 
     r = toku_open_ft_handle(FILENAME, 1, &ft, 1024, 256, TOKU_DEFAULT_COMPRESSION_METHOD, ct, txn, toku_builtin_compare_fun);                    CKERR(r);
 
-    r = toku_txn_commit_txn(txn, false, false, NULL, NULL);                                 CKERR(r);
+    r = toku_txn_commit_txn(txn, false, NULL, NULL);                                 CKERR(r);
     toku_txn_close_txn(txn);
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
     r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);                             CKERR(r);
@@ -131,7 +131,7 @@ static void test_it (int N) {
     for (int i=0; i<N; i++) {
 	r = toku_txn_begin_txn((DB_TXN*)NULL, (TOKUTXN)0, &txn, logger, TXN_SNAPSHOT_ROOT, false);                 CKERR(r);
 	r = toku_open_ft_handle(FILENAME, 0, &ft, 1024, 256, TOKU_DEFAULT_COMPRESSION_METHOD, ct, txn, toku_builtin_compare_fun);                CKERR(r);
-	r = toku_txn_commit_txn(txn, false, false, NULL, NULL);                             CKERR(r);
+	r = toku_txn_commit_txn(txn, false, NULL, NULL);                             CKERR(r);
 	toku_txn_close_txn(txn);
 
 	r = toku_txn_begin_txn((DB_TXN*)NULL, (TOKUTXN)0, &txn, logger, TXN_SNAPSHOT_ROOT, false);                 CKERR(r);
@@ -142,7 +142,7 @@ static void test_it (int N) {
 	memset(val, 'v', sizeof(val));
 	val[sizeof(val)-1]=0;
 	toku_ft_insert(ft, toku_fill_dbt(&k, key, 1+strlen(key)), toku_fill_dbt(&v, val, 1+strlen(val)), txn);
-	r = toku_txn_commit_txn(txn, false, false, NULL, NULL);                                 CKERR(r);
+	r = toku_txn_commit_txn(txn, false, NULL, NULL);                                 CKERR(r);
 	toku_txn_close_txn(txn);
 
 
@@ -154,7 +154,7 @@ static void test_it (int N) {
     for (int i=0; i<N; i++) {
 	r = toku_txn_begin_txn((DB_TXN*)NULL, (TOKUTXN)0, &txn, logger, TXN_SNAPSHOT_ROOT, false);                     CKERR(r);
 	r = toku_open_ft_handle(FILENAME, 0, &ft, 1024, 256, TOKU_DEFAULT_COMPRESSION_METHOD, ct, txn, toku_builtin_compare_fun);                CKERR(r);
-	r = toku_txn_commit_txn(txn, false, false, NULL, NULL);                                 CKERR(r);
+	r = toku_txn_commit_txn(txn, false, NULL, NULL);                                 CKERR(r);
 	toku_txn_close_txn(txn);
 
 	r = toku_txn_begin_txn((DB_TXN*)NULL, (TOKUTXN)0, &txn, logger, TXN_SNAPSHOT_ROOT, false);                     CKERR(r);
@@ -169,7 +169,7 @@ static void test_it (int N) {
 	assert(!is_empty);
 	}
 	
-	r = toku_txn_commit_txn(txn, false, false, NULL, NULL);                                 CKERR(r);
+	r = toku_txn_commit_txn(txn, false, NULL, NULL);                                 CKERR(r);
 	toku_txn_close_txn(txn);
 
 	r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);                             CKERR(r);
@@ -179,7 +179,7 @@ static void test_it (int N) {
     }
     r = toku_txn_begin_txn((DB_TXN*)NULL, (TOKUTXN)0, &txn, logger, TXN_SNAPSHOT_ROOT, false);                        CKERR(r);
     r = toku_open_ft_handle(FILENAME, 0, &ft, 1024, 256, TOKU_DEFAULT_COMPRESSION_METHOD, ct, txn, toku_builtin_compare_fun);                       CKERR(r);
-    r = toku_txn_commit_txn(txn, false, false, NULL, NULL);                                     CKERR(r);
+    r = toku_txn_commit_txn(txn, false, NULL, NULL);                                     CKERR(r);
     toku_txn_close_txn(txn);
 
     if (0) {

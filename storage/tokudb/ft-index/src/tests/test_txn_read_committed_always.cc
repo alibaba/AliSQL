@@ -114,7 +114,7 @@ static void test_simple_committed_read(DB_ENV *env) {
 
     // begin an outer txn with read-committed-always isolation
     DB_TXN *outer_txn;
-    r = env->txn_begin(env, NULL, &outer_txn, DB_READ_COMMITTED_ALWAYS); CKERR(r);
+    r = env->txn_begin(env, NULL, &outer_txn, DB_READ_COMMITTED); CKERR(r);
 
     // outer txn sees john
     r = db->get(db, outer_txn, &john, &val, 0); CKERR(r);

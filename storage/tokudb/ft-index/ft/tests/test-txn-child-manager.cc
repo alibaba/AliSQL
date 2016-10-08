@@ -151,12 +151,12 @@ void txn_child_manager_unit_test::run_child_txn_test() {
     // assert that the child has a later snapshot
     assert(child_txn->snapshot_txnid64 > root_txn->snapshot_txnid64);
 
-    r = toku_txn_commit_txn(child_txn, true, false, NULL, NULL);
+    r = toku_txn_commit_txn(child_txn, true, NULL, NULL);
     CKERR(r);
     toku_txn_close_txn(child_txn);
     assert(root_txn->child == NULL);
 
-    r = toku_txn_commit_txn(root_txn, true, false, NULL, NULL);
+    r = toku_txn_commit_txn(root_txn, true, NULL, NULL);
     CKERR(r);
     toku_txn_close_txn(root_txn);
 
@@ -232,7 +232,7 @@ void txn_child_manager_unit_test::run_test() {
     assert(cm->m_root == root_txn);
     assert(cm->m_last_xid == grandchild_txn->txnid.child_id64);
 
-    r = toku_txn_commit_txn(grandchild_txn, true, false, NULL, NULL);
+    r = toku_txn_commit_txn(grandchild_txn, true, NULL, NULL);
     CKERR(r);
     toku_txn_close_txn(grandchild_txn);
 
@@ -312,22 +312,22 @@ void txn_child_manager_unit_test::run_test() {
     r = cm->iterate(txn_child_manager_test_cb2, found_txn);
     assert(r == -1);
 
-    r = toku_txn_commit_txn(recovery_txn, true, false, NULL, NULL);
+    r = toku_txn_commit_txn(recovery_txn, true, NULL, NULL);
     CKERR(r);
     toku_txn_close_txn(recovery_txn);
     assert(grandchild_txn->child == NULL);
 
-    r = toku_txn_commit_txn(grandchild_txn, true, false, NULL, NULL);
+    r = toku_txn_commit_txn(grandchild_txn, true, NULL, NULL);
     CKERR(r);
     toku_txn_close_txn(grandchild_txn);    
     assert(child_txn->child == NULL);
 
-    r = toku_txn_commit_txn(child_txn, true, false, NULL, NULL);
+    r = toku_txn_commit_txn(child_txn, true, NULL, NULL);
     CKERR(r);
     toku_txn_close_txn(child_txn);
     assert(root_txn->child == NULL);
 
-    r = toku_txn_commit_txn(root_txn, true, false, NULL, NULL);
+    r = toku_txn_commit_txn(root_txn, true, NULL, NULL);
     CKERR(r);
     toku_txn_close_txn(root_txn);
 

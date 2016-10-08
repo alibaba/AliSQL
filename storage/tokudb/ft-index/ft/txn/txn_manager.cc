@@ -101,21 +101,6 @@ PATENT RIGHTS GRANT:
 
 bool garbage_collection_debug = false;
 
-static bool txn_records_snapshot(TXN_SNAPSHOT_TYPE snapshot_type, struct tokutxn *parent) {
-    if (snapshot_type == TXN_COPIES_SNAPSHOT) {
-        return false;
-    }
-    // we need a snapshot if the snapshot type is a child or
-    // if the snapshot type is root and we have no parent.
-    // Cases that we don't need a snapshot: when snapshot type is NONE
-    //  or when it is ROOT and we have a parent
-    return (snapshot_type != TXN_SNAPSHOT_NONE && (parent==NULL || snapshot_type == TXN_SNAPSHOT_CHILD));
-}
-
-static bool txn_copies_snapshot(TXN_SNAPSHOT_TYPE snapshot_type, struct tokutxn *parent) {
-    return (snapshot_type == TXN_COPIES_SNAPSHOT) || txn_records_snapshot(snapshot_type, parent);
-}
-
 // internal locking functions, should use this instead of accessing lock directly
 static void txn_manager_lock(TXN_MANAGER txn_manager);
 static void txn_manager_unlock(TXN_MANAGER txn_manager);
@@ -420,6 +405,7 @@ static inline void txn_manager_create_snapshot_unlocked(
     ) 
 {    
     txn->snapshot_txnid64 = ++txn_manager->last_xid;    
+    setup_live_root_txn_list(&txn_manager->live_root_ids, txn->live_root_txn_list);  
     // Add this txn to the global list of txns that have their own snapshots.
     // (Note, if a txn is a child that creates its own snapshot, then that child xid
     // is the xid stored in the global list.) 
@@ -569,11 +555,8 @@ void toku_txn_manager_handle_snapshot_create_for_child_txn(
 {
     // this is a function for child txns, so just doint a sanity check
     invariant(txn->parent != NULL);
-    bool copies_snapshot = txn_copies_snapshot(snapshot_type, txn->parent);
-    bool records_snapshot = txn_records_snapshot(snapshot_type, txn->parent);
-    // assert that if records_snapshot is true, then copies_snapshot is true
-    invariant(!records_snapshot || copies_snapshot);
-    if (records_snapshot) {
+    bool needs_snapshot = txn_needs_snapshot(snapshot_type, txn->parent);
+    if (needs_snapshot) {
         invariant(txn->live_root_txn_list == nullptr);
         XMALLOC(txn->live_root_txn_list);
         txn_manager_lock(txn_manager);
@@ -582,9 +565,6 @@ void toku_txn_manager_handle_snapshot_create_for_child_txn(
     }
     else {
         inherit_snapshot_from_parent(txn);
-    }
-    if (copies_snapshot) {
-        setup_live_root_txn_list(&txn_manager->live_root_ids, txn->live_root_txn_list);  
     }
 }
 
@@ -596,14 +576,11 @@ void toku_txn_manager_handle_snapshot_destroy_for_child_txn(
 {
     // this is a function for child txns, so just doint a sanity check
     invariant(txn->parent != NULL);
-    bool copies_snapshot = txn_copies_snapshot(snapshot_type, txn->parent);
-    bool records_snapshot = txn_records_snapshot(snapshot_type, txn->parent);
-    if (records_snapshot) {
+    bool is_snapshot = txn_needs_snapshot(snapshot_type, txn->parent);
+    if (is_snapshot) {
         txn_manager_lock(txn_manager);
         txn_manager_remove_snapshot_unlocked(txn, txn_manager);
         txn_manager_unlock(txn_manager);
-    }
-    if (copies_snapshot) {
         invariant(txn->live_root_txn_list != nullptr);
         txn->live_root_txn_list->destroy();
         toku_free(txn->live_root_txn_list);
@@ -642,14 +619,11 @@ void toku_txn_manager_start_txn(
     int r;
     TXNID xid = TXNID_NONE;
     // if we are running in recovery, we don't need to make snapshots
-    bool copies_snapshot = txn_copies_snapshot(snapshot_type, NULL);
-    bool records_snapshot = txn_records_snapshot(snapshot_type, NULL);
-    // assert that if records_snapshot is true, then copies_snapshot is true
-    invariant(!records_snapshot || copies_snapshot);
+    bool needs_snapshot = txn_needs_snapshot(snapshot_type, NULL);
 
     // perform a malloc outside of the txn_manager lock
     // will be used in txn_manager_create_snapshot_unlocked below
-    if (copies_snapshot) {
+    if (needs_snapshot) {
         invariant(txn->live_root_txn_list == nullptr);
         XMALLOC(txn->live_root_txn_list);
     }
@@ -686,14 +660,11 @@ void toku_txn_manager_start_txn(
     }
     set_oldest_referenced_xid(txn_manager);
     
-    if (records_snapshot) {
+    if (needs_snapshot) {
         txn_manager_create_snapshot_unlocked(
             txn_manager,
             txn
             );
-    }
-    if (copies_snapshot) {
-        setup_live_root_txn_list(&txn_manager->live_root_ids, txn->live_root_txn_list);  
     }
 
     if (garbage_collection_debug) {
@@ -730,14 +701,14 @@ done:
 void toku_txn_manager_finish_txn(TXN_MANAGER txn_manager, TOKUTXN txn) {
     int r;
     invariant(txn->parent == NULL);
-    bool records_snapshot = txn_records_snapshot(txn->snapshot_type, NULL);
+    bool is_snapshot = txn_needs_snapshot(txn->snapshot_type, NULL);
     txn_manager_lock(txn_manager);
 
     if (garbage_collection_debug) {
         verify_snapshot_system(txn_manager);
     }
 
-    if (records_snapshot) {
+    if (is_snapshot) {
         txn_manager_remove_snapshot_unlocked(
             txn, 
             txn_manager
@@ -789,7 +760,8 @@ void toku_txn_manager_finish_txn(TXN_MANAGER txn_manager, TOKUTXN txn) {
     txn_manager_unlock(txn_manager);
 
     //Cleanup that does not require the txn_manager lock
-    if (txn->live_root_txn_list) {
+    if (is_snapshot) {
+        invariant(txn->live_root_txn_list != nullptr);
         txn->live_root_txn_list->destroy();
         toku_free(txn->live_root_txn_list);
     }

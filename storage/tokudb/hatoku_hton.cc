@@ -423,10 +423,10 @@ static int tokudb_init_func(void *p) {
     tokudb_hton->commit = tokudb_commit;
     tokudb_hton->rollback = tokudb_rollback;
 #if TOKU_INCLUDE_XA
-    tokudb_hton->prepare=tokudb_xa_prepare;
-    tokudb_hton->recover=tokudb_xa_recover;
-    tokudb_hton->commit_by_xid=tokudb_commit_by_xid;
-    tokudb_hton->rollback_by_xid=tokudb_rollback_by_xid;
+    tokudb_hton->prepare = tokudb_xa_prepare;
+    tokudb_hton->recover = tokudb_xa_recover;
+    tokudb_hton->commit_by_xid = tokudb_commit_by_xid;
+    tokudb_hton->rollback_by_xid = tokudb_rollback_by_xid;
 #endif
 
     tokudb_hton->panic = tokudb_end;
@@ -795,25 +795,31 @@ static void tokudb_cleanup_handlers(tokudb_trx_data *trx, DB_TXN *txn) {
 extern "C" enum durability_properties thd_get_durability_property(const MYSQL_THD thd);
 #endif
 
-// Determine if an fsync is used when a transaction is committed.  The MySQL durability property 
-// has precedence over the tokudb commit sync setting as it has a better idea of what is going on.
-static bool tokudb_fsync_on_commit(THD *thd) {
+// Determine if an fsync is used when a transaction is committed.  
+static bool tokudb_sync_on_commit(THD *thd, tokudb_trx_data *trx, DB_TXN *txn) {
 #if MYSQL_VERSION_ID >= 50600
+    // Check the client durability property which is set during 2PC
     if (thd_get_durability_property(thd) == HA_IGNORE_DURABILITY)
         return false;
-    else
 #endif
-        return THDVAR(thd, commit_sync) != 0;
+#if defined(MARIADB_BASE_VERSION)
+    // Check is the txn is prepared and the binlog is open
+    if (txn->is_prepared(txn) && mysql_bin_log.is_open())
+        return false;
+#endif
+    if (tokudb_fsync_log_period > 0)
+        return false;
+    return THDVAR(thd, commit_sync) != 0;
 }
 
 static int tokudb_commit(handlerton * hton, THD * thd, bool all) {
-    TOKUDB_DBUG_ENTER("");
+    TOKUDB_DBUG_ENTER("%u", all);
     DBUG_PRINT("trans", ("ending transaction %s", all ? "all" : "stmt"));
-    uint32_t syncflag = tokudb_fsync_on_commit(thd) ? 0 : DB_TXN_NOSYNC;
     tokudb_trx_data *trx = (tokudb_trx_data *) thd_get_ha_data(thd, hton);
     DB_TXN **txn = all ? &trx->all : &trx->stmt;
     DB_TXN *this_txn = *txn;
     if (this_txn) {
+        uint32_t syncflag = tokudb_sync_on_commit(thd, trx, this_txn) ? 0 : DB_TXN_NOSYNC;
         if (tokudb_debug & TOKUDB_DEBUG_TXN) {
             TOKUDB_TRACE("commit trx %u txn %p syncflag %u", all, this_txn, syncflag);
         }
@@ -823,11 +829,11 @@ static int tokudb_commit(handlerton * hton, THD * thd, bool all) {
         commit_txn_with_progress(this_txn, syncflag, thd);
         // test hook to induce a crash on a debug build
         DBUG_EXECUTE_IF("tokudb_crash_commit_after", DBUG_SUICIDE(););
-        if (this_txn == trx->sp_level) {
-            trx->sp_level = 0;
-        }
-        *txn = 0;
+        *txn = NULL;
         trx->sub_sp_level = NULL;
+        if (this_txn == trx->sp_level || trx->all == NULL) {
+            trx->sp_level = NULL;
+        }
     } 
     else if (tokudb_debug & TOKUDB_DEBUG_TXN) {
         TOKUDB_TRACE("nothing to commit %d", all);
@@ -837,7 +843,7 @@ static int tokudb_commit(handlerton * hton, THD * thd, bool all) {
 }
 
 static int tokudb_rollback(handlerton * hton, THD * thd, bool all) {
-    TOKUDB_DBUG_ENTER("");
+    TOKUDB_DBUG_ENTER("%u", all);
     DBUG_PRINT("trans", ("aborting transaction %s", all ? "all" : "stmt"));
     tokudb_trx_data *trx = (tokudb_trx_data *) thd_get_ha_data(thd, hton);
     DB_TXN **txn = all ? &trx->all : &trx->stmt;
@@ -848,11 +854,11 @@ static int tokudb_rollback(handlerton * hton, THD * thd, bool all) {
         }
         tokudb_cleanup_handlers(trx, this_txn);
         abort_txn_with_progress(this_txn, thd);
-        if (this_txn == trx->sp_level) {
-            trx->sp_level = 0;
-        }
-        *txn = 0;
+        *txn = NULL;
         trx->sub_sp_level = NULL;
+        if (this_txn == trx->sp_level || trx->all == NULL) {
+            trx->sp_level = NULL;
+        }
     } 
     else {
         if (tokudb_debug & TOKUDB_DEBUG_TXN) {
@@ -864,12 +870,19 @@ static int tokudb_rollback(handlerton * hton, THD * thd, bool all) {
 }
 
 #if TOKU_INCLUDE_XA
+static bool tokudb_sync_on_prepare(void) {
+    // skip sync of log if fsync log period > 0
+    if (tokudb_fsync_log_period > 0)
+        return false;
+    else
+        return true;
+}
 
 static int tokudb_xa_prepare(handlerton* hton, THD* thd, bool all) {
     TOKUDB_DBUG_ENTER("");
     int r = 0;
 
-    /* if support_xa is disable, just return */
+    // if tokudb_support_xa is disable, just return
     if (!THDVAR(thd, support_xa)) {
         TOKUDB_DBUG_RETURN(r);
     }
@@ -878,6 +891,7 @@ static int tokudb_xa_prepare(handlerton* hton, THD* thd, bool all) {
     tokudb_trx_data *trx = (tokudb_trx_data *) thd_get_ha_data(thd, hton);
     DB_TXN* txn = all ? trx->all : trx->stmt;
     if (txn) {
+        uint32_t syncflag = tokudb_sync_on_prepare() ? 0 : DB_TXN_NOSYNC;
         if (tokudb_debug & TOKUDB_DEBUG_TXN) {
             TOKUDB_TRACE("doing txn prepare:%d:%p", all, txn);
         }
@@ -886,7 +900,7 @@ static int tokudb_xa_prepare(handlerton* hton, THD* thd, bool all) {
         thd_get_xid(thd, (MYSQL_XID*) &thd_xid);
         // test hook to induce a crash on a debug build
         DBUG_EXECUTE_IF("tokudb_crash_prepare_before", DBUG_SUICIDE(););
-        r = txn->xa_prepare(txn, &thd_xid);
+        r = txn->xa_prepare(txn, &thd_xid, syncflag);
         // test hook to induce a crash on a debug build
         DBUG_EXECUTE_IF("tokudb_crash_prepare_after", DBUG_SUICIDE(););
     } 
@@ -951,7 +965,7 @@ cleanup:
 #endif
 
 static int tokudb_savepoint(handlerton * hton, THD * thd, void *savepoint) {
-    TOKUDB_DBUG_ENTER("");
+    TOKUDB_DBUG_ENTER("%p", savepoint);
     int error;
     SP_INFO save_info = (SP_INFO)savepoint;
     tokudb_trx_data *trx = (tokudb_trx_data *) thd_get_ha_data(thd, hton);
@@ -972,6 +986,9 @@ static int tokudb_savepoint(handlerton * hton, THD * thd, void *savepoint) {
         trx->sp_level = save_info->txn;
         save_info->in_sub_stmt = false;
     }
+    if (tokudb_debug & TOKUDB_DEBUG_TXN) {
+        TOKUDB_TRACE("begin txn %p", save_info->txn);
+    }
     save_info->trx = trx;
     error = 0;
 cleanup:
@@ -979,7 +996,7 @@ cleanup:
 }
 
 static int tokudb_rollback_to_savepoint(handlerton * hton, THD * thd, void *savepoint) {
-    TOKUDB_DBUG_ENTER("");
+    TOKUDB_DBUG_ENTER("%p", savepoint);
     int error;
     SP_INFO save_info = (SP_INFO)savepoint;
     DB_TXN* parent = NULL;
@@ -987,6 +1004,9 @@ static int tokudb_rollback_to_savepoint(handlerton * hton, THD * thd, void *save
 
     tokudb_trx_data *trx = (tokudb_trx_data *) thd_get_ha_data(thd, hton);
     parent = txn_to_rollback->parent;
+    if (tokudb_debug & TOKUDB_DEBUG_TXN) {
+        TOKUDB_TRACE("rollback txn %p", txn_to_rollback);
+    }
     if (!(error = txn_to_rollback->abort(txn_to_rollback))) {
         if (save_info->in_sub_stmt) {
             trx->sub_sp_level = parent;
@@ -1000,24 +1020,27 @@ static int tokudb_rollback_to_savepoint(handlerton * hton, THD * thd, void *save
 }
 
 static int tokudb_release_savepoint(handlerton * hton, THD * thd, void *savepoint) {
-    TOKUDB_DBUG_ENTER("");
-    int error;
-
+    TOKUDB_DBUG_ENTER("%p", savepoint);
+    int error = 0;
     SP_INFO save_info = (SP_INFO)savepoint;
     DB_TXN* parent = NULL;
     DB_TXN* txn_to_commit = save_info->txn;
 
     tokudb_trx_data *trx = (tokudb_trx_data *) thd_get_ha_data(thd, hton);
     parent = txn_to_commit->parent;
-    if (!(error = txn_to_commit->commit(txn_to_commit, 0))) {
+    if (tokudb_debug & TOKUDB_DEBUG_TXN) {
+        TOKUDB_TRACE("commit txn %p", txn_to_commit);
+    }
+    DB_TXN *child = txn_to_commit->get_child(txn_to_commit);
+    if (child == NULL && !(error = txn_to_commit->commit(txn_to_commit, 0))) {
         if (save_info->in_sub_stmt) {
             trx->sub_sp_level = parent;
         }
         else {
             trx->sp_level = parent;
         }
-        save_info->txn = NULL;
     }
+    save_info->txn = NULL;
     TOKUDB_DBUG_RETURN(error);
 }
 
@@ -1449,8 +1472,6 @@ static MYSQL_SYSVAR_STR(data_dir, tokudb_data_dir, PLUGIN_VAR_READONLY, "TokuDB 
 
 static MYSQL_SYSVAR_STR(version, tokudb_version, PLUGIN_VAR_READONLY, "TokuDB Version", NULL, NULL, NULL);
 
-static MYSQL_SYSVAR_UINT(init_flags, tokudb_init_flags, PLUGIN_VAR_READONLY, "Sets TokuDB DB_ENV->open flags", NULL, NULL, tokudb_init_flags, 0, ~0U, 0);
-
 static MYSQL_SYSVAR_UINT(write_status_frequency, tokudb_write_status_frequency, 0, "TokuDB frequency that show processlist updates status of writes", NULL, NULL, 1000, 0, ~0U, 0);
 static MYSQL_SYSVAR_UINT(read_status_frequency, tokudb_read_status_frequency, 0, "TokuDB frequency that show processlist updates status of reads", NULL, NULL, 10000, 0, ~0U, 0);
 static MYSQL_SYSVAR_INT(fs_reserve_percent, tokudb_fs_reserve_percent, PLUGIN_VAR_READONLY, "TokuDB file system space reserve (percent free required)", NULL, NULL, 5, 0, 100, 0);
@@ -1487,7 +1508,6 @@ static struct st_mysql_sys_var *tokudb_system_variables[] = {
     MYSQL_SYSVAR(create_index_online),
     MYSQL_SYSVAR(disable_prefetching),
     MYSQL_SYSVAR(version),
-    MYSQL_SYSVAR(init_flags),
     MYSQL_SYSVAR(checkpointing_period),
     MYSQL_SYSVAR(prelock_empty),
     MYSQL_SYSVAR(checkpoint_lock),
@@ -1506,6 +1526,7 @@ static struct st_mysql_sys_var *tokudb_system_variables[] = {
     MYSQL_SYSVAR(disable_slow_upsert),
 #endif
     MYSQL_SYSVAR(analyze_time),
+    MYSQL_SYSVAR(analyze_delete_fraction),
     MYSQL_SYSVAR(fsync_log_period),
 #if TOKU_INCLUDE_HANDLERTON_HANDLE_FATAL_SIGNAL
     MYSQL_SYSVAR(gdb_path),
@@ -1528,6 +1549,10 @@ static struct st_mysql_sys_var *tokudb_system_variables[] = {
     MYSQL_SYSVAR(rpl_unique_checks_delay),
     MYSQL_SYSVAR(rpl_lookup_rows),
     MYSQL_SYSVAR(rpl_lookup_rows_delay),
+    MYSQL_SYSVAR(rpl_check_readonly),
+    MYSQL_SYSVAR(optimize_index_name),
+    MYSQL_SYSVAR(optimize_index_fraction),
+    MYSQL_SYSVAR(optimize_throttle),
     NULL
 };
 
@@ -1673,12 +1698,12 @@ static ST_FIELD_INFO tokudb_fractal_tree_info_field_info[] = {
 
 static int tokudb_report_fractal_tree_info_for_db(const DBT *dname, const DBT *iname, TABLE *table, THD *thd) {
     int error;
-    DB *db;
     uint64_t bt_num_blocks_allocated;
     uint64_t bt_num_blocks_in_use;
     uint64_t bt_size_allocated;
     uint64_t bt_size_in_use;
 
+    DB *db = NULL;
     error = db_create(&db, db_env, 0);
     if (error) {
         goto exit;
@@ -1690,12 +1715,6 @@ static int tokudb_report_fractal_tree_info_for_db(const DBT *dname, const DBT *i
     error = db->get_fractal_tree_info64(db,
                                         &bt_num_blocks_allocated, &bt_num_blocks_in_use,
                                         &bt_size_allocated, &bt_size_in_use);
-    {
-        int close_error = db->close(db, 0);
-        if (!error) {
-            error = close_error;
-        }
-    }
     if (error) {
         goto exit;
     }
@@ -1727,6 +1746,11 @@ static int tokudb_report_fractal_tree_info_for_db(const DBT *dname, const DBT *i
     error = schema_table_store_record(thd, table);
 
 exit:
+    if (db) {
+        int close_error = db->close(db, 0);
+        if (error == 0)
+            error = close_error;
+    }
     return error;
 }
 
@@ -2021,6 +2045,33 @@ static int tokudb_fractal_tree_block_map_done(void *p) {
     return 0;
 }
 
+#if TOKU_INCLUDE_LOCK_TIMEOUT_QUERY_STRING
+struct tokudb_search_txn_extra {
+    bool match_found;
+    uint64_t match_txn_id;
+    uint64_t match_client_id;
+};
+
+static int tokudb_search_txn_callback(uint64_t txn_id, uint64_t client_id, iterate_row_locks_callback iterate_locks, void *locks_extra, void *extra) {
+    struct tokudb_search_txn_extra *e = reinterpret_cast<struct tokudb_search_txn_extra *>(extra);
+    if (e->match_txn_id == txn_id) {
+        e->match_found = true;
+        e->match_client_id = client_id;
+        return 1;
+    }
+    return 0;
+}
+
+static bool tokudb_txn_id_to_client_id(THD *thd, uint64_t blocking_txnid, uint64_t *blocking_client_id) {
+    struct tokudb_search_txn_extra e = { false, blocking_txnid, 0};
+    (void) db_env->iterate_live_transactions(db_env, tokudb_search_txn_callback, &e);
+    if (e.match_found) {
+        *blocking_client_id = e.match_client_id;
+    }
+    return e.match_found;
+}
+#endif
+
 static void tokudb_pretty_key(const DB *db, const DBT *key, const char *default_key, String *out) {
     if (key->data == NULL) {
         out->append(default_key);
@@ -2070,8 +2121,9 @@ static void tokudb_lock_timeout_callback(DB *db, uint64_t requesting_txnid, cons
         // generate a JSON document with the lock timeout info
         String log_str;
         log_str.append("{");
+        uint64_t mysql_thread_id = thd->thread_id;
         log_str.append("\"mysql_thread_id\":");
-        log_str.append_ulonglong(thd->thread_id);
+        log_str.append_ulonglong(mysql_thread_id);
         log_str.append(", \"dbname\":");
         log_str.append("\""); log_str.append(tokudb_get_index_name(db)); log_str.append("\"");
         log_str.append(", \"requesting_txnid\":");
@@ -2111,7 +2163,18 @@ static void tokudb_lock_timeout_callback(DB *db, uint64_t requesting_txnid, cons
         }
         // dump to stderr
         if (lock_timeout_debug & 2) {
-            sql_print_error("%s: %s", tokudb_hton_name, log_str.c_ptr());
+            sql_print_error("%s: lock timeout %s", tokudb_hton_name, log_str.c_ptr());
+            LEX_STRING *qs = thd_query_string(thd);
+            sql_print_error("%s: requesting_thread_id:%" PRIu64 " q:%.*s", tokudb_hton_name, mysql_thread_id, (int) qs->length, qs->str);
+#if TOKU_INCLUDE_LOCK_TIMEOUT_QUERY_STRING
+            uint64_t blocking_thread_id = 0;
+            if (tokudb_txn_id_to_client_id(thd, blocking_txnid, &blocking_thread_id)) {
+                String blocking_qs;
+                if (get_thread_query_string(blocking_thread_id, blocking_qs) == 0) {
+                    sql_print_error("%s: blocking_thread_id:%" PRIu64 " q:%.*s", tokudb_hton_name, blocking_thread_id, blocking_qs.length(), blocking_qs.c_ptr());
+                }
+            }
+#endif
         }
     }
 }
@@ -2461,7 +2524,6 @@ static int show_tokudb_ha_vars(THD *thd, SHOW_VAR *var, char *buff) {
     tokudb_export_ha_status();
     var->type= SHOW_ARRAY;
     var->value= (char *) tokudb_ha_status_variables;
-
     return 0;
 }
 /* END: add row operation to show staus */
