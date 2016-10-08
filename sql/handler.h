@@ -2311,6 +2311,43 @@ protected:
     return index_read_last(buf, key, key_len);
   }
 public:
+ /**
+    TokuDB:
+    Notify storage engine about imminent index scan where a large number of
+    rows is expected to be returned. Does not replace nor call index_init.
+  */
+  virtual int prepare_index_scan(void) { return 0; }
+
+  /**
+    Notify storage engine about imminent index range scan.
+  */
+  virtual int prepare_range_scan(const key_range *start_key,
+                                 const key_range *end_key)
+  {
+    return 0;
+  }
+
+  /**
+    Notify storage engine about imminent index read with a bitmap of used key
+    parts.
+  */
+  int prepare_index_key_scan_map(const uchar *key, key_part_map keypart_map)
+  {
+    uint key_len= calculate_key_len(table, active_index, key, keypart_map);
+    return prepare_index_key_scan(key, key_len);
+  }
+
+protected:
+
+  /**
+    Notify storage engine about imminent index read with key length.
+  */
+  virtual int prepare_index_key_scan(const uchar *key, uint key_len)
+  {
+    return 0;
+  }
+
+public:
   virtual int read_range_first(const key_range *start_key,
                                const key_range *end_key,
                                bool eq_range, bool sorted);

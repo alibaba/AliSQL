@@ -393,8 +393,14 @@ static int rr_quick(READ_RECORD *info)
 
 static int rr_index_first(READ_RECORD *info)
 {
-  int tmp= info->table->file->ha_index_first(info->record);
+  int tmp= info->table->file->prepare_index_scan();
   info->read_record= rr_index;
+  if (tmp)
+  {
+    tmp= rr_handle_error(info, tmp);
+    return tmp;
+  }
+  tmp= info->table->file->ha_index_first(info->record);
   if (tmp)
     tmp= rr_handle_error(info, tmp);
   return tmp;
@@ -416,8 +422,14 @@ static int rr_index_first(READ_RECORD *info)
 
 static int rr_index_last(READ_RECORD *info)
 {
-  int tmp= info->table->file->ha_index_last(info->record);
+  int tmp= info->table->file->prepare_index_scan();
   info->read_record= rr_index_desc;
+  if (tmp)
+  {
+    tmp= rr_handle_error(info, tmp);
+    return tmp;
+  }
+  tmp= info->table->file->ha_index_last(info->record);
   if (tmp)
     tmp= rr_handle_error(info, tmp);
   return tmp;
