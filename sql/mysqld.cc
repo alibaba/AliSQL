@@ -742,7 +742,7 @@ mysql_mutex_t LOCK_log_throttle_qni;
 #ifdef HAVE_OPENSSL
 mysql_mutex_t LOCK_des_key_file;
 #endif
-mysql_rwlock_t LOCK_grant, LOCK_sys_init_connect, LOCK_sys_init_slave;
+mysql_rwlock_t LOCK_sys_init_connect, LOCK_sys_init_slave;
 mysql_rwlock_t LOCK_system_variables_hash;
 mysql_cond_t COND_thread_count;
 pthread_t signal_thread;
@@ -1993,7 +1993,6 @@ static void wait_for_signal_thread_to_end()
 
 static void clean_up_mutexes()
 {
-  mysql_rwlock_destroy(&LOCK_grant);
   mysql_mutex_destroy(&LOCK_thread_created);
   mysql_mutex_destroy(&LOCK_thread_count);
   mysql_mutex_destroy(&LOCK_log_throttle_qni);
@@ -4304,7 +4303,6 @@ static int init_thread_environment()
 #endif
   mysql_rwlock_init(key_rwlock_LOCK_sys_init_connect, &LOCK_sys_init_connect);
   mysql_rwlock_init(key_rwlock_LOCK_sys_init_slave, &LOCK_sys_init_slave);
-  mysql_rwlock_init(key_rwlock_LOCK_grant, &LOCK_grant);
   mysql_cond_init(key_COND_thread_count, &COND_thread_count, NULL);
   mysql_cond_init(key_COND_connection_count, &COND_connection_count, NULL);
   mysql_cond_init(key_COND_thread_cache, &COND_thread_cache, NULL);
