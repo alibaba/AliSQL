@@ -1093,6 +1093,8 @@ lock_rec_set_nth_bit(
 	bit_index = i % 8;
 
 	((byte*) &lock[1])[byte_index] |= 1 << bit_index;
+
+	++lock->trx->lock.n_rec_locks;
 }
 
 /**********************************************************************//**
@@ -1140,6 +1142,10 @@ lock_rec_reset_nth_bit(
 	bit_index = i % 8;
 
 	((byte*) &lock[1])[byte_index] &= ~(1 << bit_index);
+
+	--lock->trx->lock.n_rec_locks;
+
+	ut_ad(lock->trx->lock.n_rec_locks >= 0);
 }
 
 /*********************************************************************//**
@@ -1750,28 +1756,9 @@ lock_number_of_rows_locked(
 /*=======================*/
 	const trx_lock_t*	trx_lock)	/*!< in: transaction locks */
 {
-	const lock_t*	lock;
-	ulint		n_records = 0;
-
 	ut_ad(lock_mutex_own());
 
-	for (lock = UT_LIST_GET_FIRST(trx_lock->trx_locks);
-	     lock != NULL;
-	     lock = UT_LIST_GET_NEXT(trx_locks, lock)) {
-
-		if (lock_get_type_low(lock) == LOCK_REC) {
-			ulint	n_bit;
-			ulint	n_bits = lock_rec_get_n_bits(lock);
-
-			for (n_bit = 0; n_bit < n_bits; n_bit++) {
-				if (lock_rec_get_nth_bit(lock, n_bit)) {
-					n_records++;
-				}
-			}
-		}
-	}
-
-	return(n_records);
+	return(trx_lock->n_rec_locks);
 }
 
 /*============== RECORD LOCK CREATION AND QUEUE MANAGEMENT =============*/
@@ -4076,9 +4063,13 @@ lock_table_create(
 	any locks. */
 	assert_trx_in_list(trx);
 
-	if ((type_mode & LOCK_MODE_MASK) == LOCK_AUTO_INC) {
+	ulint extract_mode = (type_mode & LOCK_MODE_MASK);
+	if (extract_mode == LOCK_AUTO_INC) {
+
 		++table->n_waiting_or_granted_auto_inc_locks;
 	}
+
+	table->lock_counter[extract_mode]++;
 
 	/* For AUTOINC locking we reuse the lock instance only if
 	there is no wait involved else we allocate the waiting lock
@@ -4245,6 +4236,9 @@ lock_table_remove_low(
 	UT_LIST_REMOVE(trx_locks, trx->lock.trx_locks, lock);
 	UT_LIST_REMOVE(un_member.tab_lock.locks, table->locks, lock);
 
+	table->lock_counter[lock_get_mode(lock)]--;
+	ut_ad(table->lock_counter[lock_get_mode(lock)] >= 0);
+
 	MONITOR_INC(MONITOR_TABLELOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_TABLELOCK);
 }
@@ -4349,6 +4343,21 @@ lock_table_enqueue_waiting(
 }
 
 /*********************************************************************//**
+Checks if there are table locks incompatible with current lock type.
+@return	true if compatible. */
+static
+my_bool
+lock_table_compatible_fast_check(
+/*=============================*/
+	enum lock_mode          mode,   /*!< in: lock mode */
+	const dict_table_t*     table)  /*!< in: table */
+{
+	return ((mode == LOCK_IS || mode == LOCK_IX)
+		&& table->lock_counter[LOCK_S] == 0
+		&& table->lock_counter[LOCK_X] == 0);
+}
+
+/*********************************************************************//**
 Checks if other transactions have an incompatible mode lock request in
 the lock queue.
 @return	lock or NULL */
@@ -4367,6 +4376,11 @@ lock_table_other_has_incompatible(
 	const lock_t*	lock;
 
 	ut_ad(lock_mutex_own());
+
+	if (lock_table_compatible_fast_check(mode, table)) {
+
+		return(NULL);
+	}
 
 	for (lock = UT_LIST_GET_LAST(table->locks);
 	     lock != NULL;
@@ -4526,13 +4540,26 @@ lock_table_dequeue(
 			they are now qualified to it */
 {
 	lock_t*	lock;
+	dict_table_t* table;
+	enum lock_mode type = lock_get_mode(in_lock);
 
 	ut_ad(lock_mutex_own());
 	ut_a(lock_get_type_low(in_lock) == LOCK_TABLE);
 
 	lock = UT_LIST_GET_NEXT(un_member.tab_lock.locks, in_lock);
 
+	table = in_lock->un_member.tab_lock.table;
+
 	lock_table_remove_low(in_lock);
+
+	/* If there isn't any LOCK_S/LOCK_X request, and current lock type is
+	LOCK_IX/LOCK_IS, then we know we don't need to grant for any table
+	lock request because LOCK_IX/LOCK_IS only conflict with
+	LOCK_S/LOCK_X. */
+	if (lock_table_compatible_fast_check(type, table)) {
+
+		return;
+	}
 
 	/* Check if waiting locks in the queue can now be granted: grant
 	locks if there are no conflicting locks ahead. */
@@ -6884,6 +6911,8 @@ lock_trx_release_locks(
 	trx_mutex_exit(trx);
 
 	lock_release(trx);
+
+	trx->lock.n_rec_locks = 0;
 
 	lock_mutex_exit();
 }

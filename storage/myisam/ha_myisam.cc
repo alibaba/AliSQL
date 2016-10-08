@@ -1675,7 +1675,7 @@ int ha_myisam::index_read_map(uchar *buf, const uchar *key,
     rows_read++;
 
     uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
-    if (inx >= 0 && inx < MAX_KEY)
+    if (inx < MAX_KEY)
       index_rows_read[inx]++;
   }
   return error;
@@ -1697,7 +1697,7 @@ int ha_myisam::index_read_idx_map(uchar *buf, uint index, const uchar *key,
     rows_read++;
 
     uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
-    if (inx >= 0 && inx < MAX_KEY)
+    if (inx < MAX_KEY)
       index_rows_read[inx]++;
   }
   return error;
@@ -1719,7 +1719,7 @@ int ha_myisam::index_read_last_map(uchar *buf, const uchar *key,
     rows_read++;
 
     uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
-    if (inx >= 0 && inx < MAX_KEY)
+    if (inx < MAX_KEY)
       index_rows_read[inx]++;
   }
   DBUG_RETURN(error);
@@ -1738,7 +1738,7 @@ int ha_myisam::index_next(uchar *buf)
     rows_read++;
 
     uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
-    if (inx >= 0 && inx < MAX_KEY)
+    if (inx < MAX_KEY)
       index_rows_read[inx]++;
   }
   return error;
@@ -1757,7 +1757,7 @@ int ha_myisam::index_prev(uchar *buf)
     rows_read++;
 
     uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
-    if (inx >= 0 && inx < MAX_KEY)
+    if (inx < MAX_KEY)
       index_rows_read[inx]++;
   }
   return error;
@@ -1776,7 +1776,7 @@ int ha_myisam::index_first(uchar *buf)
     rows_read++;
 
     uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
-    if (inx >= 0 && inx < MAX_KEY)
+    if (inx < MAX_KEY)
       index_rows_read[inx]++;
   }
   return error;
@@ -1795,7 +1795,7 @@ int ha_myisam::index_last(uchar *buf)
     rows_read++;
 
     uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
-    if (inx >= 0 && inx < MAX_KEY)
+    if (inx < MAX_KEY)
       index_rows_read[inx]++;
   }
   return error;
@@ -1820,7 +1820,7 @@ int ha_myisam::index_next_same(uchar *buf,
     rows_read++;
 
     uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
-    if (inx >= 0 && inx < MAX_KEY)
+    if (inx < MAX_KEY)
       index_rows_read[inx]++;
   }
   return error;

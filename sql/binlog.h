@@ -38,7 +38,7 @@ public:
     friend class Stage_manager;
   public:
     Mutex_queue()
-      : m_first(NULL), m_last(&m_first), m_last_thd(NULL), group_prepared_engine(NULL)
+      : m_first(NULL), m_last_thd(NULL), m_last(&m_first), group_prepared_engine(NULL)
     {
     }
 

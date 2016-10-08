@@ -1194,6 +1194,8 @@ struct dict_table_t{
 	UT_LIST_BASE_NODE_T(lock_t)
 			locks;	/*!< list of locks on the table; protected
 				by lock_sys->mutex */
+	long		lock_counter[LOCK_NUM];
+				/*!< lock counter array for each lock mode */
 #endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG

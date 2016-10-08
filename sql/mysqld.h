@@ -50,8 +50,15 @@ class engine_lsn_map {
 public:
   engine_lsn_map()
   {
-    /* ALways contain trx engine, at least InnoDB.*/
-    DBUG_ASSERT(global_trx_engine.size() != 0);
+    /* If all trx engines are skipped, ignore memory allocating. */
+    if (global_trx_engine.size() == 0)
+    {
+      m_count= 0;
+      m_empty= true;
+      maps= NULL;
+      return;
+    }
+
     m_count= global_trx_engine.size();
     m_empty= true;
 
@@ -79,7 +86,8 @@ public:
     maps[i]= NULL;
    }
 
-   my_free(maps);
+   if (m_count)
+     my_free(maps);
   }
 
   lsn_map* get_map_by_type(int db_type)

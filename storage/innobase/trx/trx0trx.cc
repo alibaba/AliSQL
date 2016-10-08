@@ -289,6 +289,8 @@ trx_create(void)
 	trx->lock.table_locks = ib_vector_create(
 		heap_alloc, sizeof(void**), 32);
 
+	trx->lock.n_rec_locks = 0;
+
 	return(trx);
 }
 
