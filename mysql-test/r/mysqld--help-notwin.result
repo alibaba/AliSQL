@@ -1014,6 +1014,15 @@ The following options may be given as the first argument:
  --transaction-read-only 
  Default transaction access mode. True if transactions are
  read-only.
+ --trx-changes-idle-timeout=# 
+ The number of seconds the server waits for not-readonly
+ idle transaction
+ --trx-idle-timeout=# 
+ The number of seconds the server waits for idle
+ transaction
+ --trx-readonly-idle-timeout=# 
+ The number of seconds the server waits for readonly idle
+ transaction
  --updatable-views-with-limit=name 
  YES = Don't issue an error message (warning only) if a
  VIEW without presence of a key of the underlying table is
@@ -1320,6 +1329,9 @@ transaction-alloc-block-size 8192
 transaction-isolation REPEATABLE-READ
 transaction-prealloc-size 4096
 transaction-read-only FALSE
+trx-changes-idle-timeout 0
+trx-idle-timeout 0
+trx-readonly-idle-timeout 0
 updatable-views-with-limit YES
 validate-user-plugins TRUE
 verbose TRUE

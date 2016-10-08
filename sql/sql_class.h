@@ -474,6 +474,9 @@ typedef struct system_variables
   ulong net_retry_count;
   ulong net_wait_timeout;
   ulong net_write_timeout;
+  ulong trx_idle_timeout;
+  ulong trx_readonly_idle_timeout;
+  ulong trx_changes_idle_timeout;
   ulong optimizer_prune_level;
   ulong optimizer_search_depth;
   ulong preload_buff_size;
@@ -1217,6 +1220,15 @@ private:
   */
   uchar       m_flags;
 };
+
+inline int ha_check_trx_read_only(Ha_trx_info *ha_list)
+{
+  Ha_trx_info *ha_info;
+  for (ha_info= ha_list; ha_info; ha_info= ha_info->next())
+    if (ha_info->is_trx_read_write())
+      return FALSE;
+  return TRUE;
+}
 
 struct st_savepoint {
   struct st_savepoint *prev;

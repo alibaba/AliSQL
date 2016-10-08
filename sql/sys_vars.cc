@@ -3137,6 +3137,27 @@ static Sys_var_ulong Sys_net_wait_timeout(
        VALID_RANGE(1, IF_WIN(INT_MAX32/1000, LONG_TIMEOUT)),
        DEFAULT(NET_WAIT_TIMEOUT), BLOCK_SIZE(1));
 
+static Sys_var_ulong Sys_trx_idle_timeout(
+       "trx_idle_timeout",
+       "The number of seconds the server waits for idle transaction",
+       SESSION_VAR(trx_idle_timeout), CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, IF_WIN(INT_MAX32/1000, LONG_TIMEOUT)),
+       DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_trx_readonly_idle_timeout(
+       "trx_readonly_idle_timeout",
+       "The number of seconds the server waits for readonly idle transaction",
+       SESSION_VAR(trx_readonly_idle_timeout), CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, IF_WIN(INT_MAX32/1000, LONG_TIMEOUT)),
+       DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_trx_changes_idle_timeout(
+       "trx_changes_idle_timeout",
+       "The number of seconds the server waits for not-readonly idle transaction",
+       SESSION_VAR(trx_changes_idle_timeout), CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(0, IF_WIN(INT_MAX32/1000, LONG_TIMEOUT)),
+       DEFAULT(0), BLOCK_SIZE(1));
+
 static Sys_var_plugin Sys_default_storage_engine(
        "default_storage_engine", "The default storage engine for new tables",
        SESSION_VAR(table_plugin), NO_CMD_LINE,

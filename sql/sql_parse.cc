@@ -927,7 +927,26 @@ bool do_command(THD *thd)
     the client, the connection is closed or "net_wait_timeout"
     number of seconds has passed.
   */
-  my_net_set_read_timeout(net, thd->variables.net_wait_timeout);
+  THD_TRANS *trans= &thd->transaction.all;
+  Ha_trx_info *ha_info= trans->ha_list;
+  bool is_trx_read_only= ha_check_trx_read_only(ha_info);
+  if (thd->in_active_multi_stmt_transaction())
+  {
+    if (thd->variables.trx_idle_timeout > 0)
+    {
+      my_net_set_read_timeout(net, thd->variables.trx_idle_timeout);
+    } else if ((thd->variables.trx_readonly_idle_timeout > 0) && is_trx_read_only)
+    {
+      my_net_set_read_timeout(net, thd->variables.trx_readonly_idle_timeout);
+    } else if ((thd->variables.trx_changes_idle_timeout > 0) && !is_trx_read_only)
+    {
+      my_net_set_read_timeout(net, thd->variables.trx_changes_idle_timeout);
+    } else {
+      my_net_set_read_timeout(net, thd->variables.net_wait_timeout);
+    }
+  } else {
+    my_net_set_read_timeout(net, thd->variables.net_wait_timeout);
+  }
 
   /*
     XXX: this code is here only to clear possible errors of init_connect. 
