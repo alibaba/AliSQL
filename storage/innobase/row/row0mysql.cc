@@ -1533,7 +1533,7 @@ run_again:
 	/* It may be that the current session has not yet started
 	its transaction, or it has been committed: */
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	err = lock_table(0, prebuilt->table, LOCK_AUTO_INC, thr);
 
@@ -1604,7 +1604,7 @@ run_again:
 	/* It may be that the current session has not yet started
 	its transaction, or it has been committed: */
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	if (table) {
 		err = lock_table(
@@ -1706,7 +1706,7 @@ row_insert_for_mysql(
 
 	row_mysql_delay_if_needed();
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	row_get_prebuilt_insert_row(prebuilt);
 	node = prebuilt->ins_node;
@@ -2101,7 +2101,7 @@ row_update_for_mysql(
 
 	row_mysql_delay_if_needed();
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	if (dict_table_is_referenced_by_foreign_key(table)) {
 		/* Share lock the data dictionary to prevent any
@@ -2596,7 +2596,7 @@ err_exit:
 		return(DB_ERROR);
 	}
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	/* The table name is prefixed with the database name and a '/'.
 	Certain table names starting with 'innodb_' have their special
@@ -2816,7 +2816,7 @@ row_create_index_for_mysql(
 	table = dict_table_open_on_name(table_name, TRUE, TRUE,
 					DICT_ERR_IGNORE_NONE);
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	for (i = 0; i < index->n_def; i++) {
 		/* Check that prefix_len and actual length
@@ -2934,7 +2934,7 @@ row_table_add_foreign_constraints(
 
 	trx->op_info = "adding foreign keys";
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 
@@ -3216,7 +3216,7 @@ row_discard_tablespace_begin(
 
 	trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	/* Serialize data dictionary operations with dictionary mutex:
 	this is to avoid deadlocks during data dictionary operations */
@@ -4926,7 +4926,7 @@ row_drop_database_for_mysql(
 
 	trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 loop:
 	row_mysql_lock_data_dictionary(trx);
 

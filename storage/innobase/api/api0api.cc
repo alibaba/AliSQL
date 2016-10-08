@@ -558,7 +558,7 @@ ib_trx_start(
 	trx->api_auto_commit = auto_commit;
 	trx->read_write = read_write;
 
-	trx_start_if_not_started(trx);
+	trx_start_if_not_started(trx, read_write);
 
 	trx->isolation_level = ib_trx_level;
 

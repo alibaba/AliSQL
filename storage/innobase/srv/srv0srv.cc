@@ -374,6 +374,8 @@ static ulint		srv_n_rows_read_old		= 0;
 UNIV_INTERN ulint	srv_truncated_status_writes	= 0;
 UNIV_INTERN ulint	srv_available_undo_logs         = 0;
 
+UNIV_INTERN my_bool	srv_read_view_cache		= TRUE;
+
 /* Ensure status variables are on separate cache lines */
 
 #define CACHE_LINE_SIZE 64

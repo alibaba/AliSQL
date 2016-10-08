@@ -688,7 +688,8 @@ row_vers_build_for_semi_consistent_read(
 		/* Because version_trx is a read-write transaction,
 		its state cannot change from or to NOT_STARTED while
 		we are holding the trx_sys->mutex.  It may change from
-		ACTIVE to PREPARED or COMMITTED. */
+		ACTIVE to PREPARED or COMMITTED. But let's tolerate this
+		potential contention. */
 		mutex_exit(&trx_sys->mutex);
 
 		if (!version_trx_descr) {

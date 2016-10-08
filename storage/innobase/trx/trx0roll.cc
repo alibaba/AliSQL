@@ -93,7 +93,7 @@ trx_rollback_to_savepoint_low(
 	if (savept != NULL) {
 		roll_node->partial = TRUE;
 		roll_node->savept = *savept;
-		assert_trx_in_list(trx);
+		check_trx_state(trx);
 	}  else {
 		assert_trx_nonlocking_or_in_list(trx);
 	}
@@ -149,7 +149,7 @@ trx_rollback_to_savepoint(
 {
 	ut_ad(!trx_mutex_own(trx));
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	trx_rollback_to_savepoint_low(trx, savept);
 
@@ -210,7 +210,7 @@ trx_rollback_for_mysql(
 		return(trx_rollback_for_mysql_low(trx));
 
 	case TRX_STATE_COMMITTED_IN_MEMORY:
-		assert_trx_in_list(trx);
+		check_trx_state(trx);
 		break;
 	}
 
@@ -453,7 +453,7 @@ trx_savepoint_for_mysql(
 {
 	trx_named_savept_t*	savep;
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, false);
 
 	savep = trx_savepoint_find(trx, savepoint_name);
 
@@ -591,7 +591,7 @@ trx_rollback_active(
 	fprintf(stderr,
 		"  InnoDB: Rolling back trx with id " TRX_ID_FMT ", %lu%s"
 		" rows to undo\n",
-		trx->id,
+		trx_get_id_for_print(trx),
 		(ulong) rows_to_undo, unit);
 
 	if (trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
@@ -653,7 +653,8 @@ trx_rollback_active(
 	}
 
 	ib_logf(IB_LOG_LEVEL_INFO,
-		"Rollback of trx with id " TRX_ID_FMT " completed", trx->id);
+		"Rollback of trx with id " TRX_ID_FMT " completed",
+		trx_get_id_for_print(trx));
 
 	mem_heap_free(heap);
 

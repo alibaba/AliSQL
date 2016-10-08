@@ -278,17 +278,6 @@ trx_rw_is_active(
 	trx_id_t	trx_id,		/*!< in: trx id of the transaction */
 	ibool*		corrupt);	/*!< in: NULL or pointer to a flag
 					that will be set if corrupt */
-#ifdef UNIV_DEBUG
-/****************************************************************//**
-Checks whether a trx is in one of rw_trx_list or ro_trx_list.
-@return	TRUE if is in */
-UNIV_INTERN
-ibool
-trx_in_trx_list(
-/*============*/
-	const trx_t*	in_trx)		/*!< in: transaction */
-	MY_ATTRIBUTE((nonnull, warn_unused_result));
-#endif /* UNIV_DEBUG */
 #if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
 /***********************************************************//**
 Assert that a transaction has been recovered.
@@ -662,24 +651,12 @@ struct trx_sys_t{
 					transactions are always on this list. */
 	char		pad4[64];	/*!< Ensure list base nodes do not
 					share cache line with other fields */
-	trx_list_t	ro_trx_list;	/*!< List of active and committed in
-					memory read-only transactions, sorted
-					on trx id, biggest first. NOTE:
-					The order for read-only transactions
-					is not necessary. We should exploit
-					this and increase concurrency during
-					add/remove. */
-	char		pad5[64];	/*!< Ensure list base nodes do not
-					share cache line with other fields */
 	trx_list_t	mysql_trx_list;	/*!< List of transactions created
-					for MySQL. All transactions on
-					ro_trx_list are on mysql_trx_list. The
-					rw_trx_list can contain system
-					transactions and recovered transactions
-					that will not be in the mysql_trx_list.
-					There can be active non-locking
-					auto-commit read only transactions that
-					are on this list but not on ro_trx_list.
+					for MySQL. All user transactions are
+					on mysql_trx_list. The rw_trx_list
+					can contain system transactions and
+					recoverd transactions that will not
+					be in the mysql_trx_list.
 					mysql_trx_list may additionally contain
 					transactions that have not yet been
 					started in InnoDB. */

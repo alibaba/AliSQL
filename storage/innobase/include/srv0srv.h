@@ -404,6 +404,8 @@ extern	ulint	srv_lock_table_size;
 extern ulint	srv_column_compressed;
 extern ulint	srv_column_decompressed;
 
+extern my_bool	srv_read_view_cache;
+
 #ifdef UNIV_DEBUG
 extern	ibool	srv_print_thread_releases;
 extern	ibool	srv_print_lock_waits;

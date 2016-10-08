@@ -125,42 +125,52 @@ trx_lists_init_at_db_start(void);
 /*============================*/
 
 #ifdef UNIV_DEBUG
-#define trx_start_if_not_started_xa(t)				\
+#define trx_start_if_not_started_xa(t, rw)			\
 	{							\
 	(t)->start_line = __LINE__;				\
 	(t)->start_file = __FILE__;				\
-	trx_start_if_not_started_xa_low((t));			\
+	trx_start_if_not_started_xa_low((t), (rw));		\
 	}
 #else
-#define trx_start_if_not_started_xa(t)				\
-	trx_start_if_not_started_xa_low((t))
+#define trx_start_if_not_started_xa(t, rw)			\
+	trx_start_if_not_started_xa_low((t), (rw))
 #endif /* UNIV_DEBUG */
 
 /*************************************************************//**
-Starts the transaction if it is not yet started. */
+Starts the transaction if it is not yet started.
+
+Note:
+read_write flag is not so strict for caller, it just affect perf.
+*/
 UNIV_INTERN
 void
 trx_start_if_not_started_xa_low(
 /*============================*/
-	trx_t*	trx);	/*!< in: transaction */
+	trx_t*	trx,		/*!< in: transaction */
+	bool	read_write);	/*!< in: true if read write transaction */
 /*************************************************************//**
-Starts the transaction if it is not yet started. */
+Starts the transaction if it is not yet started.
+
+Note:
+read_write flag is not so strict for caller, it just affect perf.
+*/
 UNIV_INTERN
 void
 trx_start_if_not_started_low(
 /*=========================*/
-	trx_t*	trx);	/*!< in: transaction */
+	trx_t*	trx,		/*!< in: transaction */
+	bool	read_write);	/*!< in: true if read write transaction */
 
 #ifdef UNIV_DEBUG
-#define trx_start_if_not_started(t)				\
+#define trx_start_if_not_started(t, rw)				\
 	{							\
 	(t)->start_line = __LINE__;				\
 	(t)->start_file = __FILE__;				\
-	trx_start_if_not_started_low((t));			\
+	trx_start_if_not_started_low((t), (rw));		\
 	}
 #else
-#define trx_start_if_not_started(t)				\
-	trx_start_if_not_started_low((t))
+#define trx_start_if_not_started(t, rw)				\
+	trx_start_if_not_started_low((t), (rw))
 #endif /* UNIV_DEBUG */
 
 /*************************************************************//**
@@ -372,8 +382,8 @@ trx_set_dict_operation(
 Determines if a transaction is in the given state.
 The caller must hold trx_sys->mutex, or it must be the thread
 that is serving a running transaction.
-A running transaction must be in trx_sys->ro_trx_list or trx_sys->rw_trx_list
-unless it is a non-locking autocommit read only transaction, which is only
+A running transaction must be in trx_sys->rw_trx_list
+unless it is a read only transaction, which is only
 in trx_sys->mysql_trx_list.
 @return	TRUE if trx->state == state */
 UNIV_INLINE
@@ -478,6 +488,32 @@ trx_release_descriptor(
 /*===================*/
 	trx_t* trx);	/*!< in: trx pointer */
 
+/***************************************************************//**
+Set the transaction as a read-write transaction if it is not already
+tagged as such.
+@param[in,out] trx Transaction that needs to be "upgraded" to RW from RO
+*/
+void
+trx_set_rw_mode(
+/*=============*/
+	trx_t*	trx);	/*!< in/out: transaction pointer */
+
+/*************************************************************//**
+Retrieves the transaction ID.
+In a given point in time, it is guaranteed that IDs of the running
+transactions are unique. The values returned by this function for
+readonly transactions may be reused, so a subsequent RO transaction
+may get the same ID as a RO transaction that existed in the past.
+The values returned by this function should be used for printing
+purposes only.
+@param[in] trx	transaction whose id to retrieve
+@return transaction id */
+UNIV_INLINE
+trx_id_t
+trx_get_id_for_print(
+/*=================*/
+	const trx_t*	trx);	/*!< in: transaction pointer */
+
 /*******************************************************************//**
 Transactions that aren't started by the MySQL server don't set
 the trx_t::mysql_thd field. For such transactions we set the lock
@@ -507,19 +543,8 @@ with an explicit check for the read-only status.
 ((t)->read_only && trx_is_autocommit_non_locking((t)))
 
 /*******************************************************************//**
-Assert that the transaction is in the trx_sys_t::rw_trx_list */
-#define assert_trx_in_rw_list(t) do {					\
-	ut_ad(!(t)->read_only);						\
-	assert_trx_in_list(t);						\
-} while (0)
-
-/*******************************************************************//**
-Assert that the transaction is either in trx_sys->ro_trx_list or
-trx_sys->rw_trx_list but not both and it cannot be an autocommit
-non-locking select */
-#define assert_trx_in_list(t) do {					\
-	ut_ad((t)->in_ro_trx_list == (t)->read_only);			\
-	ut_ad((t)->in_rw_trx_list == !(t)->read_only);			\
+Check transaction state */
+#define check_trx_state(t) do {						\
 	ut_ad(!trx_is_autocommit_non_locking((t)));			\
 	switch ((t)->state) {						\
 	case TRX_STATE_PREPARED:					\
@@ -533,10 +558,17 @@ non-locking select */
 	ut_error;							\
 } while (0)
 
+/*******************************************************************//**
+Assert that transaction is in the trx_sys_t::rw_trx_list */
+#define assert_trx_in_rw_list(t) do {					\
+	ut_ad((t)->in_rw_trx_list == !(!(t)->rseg));			\
+	check_trx_state(t);						\
+} while(0)
+
 #ifdef UNIV_DEBUG
 /*******************************************************************//**
 Assert that an autocommit non-locking select cannot be in the
-ro_trx_list nor the rw_trx_list and that it is a read-only transaction.
+the rw_trx_list and that it is a read-only transaction.
 The tranasction must be in the mysql_trx_list. */
 # define assert_trx_nonlocking_or_in_list(t)				\
 	do {								\
@@ -544,19 +576,18 @@ The tranasction must be in the mysql_trx_list. */
 			trx_state_t	t_state = (t)->state;		\
 			ut_ad((t)->read_only);				\
 			ut_ad(!(t)->is_recovered);			\
-			ut_ad(!(t)->in_ro_trx_list);			\
 			ut_ad(!(t)->in_rw_trx_list);			\
 			ut_ad((t)->in_mysql_trx_list);			\
 			ut_ad(t_state == TRX_STATE_NOT_STARTED		\
 			      || t_state == TRX_STATE_ACTIVE);		\
 		} else {						\
-			assert_trx_in_list(t);				\
+			check_trx_state(t);				\
 		}							\
 	} while (0)
 #else /* UNIV_DEBUG */
 /*******************************************************************//**
 Assert that an autocommit non-locking slect cannot be in the
-ro_trx_list nor the rw_trx_list and that it is a read-only transaction.
+the rw_trx_list and that it is a read-only transaction.
 The tranasction must be in the mysql_trx_list. */
 # define assert_trx_nonlocking_or_in_list(trx) ((void)0)
 #endif /* UNIV_DEBUG */
@@ -733,30 +764,26 @@ struct trx_t{
 	XA (2PC) transactions are always treated as non-autocommit.
 
 	Transitions to ACTIVE or NOT_STARTED occur when
-	!in_rw_trx_list and !in_ro_trx_list (no trx_sys->mutex needed).
+	!in_rw_trx_list (no trx_sys->mutex needed).
 
 	Autocommit non-locking read-only transactions move between states
-	without holding any mutex. They are !in_rw_trx_list, !in_ro_trx_list.
+	without holding any mutex. They are !in_rw_trx_list.
 
 	When a transaction is NOT_STARTED, it can be in_mysql_trx_list if
-	it is a user transaction. It cannot be in ro_trx_list or rw_trx_list.
+	it is a user transaction. It cannot be in rw_trx_list.
 
 	ACTIVE->PREPARED->COMMITTED is only possible when trx->in_rw_trx_list.
 	The transition ACTIVE->PREPARED is protected by trx_sys->mutex.
 
 	ACTIVE->COMMITTED is possible when the transaction is in
-	ro_trx_list or rw_trx_list.
+	rw_trx_list.
 
 	Transitions to COMMITTED are protected by both lock_sys->mutex
 	and trx->mutex.
 
 	NOTE: Some of these state change constraints are an overkill,
 	currently only required for a consistent view for printing stats.
-	This unnecessarily adds a huge cost for the general case.
-
-	NOTE: In the future we should add read only transactions to the
-	ro_trx_list the first time they try to acquire a lock ie. by default
-	we treat all read-only transactions as non-locking.  */
+	This unnecessarily adds a huge cost for the general case. */
 	trx_state_t	state;
 
 	trx_lock_t	lock;		/*!< Information about the transaction
@@ -895,16 +922,13 @@ struct trx_t{
 					in consistent read */
 	/*------------------------------*/
 	UT_LIST_NODE_T(trx_t)
-			trx_list;	/*!< list of transactions;
-					protected by trx_sys->mutex.
-					The same node is used for both
-					trx_sys_t::ro_trx_list and
-					trx_sys_t::rw_trx_list */
+			trx_list;	/*!< list of transactions used for
+					trx_sys_t::rw_trx_list;
+					protected by trx_sys->mutex.*/
 #ifdef UNIV_DEBUG
 	/** The following two fields are mutually exclusive. */
 	/* @{ */
 
-	ibool		in_ro_trx_list;	/*!< TRUE if in trx_sys->ro_trx_list */
 	ibool		in_rw_trx_list;	/*!< TRUE if in trx_sys->rw_trx_list */
 	/* @} */
 #endif /* UNIV_DEBUG */
@@ -1001,13 +1025,12 @@ struct trx_t{
 	/*------------------------------*/
 	ibool		read_only;	/*!< TRUE if transaction is flagged
 					as a READ-ONLY transaction.
-					if !auto_commit || will_lock > 0
-					then it will added to the list
-					trx_sys_t::ro_trx_list. A read only
+					if auto_commit && will_lock == 0
+					then it will be handled as a
+					AC-NL-RO-SELECT(Auto Commit Non-Locking
+					Read Only Select). A read only
 					transaction will not be assigned an
-					UNDO log. Non-locking auto-commit
-					read-only transaction will not be on
-					either list. */
+					UNDO log.*/
 	ibool		auto_commit;	/*!< TRUE if it is an autocommit */
 	ulint		will_lock;	/*!< Will acquire some locks. Increment
 					each time we determine that a lock will

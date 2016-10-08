@@ -175,6 +175,7 @@ trx_reserve_descriptor(
 	}
 
 	*descr = trx->id;
+	ut_ad(*descr > 0);
 
 	trx_sys->descr_n_used = n_used;
 }
@@ -344,7 +345,6 @@ trx_free_low(
 	trx_t*	trx)	/*!< in, own: trx object */
 {
 	ut_a(trx->magic_n == TRX_MAGIC_N);
-	ut_ad(!trx->in_ro_trx_list);
 	ut_ad(!trx->in_rw_trx_list);
 	ut_ad(!trx->in_mysql_trx_list);
 
@@ -515,7 +515,6 @@ trx_list_rw_insert_ordered(
 	ut_d(trx->start_line = __LINE__);
 
 	ut_a(srv_is_being_started);
-	ut_ad(!trx->in_ro_trx_list);
 	ut_ad(!trx->in_rw_trx_list);
 	ut_ad(trx->state != TRX_STATE_NOT_STARTED);
 	ut_ad(trx->is_recovered);
@@ -840,7 +839,6 @@ trx_lists_init_at_db_start(void)
 
 	ut_a(srv_is_being_started);
 
-	UT_LIST_INIT(trx_sys->ro_trx_list);
 	UT_LIST_INIT(trx_sys->rw_trx_list);
 	UT_LIST_INIT(trx_sys->trx_serial_list);
 
@@ -978,6 +976,22 @@ trx_assign_rseg(
 	ut_a(!trx_is_autocommit_non_locking(trx));
 
 	trx->rseg = trx_assign_rseg_low(srv_undo_logs, srv_undo_tablespaces);
+
+	if (trx->id == 0) {
+		mutex_enter(&trx_sys->mutex);
+		trx->id = trx_sys_get_new_trx_id();
+		trx_reserve_descriptor(trx);
+		UT_LIST_ADD_FIRST(trx_list, trx_sys->rw_trx_list, trx);
+		ut_d(trx->in_rw_trx_list = TRUE);
+		ut_ad(trx_sys_validate_trx_list());
+#ifdef UNIV_DEBUG
+		if (trx->id > trx_sys->rw_max_trx_id) {
+			trx_sys->rw_max_trx_id = trx->id;
+		}
+#endif /* UNIV_DEBUG */
+		mutex_exit(&trx_sys->mutex);
+
+	}
 }
 
 /****************************************************************//**
@@ -986,7 +1000,8 @@ static
 void
 trx_start_low(
 /*==========*/
-	trx_t*	trx)		/*!< in: transaction */
+	trx_t*	trx,		/*!< in: transaction */
+	bool	read_write)	/*!< in: true if read-write transaction */
 {
 	ut_ad(trx->rseg == NULL);
 
@@ -996,10 +1011,14 @@ trx_start_low(
 	ut_ad(trx_state_eq(trx, TRX_STATE_NOT_STARTED));
 	ut_ad(UT_LIST_GET_LEN(trx->lock.trx_locks) == 0);
 
-	/* Check whether it is an AUTOCOMMIT SELECT */
+	/* Check whether it is an AUTOCOMMIT SELECT.
+	TODO: I think we should rename thd_trx_is_auto_commit to
+	something like thd_trx_is_auto_commit_select, or people
+	may be confused if not check the real code. */
 	trx->auto_commit = (trx->api_trx && trx->api_auto_commit)
 			   || thd_trx_is_auto_commit(trx->mysql_thd);
 
+	/* Notice: we can execute DML with read only if this is a temporary table. */
 	trx->read_only =
 		(trx->api_trx && !trx->read_write)
 		|| (!trx->ddl && thd_trx_is_read_only(trx->mysql_thd))
@@ -1011,11 +1030,6 @@ trx_start_low(
 		trx->read_only = TRUE;
 	}
 
-	if (!trx->read_only) {
-		trx->rseg = trx_assign_rseg_low(
-			srv_undo_logs, srv_undo_tablespaces);
-	}
-
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
 
@@ -1024,50 +1038,55 @@ trx_start_low(
 	ut_a(ib_vector_is_empty(trx->autoinc_locks));
 	ut_a(ib_vector_is_empty(trx->lock.table_locks));
 
-	mutex_enter(&trx_sys->mutex);
+	/* We tend to over assert and that complicates the code somewhat.
+	e.g., the transaction state can be set earlier but we are forced to
+	set it under the protection of the trx_sys_t::mutex because some
+	trx list assertions are triggered unnecessarily. */
 
-	/* If this transaction came from trx_allocate_for_mysql(),
-	trx->in_mysql_trx_list would hold. In that case, the trx->state
-	change must be protected by the trx_sys->mutex, so that
-	lock_print_info_all_transactions() will have a consistent view. */
+	/* By default all transactions are in the read-only list unless they
+	are non-locking auto-commit read only transaction or background
+	(internal) transactions. Note: Transactions marked explicitly as
+	read only can write to temporary tables, we put those on the RW
+	list too. */
+	if (read_write
+	    ||(!trx->read_only
+	       && (trx->mysql_thd == 0 || trx->ddl))) {
 
-	trx->state = TRX_STATE_ACTIVE;
+		trx->rseg = trx_assign_rseg_low(srv_undo_logs,
+						srv_undo_tablespaces);
 
-	trx->id = trx_sys_get_new_trx_id();
+		mutex_enter(&trx_sys->mutex);
 
-	ut_ad(!trx->in_rw_trx_list);
-	ut_ad(!trx->in_ro_trx_list);
+		/* If this transaction came from trx_allocate_for_mysql(),
+		trx->in_mysql_trx_list would hold. In that case, the trx->state
+		change must be protected by the trx_sys->mutex, so that
+		lock_print_info_all_transactions() will have a consistent view. */
 
-	if (trx->read_only) {
+		trx->state = TRX_STATE_ACTIVE;
 
-		/* Note: The trx_sys_t::ro_trx_list doesn't really need to
-		be ordered, we should exploit this using a list type that
-		doesn't need a list wide lock to increase concurrency. */
+		trx->id = trx_sys_get_new_trx_id();
 
-		if (!trx_is_autocommit_non_locking(trx)) {
-			UT_LIST_ADD_FIRST(trx_list, trx_sys->ro_trx_list, trx);
-			ut_d(trx->in_ro_trx_list = TRUE);
-		}
-	} else {
+		UT_LIST_ADD_FIRST(trx_list, trx_sys->rw_trx_list, trx);
 
-		ut_ad(trx->rseg != NULL
+		trx_reserve_descriptor(trx);
+
+		ut_ad(trx->rseg != 0
+		      || srv_read_only_mode
 		      || srv_force_recovery >= SRV_FORCE_NO_TRX_UNDO);
 
-		ut_ad(!trx_is_autocommit_non_locking(trx));
-		UT_LIST_ADD_FIRST(trx_list, trx_sys->rw_trx_list, trx);
 		ut_d(trx->in_rw_trx_list = TRUE);
+		ut_ad(trx_sys_validate_trx_list());
+
 #ifdef UNIV_DEBUG
 		if (trx->id > trx_sys->rw_max_trx_id) {
 			trx_sys->rw_max_trx_id = trx->id;
 		}
 #endif /* UNIV_DEBUG */
-
-		trx_reserve_descriptor(trx);
+		mutex_exit(&trx_sys->mutex);
+	} else {
+		trx->id = 0;
+		trx->state = TRX_STATE_ACTIVE;
 	}
-
-	ut_ad(trx_sys_validate_trx_list());
-
-	mutex_exit(&trx_sys->mutex);
 
 	trx->start_time = ut_time();
 
@@ -1334,8 +1353,8 @@ trx_commit_in_memory(
 		ut_ad(trx->read_only);
 		ut_a(!trx->is_recovered);
 		ut_ad(trx->rseg == NULL);
-		ut_ad(!trx->in_ro_trx_list);
 		ut_ad(!trx->in_rw_trx_list);
+		ut_ad(trx->id == 0);
 
 		/* Note: We are asserting without holding the lock mutex. But
 		that is OK because this transaction is not waiting and cannot
@@ -1353,18 +1372,16 @@ trx_commit_in_memory(
 
 		ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE));
 
-		trx->state = TRX_STATE_NOT_STARTED;
-
 		read_view_remove(trx->global_read_view, false);
 
 		MONITOR_INC(MONITOR_TRX_NL_RO_COMMIT);
+
+		trx->state = TRX_STATE_NOT_STARTED;
 	} else {
+
 		lock_trx_release_locks(trx);
 
 		DEBUG_SYNC_C("after_in_seria_list");
-		mutex_enter(&trx_sys->mutex);
-		/* The following also removes trx from trx_serial_list */
-		trx_release_descriptor(trx);
 		ut_ad(trx_sys->descr_n_used <= UT_LIST_GET_LEN(trx_sys->rw_trx_list));
 
 		/* Remove the transaction from the list of active
@@ -1372,35 +1389,35 @@ trx_commit_in_memory(
 
 		ut_ad(trx_state_eq(trx, TRX_STATE_COMMITTED_IN_MEMORY));
 
-		assert_trx_in_list(trx);
-
-		if (trx->read_only) {
-			UT_LIST_REMOVE(trx_list, trx_sys->ro_trx_list, trx);
-			ut_d(trx->in_ro_trx_list = FALSE);
+		if (trx->id == 0) {
+			ut_ad(!trx->in_rw_trx_list);
+			ut_a(trx->rseg == 0);
+			read_view_remove(trx->global_read_view, false);
+			trx->state = TRX_STATE_NOT_STARTED;
 			MONITOR_INC(MONITOR_TRX_RO_COMMIT);
 		} else {
+			mutex_enter(&trx_sys->mutex);
+			/* The following also removes trx from trx_serial_list */
+			trx_release_descriptor(trx);
+
+			check_trx_state(trx);
+			ut_ad(trx->in_rw_trx_list);
 			UT_LIST_REMOVE(trx_list, trx_sys->rw_trx_list, trx);
 			ut_d(trx->in_rw_trx_list = FALSE);
 			ut_ad(trx_sys->descr_n_used <=
 			      UT_LIST_GET_LEN(trx_sys->rw_trx_list));
+
 			MONITOR_INC(MONITOR_TRX_RW_COMMIT);
+			read_view_remove(trx->global_read_view, true);
+			ut_ad(trx_sys_validate_trx_list());
+			/* If this transaction came from trx_allocate_for_mysql(),
+			trx->in_mysql_trx_list would hold. In that case, the
+			trx->state change must be protected by trx_sys->mutex, so that
+			lock_print_info_all_transactions() will have a consistent
+			view. */
+			trx->state = TRX_STATE_NOT_STARTED;
+			mutex_exit(&trx_sys->mutex);
 		}
-
-		/* If this transaction came from trx_allocate_for_mysql(),
-		trx->in_mysql_trx_list would hold. In that case, the
-		trx->state change must be protected by trx_sys->mutex, so that
-		lock_print_info_all_transactions() will have a consistent
-		view. */
-
-		trx->state = TRX_STATE_NOT_STARTED;
-
-		/* We already own the trx_sys_t::mutex, by doing it here we
-		avoid a potential context switch later. */
-		read_view_remove(trx->global_read_view, true);
-
-		ut_ad(trx_sys_validate_trx_list());
-
-		mutex_exit(&trx_sys->mutex);
 	}
 
 	if (trx->global_read_view != NULL) {
@@ -1485,14 +1502,14 @@ trx_commit_in_memory(
 	trx->will_lock = 0;
 	trx->read_only = FALSE;
 	trx->auto_commit = FALSE;
+	trx->id = 0;
 
-        if (trx->fts_trx) {
-                trx_finalize_for_fts(trx, not_rollback);
-        }
+	if (trx->fts_trx) {
+		trx_finalize_for_fts(trx, not_rollback);
+	}
 
 	ut_ad(trx->lock.wait_thr == NULL);
 	ut_ad(UT_LIST_GET_LEN(trx->lock.trx_locks) == 0);
-	ut_ad(!trx->in_ro_trx_list);
 	ut_ad(!trx->in_rw_trx_list);
 
 	trx->dict_operation = TRX_DICT_OP_NONE;
@@ -1635,7 +1652,6 @@ trx_cleanup_at_db_startup(
 	that it no longer is in the trx_list. Recovered transactions
 	are never placed in the mysql_trx_list. */
 	ut_ad(trx->is_recovered);
-	ut_ad(!trx->in_ro_trx_list);
 	ut_ad(!trx->in_rw_trx_list);
 	ut_ad(!trx->in_mysql_trx_list);
 }
@@ -1654,16 +1670,20 @@ trx_assign_read_view(
 	ut_ad(trx->state == TRX_STATE_ACTIVE);
 
 	if (trx->read_view != NULL) {
+		/* Update creator_trx_id for old readview */
+		if (trx->read_view->creator_trx_id == 0) {
+			trx->read_view->creator_trx_id = trx->id;
+		}
+
 		return(trx->read_view);
 	}
 
-	if (!trx->read_view) {
+	ut_ad(!trx->read_view);
 
-		trx->read_view = read_view_open_now(
-			trx->id, trx->prebuilt_view);
+	trx->read_view = read_view_open_now(
+		trx->id, trx->prebuilt_view);
 
-		trx->global_read_view = trx->read_view;
-	}
+	trx->global_read_view = trx->read_view;
 
 	return(trx->read_view);
 }
@@ -1683,7 +1703,7 @@ trx_commit_or_rollback_prepare(
 
 	switch (trx->state) {
 	case TRX_STATE_NOT_STARTED:
-		trx_start_low(trx);
+		trx_start_low(trx, true);
 		/* fall through */
 	case TRX_STATE_ACTIVE:
 	case TRX_STATE_PREPARED:
@@ -1808,7 +1828,7 @@ trx_commit_for_mysql(
 		ut_d(trx->start_file = __FILE__);
 		ut_d(trx->start_line = __LINE__);
 
-		trx_start_low(trx);
+		trx_start_low(trx, true);
 		/* fall through */
 	case TRX_STATE_ACTIVE:
 	case TRX_STATE_PREPARED:
@@ -1902,7 +1922,7 @@ trx_print_low(
 
 	ut_ad(mutex_own(&trx_sys->mutex));
 
-	fprintf(f, "TRANSACTION " TRX_ID_FMT, trx->id);
+	fprintf(f, "TRANSACTION " TRX_ID_FMT, trx_get_id_for_print(trx));
 
 	/* trx->state cannot change from or to NOT_STARTED while we
 	are holding the trx_sys->mutex. It may change from ACTIVE to
@@ -2066,7 +2086,7 @@ trx_assert_started(
 
 	/* Non-locking autocommits should not hold any locks and this
 	function is only called from the locking code. */
-	assert_trx_in_list(trx);
+	check_trx_state(trx);
 
 	/* trx->state can change from or to NOT_STARTED while we are holding
 	trx_sys->mutex for non-locking autocommit selects but not for other
@@ -2224,7 +2244,7 @@ trx_prepare_for_mysql(
 /*==================*/
 	trx_t*	trx)	/*!< in/out: trx handle */
 {
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, false);
 
 	trx->op_info = "preparing";
 
@@ -2279,7 +2299,7 @@ trx_recover_for_mysql(
 			fprintf(stderr,
 				"  InnoDB: Transaction " TRX_ID_FMT " in"
 				" prepared state after recovery\n",
-				trx->id);
+				trx_get_id_for_print(trx));
 
 			ut_print_timestamp(stderr);
 			fprintf(stderr,
@@ -2385,12 +2405,17 @@ trx_get_trx_by_xid(
 }
 
 /*************************************************************//**
-Starts the transaction if it is not yet started. */
+Starts the transaction if it is not yet started.
+
+Note:
+read_write flag is not so strict for caller, it just affect perf.
+*/
 UNIV_INTERN
 void
 trx_start_if_not_started_xa_low(
 /*============================*/
-	trx_t*	trx)	/*!< in: transaction */
+	trx_t*	trx,		/*!< in: transaction */
+	bool	read_write)	/*!< in: true if read write transaction */
 {
 	switch (trx->state) {
 	case TRX_STATE_NOT_STARTED:
@@ -2406,9 +2431,13 @@ trx_start_if_not_started_xa_low(
 		transaction, doesn't. */
 		trx->support_xa = thd_supports_xa(trx->mysql_thd);
 
-		trx_start_low(trx);
-		/* fall through */
+		trx_start_low(trx, read_write);
+		return;
 	case TRX_STATE_ACTIVE:
+		if (trx->id == 0 && read_write) {
+
+			trx_set_rw_mode(trx);
+		}
 		return;
 	case TRX_STATE_PREPARED:
 	case TRX_STATE_COMMITTED_IN_MEMORY:
@@ -2419,18 +2448,26 @@ trx_start_if_not_started_xa_low(
 }
 
 /*************************************************************//**
-Starts the transaction if it is not yet started. */
+Starts the transaction if it is not yet started.
+
+Note:
+read_write flag is not so strict for caller, it just affect perf.
+*/
 UNIV_INTERN
 void
 trx_start_if_not_started_low(
 /*=========================*/
-	trx_t*	trx)	/*!< in: transaction */
+	trx_t*	trx,		/*!< in: transaction */
+	bool	read_write)	/*!< in: true if read write transaction */
 {
 	switch (trx->state) {
 	case TRX_STATE_NOT_STARTED:
-		trx_start_low(trx);
-		/* fall through */
+		trx_start_low(trx, read_write);
+		return;
 	case TRX_STATE_ACTIVE:
+		if (read_write && trx->id == 0) {
+			trx_set_rw_mode(trx);
+		}
 		return;
 	case TRX_STATE_PREPARED:
 	case TRX_STATE_COMMITTED_IN_MEMORY:
@@ -2462,7 +2499,7 @@ trx_start_for_ddl_low(
 
 		trx->ddl = true;
 
-		trx_start_low(trx);
+		trx_start_low(trx, true);
 		return;
 
 	case TRX_STATE_ACTIVE:
@@ -2481,3 +2518,60 @@ trx_start_for_ddl_low(
 	ut_error;
 }
 
+/*************************************************************//**
+Set the transaction as a read-write transaction if it is not already
+tagged as such. Read-only transactions that are writing to temporary
+tables are assigned an ID and a rollback segment but are not added
+to the trx read-write list because their updates should not be visible
+to other transactions and therefore their changes can be ignored by
+by MVCC. */
+
+void
+trx_set_rw_mode(
+/*============*/
+	trx_t*		trx)		/*!< in/out: transaction that is RW */
+{
+	ut_ad(trx->rseg == 0);
+	ut_ad(!trx->in_rw_trx_list);
+	ut_ad(!trx_is_autocommit_non_locking(trx));
+
+	if (srv_force_recovery >= SRV_FORCE_NO_TRX_UNDO) {
+		return;
+	}
+
+	/* Function is promoting existing trx from ro mode to rw mode.
+	In this process it has acquired trx_sys->mutex as it plan to
+	move trx from ro list to rw list. If in future, some other thread
+	looks at this trx object while it is being promoted then ensure
+	that both threads are synced by acquiring trx->mutex to avoid decision
+	based on in-consistent view formed during promotion. */
+
+	trx->rseg = trx_assign_rseg_low(
+		srv_undo_logs, srv_undo_tablespaces);
+
+	ut_ad(trx->rseg != 0);
+
+	mutex_enter(&trx_sys->mutex);
+
+	ut_ad(trx->id == 0);
+	trx->id = trx_sys_get_new_trx_id();
+
+	/* Update the creator trx_id for already created read view,
+	 * so that we can see our own changes.*/
+	if (trx->read_view && trx->read_view->creator_trx_id != trx->id)
+		trx->read_view->creator_trx_id = trx->id;
+
+#ifdef UNIV_DEBUG
+	if (trx->id > trx_sys->rw_max_trx_id) {
+		trx_sys->rw_max_trx_id = trx->id;
+	}
+#endif /* UNIV_DEBUG */
+
+	UT_LIST_ADD_FIRST(trx_list, trx_sys->rw_trx_list, trx);
+
+	ut_d(trx->in_rw_trx_list = TRUE);
+
+	trx_reserve_descriptor(trx);
+
+	mutex_exit(&trx_sys->mutex);
+}

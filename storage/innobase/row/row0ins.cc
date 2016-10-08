@@ -3231,7 +3231,7 @@ row_ins_step(
 
 	trx = thr_get_trx(thr);
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	node = static_cast<ins_node_t*>(thr->run_node);
 

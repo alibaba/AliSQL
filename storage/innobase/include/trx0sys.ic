@@ -553,7 +553,7 @@ trx_find_descriptor(
 	ut_ad(descriptors != trx_sys->descriptors ||
 	      mutex_own(&trx_sys->mutex));
 
-	if (UNIV_UNLIKELY(n_descr == 0)) {
+	if (UNIV_UNLIKELY(n_descr == 0 || trx_id == 0)) {
 
 		return(NULL);
 	}

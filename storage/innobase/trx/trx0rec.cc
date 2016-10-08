@@ -1240,6 +1240,9 @@ trx_undo_report_row_operation(
 		ut_ad(!srv_read_only_mode);
 		/* MySQL should block writes to non-temporary tables. */
 		ut_a(DICT_TF2_FLAG_IS_SET(index->table, DICT_TF2_TEMPORARY));
+		ut_ad(trx->rseg != 0);
+		/* Rseg should be assigned, but to avoid uncovered logic,
+		let's assign a new rollback segment here. */
 		if (trx->rseg == 0) {
 			trx_assign_rseg(trx);
 		}

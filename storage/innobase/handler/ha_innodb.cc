@@ -2936,7 +2936,7 @@ ha_innobase::init_table_handle_for_HANDLER(void)
 
 	/* If the transaction is not started yet, start it */
 
-	trx_start_if_not_started_xa(prebuilt->trx);
+	trx_start_if_not_started_xa(prebuilt->trx, false);
 
 	/* Assign a read view if the transaction does not have it yet */
 
@@ -3638,7 +3638,7 @@ innobase_start_trx_and_assign_read_view(
 
 	/* If the transaction is not started yet, start it */
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, false);
 
 	/* Assign a read view if the transaction does not have it yet.
 	Do this only if transaction is using REPEATABLE READ isolation
@@ -10072,7 +10072,7 @@ ha_innobase::discard_or_import_tablespace(
 		DBUG_RETURN(HA_ERR_TABLE_NEEDS_UPGRADE);
 	}
 
-	trx_start_if_not_started(prebuilt->trx);
+	trx_start_if_not_started(prebuilt->trx, true);
 
 	/* In case MySQL calls this in the middle of a SELECT query, release
 	possible adaptive hash latch to avoid deadlocks of threads. */
@@ -10425,7 +10425,7 @@ innobase_rename_table(
 
 	DEBUG_SYNC_C("innodb_rename_table_ready");
 
-	trx_start_if_not_started(trx);
+	trx_start_if_not_started(trx, true);
 
 	/* Serialize data dictionary operations with dictionary mutex:
 	no deadlocks can occur then in these operations. */
@@ -10466,7 +10466,7 @@ innobase_rename_table(
 				normalize_table_name_low(
 					par_case_name, from, FALSE);
 #endif
-				trx_start_if_not_started(trx);
+				trx_start_if_not_started(trx, true);
 				error = row_rename_table_for_mysql(
 					par_case_name, norm_to, trx, TRUE);
 			}
@@ -16784,6 +16784,11 @@ static MYSQL_SYSVAR_BOOL(rds_column_zip_mem_use_heap, column_zip_mem_use_heap,
   "if true. Currently this opition is only used for testing purposes",
   NULL, NULL, FALSE);
 
+static MYSQL_SYSVAR_BOOL(rds_read_view_cache, srv_read_view_cache,
+  PLUGIN_VAR_OPCMDARG,
+  "cache readview for read only transaction if possible",
+  NULL, NULL, TRUE);
+
 static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(additional_mem_pool_size),
   MYSQL_SYSVAR(api_trx_level),
@@ -16951,6 +16956,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(rds_column_zlib_wrap),
   MYSQL_SYSVAR(rds_column_zip_threshold),
   MYSQL_SYSVAR(rds_column_zip_mem_use_heap),
+  MYSQL_SYSVAR(rds_read_view_cache),
   NULL
 };
 

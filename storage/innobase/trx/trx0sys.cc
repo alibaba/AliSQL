@@ -132,41 +132,6 @@ updated via SET GLOBAL innodb_file_format_max = 'x' or when we open
 or create a table. */
 static	file_format_t	file_format_max;
 
-#ifdef UNIV_DEBUG
-/****************************************************************//**
-Checks whether a trx is in one of rw_trx_list or ro_trx_list.
-@return	TRUE if is in */
-UNIV_INTERN
-ibool
-trx_in_trx_list(
-/*============*/
-	const trx_t*	in_trx)	/*!< in: transaction */
-{
-	const trx_t*	trx;
-	trx_list_t*	trx_list;
-
-	/* Non-locking autocommits should not hold any locks. */
-	assert_trx_in_list(in_trx);
-
-	trx_list = in_trx->read_only
-		? &trx_sys->ro_trx_list : &trx_sys->rw_trx_list;
-
-	ut_ad(mutex_own(&trx_sys->mutex));
-
-	ut_ad(trx_assert_started(in_trx));
-
-	for (trx = UT_LIST_GET_FIRST(*trx_list);
-	     trx != NULL && trx != in_trx;
-	     trx = UT_LIST_GET_NEXT(trx_list, trx)) {
-
-		assert_trx_in_list(trx);
-		ut_ad(trx->read_only == (trx_list == &trx_sys->ro_trx_list));
-	}
-
-	return(trx != NULL);
-}
-#endif /* UNIV_DEBUG */
-
 /*****************************************************************//**
 Writes the value of max_trx_id to the file based trx system header. */
 UNIV_INTERN
@@ -549,8 +514,6 @@ trx_sys_init_at_db_start(void)
 	bootstrap mode. */
 
 	mutex_enter(&trx_sys->mutex);
-
-	ut_a(UT_LIST_GET_LEN(trx_sys->ro_trx_list) == 0);
 
 	if (UT_LIST_GET_LEN(trx_sys->rw_trx_list) > 0) {
 		const trx_t*	trx;
@@ -1196,8 +1159,6 @@ trx_sys_close(void)
 	/* Free the double write data structures. */
 	buf_dblwr_free();
 
-	ut_a(UT_LIST_GET_LEN(trx_sys->ro_trx_list) == 0);
-
 	/* Only prepared transactions may be left in the system. Free them. */
 	ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == trx_sys->n_prepared_trx);
 
@@ -1229,7 +1190,6 @@ trx_sys_close(void)
 	}
 
 	ut_a(UT_LIST_GET_LEN(trx_sys->view_list) == 0);
-	ut_a(UT_LIST_GET_LEN(trx_sys->ro_trx_list) == 0);
 	ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
 	ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
 
@@ -1274,23 +1234,20 @@ static
 ibool
 trx_sys_validate_trx_list_low(
 /*===========================*/
-	trx_list_t*	trx_list)	/*!< in: &trx_sys->ro_trx_list
-					or &trx_sys->rw_trx_list */
+	trx_list_t*	trx_list)	/*!< in: &trx_sys->rw_trx_list */
 {
 	const trx_t*	trx;
 	const trx_t*	prev_trx = NULL;
 
 	ut_ad(mutex_own(&trx_sys->mutex));
 
-	ut_ad(trx_list == &trx_sys->ro_trx_list
-	      || trx_list == &trx_sys->rw_trx_list);
+	ut_ad(trx_list == &trx_sys->rw_trx_list);
 
 	for (trx = UT_LIST_GET_FIRST(*trx_list);
 	     trx != NULL;
 	     prev_trx = trx, trx = UT_LIST_GET_NEXT(trx_list, prev_trx)) {
 
-		assert_trx_in_list(trx);
-		ut_ad(trx->read_only == (trx_list == &trx_sys->ro_trx_list));
+		check_trx_state(trx);
 
 		ut_a(prev_trx == NULL || prev_trx->id > trx->id);
 	}
@@ -1299,7 +1256,7 @@ trx_sys_validate_trx_list_low(
 }
 
 /*************************************************************//**
-Validate the trx_sys_t::ro_trx_list and trx_sys_t::rw_trx_list.
+Validate the trx_sys_t::rw_trx_list.
 @return TRUE if lists are valid. */
 UNIV_INTERN
 ibool
@@ -1308,7 +1265,6 @@ trx_sys_validate_trx_list(void)
 {
 	ut_ad(mutex_own(&trx_sys->mutex));
 
-	ut_a(trx_sys_validate_trx_list_low(&trx_sys->ro_trx_list));
 	ut_a(trx_sys_validate_trx_list_low(&trx_sys->rw_trx_list));
 
 	return(TRUE);

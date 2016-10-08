@@ -210,6 +210,7 @@ read_view_create_low(
 	}
 
 	view->n_descr = n;
+	view->cached = false;
 
 	return(view);
 }
@@ -243,6 +244,7 @@ read_view_clone(
 
 	clone->descriptors = old_descriptors;
 	clone->max_descr = old_max_descr;
+	clone->cached = false;
 
 	if (view->n_descr) {
 		memcpy(clone->descriptors, view->descriptors,
@@ -294,15 +296,23 @@ read_view_open_now_low(
 /*===================*/
 	trx_id_t	cr_trx_id,	/*!< in: trx_id of creating
 					transaction, or 0 used in purge */
-	read_view_t*&	view)		/*!< in/out: pre-allocated view array or
+	read_view_t*&	view,		/*!< in/out: pre-allocated view array or
 					NULL if a new one needs to be created */
+	bool		is_purge)	/*!< in: flag to identify if purge
+					thread or not */
 {
 	trx_id_t*	descr;
 	ulint		i;
 
 	ut_ad(mutex_own(&trx_sys->mutex));
 
+	if (view && view->cached) {
+		read_view_remove(view, true);
+	}
+
 	view = read_view_create_low(trx_sys->descr_n_used, view);
+
+	ut_ad(!view->cached);
 
 	view->undo_no = 0;
 	view->type = VIEW_NORMAL;
@@ -321,6 +331,7 @@ read_view_open_now_low(
 		ut_ad(trx_sys->descr_n_used > 0);
 		ut_ad(view->n_descr > 0);
 
+		/* trx_id belong to current trx should be excluded. */
 		view->n_descr--;
 		i = descr - trx_sys->descriptors;
 	} else {
@@ -363,7 +374,7 @@ read_view_open_now_low(
 	}
 
 	/* Purge views are not added to the view list. */
-	if (cr_trx_id > 0) {
+	if (!is_purge > 0) {
 		read_view_add(view);
 	}
 
@@ -383,9 +394,23 @@ read_view_open_now(
 	read_view_t*&	view)		/*!< in/out: pre-allocated view array or
 					NULL if a new one needs to be created */
 {
+	/* Check if we can use the cached read view. */
+	if (view && view->cached
+	    && (cr_trx_id == 0) /* this is a read only transaction */
+	    && view->n_descr == 0) { /* no rw transaction when it's created  */
+		/* TODO: this can be optimized further. */
+		view->cached = false;
+
+		if (view->low_limit_id == trx_sys_get_max_trx_id()) {
+			return view;
+		} else {
+			view->cached = true;
+		}
+	}
+
 	mutex_enter(&trx_sys->mutex);
 
-	view = read_view_open_now_low(cr_trx_id, view);
+	view = read_view_open_now_low(cr_trx_id, view, false);
 
 	mutex_exit(&trx_sys->mutex);
 
@@ -418,9 +443,14 @@ read_view_purge_open(
 
 	oldest_view = UT_LIST_GET_LAST(trx_sys->view_list);
 
+	while (oldest_view && oldest_view->cached) {
+		/* skip the read view that's marked cached. */
+		oldest_view = UT_LIST_GET_PREV(view_list, oldest_view);
+	}
+
 	if (oldest_view == NULL) {
 
-		view = read_view_open_now_low(0, prebuilt_view);
+		view = read_view_open_now_low(0, prebuilt_view, true);
 
 		mutex_exit(&trx_sys->mutex);
 
@@ -435,45 +465,50 @@ read_view_purge_open(
 
 	mutex_exit(&trx_sys->mutex);
 
-	ut_a(oldest_view->creator_trx_id > 0);
 	creator_trx_id = oldest_view->creator_trx_id;
 
-	view = read_view_create_low(oldest_view->n_descr + 1, prebuilt_view);
+	if (creator_trx_id == 0) {
+		view = read_view_create_low(oldest_view->n_descr, prebuilt_view);
+		memcpy(view->descriptors,
+		       oldest_view->descriptors,
+		       oldest_view->n_descr * sizeof(*oldest_view->descriptors));
+	} else {
+		view = read_view_create_low(oldest_view->n_descr + 1, prebuilt_view);
 
-	/* Add the creator transaction id in the descriptors array in the
-	correct slot. */
-	for (i = 0; i < oldest_view->n_descr; ++i) {
-		trx_id_t	id;
+		/* Add the creator transaction id in the descriptors array in the
+		 correct slot. */
+		for (i = 0; i < oldest_view->n_descr; ++i) {
+			trx_id_t	id;
 
-		id = oldest_view->descriptors[i - insert_done];
+			id = oldest_view->descriptors[i - insert_done];
 
-		if (insert_done == 0 && creator_trx_id < id) {
-			id = creator_trx_id;
-			insert_done = 1;
+			if (insert_done == 0 && creator_trx_id < id) {
+				id = creator_trx_id;
+				insert_done = 1;
+			}
+
+			view->descriptors[i] = id;
 		}
 
-		view->descriptors[i] = id;
+		if (insert_done == 0) {
+			view->descriptors[i] = creator_trx_id;
+		} else {
+			ut_ad(i > 0);
+			view->descriptors[i] = oldest_view->descriptors[i - 1];
+		}
 	}
-
-	if (insert_done == 0) {
-		view->descriptors[i] = creator_trx_id;
-	} else {
-		ut_ad(i > 0);
-		view->descriptors[i] = oldest_view->descriptors[i - 1];
-	}
-
-	view->creator_trx_id = 0;
 
 	view->low_limit_no = oldest_view->low_limit_no;
 	view->low_limit_id = oldest_view->low_limit_id;
+	view->up_limit_id = oldest_view->up_limit_id;
+	view->creator_trx_id = 0;
 
 	if (view->n_descr > 0) {
-		/* The first active transaction has the smallest id: */
-
-		view->up_limit_id = view->descriptors[0];
-	} else {
-		view->up_limit_id = oldest_view->up_limit_id;
+		view->up_limit_id = min(view->up_limit_id, view->descriptors[0]);
 	}
+
+	ut_a(view->up_limit_id <= view->low_limit_id);
+	ut_ad(!view->cached);
 
 	return(view);
 }
@@ -489,7 +524,17 @@ read_view_close_for_mysql(
 {
 	ut_a(trx->global_read_view);
 
-	read_view_remove(trx->global_read_view, false);
+	if (trx->id == 0
+	    && trx->global_read_view
+	    && trx->global_read_view->n_descr == 0) { /* TODO: this can be optimized. */
+		/* Let's cache the read view if this is a read-only
+		transaction. */
+		read_view_remove(trx->global_read_view, false);
+	} else {
+		mutex_enter(&trx_sys->mutex);
+		read_view_remove(trx->global_read_view, true);
+		mutex_exit(&trx_sys->mutex);
+	}
 
 	trx->read_view = NULL;
 	trx->global_read_view = NULL;
@@ -547,6 +592,12 @@ read_view_free(
 		return;
 	}
 
+	if (view->cached) {
+		mutex_enter(&trx_sys->mutex);
+		read_view_remove(view, true);
+		mutex_exit(&trx_sys->mutex);
+	}
+
 	os_atomic_decrement_lint(&srv_read_views_memory,
 				 sizeof(read_view_t) +
 				 view->max_descr * sizeof(trx_id_t));
@@ -594,7 +645,7 @@ read_cursor_view_create_for_mysql(
 	mutex_enter(&trx_sys->mutex);
 
 	curview->read_view = read_view_open_now_low(
-		UINT64_UNDEFINED, curview->read_view);
+		UINT64_UNDEFINED, curview->read_view, false);
 
 	view = curview->read_view;
 	view->undo_no = cr_trx->undo_no;
@@ -624,7 +675,10 @@ read_cursor_view_close_for_mysql(
 	belong to this transaction */
 	trx->n_mysql_tables_in_use += curview->n_mysql_tables_in_use;
 
-	read_view_remove(curview->read_view, false);
+	mutex_enter(&trx_sys->mutex);
+	read_view_remove(curview->read_view, true);
+	mutex_exit(&trx_sys->mutex);
+
 	read_view_free(curview->read_view);
 
 	trx->read_view = trx->global_read_view;

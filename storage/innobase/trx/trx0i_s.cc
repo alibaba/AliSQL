@@ -425,7 +425,6 @@ i_s_locks_row_validate(
 /*===================*/
 	const i_s_locks_row_t*	row)	/*!< in: row to validate */
 {
-	ut_ad(row->lock_trx_id != 0);
 	ut_ad(row->lock_mode != NULL);
 	ut_ad(row->lock_type != NULL);
 	ut_ad(row->lock_table != NULL);
@@ -478,7 +477,7 @@ fill_trx_row(
 
 	ut_ad(lock_mutex_own());
 
-	row->trx_id = trx->id;
+	row->trx_id = trx_get_id_for_print(trx);
 	row->trx_started = (ib_time_t) trx->start_time;
 	row->trx_state = trx_get_que_state_str(trx);
 	row->requested_lock_row = requested_lock_row;
@@ -1281,17 +1280,14 @@ void
 fetch_data_into_cache_low(
 /*======================*/
 	trx_i_s_cache_t*	cache,		/*!< in/out: cache */
-	ibool			only_ac_nl,	/*!< in: only select non-locking
-						autocommit transactions */
+	bool			read_write,	/*!< in: only read-write
+						transactions */
 	trx_list_t*		trx_list)	/*!< in: trx list */
 {
 	const trx_t*		trx;
+	bool			rw_trx_list = (trx_list == &trx_sys->rw_trx_list);
 
-	ut_ad(trx_list == &trx_sys->rw_trx_list
-	      || trx_list == &trx_sys->ro_trx_list
-	      || trx_list == &trx_sys->mysql_trx_list);
-
-	ut_ad(only_ac_nl == (trx_list == &trx_sys->mysql_trx_list));
+	ut_ad(rw_trx_list || trx_list == &trx_sys->mysql_trx_list);
 
 	/* Iterate over the transaction list and add each one
 	to innodb_trx's cache. We also add all locks that are relevant
@@ -1301,26 +1297,24 @@ fetch_data_into_cache_low(
 	for (trx = UT_LIST_GET_FIRST(*trx_list);
 	     trx != NULL;
 	     trx =
-	     (trx_list == &trx_sys->mysql_trx_list
-	      ? UT_LIST_GET_NEXT(mysql_trx_list, trx)
-	      : UT_LIST_GET_NEXT(trx_list, trx))) {
+	     (rw_trx_list
+	      ? UT_LIST_GET_NEXT(trx_list, trx)
+	      : UT_LIST_GET_NEXT(mysql_trx_list, trx))) {
 
 		i_s_trx_row_t*		trx_row;
 		i_s_locks_row_t*	requested_lock_row;
 
+		/* Note: Read only transactions that modify temporary
+		tables have a transaction ID */
 		if (trx->state == TRX_STATE_NOT_STARTED
-		    || (only_ac_nl && !trx_is_autocommit_non_locking(trx))) {
+		    || (!rw_trx_list && trx->id > 0 && !trx->read_only)) {
 
 			continue;
 		}
 
 		assert_trx_nonlocking_or_in_list(trx);
 
-		ut_ad(trx->in_ro_trx_list
-		      == (trx_list == &trx_sys->ro_trx_list));
-
-		ut_ad(trx->in_rw_trx_list
-		      == (trx_list == &trx_sys->rw_trx_list));
+		ut_ad(trx->in_rw_trx_list == rw_trx_list);
 
 		if (!add_trx_relevant_locks_to_cache(cache, trx,
 						     &requested_lock_row)) {
@@ -1329,9 +1323,9 @@ fetch_data_into_cache_low(
 			return;
 		}
 
-		trx_row = (i_s_trx_row_t*)
-			table_cache_create_empty_row(&cache->innodb_trx,
-						     cache);
+		trx_row = reinterpret_cast<i_s_trx_row_t*>(
+			table_cache_create_empty_row(
+				&cache->innodb_trx, cache));
 
 		/* memory could not be allocated */
 		if (trx_row == NULL) {
@@ -1364,12 +1358,12 @@ fetch_data_into_cache(
 
 	trx_i_s_cache_clear(cache);
 
-	fetch_data_into_cache_low(cache, FALSE, &trx_sys->rw_trx_list);
-	fetch_data_into_cache_low(cache, FALSE, &trx_sys->ro_trx_list);
+	/* Capture the state of the read-write transactions. This includes
+	internal transactions too. They are not on mysql_trx_list. */
+	fetch_data_into_cache_low(cache, true, &trx_sys->rw_trx_list);
 
-	/* Only select autocommit non-locking selects because they can
-	only be on the MySQL transaction list (TRUE). */
-	fetch_data_into_cache_low(cache, TRUE, &trx_sys->mysql_trx_list);
+	/* Capture the state of the read-only active transactions */
+	fetch_data_into_cache_low(cache, false, &trx_sys->mysql_trx_list);
 
 	cache->is_truncated = FALSE;
 }

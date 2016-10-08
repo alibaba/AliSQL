@@ -173,6 +173,8 @@ struct read_view_t{
 	trx_id_t	creator_trx_id;
 				/*!< trx id of creating transaction, or
 				0 used in purge */
+	bool		cached;	/*!< identify if read view of a finished
+				statement is cached in read view list. */
 	UT_LIST_NODE_T(read_view_t) view_list;
 				/*!< List of read views in trx_sys */
 };

@@ -310,7 +310,7 @@ dict_stats_exec_sql(
 
 	if (trx == NULL) {
 		trx = trx_allocate_for_background();
-		trx_start_if_not_started(trx);
+		trx_start_if_not_started(trx, true);
 		trx_started = true;
 	}
 
@@ -2444,7 +2444,7 @@ dict_stats_save(
 	}
 
 	trx_t*	trx = trx_allocate_for_background();
-	trx_start_if_not_started(trx);
+	trx_start_if_not_started(trx, true);
 
 	dict_index_t*	index;
 	index_map_t	indexes;
@@ -2929,7 +2929,7 @@ dict_stats_fetch_from_ps(
 
 	trx->isolation_level = TRX_ISO_READ_UNCOMMITTED;
 
-	trx_start_if_not_started(trx);
+	trx_start_if_not_started(trx, true);
 
 	dict_fs2utf8(table->name, db_utf8, sizeof(db_utf8),
 		     table_utf8, sizeof(table_utf8));

@@ -2061,7 +2061,7 @@ row_sel_step(
 		/* It may be that the current session has not yet started
 		its transaction, or it has been committed: */
 
-		trx_start_if_not_started_xa(thr_get_trx(thr));
+		trx_start_if_not_started_xa(thr_get_trx(thr), false);
 
 		plan_reset_cursor(sel_node_get_nth_plan(node, 0));
 
@@ -4033,7 +4033,11 @@ release_search_latch:
 	      || prebuilt->select_lock_type != LOCK_NONE
 	      || trx->read_view);
 
-	trx_start_if_not_started(trx);
+	/* Start a read only transaction if this is a SELECT statement or
+	innodb_read_only mode is set, else start a read-write transaction. */
+	trx_start_if_not_started(trx, ((trx->mysql_thd
+					&& thd_is_select(trx->mysql_thd))
+				       || srv_read_only_mode) ? false : true);
 
 	if (trx->isolation_level <= TRX_ISO_READ_COMMITTED
 	    && prebuilt->select_lock_type != LOCK_NONE
@@ -5211,15 +5215,21 @@ row_search_check_if_query_cache_permitted(
 
 	/* Start the transaction if it is not started yet */
 
-	trx_start_if_not_started(trx);
+	trx_start_if_not_started(trx, false);
 
 	/* If there are locks on the table or some trx has invalidated the
-	cache up to our trx id, then ret = FALSE.
-	We do not check what type locks there are on the table, though only
-	IX type locks actually would require ret = FALSE. */
+	cache before this transaction started then this transaction cannot
+	read/write from/to the cache.
+
+	If a read view has not been created for the transaction then it doesn't
+	really matter what this transaction sees. If a read views was created
+	then the view low_limit_id is the max trx id that this transaction
+	saw at the time of the read view creation. */
 
 	if (lock_table_get_n_locks(table) == 0
-	    && trx->id >= table->query_cache_inv_trx_id) {
+	    && ((trx->id != 0 && trx->id >= table->query_cache_inv_trx_id)
+		|| !trx->read_view
+		|| trx->read_view->low_limit_id >= table->query_cache_inv_trx_id)) {
 
 		ret = TRUE;
 

@@ -3565,6 +3565,7 @@ row_merge_is_index_usable(
 	return(!dict_index_is_corrupted(index)
 	       && (dict_table_is_temporary(index->table)
 		   || !trx->read_view
+		   || index->trx_id == 0
 		   || read_view_sees_trx_id(trx->read_view, index->trx_id)));
 }
 
@@ -3652,7 +3653,7 @@ row_merge_build_indexes(
 		DBUG_RETURN(DB_OUT_OF_MEMORY);
 	}
 
-	trx_start_if_not_started_xa(trx);
+	trx_start_if_not_started_xa(trx, true);
 
 	merge_files = static_cast<merge_file_t*>(
 		mem_alloc(n_indexes * sizeof *merge_files));
