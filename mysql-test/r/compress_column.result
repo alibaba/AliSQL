@@ -1,7 +1,7 @@
 drop table if exists t1,t2,t3,t4,t5,t6,t7,t8,t9;
 create table t1 (a int column_format compressed) CHARACTER SET gbk engine=innodb;
 Warnings:
-Warning	1887	Can not define column 'a' in compressed format, silently change column_format to default
+Warning	1888	Can not define column 'a' in compressed format, silently change column_format to default
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (

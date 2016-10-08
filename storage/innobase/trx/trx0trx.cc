@@ -470,7 +470,9 @@ trx_free_prepared(
 	/* Undo trx_resurrect_table_locks(). */
 	UT_LIST_INIT(trx->lock.trx_locks);
 
+	mutex_enter(&trx_sys->mutex);
 	trx_release_descriptor(trx);
+	mutex_exit(&trx_sys->mutex);
 
 	trx_free_low(trx);
 }
