@@ -747,13 +747,18 @@ ulint
 fil_space_get_n_reserved_extents(
 /*=============================*/
 	ulint	id);		/*!< in: space id */
+
+#define fil_io(type, sync, space_id, zip_size, block_offset, \
+               byte_offset, len, buf, message) \
+        _fil_io(type, sync, space_id, zip_size, block_offset, \
+                byte_offset, len, buf, message, false)
 /********************************************************************//**
 Reads or writes data. This operation is asynchronous (aio).
 @return DB_SUCCESS, or DB_TABLESPACE_DELETED if we are trying to do
 i/o on a tablespace which does not exist */
 UNIV_INTERN
 dberr_t
-fil_io(
+_fil_io(
 /*===*/
 	ulint	type,		/*!< in: OS_FILE_READ or OS_FILE_WRITE,
 				ORed to OS_FILE_LOG, if a log i/o
@@ -778,8 +783,14 @@ fil_io(
 	void*	buf,		/*!< in/out: buffer where to store read data
 				or from where to write; in aio this must be
 				appropriately aligned */
-	void*	message)	/*!< in: message for aio handler if non-sync
+	void*	message,	/*!< in: message for aio handler if non-sync
 				aio used, else ignored */
+	ibool   should_buffer)
+				/*!< in: Whether to buffer an aio request.
+				AIO read ahead uses this. If you plan to
+				use this parameter, make sure you remember
+				to call os_aio_linux_dispatch_read_array_submit
+				when you are ready to commit all your requests.*/
 	MY_ATTRIBUTE((nonnull(8)));
 /**********************************************************************//**
 Waits for an aio operation to complete. This function is used to write the

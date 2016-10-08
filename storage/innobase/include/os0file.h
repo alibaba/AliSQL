@@ -311,9 +311,9 @@ The wrapper functions have the prefix of "innodb_". */
 	pfs_os_file_close_func(file, __FILE__, __LINE__)
 
 # define os_aio(type, mode, name, file, buf, offset,			\
-		n, message1, message2)					\
+		n, message1, message2, should_buffer)			\
 	pfs_os_aio_func(type, mode, name, file, buf, offset,		\
-			n, message1, message2, __FILE__, __LINE__)
+			n, message1, message2, __FILE__, __LINE__, should_buffer)
 
 # define os_file_read(file, buf, offset, n)				\
 	pfs_os_file_read_func(file, buf, offset, n, __FILE__, __LINE__)
@@ -354,9 +354,9 @@ to original un-instrumented file I/O APIs */
 
 # define os_file_close(file)	os_file_close_func(file)
 
-# define os_aio(type, mode, name, file, buf, offset, n, message1, message2) \
+# define os_aio(type, mode, name, file, buf, offset, n, message1, message2, should_buffer) \
 	os_aio_func(type, mode, name, file, buf, offset, n,		\
-		    message1, message2)
+		    message1, message2, should_buffer)
 
 # define os_file_read(file, buf, offset, n)	\
 	os_file_read_func(file, buf, offset, n)
@@ -759,7 +759,13 @@ pfs_os_aio_func(
 				aio operation); ignored if mode is
                                 OS_AIO_SYNC */
 	const char*	src_file,/*!< in: file name where func invoked */
-	ulint		src_line);/*!< in: line where the func invoked */
+	ulint		src_line,/*!< in: line where the func invoked */
+	ibool		should_buffer);
+				/*!< in: Whether to buffer an aio request.
+				AIO read ahead uses this. If you plan to
+				use this parameter, make sure you remember
+				to call os_aio_linux_dispatch_read_array_submit
+				when you are ready to commit all your requests.*/
 /*******************************************************************//**
 NOTE! Please use the corresponding macro os_file_write(), not directly
 this function!
@@ -1118,10 +1124,16 @@ os_aio_func(
 				(can be used to identify a completed
 				aio operation); ignored if mode is
 				OS_AIO_SYNC */
-	void*		message2);/*!< in: message for the aio handler
+	void*		message2,/*!< in: message for the aio handler
 				(can be used to identify a completed
 				aio operation); ignored if mode is
 				OS_AIO_SYNC */
+	ibool		should_buffer);
+				/*!< in: Whether to buffer an aio request.
+				AIO read ahead uses this. If you plan to
+				use this parameter, make sure you remember
+				to call os_aio_linux_dispatch_read_array_submit
+				when you are ready to commit all your requests.*/
 /************************************************************************//**
 Wakes up all async i/o threads so that they know to exit themselves in
 shutdown. */
@@ -1285,6 +1297,11 @@ os_aio_linux_handle(
 				parameters are valid and can be used to
 				restart the operation. */
 	ulint*	type);		/*!< out: OS_FILE_WRITE or ..._READ */
+/*******************************************************************//**
+Submit buffered AIO requests on the given segment to the kernel. */
+UNIV_INTERN
+void
+os_aio_linux_dispatch_read_array_submit();
 #endif /* LINUX_NATIVE_AIO */
 
 #ifndef UNIV_NONINL

@@ -1486,6 +1486,7 @@ srv_export_innodb_status(void)
 			(ulint) (max_trx_id - up_limit_id);
 	}
 #endif /* UNIV_DEBUG */
+	export_vars.innodb_buffered_aio_submitted = srv_stats.n_aio_submitted;
 
 	mutex_exit(&srv_innodb_monitor_mutex);
 }
