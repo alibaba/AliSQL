@@ -2041,6 +2041,7 @@ public:
   uint   command;
   const char *user,*host,*db,*proc_info,*state_info;
   CSET_STRING query_string;
+  long long memory_used, query_memory_used;
 };
 
 // For sorting by thread_id.
@@ -2100,6 +2101,15 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
   field->maybe_null=1;
   field_list.push_back(field=new Item_empty_string("Info",max_query_length));
   field->maybe_null=1;
+  if (verbose)
+  {
+    field_list.push_back(field= new Item_return_int("Memory_used",
+                                                    MY_INT64_NUM_DECIMAL_DIGITS,
+                                                    MYSQL_TYPE_LONGLONG));
+    field_list.push_back(field= new Item_return_int("Memory_used_by_query",
+                                                    MY_INT64_NUM_DECIMAL_DIGITS,
+                                                    MYSQL_TYPE_LONGLONG));
+  }
   if (protocol->send_result_set_metadata(&field_list,
                             Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     DBUG_VOID_RETURN;
@@ -2150,6 +2160,8 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
                                       tmp_sctx->get_host()->length() ?
                                       tmp_sctx->get_host()->ptr() : "");
         thd_info->command=(int) tmp->get_command();
+        thd_info->memory_used= tmp->status_var.memory_used;
+        thd_info->query_memory_used= tmp->status_var.query_memory_used;
         DBUG_EXECUTE_IF("processlist_acquiring_dump_threads_LOCK_thd_data",
                         {
                          if (thd_info->command == COM_BINLOG_DUMP ||
@@ -2206,6 +2218,13 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
     protocol->store(thd_info->state_info, system_charset_info);
     protocol->store(thd_info->query_string.str(),
                     thd_info->query_string.charset());
+    if (verbose)
+    {
+      protocol->store(thd_info->memory_used >0 ?
+                      thd_info->memory_used : 0);
+      protocol->store(thd_info->query_memory_used >0 ?
+                      thd_info->query_memory_used : 0);
+    }
     if (protocol->write())
       break; /* purecov: inspected */
   }

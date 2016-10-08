@@ -148,6 +148,18 @@ typedef struct my_aio_result {
 #define GETDATE_SHORT_DATE	2
 #define GETDATE_HHMMSSTIME	4
 #define GETDATE_GMT		8
+
+	/* Thread Memory Usage */
+#if defined(__APPLE__)
+#define _msize(p) malloc_size(p)
+#elif !defined(_WIN32)
+#define _msize(p) malloc_usable_size(p)
+#endif
+
+typedef void (*THD_MALLOC_SIZE_CB) (size_t size, int flag, MEM_ROOT *root);
+extern void set_thd_mem_size_cb(THD_MALLOC_SIZE_CB func);
+extern void set_thd_query_size_cb(THD_MALLOC_SIZE_CB func);
+
 #define GETDATE_FIXEDLENGTH	16
 
 	/* defines when allocating data */

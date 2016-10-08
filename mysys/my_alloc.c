@@ -21,6 +21,18 @@
 #undef EXTRA_DEBUG
 #define EXTRA_DEBUG
 
+static THD_MALLOC_SIZE_CB query_size_cb_func= NULL;
+
+void set_thd_query_size_cb(THD_MALLOC_SIZE_CB func)
+{
+  query_size_cb_func= func;
+}
+
+static void update_query_size(MEM_ROOT *root, size_t length, int flag)
+{
+  if (query_size_cb_func)
+    query_size_cb_func(length, flag, root);
+}
 
 /*
   Initialize memory root
@@ -66,6 +78,7 @@ void init_alloc_root(MEM_ROOT *mem_root, size_t block_size,
       mem_root->free->size= pre_alloc_size+ALIGN_SIZE(sizeof(USED_MEM));
       mem_root->free->left= pre_alloc_size;
       mem_root->free->next= 0;
+      update_query_size(mem_root, mem_root->free->size, 0);
     }
   }
 #endif
@@ -176,6 +189,7 @@ void *alloc_root(MEM_ROOT *mem_root, size_t length)
       (*mem_root->error_handler)();
     DBUG_RETURN((uchar*) 0);			/* purecov: inspected */
   }
+  update_query_size(mem_root, length, 1);
   next->next= mem_root->used;
   next->size= length;
   mem_root->used= next;
@@ -227,6 +241,7 @@ void *alloc_root(MEM_ROOT *mem_root, size_t length)
 	(*mem_root->error_handler)();
       DBUG_RETURN((void*) 0);                      /* purecov: inspected */
     }
+    update_query_size(mem_root, length, 1);
     mem_root->block_num++;
     next->next= *prev;
     next->size= get_size;
@@ -352,6 +367,7 @@ static inline void mark_blocks_free(MEM_ROOT* root)
 void free_root(MEM_ROOT *root, myf MyFlags)
 {
   reg1 USED_MEM *next,*old;
+  ulonglong mem_size= 0;
   DBUG_ENTER("free_root");
   DBUG_PRINT("enter",("root: 0x%lx  flags: %u", (long) root, (uint) MyFlags));
 
@@ -390,7 +406,9 @@ void free_root(MEM_ROOT *root, myf MyFlags)
     root->free->left=root->pre_alloc->size-ALIGN_SIZE(sizeof(USED_MEM));
     TRASH_MEM(root->pre_alloc);
     root->free->next=0;
+    mem_size= root->pre_alloc->size;
   }
+  update_query_size(root, mem_size, 0);
   root->block_num= 4;
   root->first_block_usage= 0;
   DBUG_VOID_RETURN;

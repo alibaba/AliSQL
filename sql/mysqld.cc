@@ -752,7 +752,7 @@ pthread_attr_t connection_attrib;
 mysql_mutex_t LOCK_server_started;
 mysql_cond_t COND_server_started;
 
-int mysqld_server_started= 0;
+int mysqld_server_started= 0, mysqld_server_initialized= 0;
 
 File_parser_dummy_hook file_parser_dummy_hook;
 
@@ -3590,6 +3590,55 @@ SHOW_VAR com_status_vars[]= {
   {NullS, NullS, SHOW_LONG}
 };
 
+/* Thread Memory Used */
+extern "C" {
+/*
+ Callback Function for memory allocation.
+ flag = -1 mean malloc/free
+ flag = 0 mean MEM mem_root
+ flag = 1 mean EXTEND mem_root
+*/
+
+void my_malloc_size_cb_func(size_t size, int flag, MEM_ROOT *root)
+{
+  THD *thd= current_thd;
+
+  if (flag == -1)
+  {
+    if (mysqld_server_initialized || thd)
+    {
+      /*
+       THD may not be set if we are called from my_net_init() before THD
+       thread has started.
+       However, this should never happen, so better to assert and
+       fix this.
+      */
+      //DBUG_ASSERT(thd);
+
+      if (thd)
+      {
+         DBUG_PRINT("info", ("memory_used: %lld  size: %ld",
+                             (longlong) thd->status_var.memory_used, size));
+         thd->status_var.memory_used+= size;
+      }
+
+    }
+    int64 volatile *volatile ptr= &global_status_var.memory_used;
+    my_atomic_add64(ptr, size);
+  }
+  else
+  {
+    if (!thd || !thd->mem_root || root != thd->mem_root)
+      return;
+    if (flag == 0)
+      thd->status_var.query_memory_used= size;
+    else if (flag == 1)
+      thd->status_var.query_memory_used+= size;
+  }
+
+}
+}
+
 LEX_CSTRING sql_statement_names[(uint) SQLCOM_END + 1];
 
 void init_sql_statement_names()
@@ -3720,6 +3769,10 @@ rpl_make_log_name(const char *opt,
 int init_common_variables()
 {
   umask(((~my_umask) & 0666));
+
+  // Set memory size callback function
+  set_thd_mem_size_cb(my_malloc_size_cb_func);
+  set_thd_query_size_cb(my_malloc_size_cb_func);
   connection_errors_select= 0;
   connection_errors_accept= 0;
   connection_errors_tcpwrap= 0;
@@ -5233,6 +5286,8 @@ int mysqld_main(int argc, char **argv)
   */
   my_progname= argv[0];
 
+  mysqld_server_started= mysqld_server_initialized= 0;
+
 #ifndef _WIN32
   // For windows, my_init() is called from the win specific mysqld_main
   if (my_init())                 // init my_sys library & pthreads
@@ -5669,6 +5724,9 @@ int mysqld_main(int argc, char **argv)
     if (read_init_file(opt_init_file))
       unireg_abort(1);
   }
+
+  /* It is now safe to use thread specific memory */
+  mysqld_server_initialized= 1;
 
   create_shutdown_thread();
   start_handle_manager();
@@ -7978,6 +8036,8 @@ SHOW_VAR status_vars[]= {
   {"Last_query_cost",          (char*) offsetof(STATUS_VAR, last_query_cost), SHOW_DOUBLE_STATUS},
   {"Last_query_partial_plans", (char*) offsetof(STATUS_VAR, last_query_partial_plans), SHOW_LONGLONG_STATUS},
   {"Max_used_connections",     (char*) &max_used_connections,  SHOW_LONG},
+  {"Memory_used",              (char*) offsetof(STATUS_VAR, memory_used), SHOW_LONGLONG_STATUS},
+  {"Query_memory_used",        (char*) offsetof(STATUS_VAR, query_memory_used), SHOW_LONGLONG_STATUS},
   {"Not_flushed_delayed_rows", (char*) &delayed_rows_in_use,    SHOW_LONG_NOFLUSH},
   {"Open_files",               (char*) &my_file_opened,         SHOW_LONG_NOFLUSH},
   {"Open_streams",             (char*) &my_stream_opened,       SHOW_LONG_NOFLUSH},

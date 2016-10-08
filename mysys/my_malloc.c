@@ -16,7 +16,22 @@
 #include "mysys_priv.h"
 #include "mysys_err.h"
 #include <m_string.h>
+#include <malloc.h>
 
+/* Thread Memory Used */
+static THD_MALLOC_SIZE_CB malloc_size_cb_func= NULL;
+
+void set_thd_mem_size_cb(THD_MALLOC_SIZE_CB func)
+{
+  malloc_size_cb_func= func;
+}
+
+
+static void update_malloc_size(size_t size)
+{
+  if (malloc_size_cb_func)
+    malloc_size_cb_func(size, -1, NULL);
+}
 /**
   Allocate a sized block of memory.
 
@@ -60,8 +75,17 @@ void *my_malloc(size_t size, myf my_flags)
     if (my_flags & MY_FAE)
       exit(1);
   }
-  else if (my_flags & MY_ZEROFILL)
-    memset(point, 0, size);
+  else
+  {
+    update_malloc_size(_msize(point));
+    DBUG_EXECUTE_IF("simulate_out_of_memory",
+                    {
+                      my_free(point);
+                      point= NULL;
+                    });
+    if (my_flags & MY_ZEROFILL)
+      memset(point, 0, size);
+  }
   DBUG_PRINT("exit",("ptr: %p", point));
   DBUG_RETURN(point);
 }
@@ -80,6 +104,7 @@ void *my_malloc(size_t size, myf my_flags)
 void *my_realloc(void *oldpoint, size_t size, myf my_flags)
 {
   void *point;
+  size_t old_size;
   DBUG_ENTER("my_realloc");
   DBUG_PRINT("my",("ptr: %p  size: %lu  my_flags: %d", oldpoint,
                    (ulong) size, my_flags));
@@ -93,6 +118,8 @@ void *my_realloc(void *oldpoint, size_t size, myf my_flags)
                   goto end;);
   if (!oldpoint && (my_flags & MY_ALLOW_ZERO_PTR))
     DBUG_RETURN(my_malloc(size, my_flags));
+
+  old_size= _msize(oldpoint);
 #ifdef USE_HALLOC
   point= malloc(size);
 #else
@@ -113,10 +140,12 @@ end:
                size);
     DBUG_EXECUTE_IF("simulate_out_of_memory",
                     DBUG_SET("-d,simulate_out_of_memory"););
+    old_size+= 0;
   }
 #ifdef USE_HALLOC
   else
   {
+    update_malloc_size(_msize(point) - (longlong)old_size);
     memcpy(point,oldpoint,size);
     free(oldpoint);
   }
@@ -137,7 +166,11 @@ void my_free(void *ptr)
 {
   DBUG_ENTER("my_free");
   DBUG_PRINT("my",("ptr: %p", ptr));
-  free(ptr);
+  if (ptr)
+  {
+    update_malloc_size(- _msize(ptr));
+    free(ptr);
+  }
   DBUG_VOID_RETURN;
 }
 

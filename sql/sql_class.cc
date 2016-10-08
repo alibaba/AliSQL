@@ -933,6 +933,8 @@ THD::THD(bool enable_plugins)
   ulong tmp;
 
   mdl_context.init(this);
+  status_var.memory_used= 0;
+  status_var.query_memory_used= 0;
   /*
     Pass nominal parameters to init_alloc_root only to ensure that
     the destructor works OK in case of an error. The main_mem_root

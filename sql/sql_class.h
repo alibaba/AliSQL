@@ -639,6 +639,11 @@ typedef struct system_status_var
     automatically by add_to_status()/add_diff_to_status().
   */
   double last_query_cost;
+
+  /* Thread Memory Used */
+  volatile int64 memory_used;
+  volatile int64 query_memory_used;
+
   ulonglong last_query_partial_plans;
 } STATUS_VAR;
 
@@ -649,6 +654,7 @@ typedef struct system_status_var
 */
 
 #define last_system_status_var questions
+#define last_cleared_system_status_var memory_used
 
 
 /**
