@@ -908,6 +908,17 @@ struct TABLE_SHARE
                             uint deadlock_weight);
   /** Release resources and free memory occupied by the table share. */
   void destroy();
+
+  /* add by rds for table_stats and index_stats */
+  ulonglong rows_read;
+  ulonglong rows_changed;
+  ulonglong rows_deleted;
+  ulonglong rows_inserted;
+  ulonglong rows_updated;
+  ulonglong rows_changed_x_indexes;
+  ulonglong index_rows_read[MAX_KEY];
+  void add_table_stats();
+  void add_index_stats();
 };
 
 

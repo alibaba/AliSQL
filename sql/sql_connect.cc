@@ -58,6 +58,12 @@ using std::max;
 #define MIN_HANDSHAKE_SIZE      6
 #endif /* HAVE_OPENSSL && !EMBEDDED_LIBRARY */
 
+HASH global_table_stats;
+extern mysql_mutex_t LOCK_global_table_stats;
+
+HASH global_index_stats;
+extern mysql_mutex_t LOCK_global_index_stats;
+
 /*
   Get structure for logging connection data for the current user
 */
@@ -997,5 +1003,61 @@ end_thread:
     thd= current_thd;
     thd->thread_stack= (char*) &thd;
   }
+}
+
+extern "C" uchar *get_key_table_stats(TABLE_STATS *table_stats, size_t *length,
+                                     my_bool not_used __attribute__((unused)))
+{
+  *length= strlen(table_stats->table);
+  return (uchar*) table_stats->table;
+}
+
+extern "C" void free_table_stats(TABLE_STATS* table_stats)
+{
+  my_free((char*) table_stats);
+}
+
+void init_global_table_stats(void)
+{
+  if (my_hash_init(&global_table_stats, system_charset_info, max_connections,
+                0, 0, (my_hash_get_key)get_key_table_stats,
+                (my_hash_free_key)free_table_stats, 0)) {
+    sql_print_error("Initializing global_table_stats failed.");
+    exit(1);
+  }
+}
+
+extern "C" uchar *get_key_index_stats(INDEX_STATS *index_stats, size_t *length,
+                                     my_bool not_used __attribute__((unused)))
+{
+  *length= strlen(index_stats->index);
+  return (uchar*) index_stats->index;
+}
+
+extern "C" void free_index_stats(INDEX_STATS* index_stats)
+{
+  my_free((char*) index_stats);
+}
+
+void init_global_index_stats(void)
+{
+  if (my_hash_init(&global_index_stats, system_charset_info, max_connections,
+                0, 0, (my_hash_get_key)get_key_index_stats,
+                (my_hash_free_key)free_index_stats, 0))
+  {
+    sql_print_error("Initializing global_index_stats failed.");
+    exit(1);
+  }
+}
+
+
+void free_global_table_stats(void)
+{
+  my_hash_free(&global_table_stats);
+}
+
+void free_global_index_stats(void)
+{
+  my_hash_free(&global_index_stats);
 }
 #endif /* EMBEDDED_LIBRARY */

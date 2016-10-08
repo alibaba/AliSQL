@@ -1444,7 +1444,7 @@ thd_lock_wait_timeout(
 	returns the global value of the session variable. */
 	lock_wait_timeout = THDVAR(thd, lock_wait_timeout);
 	if (thd == NULL)
-		return(lock_wait_timeout); //no cover line
+		return(lock_wait_timeout);
 	real_time = thd_wait_time(thd);
 	if (real_time == ULONG_MAX)
 		real_time = lock_wait_timeout;
@@ -6837,6 +6837,12 @@ no_commit:
 	error = row_insert_for_mysql((byte*) record, prebuilt);
 	DEBUG_SYNC(user_thd, "ib_after_row_insert");
 
+	if (error == DB_SUCCESS)
+	{
+		rows_changed++;
+		rows_inserted++;
+	}
+
 	/* Handle duplicate key errors */
 	if (auto_inc_used) {
 		ulonglong	auto_inc;
@@ -7304,6 +7310,12 @@ ha_innobase::update_row(
 	MySQL in the UPDATE statement, which can be different from the
 	value used in the INSERT statement.*/
 
+	if (error == DB_SUCCESS)
+	{
+		rows_changed++;
+		rows_updated++;
+	}
+
 	if (error == DB_SUCCESS
 	    && table->next_number_field
 	    && new_row == table->record[0]
@@ -7397,6 +7409,12 @@ ha_innobase::delete_row(
 	innobase_srv_conc_enter_innodb(trx);
 
 	error = row_update_for_mysql((byte*) record, prebuilt);
+
+	if (error == DB_SUCCESS)
+	{
+		rows_changed++;
+		rows_deleted++;
+	}
 
 	innobase_srv_conc_exit_innodb(trx);
 
@@ -7731,6 +7749,9 @@ ha_innobase::index_read(
 	case DB_SUCCESS:
 		error = 0;
 		table->status = 0;
+		rows_read++;
+		if (active_index < MAX_KEY)
+			index_rows_read[active_index]++;
 		srv_stats.n_rows_read.add((size_t) prebuilt->trx->id, 1);
 		break;
 	case DB_RECORD_NOT_FOUND:
@@ -7983,6 +8004,9 @@ ha_innobase::general_fetch(
 	case DB_SUCCESS:
 		error = 0;
 		table->status = 0;
+		rows_read++;
+		if (active_index < MAX_KEY)
+			index_rows_read[active_index]++;
 		srv_stats.n_rows_read.add((size_t) prebuilt->trx->id, 1);
 		break;
 	case DB_RECORD_NOT_FOUND:

@@ -719,6 +719,8 @@ The following options may be given as the first argument:
  --range-alloc-block-size=# 
  Allocation block size for storing ranges during
  optimization
+ --rds-indexstat     Control INDEX_STATISTICS
+ --rds-tablestat     Control TABLE_STATISTICS
  --rds-threads-running-ctl-mode=name 
  Control which statements will be affected by threads
  running control, Values: SELECTS(default), ALL.
@@ -1259,6 +1261,8 @@ query-cache-type OFF
 query-cache-wlock-invalidate FALSE
 query-prealloc-size 8192
 range-alloc-block-size 4096
+rds-indexstat FALSE
+rds-tablestat FALSE
 rds-threads-running-ctl-mode SELECTS
 rds-threads-running-high-watermark 151
 read-buffer-size 131072

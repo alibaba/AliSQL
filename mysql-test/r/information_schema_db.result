@@ -36,6 +36,8 @@ TABLE_PRIVILEGES
 TRIGGERS
 USER_PRIVILEGES
 VIEWS
+TABLE_STATISTICS
+INDEX_STATISTICS
 show tables from INFORMATION_SCHEMA like 'T%';
 Tables_in_information_schema (T%)
 TABLES
@@ -43,6 +45,7 @@ TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
 TRIGGERS
+TABLE_STATISTICS
 create database `inf%`;
 create database mbase;
 use `inf%`;

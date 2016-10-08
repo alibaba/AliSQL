@@ -1875,6 +1875,13 @@ public:
   bool implicit_emptied;                /* Can be !=0 only if HEAP */
   const Item *pushed_cond;
 
+  ulonglong rows_read;
+  ulonglong rows_changed;
+  ulonglong rows_deleted;
+  ulonglong rows_inserted;
+  ulonglong rows_updated;
+  ulonglong index_rows_read[MAX_KEY];
+
   Item *pushed_idx_cond;
   uint pushed_idx_cond_keyno;  /* The index which the above condition is for */
 
@@ -1958,6 +1965,14 @@ public:
       DBUG_PRINT("info",
                  ("handler created F_UNLCK %d F_RDLCK %d F_WRLCK %d",
                   F_UNLCK, F_RDLCK, F_WRLCK));
+
+      rows_read= 0;
+      rows_changed= 0;
+      rows_deleted= 0;
+      rows_updated= 0;
+      rows_inserted= 0;
+      for (unsigned i= 0; i < MAX_KEY; i++)
+        index_rows_read[i]= 0;
     }
   virtual ~handler(void)
   {
@@ -2557,6 +2572,9 @@ public:
   virtual uint checksum() const { return 0; }
   virtual bool is_crashed() const  { return 0; }
   virtual bool auto_repair() const { return 0; }
+
+  void update_table_stats();
+  void update_index_stats();
 
 
 #define CHF_CREATE_FLAG 0

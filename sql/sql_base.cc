@@ -348,6 +348,9 @@ static void table_def_free_entry(TABLE_SHARE *share)
     *share->prev= share->next;
     share->next->prev= share->prev;
   }
+  share->add_table_stats();
+  share->add_index_stats();
+
   free_table_share(share);
   DBUG_VOID_RETURN;
 }
@@ -1506,6 +1509,12 @@ void close_thread_table(THD *thd, TABLE **table_ptr)
 
   tc->lock();
 
+  if (table->file)
+  {
+    table->file->update_table_stats();
+    table->file->update_index_stats();
+  }
+
   if (table->s->has_old_version() || table->needs_reopen() ||
       table_def_shutdown_in_progress)
   {
@@ -2224,6 +2233,14 @@ void close_temporary(TABLE *table, bool free_share, bool delete_table)
   DBUG_ENTER("close_temporary");
   DBUG_PRINT("tmptable", ("closing table: '%s'.'%s'",
                           table->s->db.str, table->s->table_name.str));
+
+  table->file->update_table_stats();
+  table->file->update_index_stats();
+  if (free_share)
+  {
+    table->s->add_table_stats();
+    table->s->add_index_stats();
+  }
 
   free_io_cache(table);
   closefrm(table, 0);

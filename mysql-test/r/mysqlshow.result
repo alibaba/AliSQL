@@ -110,6 +110,8 @@ Database: information_schema
 | TRIGGERS                              |
 | USER_PRIVILEGES                       |
 | VIEWS                                 |
+| TABLE_STATISTICS                      |
+| INDEX_STATISTICS                      |
 | INNODB_CMP_RESET                      |
 | INNODB_RSEG                           |
 | INNODB_SYS_DATAFILES                  |
@@ -175,6 +177,8 @@ Database: INFORMATION_SCHEMA
 | TRIGGERS                              |
 | USER_PRIVILEGES                       |
 | VIEWS                                 |
+| TABLE_STATISTICS                      |
+| INDEX_STATISTICS                      |
 | INNODB_CMP_RESET                      |
 | INNODB_RSEG                           |
 | INNODB_SYS_DATAFILES                  |

@@ -24,6 +24,7 @@
 #include "mysql/psi/mysql_file.h"          /* MYSQL_FILE */
 #include "sql_list.h"                      /* I_List */
 #include "sql_cmd.h"                       /* SQLCOM_END */
+#include "hash.h"
 #include <set>
 
 class THD;
@@ -380,6 +381,8 @@ enum enum_gtid_mode
   GTID_MODE_ON= 3
 };
 extern ulong gtid_mode;
+extern my_bool opt_tablestat;
+extern my_bool opt_indexstat;
 extern const char *gtid_mode_names[];
 extern TYPELIB gtid_mode_typelib;
 
@@ -402,6 +405,8 @@ extern SHOW_VAR status_vars[];
 extern struct system_variables max_system_variables;
 extern struct system_status_var global_status_var;
 extern struct rand_struct sql_rand;
+extern HASH global_table_stats;
+extern HASH global_index_stats;
 extern const char *opt_date_time_formats[];
 extern handlerton *partition_hton;
 extern handlerton *myisam_hton;
@@ -470,6 +475,7 @@ extern PSI_mutex_key
   key_delayed_insert_mutex, key_hash_filo_lock, key_LOCK_active_mi,
   key_LOCK_connection_count, key_LOCK_crypt, key_LOCK_delayed_create,
   key_LOCK_delayed_insert, key_LOCK_delayed_status, key_LOCK_error_log,
+  key_LOCK_global_table_stats, key_LOCK_global_index_stats,
   key_LOCK_gdl, key_LOCK_global_system_variables,
   key_LOCK_lock_db, key_LOCK_logger, key_LOCK_manager,
   key_LOCK_prepared_stmt_count,
@@ -729,7 +735,8 @@ extern mysql_mutex_t
        LOCK_slave_list, LOCK_active_mi, LOCK_manager,
        LOCK_global_system_variables, LOCK_user_conn, LOCK_log_throttle_qni,
        LOCK_prepared_stmt_count, LOCK_error_messages, LOCK_connection_count,
-       LOCK_sql_slave_skip_counter, LOCK_slave_net_timeout;
+       LOCK_sql_slave_skip_counter, LOCK_slave_net_timeout,
+       LOCK_global_table_stats, LOCK_global_index_stats;
 #ifdef HAVE_OPENSSL
 extern char* des_key_file;
 extern mysql_mutex_t LOCK_des_key_file;
@@ -861,6 +868,11 @@ inline MY_ATTRIBUTE((warn_unused_result)) query_id_t next_query_id()
   my_atomic_rwlock_wrunlock(&global_query_id_lock);
   return (id+1);
 }
+
+void init_global_table_stats(void);
+void free_global_table_stats(void);
+void init_global_index_stats(void);
+void free_global_index_stats(void);
 
 /*
   TODO: Replace this with an inline function.

@@ -4715,6 +4715,16 @@ static Sys_var_mybool Sys_show_old_temporals(
         ON_CHECK(0), ON_UPDATE(0),
         DEPRECATED(""));
 
+static Sys_var_mybool Sys_tablestat(
+       "rds_tablestat",
+       "Control TABLE_STATISTICS",
+       GLOBAL_VAR(opt_tablestat), CMD_LINE(OPT_ARG), DEFAULT(FALSE));
+
+static Sys_var_mybool Sys_indexstat(
+       "rds_indexstat",
+       "Control INDEX_STATISTICS",
+       GLOBAL_VAR(opt_indexstat), CMD_LINE(OPT_ARG), DEFAULT(FALSE));
+
 /* BEGIN: thread running control */
 /* no need lock */
 static bool update_tr_high_watermark(sys_var *self, THD *thd, enum_var_type type)

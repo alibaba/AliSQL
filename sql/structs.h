@@ -25,6 +25,7 @@
 #include "my_time.h"                   /* enum_mysql_timestamp_type */
 #include "thr_lock.h"                  /* thr_lock_type */
 #include "my_base.h"                   /* ha_rows, ha_key_alg */
+#include "mysql_com.h"
 
 struct TABLE;
 class Field;
@@ -240,6 +241,20 @@ typedef struct  user_conn {
   /* Maximum amount of resources which account is allowed to consume. */
   USER_RESOURCES user_resources;
 } USER_CONN;
+
+typedef struct st_table_stats {
+  char table[NAME_LEN * 2 + 2];  // [db] + '.' + [table] + '\0'
+  ulonglong rows_read, rows_changed;
+  ulonglong rows_changed_x_indexes;
+  ulonglong rows_inserted, rows_deleted, rows_updated;
+  /* Stores enum db_type, but forward declarations cannot be done */
+  int engine_type;
+} TABLE_STATS;
+
+typedef struct st_index_stats {
+  char index[NAME_LEN * 3 + 3];  // [db] + '.' + [table] + '.' + [index] + '\0'
+  ulonglong rows_read;
+} INDEX_STATS;
 
 	/* Bits in form->update */
 #define REG_MAKE_DUPP		1	/* Make a copy of record when read */

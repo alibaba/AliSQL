@@ -4521,13 +4521,13 @@ os_aio_linux_dispatch_read_array_submit()
 			} else {
 				/* io_submit returns number of successfully
 				queued requests or -errno. */
-				fprintf(stderr, "Trying to sumbit %d aio "   //no cover begin
+				fprintf(stderr, "Trying to sumbit %d aio "
 					"requests, io_submit returns %d.\n",
 					count, submitted);
 				if (submitted < 0) {
 					errno = -submitted;
 				}
-				ut_error; //no cover end
+				ut_error;
 			}
 		}
 	}

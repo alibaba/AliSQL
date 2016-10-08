@@ -3770,6 +3770,117 @@ uint get_table_open_method(TABLE_LIST *tables,
   return (uint) OPEN_FULL_TABLE;
 }
 
+// Sends the global table stats back to the client.
+int fill_schema_table_stats(THD* thd, TABLE_LIST* tables, Item* __attribute__((unused)))
+{
+  TABLE *table= tables->table;
+  DBUG_ENTER("fill_schema_table_stats");
+  char *table_full_name, *table_schema;
+  TABLE_SHARE *share;
+  uint indx;
+
+  mysql_mutex_lock(&LOCK_open);
+  for(indx = 0; indx < table_def_cache.records; indx++)
+  {
+    share= (TABLE_SHARE*) my_hash_element(&table_def_cache, indx);
+    share->add_table_stats();
+  }
+  mysql_mutex_unlock(&LOCK_open);
+
+  mysql_mutex_lock(&LOCK_global_table_stats);
+  for (uint i = 0; i < global_table_stats.records; ++i)
+  {
+    restore_record(table, s->default_values);
+    TABLE_STATS *table_stats =
+      (TABLE_STATS *) my_hash_element(&global_table_stats, i);
+
+    table_full_name= thd->strdup(table_stats->table);
+    table_schema= strsep(&table_full_name, ".");
+
+    TABLE_LIST tmp_table;
+    memset((char *) &tmp_table, 0, sizeof(tmp_table));
+    tmp_table.table_name= table_full_name;
+    tmp_table.db= table_schema;
+    tmp_table.grant.privilege= 0;
+    if (check_access(thd, SELECT_ACL, tmp_table.db,
+                      &tmp_table.grant.privilege, 0, 0,
+                      is_infoschema_db(table_schema)) ||
+         check_grant(thd, SELECT_ACL, &tmp_table, 1, UINT_MAX, 1))
+        continue;
+
+    table->field[0]->store(table_schema, strlen(table_schema), system_charset_info);
+    table->field[1]->store(table_full_name, strlen(table_full_name), system_charset_info);
+    table->field[2]->store((longlong)table_stats->rows_read, TRUE);
+    table->field[3]->store((longlong)table_stats->rows_changed, TRUE);
+    table->field[4]->store((longlong)table_stats->rows_changed_x_indexes, TRUE);
+
+    table->field[5]->store((longlong)table_stats->rows_inserted, TRUE);
+    table->field[6]->store((longlong)table_stats->rows_deleted, TRUE);
+    table->field[7]->store((longlong)table_stats->rows_updated, TRUE);
+
+    if (schema_table_store_record(thd, table))
+    {
+      mysql_mutex_unlock(&LOCK_global_table_stats);
+      DBUG_RETURN(1);
+    }
+  }
+  mysql_mutex_unlock(&LOCK_global_table_stats);
+  DBUG_RETURN(0);
+}
+
+// Sends the global index stats back to the client.
+int fill_schema_index_stats(THD* thd, TABLE_LIST* tables, Item* __attribute__((unused)))
+{
+  TABLE *table= tables->table;
+  DBUG_ENTER("fill_schema_index_stats");
+  char *index_full_name, *table_schema, *table_name;
+  uint indx;
+  TABLE_SHARE *share;
+
+  mysql_mutex_lock(&LOCK_open);
+  for(indx = 0; indx < table_def_cache.records; indx++)
+  {
+    share= (TABLE_SHARE*) my_hash_element(&table_def_cache, indx);
+    share->add_index_stats();
+  }
+  mysql_mutex_unlock(&LOCK_open);
+
+  mysql_mutex_lock(&LOCK_global_index_stats);
+  for (uint i = 0; i < global_index_stats.records; ++i)
+  {
+    restore_record(table, s->default_values);
+    INDEX_STATS *index_stats =
+      (INDEX_STATS *) my_hash_element(&global_index_stats, i);
+
+    index_full_name= thd->strdup(index_stats->index);
+    table_schema= strsep(&index_full_name, ".");
+    table_name= strsep(&index_full_name, ".");
+
+    TABLE_LIST tmp_table;
+    memset((char *) &tmp_table, 0, sizeof(tmp_table));
+    tmp_table.table_name= table_name;
+    tmp_table.db= table_schema;
+    tmp_table.grant.privilege= 0;
+    if (check_access(thd, SELECT_ACL, tmp_table.db,
+                      &tmp_table.grant.privilege, 0, 0,
+                      is_infoschema_db(table_schema)) ||
+         check_grant(thd, SELECT_ACL, &tmp_table, 1, UINT_MAX, 1))
+        continue;
+
+    table->field[0]->store(table_schema, strlen(table_schema), system_charset_info);
+    table->field[1]->store(table_name, strlen(table_name), system_charset_info);
+    table->field[2]->store(index_full_name, strlen(index_full_name), system_charset_info);
+    table->field[3]->store((longlong)index_stats->rows_read, TRUE);
+
+    if (schema_table_store_record(thd, table))
+    {
+      mysql_mutex_unlock(&LOCK_global_index_stats);
+      DBUG_RETURN(1);
+    }
+  }
+  mysql_mutex_unlock(&LOCK_global_index_stats);
+  DBUG_RETURN(0);
+}
 
 /**
    Try acquire high priority share metadata lock on a table (with
@@ -8067,6 +8178,29 @@ ST_FIELD_INFO variables_fields_info[]=
   {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, SKIP_OPEN_TABLE}
 };
 
+ST_FIELD_INFO table_stats_fields_info[]=
+{
+  {"TABLE_SCHEMA", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Table_schema", SKIP_OPEN_TABLE},
+  {"TABLE_NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Table_name", SKIP_OPEN_TABLE},
+  {"ROWS_READ", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, "Rows_read", SKIP_OPEN_TABLE},
+  {"ROWS_CHANGED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, "Rows_changed", SKIP_OPEN_TABLE},
+  {"ROWS_CHANGED_X_INDEXES", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, "Rows_changed_x_#indexes", SKIP_OPEN_TABLE},
+
+  {"ROWS_INSERTED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, "Rows_inserted", SKIP_OPEN_TABLE},
+  {"ROWS_DELETED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, "Rows_deleted", SKIP_OPEN_TABLE},
+  {"ROWS_UPDATED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, "Rows_updated", SKIP_OPEN_TABLE},
+
+  {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}
+};
+
+ST_FIELD_INFO index_stats_fields_info[]=
+{
+  {"TABLE_SCHEMA", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Table_schema", SKIP_OPEN_TABLE},
+  {"TABLE_NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Table_name", SKIP_OPEN_TABLE},
+  {"INDEX_NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Index_name", SKIP_OPEN_TABLE},
+  {"ROWS_READ", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONG, 0, 0, "Rows_read", SKIP_OPEN_TABLE},
+  {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}
+};
 
 ST_FIELD_INFO processlist_fields_info[]=
 {
@@ -8341,6 +8475,10 @@ ST_SCHEMA_TABLE schema_tables[]=
   {"VIEWS", view_fields_info, create_schema_table, 
    get_all_tables, 0, get_schema_views_record, 1, 2, 0,
    OPEN_VIEW_ONLY|OPTIMIZE_I_S_TABLE},
+  {"TABLE_STATISTICS", table_stats_fields_info, create_schema_table,
+    fill_schema_table_stats, make_old_format, 0, -1, -1, 0, 0},
+  {"INDEX_STATISTICS", index_stats_fields_info, create_schema_table,
+   fill_schema_index_stats, make_old_format, 0, -1, -1, 0, 0},
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 

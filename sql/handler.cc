@@ -3812,6 +3812,62 @@ void handler::print_error(int error, myf errflag)
   DBUG_VOID_RETURN;
 }
 
+// Updates the table stats with the TABLE this handler represents.
+void handler::update_table_stats()
+{
+  if (!opt_tablestat)
+  {
+    rows_read= rows_changed= 0;
+    rows_inserted= rows_deleted= rows_updated= 0;
+    return;
+  }
+
+  if (!rows_read && !rows_changed)
+    return;
+
+  if (!table->s || !table->s->table_cache_key.str || !table->s->table_name.str)
+    return;
+
+  table->s->rows_read+= rows_read;
+  table->s->rows_changed+= rows_changed;
+  table->s->rows_inserted+= rows_inserted;
+  table->s->rows_deleted+= rows_deleted;
+  table->s->rows_updated+= rows_updated;
+
+  table->s->rows_changed_x_indexes+=
+    rows_changed * (table->s->keys ? table->s->keys : 1);
+
+  rows_read= rows_changed= 0;
+  rows_inserted= rows_deleted= rows_updated= 0;
+}
+
+// Updates the index stats with this handler's accumulated index reads
+void handler::update_index_stats()
+{
+  if (!table)
+    return;
+
+  if (!opt_indexstat)
+  {
+    for (uint x= 0; x < table->s->keys; ++x)
+    {
+      index_rows_read[x]= 0;
+    }
+    return;
+  }
+
+  if (!table->s || !table->s->table_cache_key.str || !table->s->table_name.str)
+    return;
+
+  for (uint x = 0; x < table->s->keys; ++x)
+  {
+    if (index_rows_read[x])
+    {
+      table->s->index_rows_read[x]+= index_rows_read[x];
+      index_rows_read[x]= 0;
+    }
+  }
+}
 
 /**
   Return an error message specific to this handler.

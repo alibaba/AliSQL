@@ -436,6 +436,114 @@ void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
   DBUG_VOID_RETURN;
 }
 
+/*
+ Aggregate TABLE_SHARE table_stats into global_table_stats.
+ assumed that has hold LOCK_open if no_tmp_table.
+*/
+void TABLE_SHARE::add_table_stats()
+{
+  if (!rows_read && !rows_changed)
+    return;
+
+  if (!table_cache_key.str || !table_name.str)
+    return;
+
+  TABLE_STATS* table_stats;
+  char key[NAME_LEN * 2 + 2];
+  sprintf(key, "%s.%s", table_cache_key.str, table_name.str);
+
+  mysql_mutex_lock(&LOCK_global_table_stats);
+  if (!(table_stats = (TABLE_STATS *) my_hash_search(&global_table_stats,
+                                                     (uchar*)key,
+                                                     strlen(key))))
+  {
+    if (!(table_stats = ((TABLE_STATS *)
+                         my_malloc(sizeof(TABLE_STATS), MYF(MY_WME | MY_ZEROFILL)))))
+    {
+      sql_print_error("Allocating table stats failed.");
+      goto end;
+    }
+    strncpy(table_stats->table, key, sizeof(table_stats->table));
+    table_stats->rows_read= 0;
+    table_stats->rows_changed= 0;
+    table_stats->rows_changed_x_indexes= 0;
+    table_stats->rows_inserted= 0;
+    table_stats->rows_deleted= 0;
+    table_stats->rows_updated= 0;
+
+    if (my_hash_insert(&global_table_stats, (uchar *) table_stats))
+    {
+      sql_print_error("Inserting table stats failed.");
+      my_free((char *) table_stats);
+      goto end;
+    }
+  }
+
+  table_stats->rows_read+= rows_read;
+  table_stats->rows_changed+= rows_changed;
+  table_stats->rows_inserted+= rows_inserted;
+  table_stats->rows_deleted+= rows_deleted;
+  table_stats->rows_updated+= rows_updated;
+  table_stats->rows_changed_x_indexes+= rows_changed_x_indexes;
+
+  rows_read= 0;
+  rows_changed= 0;
+  rows_inserted= 0;
+  rows_deleted= 0;
+  rows_updated= 0;
+  rows_changed_x_indexes= 0;
+
+end:
+  mysql_mutex_unlock(&LOCK_global_table_stats);
+}
+
+/*
+  Aggregate TABLE_SHARE index_stats into global_index_stats.
+  assumed that has hold LOCK_open if no_tmp_table.
+*/
+void TABLE_SHARE::add_index_stats()
+{
+  INDEX_STATS *index_stats;
+  char key[NAME_LEN * 3 + 3];
+
+  if (!table_cache_key.str || !table_name.str)
+    return;
+
+  for (uint x= 0; x < keys; x++)
+  {
+    if (index_rows_read[x])
+    {
+      KEY *info= key_info+x;
+      sprintf(key, "%s.%s.%s", table_cache_key.str, table_name.str, info->name);
+
+      mysql_mutex_lock(&LOCK_global_index_stats);
+      if (!(index_stats = (INDEX_STATS *) my_hash_search(&global_index_stats,
+                                                         (uchar *) key,
+                                                         strlen(key))))
+      {
+        if (!(index_stats = ((INDEX_STATS *)
+                             my_malloc(sizeof(INDEX_STATS), MYF(MY_WME | MY_ZEROFILL)))))
+        {
+          sql_print_error("Allocating index stats failed.");
+          goto end;
+        }
+        strncpy(index_stats->index, key, sizeof(index_stats->index));
+        index_stats->rows_read= 0;
+
+        if (my_hash_insert(&global_index_stats, (uchar *) index_stats))
+        {
+          sql_print_error("Inserting index stats failed.");
+          my_free((char *) index_stats);
+          goto end;
+        }
+      }
+      index_stats->rows_read+= index_rows_read[x];
+      index_rows_read[x]= 0;
+    end:
+      mysql_mutex_unlock(&LOCK_global_index_stats);
+    }
+  }
+}
 
 /**
   Release resources (plugins) used by the share and free its memory.

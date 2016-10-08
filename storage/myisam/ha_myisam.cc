@@ -811,6 +811,7 @@ int ha_myisam::close(void)
 
 int ha_myisam::write_row(uchar *buf)
 {
+  int error= 0;
   ha_statistic_increment(&SSV::ha_write_count);
 
   /*
@@ -819,11 +820,16 @@ int ha_myisam::write_row(uchar *buf)
   */
   if (table->next_number_field && buf == table->record[0])
   {
-    int error;
     if ((error= update_auto_increment()))
       return error;
   }
-  return mi_write(file,buf);
+  error= mi_write(file,buf);
+  if (!error)
+  {
+    rows_inserted++;
+    rows_changed++;
+  }
+  return error;
 }
 
 int ha_myisam::check(THD* thd, HA_CHECK_OPT* check_opt)
@@ -1589,14 +1595,28 @@ bool ha_myisam::is_crashed() const
 
 int ha_myisam::update_row(const uchar *old_data, uchar *new_data)
 {
+  int error= 0;
   ha_statistic_increment(&SSV::ha_update_count);
-  return mi_update(file,old_data,new_data);
+  error= mi_update(file,old_data,new_data);
+  if (!error)
+  {
+    rows_updated++;
+    rows_changed++;
+  }
+  return error;
 }
 
 int ha_myisam::delete_row(const uchar *buf)
 {
+  int error= 0;
   ha_statistic_increment(&SSV::ha_delete_count);
-  return mi_delete(file,buf);
+  error= mi_delete(file,buf);
+  if (!error)
+  {
+    rows_changed++;
+    rows_deleted++;
+  }
+  return error;
 }
 
 C_MODE_START
@@ -1649,6 +1669,15 @@ int ha_myisam::index_read_map(uchar *buf, const uchar *key,
   int error=mi_rkey(file, buf, active_index, key, keypart_map, find_flag);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_INDEX_READ_ROW_DONE(error);
+
+  if (!error)
+  {
+    rows_read++;
+
+    uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
+    if (inx >= 0 && inx < MAX_KEY)
+      index_rows_read[inx]++;
+  }
   return error;
 }
 
@@ -1663,6 +1692,14 @@ int ha_myisam::index_read_idx_map(uchar *buf, uint index, const uchar *key,
   int error=mi_rkey(file, buf, index, key, keypart_map, find_flag);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_INDEX_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+
+    uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
+    if (inx >= 0 && inx < MAX_KEY)
+      index_rows_read[inx]++;
+  }
   return error;
 }
 
@@ -1677,6 +1714,14 @@ int ha_myisam::index_read_last_map(uchar *buf, const uchar *key,
                     HA_READ_PREFIX_LAST);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_INDEX_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+
+    uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
+    if (inx >= 0 && inx < MAX_KEY)
+      index_rows_read[inx]++;
+  }
   DBUG_RETURN(error);
 }
 
@@ -1688,6 +1733,14 @@ int ha_myisam::index_next(uchar *buf)
   int error=mi_rnext(file,buf,active_index);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_INDEX_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+
+    uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
+    if (inx >= 0 && inx < MAX_KEY)
+      index_rows_read[inx]++;
+  }
   return error;
 }
 
@@ -1699,6 +1752,14 @@ int ha_myisam::index_prev(uchar *buf)
   int error=mi_rprev(file,buf, active_index);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_INDEX_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+
+    uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
+    if (inx >= 0 && inx < MAX_KEY)
+      index_rows_read[inx]++;
+  }
   return error;
 }
 
@@ -1710,6 +1771,14 @@ int ha_myisam::index_first(uchar *buf)
   int error=mi_rfirst(file, buf, active_index);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_INDEX_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+
+    uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
+    if (inx >= 0 && inx < MAX_KEY)
+      index_rows_read[inx]++;
+  }
   return error;
 }
 
@@ -1721,6 +1790,14 @@ int ha_myisam::index_last(uchar *buf)
   int error=mi_rlast(file, buf, active_index);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_INDEX_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+
+    uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
+    if (inx >= 0 && inx < MAX_KEY)
+      index_rows_read[inx]++;
+  }
   return error;
 }
 
@@ -1738,6 +1815,14 @@ int ha_myisam::index_next_same(uchar *buf,
   } while (error == HA_ERR_RECORD_DELETED);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_INDEX_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+
+    uint inx = (active_index == MAX_KEY) ? file->lastinx : active_index;
+    if (inx >= 0 && inx < MAX_KEY)
+      index_rows_read[inx]++;
+  }
   return error;
 }
 
@@ -1757,6 +1842,10 @@ int ha_myisam::rnd_next(uchar *buf)
   int error=mi_scan(file, buf);
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+  }
   return error;
 }
 
@@ -1773,6 +1862,10 @@ int ha_myisam::rnd_pos(uchar *buf, uchar *pos)
   int error=mi_rrnd(file, buf, my_get_ptr(pos,ref_length));
   table->status=error ? STATUS_NOT_FOUND: 0;
   MYSQL_READ_ROW_DONE(error);
+  if (!error)
+  {
+    rows_read++;
+  }
   return error;
 }
 
