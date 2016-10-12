@@ -87,6 +87,12 @@ USER_PRIVILEGES
 VIEWS
 TABLE_STATISTICS
 INDEX_STATISTICS
+TokuDB_file_map
+TokuDB_trx
+TokuDB_locks
+TokuDB_lock_waits
+TokuDB_fractal_tree_block_map
+TokuDB_fractal_tree_info
 columns_priv
 db
 event
@@ -128,6 +134,12 @@ TABLE_CONSTRAINTS	TABLE_CONSTRAINTS
 TABLE_PRIVILEGES	TABLE_PRIVILEGES
 TRIGGERS	TRIGGERS
 TABLE_STATISTICS	TABLE_STATISTICS
+TokuDB_file_map	TokuDB_file_map
+TokuDB_trx	TokuDB_trx
+TokuDB_locks	TokuDB_locks
+TokuDB_lock_waits	TokuDB_lock_waits
+TokuDB_fractal_tree_block_map	TokuDB_fractal_tree_block_map
+TokuDB_fractal_tree_info	TokuDB_fractal_tree_info
 tables_priv	tables_priv
 time_zone	time_zone
 time_zone_leap_second	time_zone_leap_second
@@ -149,6 +161,12 @@ TABLE_CONSTRAINTS	TABLE_CONSTRAINTS
 TABLE_PRIVILEGES	TABLE_PRIVILEGES
 TRIGGERS	TRIGGERS
 TABLE_STATISTICS	TABLE_STATISTICS
+TokuDB_file_map	TokuDB_file_map
+TokuDB_trx	TokuDB_trx
+TokuDB_locks	TokuDB_locks
+TokuDB_lock_waits	TokuDB_lock_waits
+TokuDB_fractal_tree_block_map	TokuDB_fractal_tree_block_map
+TokuDB_fractal_tree_info	TokuDB_fractal_tree_info
 tables_priv	tables_priv
 time_zone	time_zone
 time_zone_leap_second	time_zone_leap_second
@@ -170,6 +188,12 @@ TABLE_CONSTRAINTS	TABLE_CONSTRAINTS
 TABLE_PRIVILEGES	TABLE_PRIVILEGES
 TRIGGERS	TRIGGERS
 TABLE_STATISTICS	TABLE_STATISTICS
+TokuDB_file_map	TokuDB_file_map
+TokuDB_trx	TokuDB_trx
+TokuDB_locks	TokuDB_locks
+TokuDB_lock_waits	TokuDB_lock_waits
+TokuDB_fractal_tree_block_map	TokuDB_fractal_tree_block_map
+TokuDB_fractal_tree_info	TokuDB_fractal_tree_info
 tables_priv	tables_priv
 time_zone	time_zone
 time_zone_leap_second	time_zone_leap_second
@@ -664,6 +688,12 @@ TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
 TRIGGERS
 TABLE_STATISTICS
+TokuDB_file_map
+TokuDB_trx
+TokuDB_locks
+TokuDB_lock_waits
+TokuDB_fractal_tree_block_map
+TokuDB_fractal_tree_info
 create database information_schema;
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
 use information_schema;
@@ -675,6 +705,12 @@ TABLE_CONSTRAINTS	SYSTEM VIEW
 TABLE_PRIVILEGES	SYSTEM VIEW
 TRIGGERS	SYSTEM VIEW
 TABLE_STATISTICS	SYSTEM VIEW
+TokuDB_file_map	SYSTEM VIEW
+TokuDB_trx	SYSTEM VIEW
+TokuDB_locks	SYSTEM VIEW
+TokuDB_lock_waits	SYSTEM VIEW
+TokuDB_fractal_tree_block_map	SYSTEM VIEW
+TokuDB_fractal_tree_info	SYSTEM VIEW
 create table t1(a int);
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
 use test;
@@ -689,6 +725,12 @@ TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
 TRIGGERS
 TABLE_STATISTICS
+TokuDB_file_map
+TokuDB_trx
+TokuDB_locks
+TokuDB_lock_waits
+TokuDB_fractal_tree_block_map
+TokuDB_fractal_tree_info
 select table_name from tables where table_name='user';
 table_name
 user
@@ -897,6 +939,9 @@ TABLES	TABLE_NAME	select
 TABLE_CONSTRAINTS	TABLE_NAME	select
 TABLE_PRIVILEGES	TABLE_NAME	select
 TABLE_STATISTICS	TABLE_NAME	select
+TokuDB_file_map	table_name	select
+TokuDB_fractal_tree_block_map	table_name	select
+TokuDB_fractal_tree_info	table_name	select
 VIEWS	TABLE_NAME	select
 delete from mysql.user where user='mysqltest_4';
 delete from mysql.db where user='mysqltest_4';
@@ -906,7 +951,7 @@ table_schema IN ('mysql', 'INFORMATION_SCHEMA', 'test', 'mysqltest')
 AND table_name not like 'ndb%' AND table_name not like 'innodb_%'
 GROUP BY TABLE_SCHEMA;
 table_schema	count(*)
-information_schema	34
+information_schema	40
 mysql	25
 create table t1 (i int, j int);
 create trigger trg1 before insert on t1 for each row
@@ -1377,6 +1422,12 @@ TABLESPACES	information_schema.TABLESPACES	1
 TABLE_CONSTRAINTS	information_schema.TABLE_CONSTRAINTS	1
 TABLE_PRIVILEGES	information_schema.TABLE_PRIVILEGES	1
 TABLE_STATISTICS	information_schema.TABLE_STATISTICS	1
+TokuDB_file_map	information_schema.TokuDB_file_map	1
+TokuDB_fractal_tree_block_map	information_schema.TokuDB_fractal_tree_block_map	1
+TokuDB_fractal_tree_info	information_schema.TokuDB_fractal_tree_info	1
+TokuDB_locks	information_schema.TokuDB_locks	1
+TokuDB_lock_waits	information_schema.TokuDB_lock_waits	1
+TokuDB_trx	information_schema.TokuDB_trx	1
 TRIGGERS	information_schema.TRIGGERS	1
 USER_PRIVILEGES	information_schema.USER_PRIVILEGES	1
 VIEWS	information_schema.VIEWS	1

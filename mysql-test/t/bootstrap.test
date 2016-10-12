@@ -12,6 +12,7 @@ let $MYSQLD_BOOTSTRAP_CMD= $MYSQLD_BOOTSTRAP_CMD --datadir=$MYSQLD_DATADIR --def
 #
 # Check that --bootstrap reads from stdin
 #
+--exec rm -f $MYSQLTEST_VARDIR/mysqld.1/data/__tokudb_lock*
 --write_file $MYSQLTEST_VARDIR/tmp/bootstrap_test.sql
 use test;
 CREATE TABLE t1(a int);

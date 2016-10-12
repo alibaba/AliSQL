@@ -39,6 +39,12 @@ USER_PRIVILEGES
 VIEWS
 TABLE_STATISTICS
 INDEX_STATISTICS
+TokuDB_file_map
+TokuDB_trx
+TokuDB_locks
+TokuDB_lock_waits
+TokuDB_fractal_tree_block_map
+TokuDB_fractal_tree_info
 show tables from INFORMATION_SCHEMA like 'T%';
 Tables_in_information_schema (T%)
 TABLES
@@ -47,6 +53,12 @@ TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
 TRIGGERS
 TABLE_STATISTICS
+TokuDB_file_map
+TokuDB_trx
+TokuDB_locks
+TokuDB_lock_waits
+TokuDB_fractal_tree_block_map
+TokuDB_fractal_tree_info
 create database `inf%`;
 create database mbase;
 use `inf%`;

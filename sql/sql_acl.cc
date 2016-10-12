@@ -778,7 +778,11 @@ my_bool acl_init(bool dont_read_acl_tables)
   THD  *thd;
   my_bool return_val;
   DBUG_ENTER("acl_init");
-  LOCK_grant.init(LOCK_GRANT_PARTITIONS, key_rwlock_LOCK_grant);
+  LOCK_grant.init(LOCK_GRANT_PARTITIONS
+#ifdef HAVE_PSI_RWLOCK_INTERFACE
+                  , key_rwlock_LOCK_grant
+#endif
+                 );
   rwlocks_initialized= true;
 
   acl_cache= new hash_filo(ACL_CACHE_SIZE, 0, 0,

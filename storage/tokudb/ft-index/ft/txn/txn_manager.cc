@@ -402,13 +402,13 @@ find_xid (const TOKUTXN &txn, const TOKUTXN &txnfind)
 static inline void txn_manager_create_snapshot_unlocked(
     TXN_MANAGER txn_manager,
     TOKUTXN txn
-    ) 
-{    
-    txn->snapshot_txnid64 = ++txn_manager->last_xid;    
-    setup_live_root_txn_list(&txn_manager->live_root_ids, txn->live_root_txn_list);  
+    )
+{
+    txn->snapshot_txnid64 = ++txn_manager->last_xid;
+    setup_live_root_txn_list(&txn_manager->live_root_ids, txn->live_root_txn_list);
     // Add this txn to the global list of txns that have their own snapshots.
     // (Note, if a txn is a child that creates its own snapshot, then that child xid
-    // is the xid stored in the global list.) 
+    // is the xid stored in the global list.)
     if (txn_manager->snapshot_head == NULL) {
         invariant(txn_manager->snapshot_tail == NULL);
         txn_manager->snapshot_head = txn;

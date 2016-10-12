@@ -807,7 +807,7 @@ static void tokudb_cleanup_handlers(tokudb_trx_data *trx, DB_TXN *txn) {
 extern "C" enum durability_properties thd_get_durability_property(const MYSQL_THD thd);
 #endif
 
-// Determine if an fsync is used when a transaction is committed.  
+// Determine if an fsync is used when a transaction is committed.
 static bool tokudb_sync_on_commit(THD *thd, tokudb_trx_data *trx, DB_TXN *txn) {
 #if MYSQL_VERSION_ID >= 50600
     // Check the client durability property which is set during 2PC

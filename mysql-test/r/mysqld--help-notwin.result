@@ -1024,6 +1024,123 @@ The following options may be given as the first argument:
  -t, --tmpdir=name   Path for temporary files. Several paths may be specified,
  separated by a colon (:), in this case they are used in a
  round-robin fashion
+ --tokudb-alter-print-error 
+ Print errors for alter table operations
+ --tokudb-analyze-delete-fraction=# 
+ fraction of rows allowed to be deleted
+ --tokudb-analyze-time=# 
+ analyze time (seconds)
+ --tokudb-block-size=# 
+ fractal tree block size
+ --tokudb-bulk-fetch enable bulk fetch
+ (Defaults to on; use --skip-tokudb-bulk-fetch to disable.)
+ --tokudb-cache-size=# 
+ TokuDB cache table size
+ --tokudb-checkpoint-lock 
+ Tokudb Checkpoint Lock
+ --tokudb-checkpoint-on-flush-logs 
+ TokuDB Checkpoint on Flush Logs 
+ --tokudb-checkpointing-period=# 
+ TokuDB Checkpointing period
+ --tokudb-cleaner-iterations=# 
+ TokuDB cleaner_iterations
+ --tokudb-cleaner-period=# 
+ TokuDB cleaner_period
+ --tokudb-commit-sync 
+ sync on txn commit
+ (Defaults to on; use --skip-tokudb-commit-sync to disable.)
+ --tokudb-cpu-nums=# TokuDB CPU nums
+ --tokudb-create-index-online 
+ if on, create index done online
+ (Defaults to on; use --skip-tokudb-create-index-online to disable.)
+ --tokudb-data-dir=name 
+ TokuDB Data Directory
+ --tokudb-debug=#    TokuDB Debug
+ --tokudb-directio   TokuDB Enable Direct I/O 
+ --tokudb-disable-hot-alter 
+ if on, hot alter table is disabled
+ --tokudb-disable-prefetching 
+ if on, prefetching disabled
+ --tokudb-disable-slow-alter 
+ if on, alter tables that require copy are disabled
+ --tokudb-disable-slow-update 
+ disable slow update
+ --tokudb-disable-slow-upsert 
+ disable slow upsert
+ --tokudb-empty-scan[=name] 
+ TokuDB algorithm to check if the table is empty when
+ opened. 
+ --tokudb-fs-reserve-percent=# 
+ TokuDB file system space reserve (percent free required)
+ --tokudb-fsync-log-period=# 
+ TokuDB fsync log period
+ --tokudb-hide-default-row-format 
+ hide the default row format
+ (Defaults to on; use --skip-tokudb-hide-default-row-format to disable.)
+ --tokudb-killed-time=# 
+ TokuDB killed time
+ --tokudb-last-lock-timeout=name 
+ last TokuDB lock timeout
+ --tokudb-load-save-space 
+ compress intermediate bulk loader files to save space
+ (Defaults to on; use --skip-tokudb-load-save-space to disable.)
+ --tokudb-loader-memory-size=# 
+ TokuDB loader memory size
+ --tokudb-lock-timeout=# 
+ TokuDB lock timeout
+ --tokudb-lock-timeout-debug=# 
+ TokuDB lock timeout debug
+ --tokudb-log-dir=name 
+ TokuDB Log Directory
+ --tokudb-max-lock-memory=# 
+ TokuDB max memory for locks
+ --tokudb-optimize-index-fraction=# 
+ optimize index fraction (default 1.0 all)
+ --tokudb-optimize-index-name=name 
+ optimize index name (default all indexes)
+ --tokudb-optimize-throttle=# 
+ optimize throttle (default no throttle)
+ --tokudb-pk-insert-mode=# 
+ set the primary key insert mode
+ --tokudb-prelock-empty 
+ Tokudb Prelock Empty Table
+ (Defaults to on; use --skip-tokudb-prelock-empty to disable.)
+ --tokudb-read-block-size=# 
+ fractal tree read block size
+ --tokudb-read-buf-size=# 
+ fractal tree read block size
+ --tokudb-read-status-frequency=# 
+ TokuDB frequency that show processlist updates status of
+ reads
+ --tokudb-row-format[=name] 
+ Specifies the compression method for a table during this
+ session. Possible values are TOKUDB_UNCOMPRESSED,
+ TOKUDB_ZLIB, TOKUDB_QUICKLZ, TOKUDB_LZMA, TOKUDB_FAST,
+ TOKUDB_SMALL and TOKUDB_DEFAULT
+ --tokudb-rpl-check-readonly 
+ check if the slave is read only
+ (Defaults to on; use --skip-tokudb-rpl-check-readonly to disable.)
+ --tokudb-rpl-lookup-rows 
+ lookup a row on rpl slave
+ (Defaults to on; use --skip-tokudb-rpl-lookup-rows to disable.)
+ --tokudb-rpl-lookup-rows-delay=# 
+ time in milliseconds to add to lookups on replication
+ slave
+ --tokudb-rpl-unique-checks 
+ enable unique checks on replication slave
+ (Defaults to on; use --skip-tokudb-rpl-unique-checks to disable.)
+ --tokudb-rpl-unique-checks-delay=# 
+ time in milliseconds to add to unique checks test on
+ replication slave
+ --tokudb-support-xa Enable TokuDB support for the XA two-phase commit
+ (Defaults to on; use --skip-tokudb-support-xa to disable.)
+ --tokudb-tmp-dir=name 
+ Tokudb Tmp Dir
+ --tokudb-version=name 
+ TokuDB Version
+ --tokudb-write-status-frequency=# 
+ TokuDB frequency that show processlist updates status of
+ writes
  --transaction-alloc-block-size=# 
  Allocation block size for transactions to be stored in
  binary log
@@ -1356,6 +1473,58 @@ thread-stack 262144
 time-format %H:%i:%s
 timed-mutexes FALSE
 tmp-table-size 16777216
+tokudb-alter-print-error FALSE
+tokudb-analyze-delete-fraction 1
+tokudb-analyze-time 5
+tokudb-block-size 4194304
+tokudb-bulk-fetch TRUE
+tokudb-cache-size 0
+tokudb-checkpoint-lock FALSE
+tokudb-checkpoint-on-flush-logs FALSE
+tokudb-checkpointing-period 60
+tokudb-cleaner-iterations 5
+tokudb-cleaner-period 1
+tokudb-commit-sync TRUE
+tokudb-cpu-nums 0
+tokudb-create-index-online TRUE
+tokudb-data-dir (No default value)
+tokudb-debug 0
+tokudb-directio FALSE
+tokudb-disable-hot-alter FALSE
+tokudb-disable-prefetching FALSE
+tokudb-disable-slow-alter FALSE
+tokudb-disable-slow-update FALSE
+tokudb-disable-slow-upsert FALSE
+tokudb-empty-scan rl
+tokudb-fs-reserve-percent 5
+tokudb-fsync-log-period 0
+tokudb-hide-default-row-format TRUE
+tokudb-killed-time 4000
+tokudb-last-lock-timeout (No default value)
+tokudb-load-save-space TRUE
+tokudb-loader-memory-size 100000000
+tokudb-lock-timeout 4000
+tokudb-lock-timeout-debug 1
+tokudb-log-dir (No default value)
+tokudb-max-lock-memory 0
+tokudb-optimize-index-fraction 1
+tokudb-optimize-index-name (No default value)
+tokudb-optimize-throttle 0
+tokudb-pk-insert-mode 1
+tokudb-prelock-empty TRUE
+tokudb-read-block-size 65536
+tokudb-read-buf-size 131072
+tokudb-read-status-frequency 10000
+tokudb-row-format tokudb_zlib
+tokudb-rpl-check-readonly TRUE
+tokudb-rpl-lookup-rows TRUE
+tokudb-rpl-lookup-rows-delay 0
+tokudb-rpl-unique-checks TRUE
+tokudb-rpl-unique-checks-delay 0
+tokudb-support-xa TRUE
+tokudb-tmp-dir (No default value)
+tokudb-version 7.5.6
+tokudb-write-status-frequency 1000
 transaction-alloc-block-size 8192
 transaction-isolation REPEATABLE-READ
 transaction-prealloc-size 4096

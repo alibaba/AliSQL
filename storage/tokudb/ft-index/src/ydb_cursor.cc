@@ -885,7 +885,7 @@ toku_db_cursor_internal(DB * db, DB_TXN * txn, DBC *c, uint32_t flags, int is_te
     dbc_struct_i(c)->rmw = (flags & DB_RMW) != 0;
     bool is_snapshot_read = false;
     if (txn) {
-        is_snapshot_read = (dbc_struct_i(c)->iso == TOKU_ISO_READ_COMMITTED || 
+        is_snapshot_read = (dbc_struct_i(c)->iso == TOKU_ISO_READ_COMMITTED ||
                             dbc_struct_i(c)->iso == TOKU_ISO_SNAPSHOT);
     }
     int r = toku_ft_cursor_create(
