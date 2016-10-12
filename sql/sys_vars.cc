@@ -1853,6 +1853,21 @@ static Sys_var_ulong Sys_pseudo_thread_id(
        BLOCK_SIZE(1), NO_MUTEX_GUARD, IN_BINLOG,
        ON_CHECK(check_has_super));
 
+static bool check_ic_reduce_hint_enable(sys_var *self, THD *thd, set_var *var)
+{
+    if (SCHEDULER_POOL_THREADS == thread_handling && TRUE == (bool)var->save_result.ulonglong_value)
+        return true;
+
+    return false;
+}
+
+static Sys_var_mybool Sys_rds_ic_reduce_hint_enable(
+       "rds_ic_reduce_hint_enable", "enable the ic_reduce strategy when using hint",
+       GLOBAL_VAR(ic_reduce_hint_enable), CMD_LINE(OPT_ARG),
+       DEFAULT(FALSE), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+       ON_CHECK(check_ic_reduce_hint_enable),
+       ON_UPDATE(0));
+
 static bool fix_max_join_size(sys_var *self, THD *thd, enum_var_type type)
 {
   SV *sv= type == OPT_GLOBAL ? &global_system_variables : &thd->variables;

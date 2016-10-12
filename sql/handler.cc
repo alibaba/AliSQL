@@ -40,6 +40,7 @@
 #include "debug_sync.h"         // DEBUG_SYNC
 #include <my_bit.h>
 #include <list>
+#include <mysqld.h>
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
 #include "ha_partition.h"
@@ -1298,6 +1299,51 @@ ha_check_and_coalesce_trx_read_only(THD *thd, Ha_trx_info *ha_list,
   }
   return rw_ha_count;
 }
+/*
+   Release the execute_lock, let another waiter pass.
+*/
+inline void trans_unregist_execute_item(THD *thd)
+{
+  if (!thd->execute_item)
+    return;
+
+  ic_hash_item_t *item= thd->execute_item;
+
+  pthread_mutex_unlock(&item->execute_lock);
+  pthread_mutex_lock(&item->queue_lock);
+
+  if (item->left_thread_num > 1)
+  {
+    item->left_thread_num--;
+    pthread_mutex_unlock(&item->queue_lock);
+  }
+  else
+  {
+    DBUG_ASSERT(item->left_thread_num == 1);
+    pthread_mutex_unlock(&item->queue_lock);
+
+    DEBUG_SYNC(thd, "after_unlock_queue_lock_in_unregist");
+
+    pthread_mutex_lock(&ic_gather_hash_lock);
+    pthread_mutex_lock(&item->queue_lock);
+
+    item->left_thread_num--;
+
+    if (item->left_thread_num == 0)
+    {
+      pthread_mutex_unlock(&item->queue_lock);
+      my_hash_delete(&ic_gather_hash, (uchar*)item);
+    }
+    else
+    {
+      pthread_mutex_unlock(&item->queue_lock);
+    }
+
+    pthread_mutex_unlock(&ic_gather_hash_lock);
+  }
+
+  thd->execute_item= NULL;
+}
 
 
 /**
@@ -1337,6 +1383,10 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock)
   */
   bool is_real_trans= all || thd->transaction.all.ha_list == 0;
   Ha_trx_info *ha_info= trans->ha_list;
+
+  MDL_request mdl_request;
+  bool release_mdl= false;
+
   DBUG_ENTER("ha_commit_trans");
 
   DBUG_PRINT("info", ("all=%d thd->in_sub_stmt=%d ha_info=%p is_real_trans=%d",
@@ -1360,7 +1410,10 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock)
       TODO: This should be fixed in later ( >= 5.1) releases.
     */
     if (!all)
-      DBUG_RETURN(0);
+    {
+      error= 0;
+      goto unregist_quit;
+    }
     /*
       We assume that all statements which commit or rollback main transaction
       are prohibited inside of stored functions or triggers. So they should
@@ -1368,11 +1421,9 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock)
       let us throw error in non-debug builds.
     */
     my_error(ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG, MYF(0));
-    DBUG_RETURN(2);
+    error= 2;
+    goto unregist_quit;
   }
-
-  MDL_request mdl_request;
-  bool release_mdl= false;
 
   if (ha_info)
   {
@@ -1414,7 +1465,8 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock)
                                         thd->variables.lock_wait_timeout))
       {
         ha_rollback_trans(thd, all);
-        DBUG_RETURN(1);
+        error= 1;
+        goto unregist_quit;
       }
       release_mdl= true;
 
@@ -1457,6 +1509,12 @@ end:
   /* Free resources and perform other cleanup even for 'empty' transactions. */
   if (is_real_trans)
     thd->transaction.cleanup();
+
+unregist_quit:
+  if (is_real_trans)
+    trans_unregist_execute_item(thd);
+
+
   DBUG_RETURN(error);
 }
 
@@ -1619,9 +1677,14 @@ int ha_rollback_trans(THD *thd, bool all)
       call for more information.
     */
     if (!all)
-      DBUG_RETURN(0);
+    {
+      error= 0;
+      goto unregist_quitr;
+    }
     my_error(ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG, MYF(0));
-    DBUG_RETURN(1);
+
+    error= 1;
+    goto unregist_quitr;
   }
 
   if (tc_log)
@@ -1656,6 +1719,11 @@ int ha_rollback_trans(THD *thd, bool all)
   if (is_real_trans && thd->transaction.all.cannot_safely_rollback() &&
       !thd->slave_thread && thd->killed != THD::KILL_CONNECTION)
     thd->transaction.push_unsafe_rollback_warnings(thd);
+
+unregist_quitr:
+  if (is_real_trans)
+    trans_unregist_execute_item(thd);
+
   DBUG_RETURN(error);
 }
 

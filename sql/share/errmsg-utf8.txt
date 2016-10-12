@@ -7121,3 +7121,6 @@ ER_BLOB_KEY_WITH_COMPRESS
 
 ER_DEFINED_COMPRESS_COLUMN
   eng "Can not define column '%-.192s' in compressed format, silently change column_format to default"
+
+ER_UNMATCH_AFFECTED_ROWS
+  eng "The affected row number does not match that of user specified."

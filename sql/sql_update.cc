@@ -245,6 +245,7 @@ int mysql_update(THD *thd,
   List<Item> all_fields;
   THD::killed_state killed_status= THD::NOT_KILLED;
   COPY_INFO update(COPY_INFO::UPDATE_OPERATION, &fields, &values);
+  uint specified_affect_row;
 
   DBUG_ENTER("mysql_update");
 
@@ -963,6 +964,16 @@ int mysql_update(THD *thd,
     updated= table->file->end_read_removal();
     if (!records_are_comparable(table))
       found= updated;
+  }
+
+  specified_affect_row= thd->lex->target_affect_row;
+
+  if (specified_affect_row && updated != specified_affect_row)
+  {
+    my_message(ER_UNMATCH_AFFECTED_ROWS,
+               ER(ER_UNMATCH_AFFECTED_ROWS), MYF(0));
+    error= 1;
+    goto exit_without_my_ok;
   }
 
   if (!transactional_table && updated > 0)

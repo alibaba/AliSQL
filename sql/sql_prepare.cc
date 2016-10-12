@@ -4058,6 +4058,13 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
 
       error= mysql_execute_command(thd);
       thd->m_statement_psi= parent_locker;
+
+      if (!error && thd->lex->ci_on_success)
+        trans_commit(thd);
+
+      if (error && thd->lex->rb_on_fail)
+        trans_rollback(thd);
+
       MYSQL_QUERY_EXEC_DONE(error);
     }
   }

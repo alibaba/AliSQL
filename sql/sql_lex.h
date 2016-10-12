@@ -2444,6 +2444,10 @@ struct LEX: public Query_tables_list
   bool is_set_password_sql;
   bool contains_plaintext_password;
 
+  bool ci_on_success; /* has hint commit_on_success */
+  bool rb_on_fail; /* has hint rollback_on_fail */
+  ulonglong ic_reduce_id; /* queue_on_pk's id */
+  ulonglong target_affect_row; /* arg of target_affect_row */
 private:
   bool m_broken; ///< see mark_broken()
   /// Current SP parsing context.

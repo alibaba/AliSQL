@@ -719,9 +719,17 @@ The following options may be given as the first argument:
  --range-alloc-block-size=# 
  Allocation block size for storing ranges during
  optimization
+ --rds-allow-unsafe-stmt-with-gtid 
+ Allow executing CREATE TABLE AS SELECT or mixed engine
+ transactions if enabled.
  --rds-filter-key-cmp-in-order 
  If enabled, then match keys stored in filter list in
  order
+ --rds-gtid-precommit 
+ Add gtid into gtid_executed before flushing binlog from
+ cache to file.
+ --rds-ic-reduce-hint-enable 
+ enable the ic_reduce strategy when using hint
  --rds-indexstat     Control INDEX_STATISTICS
  --rds-reset-all-filter 
  Delete all sql filters immediately
@@ -740,12 +748,6 @@ The following options may be given as the first argument:
  --rds-threads-running-high-watermark=# 
  When threads_running exceeds this limit, query that isn't
  in active transaction should quit.
- --rds-allow-unsafe-stmt-with-gtid 
- Allow executing CREATE TABLE AS SELECT or mixed engine
- transactions if enabled.
- --rds-gtid-precommit 
- Add gtid into gtid_executed before flushing binlog from
- cache to file.
  --read-buffer-size=# 
  Each thread that does a sequential scan allocates a
  buffer of this size for each table it scans. If you do
@@ -1205,10 +1207,10 @@ block-encryption-mode aes-128-ecb
 bulk-insert-buffer-size 8388608
 character-set-client-handshake TRUE
 character-set-filesystem binary
-character-set-server latin1
+character-set-server gbk
 character-sets-dir MYSQL_CHARSETSDIR/
 chroot (No default value)
-collation-server latin1_swedish_ci
+collation-server gbk_chinese_ci
 completion-type NO_CHAIN
 concurrent-insert AUTO
 connect-timeout 10
@@ -1397,7 +1399,10 @@ query-cache-type OFF
 query-cache-wlock-invalidate FALSE
 query-prealloc-size 8192
 range-alloc-block-size 4096
+rds-allow-unsafe-stmt-with-gtid FALSE
 rds-filter-key-cmp-in-order FALSE
+rds-gtid-precommit FALSE
+rds-ic-reduce-hint-enable FALSE
 rds-indexstat FALSE
 rds-reset-all-filter FALSE
 rds-sql-delete-filter (No default value)
@@ -1407,8 +1412,6 @@ rds-sql-update-filter (No default value)
 rds-tablestat FALSE
 rds-threads-running-ctl-mode SELECTS
 rds-threads-running-high-watermark 151
-rds-allow-unsafe-stmt-with-gtid FALSE
-rds-gtid-precommit FALSE
 read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144

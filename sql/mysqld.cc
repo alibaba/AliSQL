@@ -552,6 +552,10 @@ bool host_cache_size_specified= false;
 bool table_definition_cache_specified= false;
 my_bool opt_rds_allow_unsafe_stmt_with_gtid= FALSE;
 
+my_bool ic_reduce_hint_enable= 0;
+HASH ic_gather_hash;
+pthread_mutex_t ic_gather_hash_lock;
+
 Error_log_throttle err_log_throttle(Log_throttle::LOG_THROTTLE_WINDOW_SIZE,
                                     sql_print_error,
                                     "Error log throttle: %10lu 'Can't create"
@@ -5300,6 +5304,19 @@ static void test_lc_time_sz()
 }
 #endif//DBUG_OFF
 
+
+static uchar *hash_item_get_key(const uchar *record, size_t *length, my_bool not_used __attribute__((unused)))
+{
+  ic_hash_item_t *entry= (ic_hash_item_t*) record;
+  *length= entry->key_len;
+  return (uchar*) entry->key;
+}
+
+static void hash_item_free_entry(ic_hash_item_t *record)
+{
+  delete record;
+}
+
 #ifdef __WIN__
 int win_main(int argc, char **argv)
 #else
@@ -5561,6 +5578,19 @@ int mysqld_main(int argc, char **argv)
 
   if (init_server_components())
     unireg_abort(1);
+
+  if (SCHEDULER_POOL_THREADS == thread_handling && TRUE == ic_reduce_hint_enable)
+  {
+      sql_print_error("You have enabled thread pool and rds_ic_reduce_hint_enable"
+                      " at the same time, this is not allowed.");
+      unireg_abort(1);
+  }
+
+  (void) my_hash_init(&ic_gather_hash, &my_charset_bin, 1024+16, 0, 0,
+                      (my_hash_get_key) hash_item_get_key,
+                      (my_hash_free_key) hash_item_free_entry, MYF(0));
+
+  pthread_mutex_init(&ic_gather_hash_lock, NULL);
 
   /*
     Each server should have one UUID. We will create it automatically, if it

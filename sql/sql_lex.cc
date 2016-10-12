@@ -461,6 +461,9 @@ void lex_start(THD *thd)
     lex->select_lex.order_list_ptrs->clear();
   lex->select_lex.gorder_list.empty();
   lex->duplicates= DUP_ERROR;
+  lex->ci_on_success= 0;
+  lex->rb_on_fail= 0;
+  lex->target_affect_row= 0;
   lex->ignore= 0;
   lex->spname= NULL;
   lex->sphead= NULL;

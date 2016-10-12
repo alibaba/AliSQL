@@ -1113,6 +1113,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  CHECKSUM_SYM
 %token  CHECK_SYM                     /* SQL-2003-R */
 %token  CIPHER_SYM
+%token  CI_ON_SUCCESS_SYM
 %token  CLASS_ORIGIN_SYM              /* SQL-2003-N */
 %token  CLIENT_SYM
 %token  CLOSE_SYM                     /* SQL-2003-R */
@@ -1463,8 +1464,10 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  PURGE
 %token  QUARTER_SYM
 %token  QUERY_SYM
+%token  QUEUE_ON_PK_SYM
 %token  QUICK
 %token  RANGE_SYM                     /* SQL-2003-R */
+%token  RB_ON_FAIL_SYM
 %token  READS_SYM                     /* SQL-2003-R */
 %token  READ_ONLY_SYM
 %token  READ_SYM                      /* SQL-2003-N */
@@ -1594,6 +1597,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  TABLE_SYM                     /* SQL-2003-R */
 %token  TABLE_CHECKSUM_SYM
 %token  TABLE_NAME_SYM                /* SQL-2003-N */
+%token  TARGET_AFFECT_SYM
 %token  TEMPORARY                     /* SQL-2003-N */
 %token  TEMPTABLE_SYM
 %token  TERMINATED
@@ -12065,7 +12069,7 @@ insert:
             lex->duplicates= DUP_ERROR; 
             mysql_init_select(lex);
           }
-          insert_lock_option
+          insert_lock_option opt_ci_on_success opt_rb_on_fail opt_queue_on_pk
           opt_ignore insert2
           {
             Select->set_lock_for_tables($3);
@@ -12272,7 +12276,7 @@ update:
             lex->sql_command= SQLCOM_UPDATE;
             lex->duplicates= DUP_ERROR; 
           }
-          opt_low_priority opt_ignore join_table_list
+          opt_low_priority opt_ci_on_success opt_rb_on_fail opt_queue_on_pk opt_target_affect_row opt_ignore join_table_list
           SET update_list
           {
             LEX *lex= Lex;
@@ -12326,6 +12330,26 @@ insert_update_elem:
 opt_low_priority:
           /* empty */ { $$= TL_WRITE_DEFAULT; }
         | LOW_PRIORITY { $$= TL_WRITE_LOW_PRIORITY; }
+        ;
+
+opt_queue_on_pk:
+          /* empty */ { Lex->ic_reduce_id= 0;}
+        | QUEUE_ON_PK_SYM ulonglong_num {Lex->ic_reduce_id= $2;}
+        ;
+
+opt_ci_on_success:
+          /* empty */ { Lex->ci_on_success= 0; }
+        | CI_ON_SUCCESS_SYM  {Lex->ci_on_success= 1;}
+        ;
+
+opt_rb_on_fail:
+         /* empty */ { Lex->rb_on_fail= 0; }
+        | RB_ON_FAIL_SYM  {Lex->rb_on_fail= 1;}
+        ;
+
+opt_target_affect_row:
+        /* empty */ {Lex->target_affect_row= 0;}
+        | TARGET_AFFECT_SYM ulonglong_num {Lex->target_affect_row= $2;}
         ;
 
 /* Delete rows from a table */

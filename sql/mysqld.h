@@ -455,6 +455,11 @@ extern uint host_cache_size;
 void init_sql_statement_names();
 extern my_bool opt_rds_allow_unsafe_stmt_with_gtid;
 
+
+extern HASH ic_gather_hash;
+extern pthread_mutex_t ic_gather_hash_lock;
+extern my_bool ic_reduce_hint_enable;
+
 /*
   THR_MALLOC is a key which will be used to set/get MEM_ROOT** for a thread,
   using my_pthread_setspecific_ptr()/my_thread_getspecific_ptr().

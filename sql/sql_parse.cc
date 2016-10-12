@@ -2340,6 +2340,62 @@ err:
   return TRUE;
 }
 
+/**
+  Check if need to wait on pk, and waitting.
+
+  @param thd                    Thread handler
+  @param all_tables             global table list of query
+  @param lex                    LEX for SELECT statement.
+*/
+void check_queue_on_pk(THD *thd, TABLE_LIST *all_tables, LEX *lex)
+{
+  if (thd->execute_item)
+    return;
+
+  unsigned long long primary_id= 0;
+
+  if (ic_reduce_hint_enable)
+  {
+    primary_id= thd->lex->ic_reduce_id;
+  }
+
+  if (primary_id == 0)
+    return;
+
+  ic_hash_item_t *new_item, *item;
+
+  new_item= new ic_hash_item_t;
+
+  new_item->key_len= snprintf(new_item->key, sizeof(new_item->key), "%s\1%s\1%llu",
+                              all_tables->db, all_tables->table_name, primary_id);
+  pthread_mutex_lock(&ic_gather_hash_lock);
+
+  item= (ic_hash_item_t*) my_hash_search(&ic_gather_hash, (const uchar*)new_item->key,
+                                         new_item->key_len);
+
+  if (!item)
+  {
+    item= new_item;
+    my_hash_insert(&ic_gather_hash, (const uchar*)new_item);
+  }
+  else
+  {
+    delete new_item;
+  }
+
+  pthread_mutex_lock(&item->queue_lock);
+  pthread_mutex_unlock(&ic_gather_hash_lock);
+
+  item->left_thread_num++;
+
+  pthread_mutex_unlock(&item->queue_lock);
+
+  DEBUG_SYNC(thd, "after_unlock_queue_lock_in_check");
+
+  thd->execute_item= item;
+
+  pthread_mutex_lock(&item->execute_lock);
+}
 
 /**
   Execute command saved in thd and lex->sql_command.
@@ -2396,6 +2452,7 @@ mysql_execute_command(THD *thd)
   thd->work_part_info= 0;
 #endif
 
+  thd->trx_end_by_hint= FALSE;
   DBUG_ASSERT(thd->transaction.stmt.is_empty() || thd->in_sub_stmt);
   /*
     Each statement or replication event which might produce deadlock
@@ -3393,6 +3450,7 @@ end_with_restore_list:
     DBUG_ASSERT(select_lex->offset_limit == 0);
     unit->set_limit(select_lex);
     MYSQL_UPDATE_START(thd->query());
+    check_queue_on_pk(thd, all_tables, lex);
     res= (up_result= mysql_update(thd, all_tables,
                                   select_lex->item_list,
                                   lex->value_list,
@@ -3402,6 +3460,18 @@ end_with_restore_list:
                                   unit->select_limit_cnt,
                                   lex->duplicates, lex->ignore,
                                   &found, &updated));
+    if (!res && lex->ci_on_success)
+    {
+      trans_commit_stmt(thd);
+      trans_commit(thd);
+      thd->trx_end_by_hint= TRUE;
+    }
+    else if (res && lex->rb_on_fail)
+    {
+      trans_rollback_stmt(thd);
+      trans_rollback(thd);
+      thd->trx_end_by_hint= TRUE;
+    }
     MYSQL_UPDATE_DONE(res, found, updated);
     /* mysql_update return 2 if we need to switch to multi-update */
     if (up_result != 2)
@@ -3535,9 +3605,22 @@ end_with_restore_list:
       break;
 
     MYSQL_INSERT_START(thd->query());
+    check_queue_on_pk(thd, all_tables, lex);
     res= mysql_insert(thd, all_tables, lex->field_list, lex->many_values,
 		      lex->update_list, lex->value_list,
                       lex->duplicates, lex->ignore);
+    if (!res && lex->ci_on_success)
+    {
+      trans_commit_stmt(thd);
+      trans_commit(thd);
+      thd->trx_end_by_hint= TRUE;
+    }
+    else if (res && lex->rb_on_fail)
+    {
+      trans_rollback_stmt(thd);
+      trans_rollback(thd);
+      thd->trx_end_by_hint= TRUE;
+    }
     MYSQL_INSERT_DONE(res, (ulong) thd->get_row_count_func());
     /*
       If we have inserted into a VIEW, and the base table has
@@ -5125,7 +5208,9 @@ dec_filter_item_conc(thd, lex->sql_command);
       thd->killed= THD::NOT_KILLED;
       thd->mysys_var->abort= 0;
     }
-    if (thd->is_error() || (thd->variables.option_bits & OPTION_MASTER_SQL_ERROR))
+    if (thd->trx_end_by_hint)
+      thd->get_stmt_da()->set_overwrite_status(false);
+    else if (thd->is_error() || (thd->variables.option_bits & OPTION_MASTER_SQL_ERROR))
       trans_rollback_stmt(thd);
     else
     {
@@ -6495,7 +6580,17 @@ void mysql_parse(THD *thd, char *rawbuf, uint length,
             error= 1;
           }
           else
+          {
             error= mysql_execute_command(thd);
+            if (!thd->trx_end_by_hint)
+            {
+              if (!error && lex->ci_on_success)
+                trans_commit(thd);
+
+              if (error && lex->rb_on_fail)
+                trans_rollback(thd);
+            }
+          }
           if (error == 0 &&
               thd->variables.gtid_next.type == GTID_GROUP &&
               thd->owned_gtid.sidno != 0 &&

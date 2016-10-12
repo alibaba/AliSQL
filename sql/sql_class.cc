@@ -860,6 +860,18 @@ char *thd_security_context(THD *thd, char *buffer, unsigned int length,
   return buffer;
 }
 
+st_ic_hash_item::st_ic_hash_item()
+{
+  left_thread_num= 0;
+  pthread_mutex_init(&queue_lock, NULL);
+  pthread_mutex_init(&execute_lock, NULL);
+}
+
+st_ic_hash_item::~st_ic_hash_item()
+{
+  (void) pthread_mutex_destroy(&queue_lock);
+  (void) pthread_mutex_destroy(&execute_lock);
+}
 
 /**
   Implementation of Drop_table_error_handler::handle_condition().
@@ -968,6 +980,8 @@ THD::THD(bool enable_plugins)
    duplicate_slave_id(false)
 {
   ulong tmp;
+
+  execute_item= NULL;
 
   mdl_context.init(this);
   status_var.memory_used= 0;

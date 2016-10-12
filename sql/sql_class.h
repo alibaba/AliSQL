@@ -2104,6 +2104,20 @@ my_micro_time_to_timeval(ulonglong micro_time, struct timeval *tm)
   tm->tv_usec= (long) (micro_time % 1000000);
 }
 
+typedef struct st_ic_hash_item
+{
+  pthread_mutex_t queue_lock, execute_lock;
+
+  uint left_thread_num;
+
+  size_t key_len;
+  char key[2*NAME_CHAR_LEN + 10];
+
+  st_ic_hash_item();
+  ~st_ic_hash_item();
+
+}ic_hash_item_t;
+
 /**
   @class THD
   For each client connection we create a separate thread with THD serving as
@@ -2231,6 +2245,8 @@ public:
     allocated) strings, which memory won't go away over time.
   */
   const char *proc_info;
+  bool trx_end_by_hint;
+  ic_hash_item_t *execute_item;
 
 private:
   unsigned int m_current_stage_key;
