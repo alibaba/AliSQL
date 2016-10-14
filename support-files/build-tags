@@ -1,0 +1,12 @@
+#! /bin/sh
+
+rm -f TAGS
+filter='\.cpp$\|\.cc$\|\.c$\|\.h$\|sql_yacc\.yy$\|\.hpp$\|\.ic$'
+
+list="find . -type f"
+git rev-parse >/dev/null 2>/dev/null && list="git ls-files"
+
+$list |grep $filter |while read f; 
+do
+	 etags -o TAGS --append $f
+done

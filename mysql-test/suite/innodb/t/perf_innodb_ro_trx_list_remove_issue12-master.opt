@@ -1,0 +1,4 @@
+--query_cache_size=1M
+--query_cache_type=1
+--innodb_autoinc_lock_mode=0
+--binlog-format=row

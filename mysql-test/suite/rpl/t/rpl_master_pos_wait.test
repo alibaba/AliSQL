@@ -1,0 +1,36 @@
+#
+# Check what happens when there is an error with parameters provided
+# to MASTER_POS_WAIT and when it timeouts.
+#
+source include/master-slave.inc;
+--source include/sync_slave_sql_with_master.inc
+
+#
+# MASTER_POS_WAIT: Check if time-out is correctly handled.
+#
+select master_pos_wait('master-bin.999999',0,2);
+explain extended select master_pos_wait('master-bin.999999',0,2);
+
+#
+# MASTER_POS_WAIT (BUG#651): Check if it hangs when slave is 
+# idle and STOP SLAVE is issued.
+#
+send select master_pos_wait('master-bin.999999',0);
+connection slave1;
+stop slave sql_thread;
+connection slave;
+reap;
+
+#
+#  MASTER_POS_WAIT (BUG#26622): it does not work as documented
+#
+connection master;
+echo "*** must be empty ***";
+query_vertical show slave status;
+
+echo "*** must be NULL ***";
+select master_pos_wait('foo', 98);
+
+# End of 4.1 tests
+--let $rpl_only_running_threads= 1
+--source include/rpl_end.inc

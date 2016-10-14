@@ -1,0 +1,215 @@
+-- source include/mysql_upgrade_preparation.inc
+
+#
+# Basic test that we can run mysql_upgrde and that it finds the
+# expected binaries it uses.
+#
+--echo Run mysql_upgrade once
+--exec $MYSQL_UPGRADE --skip-verbose --force 2>&1
+
+# It should have created a file in the MySQL Servers datadir
+let $MYSQLD_DATADIR= `select @@datadir`;
+file_exists $MYSQLD_DATADIR/mysql_upgrade_info;
+
+--echo Run it again - should say already completed
+--replace_result $MYSQL_SERVER_VERSION VERSION
+--error 1
+--exec $MYSQL_UPGRADE --skip-verbose 2>&1
+
+# It should have created a file in the MySQL Servers datadir
+file_exists $MYSQLD_DATADIR/mysql_upgrade_info;
+
+--echo Force should run it regardless of wether it's been run before
+--exec $MYSQL_UPGRADE --skip-verbose --force 2>&1
+
+# It should have created a file in the MySQL Servers datadir
+file_exists $MYSQLD_DATADIR/mysql_upgrade_info;
+
+
+#
+# Bug #25452 mysql_upgrade access denied.
+#
+
+# Password protect a root account and run mysql_upgrade
+
+CREATE USER mysqltest1@'%' IDENTIFIED by 'sakila';
+GRANT ALL ON *.* TO mysqltest1@'%';
+--echo Run mysql_upgrade with password protected account
+--exec $MYSQL_UPGRADE --skip-verbose --force --user=mysqltest1 --password=sakila 2>&1
+
+DROP USER mysqltest1@'%';
+
+
+#
+# Bug #26639 mysql_upgrade exits successfully even if external command failed
+#
+
+--echo Run mysql_upgrade with a non existing server socket
+--replace_result $MYSQLTEST_VARDIR var
+--replace_regex /.*mysqlcheck.*: Got/mysqlcheck: Got/ /\([0-9]*\)/(errno)/
+--error 1
+# NC: Added --skip-version-check, as the version check would fail when
+# mysql_upgrade tries to get the server version.
+--exec $MYSQL_UPGRADE --skip-verbose --force --host=not_existing_host --skip-version-check 2>&1
+
+#
+# Bug #28401 mysql_upgrade Failed with STRICT_ALL_TABLES, ANSI_QUOTES and NO_ZERO_DATE
+#
+
+# The SQL commands used by mysql_upgrade are written to be run
+# with sql_mode set to '' - thus the scripts should change sql_mode
+# for the session to make sure the SQL is legal.
+
+# Test by setting sql_mode before running mysql_upgrade
+set GLOBAL sql_mode='STRICT_ALL_TABLES,ANSI_QUOTES,NO_ZERO_DATE';
+--exec $MYSQL_UPGRADE --skip-verbose --force 2>&1
+eval set GLOBAL sql_mode=default;
+
+--echo #
+--echo # Bug #41569 mysql_upgrade (ver 5.1) add 3 fields to mysql.proc table 
+--echo # but does not set values.
+--echo #
+
+# Create a stored procedure and set the fields in question to null. 
+# When running mysql_upgrade, a warning should be written.
+
+CREATE PROCEDURE testproc() BEGIN END;
+UPDATE mysql.proc SET character_set_client = NULL WHERE name LIKE 'testproc';
+UPDATE mysql.proc SET collation_connection = NULL WHERE name LIKE 'testproc';
+UPDATE mysql.proc SET db_collation = NULL WHERE name LIKE 'testproc';
+--exec $MYSQL_UPGRADE --skip-verbose --force 2> $MYSQLTEST_VARDIR/tmp/41569.txt
+CALL testproc();
+DROP PROCEDURE testproc;
+--cat_file $MYSQLTEST_VARDIR/tmp/41569.txt
+--remove_file $MYSQLTEST_VARDIR/tmp/41569.txt
+
+
+--echo #
+--echo # Bug #53613: mysql_upgrade incorrectly revokes 
+--echo #   TRIGGER privilege on given table
+--echo #
+
+GRANT USAGE ON *.* TO 'user3'@'%';
+GRANT ALL PRIVILEGES ON `roelt`.`test2` TO 'user3'@'%';
+--echo Run mysql_upgrade with all privileges on a user
+--exec $MYSQL_UPGRADE --skip-verbose --force 2>&1
+SHOW GRANTS FOR 'user3'@'%';
+
+DROP USER 'user3'@'%';
+
+--echo End of 5.1 tests
+
+
+#
+# Test the --upgrade-system-tables option
+#
+--replace_result $MYSQLTEST_VARDIR var
+--exec $MYSQL_UPGRADE --skip-verbose --force --upgrade-system-tables
+
+--echo #
+--echo # Bug#12688860 : SECURITY RECOMMENDATION: PASSWORDS ON CLI
+--echo #
+--exec $MYSQL_UPGRADE -uroot --password= --skip-verbose --force 2>&1
+
+
+--echo #
+--echo # Bug#11827359 60223: MYSQL_UPGRADE PROBLEM WITH OPTION
+--echo #                     SKIP-WRITE-BINLOG
+--echo #
+
+let $MYSQLD_DATADIR= `select @@datadir`;
+
+--echo # Droping the previously created mysql_upgrade_info file..
+--remove_file $MYSQLD_DATADIR/mysql_upgrade_info
+
+--echo # Running mysql_upgrade with --skip-write-binlog..
+--replace_result $MYSQLTEST_VARDIR var
+--exec $MYSQL_UPGRADE --skip-verbose --skip-write-binlog
+
+# mysql_upgrade must have created mysql_upgrade_info file,
+# so the following command should never fail.
+--remove_file $MYSQLD_DATADIR/mysql_upgrade_info
+
+--echo # Running mysql_upgrade with --write-binlog..
+--replace_result $MYSQLTEST_VARDIR var
+--exec $MYSQL_UPGRADE --skip-verbose --write-binlog
+
+# mysql_upgrade must have created mysql_upgrade_info file,
+# so the following command should never fail.
+--remove_file $MYSQLD_DATADIR/mysql_upgrade_info
+
+--echo #
+--echo # Bug# 13586336: issue deprecation warning
+--echo #   for legacy authentication method
+--echo #
+
+CREATE USER 'bug13586336'@'localhost' IDENTIFIED WITH 'mysql_old_password';
+SET PASSWORD FOR 'bug13586336'@'localhost' = OLD_PASSWORD('a');
+--echo Run mysql_upgrade with all privileges on a user
+--exec $MYSQL_UPGRADE --skip-verbose --force 2>&1
+DROP USER 'bug13586336'@'localhost';
+
+--echo #
+--echo # Bug #20023823 BACKPORT THE FIX FOR MYSQL_INSTALL_DB/MYSQL_UPGRADE
+--echo #               ON NON-EMPTY PLUGIN COLUMN
+--echo #
+
+--echo # Creating user with empty plugin and empty password
+--echo # plugin should be changed to mysql_native_password after the update
+
+CREATE USER B20023823_empty@localhost;
+GRANT ALL PRIVILEGES on *.* TO B20023823_empty@localhost;
+update mysql.user set plugin='' WHERE user='B20023823_empty'
+                                and host='localhost';
+flush privileges;
+--echo # Creating user with default plugin, i.e. mysql_native_password
+--echo # this plugin should not be changed during the upgrade
+
+CREATE USER B20023823_def@localhost IDENTIFIED BY 'test';
+
+--echo # Creating user with 41 bytes hash pass (default) and setting its plugin
+--echo # to empty string. Plugin should be set to mysql_native_password
+--echo # after the upgrade is finished
+
+CREATE USER B20023823_41hash@localhost IDENTIFIED WITH mysql_native_password;
+set session old_passwords=0;
+set password for B20023823_41hash@localhost = password('test');
+update mysql.user set plugin='' WHERE user='B20023823_41hash'
+                                      and host='localhost';
+flush privileges;
+
+--echo # Creating user with 16 bytes hash pass and setting its plugin
+--echo # to empty string. Plugin should be set to mysql_old_password
+--echo # after the upgrade is finished
+
+CREATE USER B20023823_16hash@localhost identified with mysql_old_password;
+set session old_passwords=1;
+set password for B20023823_16hash@localhost = password('test');
+update mysql.user set plugin='' WHERE user='B20023823_16hash'
+                                and host='localhost';
+flush privileges;
+SELECT user, plugin from mysql.user;
+
+--echo # repair the user's plugin
+--exec $MYSQL_UPGRADE --skip-verbose --force 2>&1
+
+--echo # expect non-empty
+SELECT user, plugin from mysql.user;
+
+--echo # cleanup
+DROP USER B20023823_empty@localhost;
+DROP USER B20023823_def@localhost;
+DROP USER B20023823_41hash@localhost;
+DROP USER B20023823_16hash@localhost;
+
+
+--echo #
+--echo # Bug #21489398: MYSQL_UPGRADE: FATAL ERROR: UPGRADE FAILED - IMPROVE ERROR
+--echo #
+
+--echo Run mysql_upgrade with unauthorized access
+--error 1
+--exec $MYSQL_UPGRADE --skip-verbose --user=root --password=wrong_password 2>&1
+
+--echo
+--echo End of tests

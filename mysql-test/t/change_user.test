@@ -1,0 +1,135 @@
+#
+# functional change user tests
+#
+connect (con_main,localhost,root,,,,,SKIPSECUREAUTH);
+
+SET GLOBAL secure_auth = OFF;
+grant select on test.* to test_nopw;
+create user test_oldpw identified with 'mysql_old_password';
+# need to suppress the deprecation warnings because they're absent in embedded
+--disable_warnings
+grant select on test.* to test_oldpw identified by password "09301740536db389";
+--enable_warnings
+grant select on test.* to test_newpw identified by "newpw";
+
+select user(), current_user(), database();
+#
+# massaging the data for tests to pass in the embedded server,
+# that has authentication completely disabled.
+#
+
+--replace_result <@> <test_nopw@%> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+   
+
+change_user test_nopw;
+--replace_result <@> <test_nopw@%> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+change_user test_oldpw, oldpw;
+--replace_result <@> <test_oldpw@%> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+change_user test_newpw, newpw;
+--replace_result <@> <test_newpw@%> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+change_user root;
+--replace_result <@> <root@localhost> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+
+change_user test_nopw,,test;
+--replace_result <@> <test_nopw@%> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+change_user test_oldpw,oldpw,test;
+--replace_result <@> <test_oldpw@%> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+change_user test_newpw,newpw,test;
+--replace_result <@> <test_newpw@%> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+change_user root,,test;
+--replace_result <@> <root@localhost> @> @localhost>
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+
+drop user test_nopw;
+drop user test_oldpw;
+drop user test_newpw;
+
+SET GLOBAL secure_auth = DEFAULT;
+
+connection default;
+disconnect con_main;
+
+#
+# Bug#20023 mysql_change_user() resets the value of SQL_BIG_SELECTS
+#
+
+--echo Bug#20023
+SELECT @@session.sql_big_selects;
+# The exact value depends on the server build flags
+--replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
+SELECT @@global.max_join_size;
+--echo change_user
+--change_user
+SELECT @@session.sql_big_selects;
+# The exact value depends on the server build flags
+--replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
+SELECT @@global.max_join_size;
+SET @@global.max_join_size = 10000;
+SET @@session.max_join_size = default;
+--echo change_user
+--change_user
+SELECT @@session.sql_big_selects;
+# On some machines the following will result into a warning
+--disable_warnings
+SET @@global.max_join_size = 18446744073709551615;
+--enable_warnings
+SET @@session.max_join_size = default;
+--echo change_user
+--change_user
+SELECT @@session.sql_big_selects;
+
+#
+# Bug#31418 User locks misfunctioning after mysql_change_user()
+#
+
+--echo Bug#31418
+SELECT IS_FREE_LOCK('bug31418');
+SELECT IS_USED_LOCK('bug31418');
+SELECT GET_LOCK('bug31418', 1);
+SELECT IS_USED_LOCK('bug31418') = CONNECTION_ID();
+--echo change_user
+--change_user
+SELECT IS_FREE_LOCK('bug31418');
+SELECT IS_USED_LOCK('bug31418');
+
+#
+# Bug#31222: com_% global status counters behave randomly with
+# mysql_change_user.
+#
+
+FLUSH STATUS;
+
+--disable_result_log
+--disable_query_log
+
+let $i = 100;
+
+while ($i)
+{
+  dec $i;
+
+  SELECT 1;
+}
+
+--enable_query_log
+--enable_result_log
+
+let $before= query_get_value(SHOW GLOBAL STATUS LIKE 'com_select',Value,1);
+
+--change_user
+
+let $after= query_get_value(SHOW GLOBAL STATUS LIKE 'com_select',Value,1);
+
+if ($after != $before){
+  SHOW GLOBAL STATUS LIKE 'com_select';
+  die The value of com_select changed during change_user;
+}
+echo Value of com_select did not change;

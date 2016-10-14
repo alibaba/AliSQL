@@ -1,0 +1,433 @@
+# This test requires that --log-output includes 'table', and the general
+# log is on
+
+# embedded server causes different stat
+-- source include/not_embedded.inc
+
+# Save the initial number of concurrent sessions
+--source include/count_sessions.inc
+
+# Disable concurrent inserts to avoid sporadic test failures as it might
+# affect the the value of variables used throughout the test case.
+set @old_concurrent_insert= @@global.concurrent_insert;
+set @@global.concurrent_insert= 0;
+
+# Disable logging to table, since this will also cause table locking and unlocking, which will
+# show up in SHOW STATUS and may cause sporadic failures
+
+SET @old_log_output = @@global.log_output;
+SET GLOBAL LOG_OUTPUT = 'FILE';
+
+# PS causes different statistics
+--disable_ps_protocol
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+
+flush status;
+
+show status like 'Table_lock%';
+select * from information_schema.session_status where variable_name like 'Table_lock%';
+
+connection con1;
+--echo # Switched to connection: con1
+set sql_log_bin=0;
+set @old_general_log = @@global.general_log;
+set global general_log = 'OFF';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(n int) engine=myisam;
+insert into t1 values(1);
+# Execute dummy select in order to ensure that tables used in the
+# previous statement are unlocked and closed.
+select 1;
+
+connection con2;
+--echo # Switched to connection: con2
+lock tables t1 read;
+unlock tables;
+lock tables t1 read;
+
+connection con1;
+--echo # Switched to connection: con1
+let $ID= `select connection_id()`;
+--send update t1 set n = 3
+
+connection con2;
+--echo # Switched to connection: con2
+# wait for the other query to start executing
+let $wait_condition= select 1 from INFORMATION_SCHEMA.PROCESSLIST
+                     where ID = $ID and STATE = "Waiting for table level lock";
+--source include/wait_condition.inc
+unlock tables;
+
+connection con1;
+--echo # Switched to connection: con1
+reap;
+show status like 'Table_locks_waited';
+drop table t1;
+set global general_log = @old_general_log;
+
+disconnect con2;
+disconnect con1;
+connection default;
+--echo # Switched to connection: default
+
+# End of 4.1 tests
+
+#
+# last_query_cost
+#
+
+select 1;
+show status like 'last_query_cost';
+create table t1 (a int);
+insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+select * from t1 where a=6;
+show status like 'last_query_cost';
+# Ensure value dosn't change by second status call
+show status like 'last_query_cost';
+select 1;
+show status like 'last_query_cost';
+drop table t1;
+
+#
+# Test for Bug#15933 max_used_connections is wrong after FLUSH STATUS
+# if connections are cached
+#
+#
+# The first suggested fix from the bug report was chosen
+# (see http://bugs.mysql.com/bug.php?id=15933):
+#
+#   a) On flushing the status, set max_used_connections to
+#   threads_connected, not to 0.
+#
+#   b) Check if it is necessary to increment max_used_connections when
+#   taking a thread from the cache as well as when creating new threads
+#
+
+# Wait for at most $disconnect_timeout seconds for disconnects to finish.
+let $disconnect_timeout = 10;
+
+# Wait for any previous disconnects to finish.
+FLUSH STATUS;
+--disable_query_log
+--disable_result_log
+eval SET @wait_left = $disconnect_timeout;
+let $max_used_connections = `SHOW STATUS LIKE 'max_used_connections'`;
+eval SET @max_used_connections = SUBSTRING('$max_used_connections', 21)+0;
+let $wait_more = `SELECT @max_used_connections != 1 && @wait_left > 0`;
+while ($wait_more)
+{
+  sleep 1;
+  FLUSH STATUS;
+  SET @wait_left = @wait_left - 1;
+  let $max_used_connections = `SHOW STATUS LIKE 'max_used_connections'`;
+  eval SET @max_used_connections = SUBSTRING('$max_used_connections', 21)+0;
+  let $wait_more = `SELECT @max_used_connections != 1 && @wait_left > 0`;
+}
+--enable_query_log
+--enable_result_log
+
+# Prerequisite.
+SHOW STATUS LIKE 'max_used_connections';
+SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+
+# Save original setting.
+SET @save_thread_cache_size=@@thread_cache_size;
+SET GLOBAL thread_cache_size=3;
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+
+connection con1;
+disconnect con2;
+
+# Check that max_used_connections still reflects maximum value.
+SHOW STATUS LIKE 'max_used_connections';
+SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+
+# Check that after flush max_used_connections equals to current number
+# of connections.  First wait for previous disconnect to finish.
+FLUSH STATUS;
+--disable_query_log
+--disable_result_log
+eval SET @wait_left = $disconnect_timeout;
+let $max_used_connections = `SHOW STATUS LIKE 'max_used_connections'`;
+eval SET @max_used_connections = SUBSTRING('$max_used_connections', 21)+0;
+let $wait_more = `SELECT @max_used_connections != 2 && @wait_left > 0`;
+while ($wait_more)
+{
+  sleep 1;
+  FLUSH STATUS;
+  SET @wait_left = @wait_left - 1;
+  let $max_used_connections = `SHOW STATUS LIKE 'max_used_connections'`;
+  eval SET @max_used_connections = SUBSTRING('$max_used_connections', 21)+0;
+  let $wait_more = `SELECT @max_used_connections != 2 && @wait_left > 0`;
+}
+--enable_query_log
+--enable_result_log
+# Check that we don't count disconnected thread any longer.
+SHOW STATUS LIKE 'max_used_connections';
+SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+
+# Check that max_used_connections is updated when cached thread is
+# reused...
+connect (con2,localhost,root,,);
+SHOW STATUS LIKE 'max_used_connections';
+SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+
+# ...and when new thread is created.
+connect (con3,localhost,root,,);
+SHOW STATUS LIKE 'max_used_connections';
+SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+
+# Restore original setting.
+connection default;
+SET GLOBAL thread_cache_size=@save_thread_cache_size;
+
+disconnect con3;
+disconnect con2;
+disconnect con1;
+
+
+#
+# Bug#30377 EXPLAIN loses last_query_cost when used with UNION
+#
+
+CREATE TABLE t1 ( a INT );
+INSERT INTO t1 VALUES (1), (2);
+
+SELECT a FROM t1 LIMIT 1;
+SHOW SESSION STATUS LIKE 'Last_query_cost';
+
+EXPLAIN SELECT a FROM t1;
+SHOW SESSION STATUS LIKE 'Last_query_cost';
+
+SELECT a FROM t1 UNION SELECT a FROM t1 ORDER BY a;
+SHOW SESSION STATUS LIKE 'Last_query_cost';
+
+EXPLAIN SELECT a FROM t1 UNION SELECT a FROM t1 ORDER BY a;
+SHOW SESSION STATUS LIKE 'Last_query_cost';
+
+SELECT a IN (SELECT a FROM t1) FROM t1 LIMIT 1;
+SHOW SESSION STATUS LIKE 'Last_query_cost';
+
+SELECT (SELECT a FROM t1 LIMIT 1) x FROM t1 LIMIT 1;
+SHOW SESSION STATUS LIKE 'Last_query_cost';
+
+SELECT * FROM t1 a, t1 b LIMIT 1;
+SHOW SESSION STATUS LIKE 'Last_query_cost';
+
+DROP TABLE t1;
+
+
+# End of 5.0 tests
+
+#
+# Ensure that SHOW STATUS only changes global status variables
+#
+
+connect (con1,localhost,root,,);
+let $rnd_next = `show global status like 'handler_read_rnd_next'`;
+let $tmp_table = `show global status like 'Created_tmp_tables'`;
+show status like 'com_show_status';
+show status like 'hand%write%';
+show status like '%tmp%';
+show status like 'hand%write%';
+show status like '%tmp%';
+show status like 'com_show_status';
+let $rnd_next2 = `show global status like 'handler_read_rnd_next'`;
+let $tmp_table2 = `show global status like 'Created_tmp_tables'`;
+--disable_query_log
+eval select substring_index('$rnd_next2',0x9,-1)-substring_index('$rnd_next',0x9,-1) as rnd_diff, substring_index('$tmp_table2',0x9,-1)-substring_index('$tmp_table',0x9,-1) as tmp_table_diff;
+--enable_query_log
+disconnect con1;
+connection default;
+
+#
+# Bug#30252 Com_create_function is not incremented.
+#
+flush status;
+show status like 'Com%function';
+
+DELIMITER //;
+create function f1 (x INTEGER) returns integer
+  begin
+    declare ret integer;
+    set ret = x * 10;
+    return ret;
+  end //
+DELIMITER ;//
+
+drop function f1;
+
+show status like 'Com%function';
+
+#
+# Bug#37908 Skipped access right check caused server crash.
+#
+connect (root, localhost, root,,test);
+connection root;
+let $root_connection_id= `select connection_id()`;
+--disable_warnings
+create database db37908;
+--enable_warnings
+create table db37908.t1(f1 int);
+insert into db37908.t1 values(1);
+grant usage,execute on test.* to mysqltest_1@localhost;
+delimiter |;
+create procedure proc37908() begin select 1; end |
+create function func37908() returns int sql security invoker
+  return (select * from db37908.t1 limit 1)|
+delimiter ;|
+
+connect (user1,localhost,mysqltest_1,,test);
+connection user1;
+let $user1_connection_id= `select connection_id()`;
+
+--error ER_TABLEACCESS_DENIED_ERROR
+select * from db37908.t1;
+--error ER_TABLEACCESS_DENIED_ERROR
+show status where variable_name ='uptime' and 2 in (select * from db37908.t1);
+--error ER_TABLEACCESS_DENIED_ERROR
+show procedure status where name ='proc37908' and 1 in (select f1 from db37908.t1);
+--error ER_TABLEACCESS_DENIED_ERROR
+show function status where name ='func37908' and 1 in (select func37908());
+
+connection default;
+disconnect user1;
+disconnect root;
+drop database db37908;
+drop procedure proc37908;
+drop function func37908;
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM mysqltest_1@localhost;
+DROP USER mysqltest_1@localhost;
+# Wait till the sessions user1 and root are disconnected
+let $wait_condition =
+  SELECT COUNT(*) = 0
+  FROM information_schema.processlist
+  WHERE  id in ('$root_connection_id','$user1_connection_id');
+--source include/wait_condition.inc
+
+#
+# Bug#41131 "Questions" fails to increment - ignores statements instead stored procs
+#
+connect (con1,localhost,root,,);
+connection con1;
+--disable_warnings
+DROP PROCEDURE IF EXISTS p1;
+DROP FUNCTION IF EXISTS f1;
+--enable_warnings
+DELIMITER $$;
+CREATE FUNCTION f1() RETURNS INTEGER
+BEGIN
+  DECLARE foo INTEGER;
+  DECLARE bar INTEGER;
+  SET foo=1;
+  SET bar=2;
+  RETURN foo;
+END $$
+CREATE PROCEDURE p1()
+  BEGIN
+  SELECT 1;
+END $$
+DELIMITER ;$$
+let $org_queries= `SHOW STATUS LIKE 'Queries'`;
+SELECT f1();
+CALL p1();
+let $new_queries= `SHOW STATUS LIKE 'Queries'`;
+--disable_query_log
+let $diff= `SELECT SUBSTRING('$new_queries',9)-SUBSTRING('$org_queries',9)`;
+--enable_query_log
+eval SELECT $diff;
+disconnect con1;
+connection default;
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+
+# End of 5.1 tests
+
+
+--echo #
+--echo # Test coverage for status variables which were introduced by
+--echo # WL#5772 "Add partitioned Table Definition Cache to avoid
+--echo # using LOCK_open and its derivatives in DML queries".
+--echo #
+create table t1 (i int);
+create table t2 (j int);
+create table t3 (k int);
+--echo # Flush table cache to ensure that it is empty and reset status
+--echo # variables. Since to test cache overflow we will need to reduce
+--echo # its size, also save original table cache size.
+flush tables;
+flush status;
+set @old_table_open_cache= @@table_open_cache;
+
+--echo # Check that after reset all status variables are zero.
+show status like 'table_open_cache_%';
+
+--echo # The first statement accessing t1 after flush should result
+--echo # in table cache miss.
+select * from t1;
+show status like 'table_open_cache_%';
+
+--echo # The second statement accessing the same table should
+--echo # result in table cache hit.
+select * from t1;
+show status like 'table_open_cache_%';
+
+--echo # Again table cache miss if accessing different table.
+select * from t2;
+show status like 'table_open_cache_%';
+
+--echo # And cache hit then accessing it second time.
+select * from t2;
+show status like 'table_open_cache_%';
+
+--echo # The below statement should result in 2 cache hits and 
+--echo # 4 cache misses since it needs 6 table instances in total.
+select * from t1 as a, t2 as b, t1 as c, t2 as d, t1 as e, t2 as f;
+show status like 'table_open_cache_%';
+
+--echo # Reduce size of table cache to check that status
+--echo # variable tracking cache overflows works.
+set @@global.table_open_cache= 4;
+
+--echo # The below statement should result in table cache hit, but
+--echo # as a side effect it should result in trimming of table
+--echo # cache by 2 TABLE instances, meaning that overflow counter
+--echo # will get increased by 2.
+select * from t1;
+show status like 'table_open_cache_%';
+
+--echo # This statement should result in 4 cache hits, 2 cache misses/
+--echo # overflows.
+select * from t1 as a, t2 as b, t1 as c, t2 as d, t1 as e, t2 as f;
+show status like 'table_open_cache_%';
+
+--echo # Finally, the below statement should result in 1 cache miss
+--echo # and 1 overflow since it accesses table which is not yet in
+--echo # cache and table cache is full.
+select * from t3;
+show status like 'table_open_cache_%';
+
+--echo # Cleanup
+set @@global.table_open_cache= @old_table_open_cache;
+drop tables t1, t2, t3;
+
+
+# Restore global concurrent_insert value. Keep in the end of the test file.
+--connection default
+set @@global.concurrent_insert= @old_concurrent_insert;
+SET GLOBAL log_output = @old_log_output;
+
+# Wait till we reached the initial number of concurrent sessions
+--source include/wait_until_count_sessions.inc
+

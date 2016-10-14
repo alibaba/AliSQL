@@ -1,0 +1,4 @@
+max-time: 600
+cmd: testBasic
+args: -n PkRead T1
+

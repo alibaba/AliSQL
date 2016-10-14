@@ -1,0 +1,4 @@
+--default-storage-engine=MyISAM 
+--default-tmp-storage-engine=MyISAM 
+--skip-innodb
+--server-id=0
