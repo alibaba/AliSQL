@@ -1004,7 +1004,7 @@ end_thread:
     thd->thread_stack= (char*) &thd;
   }
 }
-
+#endif /* EMBEDDED_LIBRARY */
 extern "C" uchar *get_key_table_stats(TABLE_STATS *table_stats, size_t *length,
                                      my_bool not_used __attribute__((unused)))
 {
@@ -1060,4 +1060,3 @@ void free_global_index_stats(void)
 {
   my_hash_free(&global_index_stats);
 }
-#endif /* EMBEDDED_LIBRARY */
