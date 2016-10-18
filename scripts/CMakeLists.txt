@@ -282,9 +282,13 @@ MACRO(EXTRACT_LINK_LIBRARIES target var)
     LIST(REMOVE_ITEM ${target}_LIB_DEPENDS "")
     LIST(REMOVE_DUPLICATES ${target}_LIB_DEPENDS)
     FOREACH(lib ${${target}_LIB_DEPENDS})
+      # TokuDB SE is built statically into AliSQL, and depends on stdc++ lib,
+      # which will be used here. The '+' character has special meaning in
+      # cmake regex, so "stdc++" need to be escaped before do matching.
+      string(REPLACE  "++" "\\+\\+" lib_escaped ${lib})
       # Filter out "general", it is not a library, just CMake hint
       # Also, remove duplicates
-      IF(NOT lib STREQUAL "general" AND NOT ${var}  MATCHES "-l${lib} ")
+      IF(NOT lib STREQUAL "general" AND NOT ${var}  MATCHES "-l${lib_escaped} ")
         IF (lib MATCHES "^\\-l")
           SET(${var} "${${var}} ${lib} ") 
         ELSEIF(lib MATCHES "^/")
