@@ -1,0 +1,244 @@
+--source include/have_innodb.inc
+
+CALL mtr.add_suppression("already exists though the corresponding table");
+CALL mtr.add_suppression("returned OS error 71");
+CALL mtr.add_suppression("Cannot create file");
+CALL mtr.add_suppression("Error number 17 means");
+CALL mtr.add_suppression("Maybe it doesn't exist in innodb");
+CALL mtr.add_suppression("Could not find a valid tablespace file");
+CALL mtr.add_suppression("nnoDB: Tablespace open failed for");
+CALL mtr.add_suppression("InnoDB: Failed to find tablespace");
+
+create database zwx;
+use zwx;
+
+#Only allow supper user to do FORCE DROP.
+grant all on zwx.* to 'nosuper'@'%';
+
+connect(no_super, localhost, nosuper,,);
+
+connection no_super;
+--error 1227
+drop table force t1;
+
+connection default;
+
+let $MYSQLD_DATADIR= `select @@datadir`;
+
+create table t1 (a int) engine=innodb;
+
+--echo rm zwx/t1.ibd
+--remove_file $MYSQLD_DATADIR/zwx/t1.ibd
+
+drop table t1;
+
+create table t1 (a int) engine=innodb;
+
+--echo rm zwx/t1.frm
+--remove_file $MYSQLD_DATADIR/zwx/t1.frm
+
+--error 1051
+drop table t1;
+
+--error 1813
+create table t1 (a int) engine=innodb;
+
+--error 1051
+drop table force t1;
+
+create table t1 (a int) engine=innodb;
+
+drop table t1;
+
+create table t1 (a int, key(a)) engine=innodb;
+create table t2 (b int, foreign key(b) references t1(a), key(b)) engine=innodb;
+
+--error 1217
+drop table t1;
+
+--echo rm zwx/t1.frm
+--remove_file $MYSQLD_DATADIR/zwx/t1.frm
+
+--error 1051
+drop table t1;
+
+CALL mtr.add_suppression("because of foreign key constraint");
+
+--error 1051
+drop table force t1;
+
+drop table t2;
+
+--error 1051
+drop table force t1;
+
+create table t1 (a int) engine=innodb;
+
+drop table t1;
+--error 1051
+drop table force t1;
+
+create table t1 (a int) partition by list (a)
+(partition p1 values in (1), partition p2 values in (2), partition p3 values in (3));
+
+--echo rm zwx/t1.frm
+--remove_file $MYSQLD_DATADIR/zwx/t1.frm
+
+--error 1051
+drop table t1;
+
+CALL mtr.add_suppression("does not exist in the InnoDB internal");
+
+--error 1051
+drop table force t1;
+
+--error 1051
+drop table force t1;
+
+#Test alter...drop partition force..
+#Test innodb engine
+create table t1 (a int) engine = innodb partition by list (a)
+(partition p1 values in (1), partition p2 values in (2), partition p3 values in (3), partition p4 values in(4));
+
+--echo rm zwx/t1#P#p2.ibd
+--remove_file $MYSQLD_DATADIR/zwx/t1#P#p2.ibd
+--echo rm zwx/t1#P#p3.ibd
+--remove_file $MYSQLD_DATADIR/zwx/t1#P#p3.ibd
+
+create table t2 (a int, b int, c int, primary key(a), key(b)) engine = innodb
+partition by list (a) (partition p1 values in (1), partition p2 values in (2),
+partition p3 values in (3), partition p4 values in(4));
+
+#remove first ibd
+--echo rm zwx/t2#P#p1.ibd
+--remove_file $MYSQLD_DATADIR/zwx/t2#P#p1.ibd
+
+create table t3 (a int, b int, c int, primary key(a), key(b)) engine = innodb
+partition by list (a) (partition p1 values in (1), partition p2 values in (2),
+partition p3 values in (3), partition p4 values in(4));
+
+#remove last ibd
+--echo rm zwx/t3#P#p4.ibd
+--remove_file $MYSQLD_DATADIR/zwx/t3#P#p4.ibd
+
+# Test mysiam engine
+create table t4 (a int) engine =myisam partition by list (a)
+(partition p1 values in (1), partition p2 values in (2), partition p3 values in (3), partition p4 values in(4));
+
+--echo rm zwx/t4#P#p2.MYD
+--remove_file $MYSQLD_DATADIR/zwx/t4#P#p2.MYD
+--echo rm zwx/t4#P#p3.ibd
+--remove_file $MYSQLD_DATADIR/zwx/t4#P#p3.MYD
+
+#Test range partition
+create table t6 (a int primary key, b int) engine = innodb partition by range columns(a)
+(partition p1 values less than (10),
+partition p2 values less than (100),
+partition p3 values less than (1000),
+partition p4 values less than (10000),
+partition p5 values less than (MAXVALUE));
+
+#remove ibd file
+--echo rm zwx/t6#P#p1.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t6#P#p1.ibd
+--echo rm zwx/t6#P#p3.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t6#P#p3.ibd
+--echo rm zwx/t6#P#p5.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t6#P#p5.ibd
+
+#Test hash partition
+create table t7(a int , b int) engine = innodb partition by hash(a) partitions 5;
+#remove ibd file
+--echo rm zwx/t7#P#p1.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t7#P#p1.ibd
+--echo rm zwx/t7#P#p3.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t7#P#p3.ibd
+--echo rm zwx/t7#P#p4.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t7#P#p4.ibd
+
+#linear partition
+create table t8(a int , b int) engine = innodb partition by linear hash(a) partitions 5;
+#remove ibd file
+--echo rm zwx/t8#P#p1.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t8#P#p1.ibd
+--echo rm zwx/t8#P#p3.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t8#P#p3.ibd
+--echo rm zwx/t8#P#p4.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t8#P#p4.ibd
+
+#Test KEY partition
+create table t9 (a int , b int ) engine=innodb partition by key(a) partitions 5;
+#remove ibd file
+--echo rm zwx/t9#P#p1.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t9#P#p1.ibd
+--echo rm zwx/t9#P#p3.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t9#P#p3.ibd
+--echo rm zwx/t9#P#p4.IBD
+--remove_file $MYSQLD_DATADIR/zwx/t9#P#p4.ibd
+
+#Test Sub-partition
+create table t10 (a int, b int) engine = innodb
+partition by range(a) subpartition by hash(b)
+( PARTITION p0 VALUES LESS THAN (1990) (SUBPARTITION s0, SUBPARTITION s1),
+PARTITION p1 VALUES LESS THAN (2000) (SUBPARTITION s2, SUBPARTITION s3),
+PARTITION p2 VALUES LESS THAN MAXVALUE (SUBPARTITION s4,SUBPARTITION s5));
+#remove ibd file
+--echo rm zwx/t10#P#p0#SP#s0.ibd
+--remove_file $MYSQLD_DATADIR/zwx/t10#P#p0#SP#s0.ibd
+--echo rm zwx/t10#P#p2#SP#s5.ibd
+--remove_file $MYSQLD_DATADIR/zwx/t10#P#p2#SP#s5.ibd
+
+disconnect no_super;
+
+#restart the server
+--echo # Stop server
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--send_shutdown
+--source include/wait_until_disconnected.inc
+--exec echo "restart: " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+use zwx;
+--error 1146
+alter table t1 drop partition p2;
+--error 1146
+alter table t1 drop partition p3;
+
+connect(no_super, localhost, nosuper,,);
+connection no_super;
+--error 1045
+alter table t1 drop partition force p2, p3;
+
+connection default;
+alter table t1 drop partition force p2, p3;
+alter table t1 add partition (partition p2 values in (2));
+
+alter table t2 drop partition force p1;
+alter table t3 drop partition force p4;
+alter table t6 drop partition force p1,p3,p5;
+
+--error 1146
+alter table t7 drop partition p1,p3,p5;
+#DROP PARTITION can only be used on RANGE/LIST partitions
+--error 1512
+alter table t7 drop partition force p1,p3,p5;
+--error 1512
+alter table t8 drop partition force p1,p3,p5;
+--error 1512
+alter table t9 drop partition force p1,p3,p5;
+alter table t10 drop partition force p0, p2;
+
+--error 29
+alter table t4 drop partition p2;
+--error 29
+alter table t4 drop partition p3;
+
+--error 29
+alter table t4 drop partition force p2, p3;
+alter table t4 add partition (partition p2 values in (2));
+
+#cleanup
+disconnect no_super;
+drop database zwx;
+drop user nosuper;

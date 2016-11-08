@@ -507,6 +507,8 @@ void lex_start(THD *thd)
   lex->is_change_password= false;
   lex->is_set_password_sql= false;
   lex->mark_broken(false);
+  lex->force_drop_table= 0;
+  lex->skip_force_pos= 0;
   DBUG_VOID_RETURN;
 }
 

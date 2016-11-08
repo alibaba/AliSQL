@@ -136,6 +136,7 @@ private:
   char *m_name_buffer_ptr;		// Pointer to first partition name
   plugin_ref *m_engine_array;           // Array of types of the handlers
   handler **m_file;                     // Array of references to handler inst.
+  char *bad_file;                       // Array to identify if the data file is missed
   uint m_file_tot_parts;                // Debug
   handler **m_new_file;                 // Array of references to new handlers
   handler **m_reorged_file;             // Reorganised partitions

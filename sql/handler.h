@@ -884,6 +884,7 @@ struct handlerton
    void (*close_cursor_read_view)(handlerton *hton, THD *thd, void *read_view);
    handler *(*create)(handlerton *hton, TABLE_SHARE *table, MEM_ROOT *mem_root);
    void (*drop_database)(handlerton *hton, char* path);
+   void (*force_drop_table)(handlerton *hton, char* name);
    int (*panic)(handlerton *hton, enum ha_panic_function flag);
    int (*start_consistent_snapshot)(handlerton *hton, THD *thd);
    bool (*flush_logs)(handlerton *hton, unsigned long long target_lsn);
@@ -3452,6 +3453,7 @@ int ha_panic(enum ha_panic_function flag);
 void ha_close_connection(THD* thd);
 bool ha_flush_logs(handlerton *db_type, engine_lsn_map *engine_map= NULL);
 void ha_drop_database(char* path);
+void ha_force_drop_table(char *name);
 int ha_create_table(THD *thd, const char *path,
                     const char *db, const char *table_name,
                     HA_CREATE_INFO *create_info,

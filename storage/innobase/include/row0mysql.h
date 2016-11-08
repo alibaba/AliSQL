@@ -567,7 +567,8 @@ dberr_t
 row_drop_database_for_mysql(
 /*========================*/
 	const char*	name,	/*!< in: database name which ends to '/' */
-	trx_t*		trx)	/*!< in: transaction handle */
+	trx_t*		trx,	/*!< in: transaction handle */
+	bool		is_prefix = false) /*!< in: name is prefix of partition table if true. */
 	MY_ATTRIBUTE((nonnull));
 /*********************************************************************//**
 Renames a table for MySQL.

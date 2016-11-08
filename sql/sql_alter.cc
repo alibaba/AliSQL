@@ -218,6 +218,10 @@ bool Sql_cmd_alter_table::execute(THD *thd)
                           Alter_info::ALTER_RENAME))
     priv_needed|= DROP_ACL;
 
+  /* Need SUPER_ACL to execute ALTER ..DROP PARTITION FORCE..*/
+  if (thd->lex && thd->lex->force_drop_table)
+    priv_needed|= SUPER_ACL;
+
   /* Must be set in the parser */
   DBUG_ASSERT(select_lex->db);
   DBUG_ASSERT(!(alter_info.flags & Alter_info::ALTER_EXCHANGE_PARTITION));

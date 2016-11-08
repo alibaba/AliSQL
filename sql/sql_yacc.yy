@@ -1735,7 +1735,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
         opt_natural_language_mode opt_query_expansion
         opt_ev_status opt_ev_on_completion ev_on_completion opt_ev_comment
         ev_alter_on_schedule_completion opt_ev_rename_to opt_ev_sql_stmt
-        trg_action_time trg_event
+        trg_action_time trg_event force_drop
 
 /*
   Bit field of MYSQL_START_TRANS_OPT_* flags.
@@ -7653,8 +7653,9 @@ alter_commands:
   will be longer.
 */
         | add_partition_rule
-        | DROP PARTITION_SYM alt_part_name_list
+        | DROP PARTITION_SYM force_drop alt_part_name_list
           {
+            Lex->force_drop_table= $3;
             Lex->alter_info.flags|= Alter_info::ALTER_DROP_PARTITION;
           }
         | REBUILD_SYM PARTITION_SYM opt_no_write_to_binlog
@@ -11849,19 +11850,20 @@ do:
 */
 
 drop:
-          DROP opt_temporary table_or_tables if_exists
+          DROP opt_temporary table_or_tables if_exists force_drop
           {
             LEX *lex=Lex;
             lex->sql_command = SQLCOM_DROP_TABLE;
             lex->drop_temporary= $2;
             lex->drop_if_exists= $4;
+            lex->force_drop_table= $5;
             YYPS->m_lock_type= TL_UNLOCK;
             YYPS->m_mdl_type= MDL_EXCLUSIVE;
           }
           table_list opt_wait opt_restrict
           {
             LEX *lex= Lex;
-            lex->wait_time= $7;
+            lex->wait_time= $8;
           }
         | DROP INDEX_SYM ident ON table_ident opt_wait {}
           {
@@ -12036,6 +12038,15 @@ table_alias_ref:
 if_exists:
           /* empty */ { $$= 0; }
         | IF EXISTS { $$= 1; }
+        ;
+
+force_drop:
+          /* empty */ { $$= 0; }
+        | FORCE_SYM
+          {
+            $$= 1;
+            Lex->skip_force_pos= YYLIP->get_tok_start() - YYTHD->query();
+          }
         ;
 
 opt_temporary:

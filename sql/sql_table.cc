@@ -2048,6 +2048,7 @@ int write_bin_log(THD *thd, bool clear_error,
                   char const *query, ulong query_length, bool is_trans)
 {
   int error= 0;
+  char *new_query= NULL;
   if (mysql_bin_log.is_open())
   {
     int errcode= 0;
@@ -2055,8 +2056,33 @@ int write_bin_log(THD *thd, bool clear_error,
       thd->clear_error();
     else
       errcode= query_error_code(thd, TRUE);
+
+    /* Rewrite the query to skip `FORCE` if this is a force drop command. */
+    if (thd->lex->force_drop_table
+        && thd->lex->skip_force_pos)
+    {
+        new_query= (char *)alloc_root(thd->mem_root, query_length);
+        int skip_pos= thd->lex->skip_force_pos;
+
+        if (new_query)
+        {
+          /* Init the buffer. */
+          memset(new_query, '\0', query_length);
+          /* Copy the query string before 'FORCE'. */
+          memcpy(new_query, query, skip_pos);
+          /* Copy the query string after 'FORCE'. */
+          memcpy(new_query+skip_pos,
+              query + (skip_pos + 6),
+              query_length - (skip_pos + 6));
+
+          /* We need to skip 'FORCE' + ' '. */
+          query_length-= 6;
+          DBUG_ASSERT(query_length == strlen(new_query));
+        }
+    }
+
     error= thd->binlog_query(THD::STMT_QUERY_TYPE,
-                             query, query_length, is_trans, FALSE, FALSE,
+                             new_query ? new_query : query, query_length, is_trans, FALSE, FALSE,
                              errcode);
   }
   return error;
@@ -2261,6 +2287,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
   bool non_tmp_table_deleted= 0;
   bool have_nonexistent_tmp_table= 0;
   bool is_drop_tmp_if_exists_with_no_defaultdb= 0;
+  bool force_drop_table= (thd->lex && thd->lex->force_drop_table);
   String built_query;
   String built_trans_tmp_query, built_non_trans_tmp_query;
   String nonexistent_tmp_tables;
@@ -2575,6 +2602,25 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
         goto err;
       }
 
+      if (force_drop_table
+          && !foreign_key_error)
+      {
+        char* end;
+        *(end= path + path_length - reg_ext_length)= '\0';
+
+        /* Check if table exists in engine layer and try to delete it.*/
+        ha_force_drop_table(path);
+
+        /* Check if .par file exists. */
+        char buff[FN_REFLEN];
+        fn_format(buff, path, "", ".par", MY_APPEND_EXT);
+        if (!my_access(buff,F_OK))
+        {
+          sql_print_information("File %s exists, delete it!", buff);
+          my_delete_with_symlink(buff, MYF(MY_WME));
+        }
+      }
+
       if (wrong_tables.length())
         wrong_tables.append(',');
 
@@ -2603,8 +2649,13 @@ err:
   if (wrong_tables.length())
   {
     if (!foreign_key_error)
+    {
+      if (force_drop_table)
+        wrong_tables.append("'. Force engine layer to clean these tables.");
+
       my_printf_error(ER_BAD_TABLE_ERROR, ER(ER_BAD_TABLE_ERROR), MYF(0),
                       wrong_tables.c_ptr());
+    }
     else
       my_message(ER_ROW_IS_REFERENCED, ER(ER_ROW_IS_REFERENCED), MYF(0));
     error= 1;

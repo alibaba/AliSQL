@@ -3811,6 +3811,12 @@ end_with_restore_list:
   case SQLCOM_DROP_TABLE:
   {
     DBUG_ASSERT(first_table == all_tables && first_table != 0);
+
+    /* Only allow super user to do FORCE DROP operation. */
+    if (lex->force_drop_table
+        && (check_global_access(thd, SUPER_ACL)))
+        goto error;
+
     if (!lex->drop_temporary)
     {
       if (check_table_access(thd, DROP_ACL, all_tables, FALSE, UINT_MAX, FALSE))

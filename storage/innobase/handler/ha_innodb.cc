@@ -1024,6 +1024,14 @@ innobase_close_cursor_view(
 	THD*		thd,		/*!< in: user thread handle */
 	void*		curview);	/*!< in: Consistent read view to be
 					closed */
+/***************************************//**
+Remove the specified table from InnoDB. */
+static
+void
+innobase_force_drop_table(
+/*=======================*/
+	handlerton*	hton,
+	char*		name);
 /*****************************************************************//**
 Removes all tables in the named database inside InnoDB. */
 static
@@ -3006,6 +3014,7 @@ innobase_init(
 	innobase_hton->close_cursor_read_view = innobase_close_cursor_view;
 	innobase_hton->create = innobase_create_handler;
 	innobase_hton->drop_database = innobase_drop_database;
+	innobase_hton->force_drop_table = innobase_force_drop_table;
 	innobase_hton->panic = innobase_end;
 
 	innobase_hton->start_consistent_snapshot =
@@ -10324,7 +10333,92 @@ ha_innobase::delete_table(
 
 	DBUG_RETURN(convert_error_code_to_mysql(err, 0, NULL));
 }
+/***************************************//**
+Remove the specified table from InnoDB. */
+static
+void
+innobase_force_drop_table(
+/*=======================*/
+	handlerton*	hton,
+	char*		name)
+{
+	trx_t* trx;
+	dberr_t err;
+	char  norm_name[FN_REFLEN];
 
+	if (srv_read_only_mode
+	    || name == NULL
+	    || (strchr(name, '/') == NULL))
+		return; //no cover line
+
+	THD* thd = current_thd;
+	if (thd) {
+		trx_t*	parent_trx = check_trx_exists(thd);
+
+		/* In case MySQL calls this in the middle of a SELECT
+		query, release possible adaptive hash latch to avoid
+		deadlocks of threads */
+		trx_search_latch_release_if_reserved(parent_trx);
+	}
+
+	normalize_table_name(norm_name, name);
+
+	trx = innobase_trx_allocate(thd);
+
+	/* We are doing a DDL operation. */
+	++trx->will_lock;
+	trx->ddl = true;
+
+	/* Drop the table in InnoDB */
+	err = row_drop_table_for_mysql(
+	       norm_name, trx, false);
+
+	if (err == DB_TABLE_NOT_FOUND) {
+		/* Probably a partition table, Check it
+		from system table. For example, suppose we passed
+		test/t1 to this fuction, should also drop tables with
+		prefix `t1#P#` .*/
+		char prefix_name [FN_REFLEN];
+		/* Build the prefix for partition table. */
+		my_snprintf(prefix_name, FN_REFLEN, "%s#P#", norm_name);
+
+		ib_logf(IB_LOG_LEVEL_INFO,
+			"Try to drop table with prefix '%s'",
+			prefix_name);
+
+		trx->op_info = "force drop table";
+
+		err = row_drop_database_for_mysql(prefix_name, trx, true);
+
+		trx->op_info = "";
+
+	}
+
+	log_buffer_flush_to_disk();
+
+	innobase_commit_low(trx);
+
+	trx_free_for_mysql(trx);
+
+	switch(err) {
+	case DB_CANNOT_DROP_CONSTRAINT:
+		ib_logf(IB_LOG_LEVEL_WARN,
+			"Can't drop %s because of foreign key constraint", norm_name);
+		break;
+	case DB_TABLE_NOT_FOUND:
+		ib_logf(IB_LOG_LEVEL_WARN,
+			"Can't find table %s. Maybe it doesn't exist in innodb.", norm_name);
+		break;
+	case DB_SUCCESS:
+		ib_logf(IB_LOG_LEVEL_INFO,
+			"Success to drop %s from innodb.", norm_name);
+		break;
+	default:
+		ib_logf(IB_LOG_LEVEL_WARN, "Some error happened, error code: %d\n", err);
+		break;
+
+	}
+}
 /*****************************************************************//**
 Removes all tables in the named database inside InnoDB. */
 static

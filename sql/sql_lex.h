@@ -2444,6 +2444,11 @@ struct LEX: public Query_tables_list
   bool is_set_password_sql;
   bool contains_plaintext_password;
 
+  /* Force to drop table from engine even frm file doesn't exist. */
+  bool force_drop_table;
+  /* Offset of the keyword 'FORCE' in query string.*/
+  int  skip_force_pos;
+
   bool ci_on_success; /* has hint commit_on_success */
   bool rb_on_fail; /* has hint rollback_on_fail */
   ulonglong ic_reduce_id; /* queue_on_pk's id */

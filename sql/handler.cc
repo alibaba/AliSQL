@@ -832,6 +832,21 @@ void ha_drop_database(char* path)
   plugin_foreach(NULL, dropdb_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, path);
 }
 
+static my_bool force_drop_table_handlerton(THD *unused1, plugin_ref plugin,
+                                           void *name)
+{
+  handlerton *hton= plugin_data(plugin, handlerton *);
+  if (hton->state == SHOW_OPTION_YES && hton->force_drop_table)
+    hton->force_drop_table(hton, (char *)name);
+
+  return FALSE;
+}
+
+void ha_force_drop_table(char* name)
+{
+  plugin_foreach(NULL,
+      force_drop_table_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, name);
+}
 
 static my_bool closecon_handlerton(THD *thd, plugin_ref plugin,
                                    void *unused)

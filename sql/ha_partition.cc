@@ -2670,6 +2670,12 @@ bool ha_partition::create_handlers(MEM_ROOT *mem_root)
     DBUG_RETURN(TRUE);
   m_file_tot_parts= m_tot_parts;
   memset(m_file, 0, alloc_len);
+
+  alloc_len= (m_tot_parts + 1) * sizeof(char);
+  if (!(bad_file= (char *) alloc_root(mem_root, alloc_len)))
+    DBUG_RETURN(TRUE);
+  memset(bad_file, 0, alloc_len);
+
   for (i= 0; i < m_tot_parts; i++)
   {
     handlerton *hton= plugin_data(m_engine_array[i], handlerton*);
@@ -2722,6 +2728,14 @@ bool ha_partition::new_handlers_from_part_info(MEM_ROOT *mem_root)
   m_file_tot_parts= m_tot_parts;
   memset(m_file, 0, alloc_len);
   DBUG_ASSERT(m_part_info->num_parts > 0);
+
+  alloc_len= (m_tot_parts + 1) * sizeof(char);
+  if (!(bad_file= (char *) alloc_root(mem_root, alloc_len)))
+  {
+    mem_alloc_error(alloc_len);
+    goto error_end;
+  }
+  memset(bad_file, 0, alloc_len);
 
   i= 0;
   part_count= 0;
@@ -3268,6 +3282,7 @@ int ha_partition::open(const char *name, int mode, uint test_if_locked)
   handler **file;
   char name_buff[FN_REFLEN];
   ulonglong check_table_flags;
+  int iter;
   DBUG_ENTER("ha_partition::open");
 
   DBUG_ASSERT(table->s == table_share);
@@ -3313,6 +3328,15 @@ int ha_partition::open(const char *name, int mode, uint test_if_locked)
       goto err_alloc;
     }
     memset(m_file, 0, alloc_len);
+
+    alloc_len= (m_tot_parts + 1) * sizeof(char);
+    if (!(bad_file= (char *) alloc_root(m_clone_mem_root, alloc_len)))
+    {
+      error= HA_ERR_INITIALIZATION;
+      goto err_alloc;
+    }
+    memset(bad_file, 0, alloc_len);
+
     /*
       Populate them by cloning the original partitions. This also opens them.
       Note that file->ref is allocated too.
@@ -3334,28 +3358,49 @@ int ha_partition::open(const char *name, int mode, uint test_if_locked)
   }
   else
   {
+   THD *thd= current_thd;
+   bool force_drop_partition=
+     (thd->lex && thd->lex->force_drop_table);
    file= m_file;
+   iter= 0;
    do
    {
       create_partition_name(name_buff, name, name_buffer_ptr, NORMAL_PART_NAME,
                             FALSE);
       if ((error= (*file)->ha_open(table, name_buff, mode,
                                    test_if_locked | HA_OPEN_NO_PSI_CALL)))
-        goto err_handler;
+      {
+        if (force_drop_partition)
+        {
+          /* Ignore the error and continue opening other partitions. */
+          error= 0;
+          bad_file[iter++]= 1;
+        }
+        else
+          goto err_handler;
+
+      } else
+        bad_file[iter++]= 0;
+
       if (m_file == file)
         m_num_locks= (*file)->lock_count();
       DBUG_ASSERT(m_num_locks == (*file)->lock_count());
       name_buffer_ptr+= strlen(name_buffer_ptr) + 1;
     } while (*(++file));
   }
-  
+
   file= m_file;
   ref_length= (*file)->ref_length;
   check_table_flags= (((*file)->ha_table_flags() &
                        ~(PARTITION_DISABLED_TABLE_FLAGS)) |
                       (PARTITION_ENABLED_TABLE_FLAGS));
+  iter= 0;
   while (*(++file))
   {
+    DBUG_ASSERT(bad_file[iter] <= 1);
+    if (bad_file[iter++])
+      continue;
+
     /* MyISAM can have smaller ref_length for partitions with MAX_ROWS set */
     set_if_bigger(ref_length, ((*file)->ref_length));
     /*
@@ -3534,10 +3579,16 @@ int ha_partition::close(void)
   free_partition_bitmaps();
   DBUG_ASSERT(m_part_info);
   file= m_file;
+  int iter;
 
 repeat:
+  iter= 0;
   do
   {
+    DBUG_ASSERT(!first || bad_file[iter] <= 1);
+    if (first && bad_file[iter++])
+      continue;
+
     (*file)->ha_close();
   } while (*(++file));
 
@@ -3613,6 +3664,9 @@ int ha_partition::external_lock(THD *thd, int lock_type)
        i= bitmap_get_next_set(used_partitions, i))
   {
     DBUG_PRINT("info", ("external_lock(thd, %d) part %d", lock_type, i));
+    DBUG_ASSERT(bad_file[i] <= 1);
+    if (bad_file[i])
+      continue;
     if ((error= m_file[i]->ha_external_lock(thd, lock_type)))
     {
       if (lock_type != F_UNLCK)
@@ -3649,6 +3703,9 @@ err_handler:
        j < i;
        j= bitmap_get_next_set(&m_locked_partitions, j))
   {
+    DBUG_ASSERT(bad_file[j] <= 1);
+    if (bad_file[j])
+      continue;
     (void) m_file[j]->ha_external_lock(thd, F_UNLCK);
   }
   bitmap_clear_all(&m_locked_partitions);
@@ -3718,7 +3775,12 @@ THR_LOCK_DATA **ha_partition::store_lock(THD *thd,
   if (thd != table->in_use)
   {
     for (i= 0; i < m_tot_parts; i++)
+    {
+      DBUG_ASSERT(bad_file[i] <= 1);
+      if (bad_file[i])
+        continue;
       to= m_file[i]->store_lock(thd, to, lock_type);
+    }
   }
   else
   {
@@ -3727,6 +3789,9 @@ THR_LOCK_DATA **ha_partition::store_lock(THD *thd,
          i= bitmap_get_next_set(&m_part_info->lock_partitions, i))
     {
       DBUG_PRINT("info", ("store lock %d iteration", i));
+      DBUG_ASSERT(bad_file[i] <= 1);
+      if (bad_file[i])
+        continue;
       to= m_file[i]->store_lock(thd, to, lock_type);
     }
   }
@@ -6398,6 +6463,10 @@ int ha_partition::info(uint flag)
   uint extra_var_flag= flag & HA_STATUS_VARIABLE_EXTRA;
   DBUG_ENTER("ha_partition::info");
 
+  THD *thd = current_thd;
+  if(thd->lex && thd->lex->force_drop_table)
+    DBUG_RETURN(0);
+
 #ifndef DBUG_OFF
   if (bitmap_is_set_all(&(m_part_info->read_partitions)))
     DBUG_PRINT("info", ("All partitions are used"));
@@ -7285,11 +7354,14 @@ int ha_partition::loop_extra(enum ha_extra_function operation)
   int result= 0, tmp;
   uint i;
   DBUG_ENTER("ha_partition::loop_extra()");
-  
+
   for (i= bitmap_get_first_set(&m_part_info->lock_partitions);
        i < m_tot_parts;
        i= bitmap_get_next_set(&m_part_info->lock_partitions, i))
   {
+    if (bad_file[i])
+      continue;
+
     if ((tmp= m_file[i]->extra(operation)))
       result= tmp;
   }
