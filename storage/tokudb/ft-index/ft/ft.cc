@@ -335,7 +335,13 @@ static void ft_note_pin_by_checkpoint (CACHEFILE UU(cachefile), void *header_v) 
     FT ft = (FT) header_v;
     toku_ft_grab_reflock(ft);
     assert(!ft->pinned_by_checkpoint);
+
+    // because we add in_backup for cachetable, with this case:
+    // in_backup=true and then do a checkpoint
+    // this assertion fails since nobody references to the ft
+#if 0
     assert(toku_ft_needed_unlocked(ft));
+#endif
     ft->pinned_by_checkpoint = true;
     toku_ft_release_reflock(ft);
 }
@@ -955,8 +961,12 @@ toku_ft_remove_reference(FT ft, bool oplsn_valid, LSN oplsn, remove_ft_ref_callb
             assert(!needed);
         }
         if (!needed) {
-            // close header
-            toku_ft_evict_from_memory(ft, oplsn_valid, oplsn);
+            // close header if we are not in backup
+            // if close header during backup, the FT files would be inconsistency
+            bool in_backup = toku_cachefile_in_backup(ft->cf);
+            if (!in_backup) {
+                toku_ft_evict_from_memory(ft, oplsn_valid, oplsn);
+            }
         }
     
         toku_ft_open_close_unlock();

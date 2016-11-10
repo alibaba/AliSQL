@@ -182,6 +182,7 @@ SELECT MAX(c1) FROM t3;
 --let $innodb_status =`show engine tokudb status`
 --sleep 2
 --let $innodb_status =`show engine tokudb status`
+--replace_column 2 ####
 show status like '%tokudb_rows%';
 show variables like 'tokudb_cpu_nums';
 

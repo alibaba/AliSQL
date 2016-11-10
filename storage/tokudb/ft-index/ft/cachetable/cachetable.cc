@@ -306,6 +306,7 @@ int toku_cachetable_create(CACHETABLE *ct_result, long size_limit, LSN UU(initia
     CACHETABLE XCALLOC(ct);
     ct->list.init();
     ct->cf_list.init();
+    ct->in_backup = false;
 
     int num_processors = toku_os_get_number_active_processors();
     int checkpointing_nworkers = (num_processors/4) ? num_processors/4 : 1;
@@ -4451,6 +4452,25 @@ struct iterate_begin_checkpoint {
         return 0;
     }
 };
+
+void toku_cachetable_begin_backup(CACHETABLE ct)
+{
+    ct->cf_list.read_lock();
+    ct->in_backup = true;
+    ct->cf_list.read_unlock();
+}
+
+void toku_cachetable_end_backup(CACHETABLE ct)
+{
+    ct->cf_list.read_lock();
+    ct->in_backup = false;
+    ct->cf_list.read_unlock();
+}
+
+bool toku_cachefile_in_backup(CACHEFILE cf)
+{
+    return cf->cachetable->in_backup;
+}
 
 //
 // Update the user data in any cachefiles in our checkpoint list.

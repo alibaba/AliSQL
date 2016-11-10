@@ -1,0 +1,282 @@
+# conn1 mocks Xtrabackup
+# conn2 mocks writing during TokuDB data file copying
+--source include/have_tokudb.inc
+
+
+--echo =====1) hotbackup test=====
+# mkdir the tmp backup dir
+--mkdir $MYSQL_TMP_DIR/backupdir
+let $MYSQLD_DATADIR= `select @@datadir`;
+CREATE TABLE test.t1 (c1 INT PRIMARY KEY, c2 INT, c3 INT) ENGINE=TOKUDB;
+INSERT INTO test.t1 VALUES(1111,1111,11111);
+
+# table for rename during backup
+CREATE TABLE test.t11 (c1 INT PRIMARY KEY, c2 INT, c3 INT) ENGINE=TOKUDB;
+
+# create table t2
+CREATE TABLE test.t2 (c1 INT PRIMARY KEY, c2 INT) ENGINE=TOKUDB;
+INSERT INTO test.t2 VALUES(1122,1122);
+
+# do checkpoint
+SET GLOBAL tokudb_checkpoint_on_flush_logs=ON;
+FLUSH LOGS;
+SET GLOBAL tokudb_checkpoint_on_flush_logs=OFF;
+
+connect (conn1, localhost, root,,);
+connection conn1;
+
+#conn1 write(1,1,1)
+INSERT INTO test.t1 VALUES(1,1,1);
+# fake xtrabackup 1) tokudb checkpoint lock
+SET GLOBAL TOKUDB_CHECKPOINT_LOCK=ON;
+
+connect (conn2, localhost, root,,);
+connection conn2;
+
+# table for drop during backup
+CREATE TABLE test.t22 (c1 INT PRIMARY KEY, c2 INT) ENGINE=TOKUDB;
+INSERT INTO test.t22 VALUES(1,1);
+
+# conn2 write(2,2,2)
+INSERT INTO test.t1 VALUES(2,2,2);
+
+connection conn1;
+# fake xtrabackup 2) FLUSH TABLES WITH READ LOCK
+FLUSH TABLES WITH READ LOCK;
+
+# fake xtrabackup 3) copy tokudb.* and redo-log to backup dir
+--exec cp -rf $MYSQLD_DATADIR/tokudb.* $MYSQL_TMP_DIR/backupdir/
+--exec cp -rf $MYSQLD_DATADIR/log000* $MYSQL_TMP_DIR/backupdir/
+# fake extrabackup 4) unlock tables
+UNLOCK TABLES;
+
+connection conn2;
+# shadow row
+--echo conn2 write(22,22,22), this row can't visible in new backup instance
+INSERT INTO test.t1 VALUES(22222,22222,22222);
+FLUSH TABLES;
+
+connection conn1;
+# fake xtrabackup 5) copy tokudb datas file to backup dir
+ALTER TABLE test.t11 RENAME test.t111;
+--exec cp -rf $MYSQLD_DATADIR/_test_t1* $MYSQL_TMP_DIR/backupdir/
+# fake drop tables during backup
+DROP TABLE test.t22;
+--exec cp -rf $MYSQLD_DATADIR/_test_t2* $MYSQL_TMP_DIR/backupdir/
+DROP TABLE test.t111;
+
+# fake xtrabackup 6) release tokudb checkpoint lock
+SET GLOBAL TOKUDB_CHECKPOINT_LOCK=OFF;
+
+--echo shutdown server
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+
+# cleanup tokudb files
+--exec rm -rf $MYSQLD_DATADIR/tokudb.*
+--exec rm -rf $MYSQLD_DATADIR/log000*
+
+# fake recovery: copy tokudb.* and redo-log, data files from backup dir
+--exec cp -rf $MYSQL_TMP_DIR/backupdir/* $MYSQLD_DATADIR/
+
+--enable_reconnect
+--exec echo "restart: --innodb_buffer_pool_size=100M --tokudb_cache_size=100M" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+# check tables
+SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TOKUDB_FILE_MAP WHERE TABLE_SCHEMA='test' AND TABLE_DICTIONARY_NAME='main';
+OPTIMIZE TABLE test.t1;
+SELECT * FROM test.t1;
+SELECT * FROM test.t2;
+DROP TABLE test.t1;
+DROP TABLE test.t2;
+disconnect conn1;
+disconnect conn2;
+
+
+
+
+
+--echo =====2) crash and recover test=====
+connect (conn1, localhost, root,,);
+connection conn1;
+CREATE TABLE test.t2 (c1 INT, c2 INT, PRIMARY KEY(c1), CLUSTERING KEY(c2)) ENGINE=TOKUDB;
+
+--disable_query_log
+--let $i=1000
+while ($i)
+{
+  --eval INSERT INTO test.t2 VALUES($i, $i)
+  --dec $i
+}
+--enable_query_log
+
+--disable_query_log
+call mtr.add_suppression("Attempting backtrace");
+--enable_query_log
+
+# make mtr expect the "crash"
+--let $_server_id= `SELECT @@server_id`
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
+--exec echo "wait" > $_expect_file_name
+--let $_mysqld_datadir= `SELECT @@datadir`
+
+# crashed, sending SIGSEGV
+--let $pid_file_name = `select @@pid_file`
+--exec kill -9 `cat $pid_file_name`;
+--echo 1
+--source include/wait_until_disconnected.inc
+
+--enable_reconnect
+# start mysqld
+--exec echo "restart" > $_expect_file_name
+--source include/wait_until_connected_again.inc
+SELECT COUNT(*) FROM test.t2;
+DROP TABLE test.t2;
+disconnect conn1;
+
+
+
+
+
+--echo =====3) create empty table and shutdown with checkpoint lock=====
+connect (conn1, localhost, root,,);
+connection conn1;
+CREATE TABLE test.t1 (c1 INT, c2 INT, PRIMARY KEY(c1), CLUSTERING KEY(c2)) ENGINE=TOKUDB;
+CREATE TABLE test.t2 (c1 INT) ENGINE=TOKUDB;
+
+--echo shutdown server
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+
+--enable_reconnect
+--exec echo "restart: --innodb_buffer_pool_size=100M --tokudb_cache_size=100M --tokudb_checkpoint_lock=ON" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+SELECT * FROM test.t1;
+SELECT * FROM test.t2;
+
+CREATE TABLE test.t3 (c1 INT) ENGINE=TOKUDB;
+INSERT INTO test.t3 VALUES(1);
+
+--echo shutdown server
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+
+--enable_reconnect
+--exec echo "restart: --innodb_buffer_pool_size=100M --tokudb_cache_size=100M" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+SELECT * FROM test.t3;
+
+DROP TABLE test.t1;
+DROP TABLE test.t2;
+DROP TABLE test.t3;
+disconnect conn1;
+
+
+
+
+
+--echo =====4) alter table with checkpoint lock=====
+connect (conn1, localhost, root,,);
+connection conn1;
+CREATE TABLE test.t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=TOKUDB;
+
+#conn1 write(1,1)
+INSERT INTO test.t1 VALUES(1,1);
+SET GLOBAL TOKUDB_CHECKPOINT_LOCK=ON;
+
+# copy tokudb meta files
+FLUSH TABLES WITH READ LOCK;
+--exec cp -rf $MYSQLD_DATADIR/tokudb.* $MYSQL_TMP_DIR/backupdir/
+--exec cp -rf $MYSQLD_DATADIR/log000* $MYSQL_TMP_DIR/backupdir/
+UNLOCK TABLES;
+
+# alter table after meta files copied in conn2
+connect (conn2, localhost, root,,);
+connection conn2;
+ALTER TABLE test.t1 ADD COLUMN `c3` INT;
+INSERT INTO test.t1 VALUES(2,2,3);
+
+connection conn1;
+# copy tokudb files after table altered
+--exec cp -rf $MYSQLD_DATADIR/_test_t1* $MYSQL_TMP_DIR/backupdir/
+
+SET GLOBAL TOKUDB_CHECKPOINT_LOCK=OFF;
+
+--echo shutdown server
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+
+# cleanup tokudb files
+--exec rm -rf $MYSQLD_DATADIR/tokudb.*
+--exec rm -rf $MYSQLD_DATADIR/log000*
+--exec rm -rf $MYSQLD_DATADIR/_test_t1*
+
+# fake recovery: copy tokudb.* and redo-log, data files from backup dir
+--exec cp -rf $MYSQL_TMP_DIR/backupdir/* $MYSQLD_DATADIR/
+
+--enable_reconnect
+--exec echo "restart: --innodb_buffer_pool_size=100M --tokudb_cache_size=100M" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+OPTIMIZE TABLE test.t1;
+SELECT * FROM test.t1;
+
+DROP TABLE test.t1;
+disconnect conn1;
+disconnect conn2;
+--exec rm -rf $MYSQL_TMP_DIR/backupdir/
+
+
+
+
+--echo =====5) kill insert/alter/add index when checkpoint lock ON=====
+connect (conn1, localhost, root,,);
+connection conn1;
+--echo shutdown server
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+
+--enable_reconnect
+--exec echo "restart: --innodb_buffer_pool_size=100M --tokudb_cache_size=100M" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+# grap checkpoint lock in conn1
+CREATE TABLE test.t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=TOKUDB;
+SET GLOBAL TOKUDB_CHECKPOINT_LOCK=ON;
+
+connect (conn2, localhost, root,,);
+connection conn2;
+CREATE TABLE test.t3 (c1 INT PRIMARY KEY, c2 INT) ENGINE=TOKUDB;
+ALTER TABLE test.t1 ADD COLUMN `c3` INT;
+INSERT INTO test.t1 VALUES(2,2,3);
+
+connect (conn3, localhost, root,,);
+connection conn3;
+ALTER TABLE test.t3 ADD INDEX idx_c1c2(c1, c2);
+
+# crashed, sending SIGSEGV
+--let $_server_id= `SELECT @@server_id`
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
+--exec echo "wait" > $_expect_file_name
+--let $pid_file_name = `select @@pid_file`
+--exec kill -9 `cat $pid_file_name`;
+--echo 1
+--source include/wait_until_disconnected.inc
+
+--enable_reconnect
+# start mysqld
+--exec echo "restart" > $_expect_file_name
+--source include/wait_until_connected_again.inc
+SHOW CREATE TABLE test.t1;
+SHOW CREATE TABLE test.t3;
+DROP TABLE test.t1;
+DROP TABLE test.t3;
+disconnect conn1;
+disconnect conn2;
+disconnect conn3;

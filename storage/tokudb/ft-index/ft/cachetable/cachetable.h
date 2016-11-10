@@ -191,6 +191,10 @@ void toku_cachetable_begin_checkpoint (CHECKPOINTER cp, struct tokulogger *logge
 void toku_cachetable_end_checkpoint(CHECKPOINTER cp, struct tokulogger *logger, 
                                    void (*testcallback_f)(void*),  void * testextra);
 
+void toku_cachetable_begin_backup(CACHETABLE ct);
+void toku_cachetable_end_backup(CACHETABLE ct);
+bool toku_cachefile_in_backup(CACHEFILE cf);
+
 
 // Shuts down checkpoint thread
 // Requires no locks be held that are taken by the checkpoint function

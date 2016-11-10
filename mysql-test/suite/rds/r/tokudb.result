@@ -277,10 +277,10 @@ MAX(c1)
 3
 show status like '%tokudb_rows%';
 Variable_name	Value
-Tokudb_rows_inserted	41
-Tokudb_rows_read	98
-Tokudb_rows_deleted	8
-Tokudb_rows_updated	19
+Tokudb_rows_inserted	####
+Tokudb_rows_read	####
+Tokudb_rows_deleted	####
+Tokudb_rows_updated	####
 show variables like 'tokudb_cpu_nums';
 Variable_name	Value
 tokudb_cpu_nums	0

@@ -465,6 +465,9 @@ public:
     void add_background_job();
     void remove_background_job();
     void end_checkpoint(void (*testcallback_f)(void*),  void* testextra);
+
+    void begin_backup();
+    void end_backup();
     TOKULOGGER get_logger();
     // used during begin_checkpoint
     void increment_num_txns();
@@ -651,4 +654,5 @@ struct cachetable {
     KIBBUTZ checkpointing_kibbutz; // small pool for checkpointing cloned pairs
 
     char *env_dir;
+    bool in_backup; // in backup or NOT, default is false
 };
