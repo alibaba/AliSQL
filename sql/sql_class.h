@@ -109,6 +109,8 @@ enum enum_slave_type_conversions { SLAVE_TYPE_CONVERSIONS_ALL_LOSSY,
 enum enum_slave_rows_search_algorithms { SLAVE_ROWS_TABLE_SCAN = (1U << 0),
                                          SLAVE_ROWS_INDEX_SCAN = (1U << 1),
                                          SLAVE_ROWS_HASH_SCAN  = (1U << 2)};
+enum enum_slave_pr_mode { SLAVE_PR_MODE_SCHEMA,
+                          SLAVE_PR_MODE_TABLE };
 
 enum enum_mark_columns
 { MARK_COLUMNS_NONE, MARK_COLUMNS_READ, MARK_COLUMNS_WRITE};

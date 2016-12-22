@@ -454,6 +454,7 @@ extern ulong log_warnings;
 extern uint host_cache_size;
 void init_sql_statement_names();
 extern my_bool opt_rds_allow_unsafe_stmt_with_gtid;
+extern ulong slave_pr_mode_options;
 
 
 extern HASH ic_gather_hash;

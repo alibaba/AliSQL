@@ -929,6 +929,8 @@ The following options may be given as the first argument:
  Max size of Slave Worker queues holding yet not applied
  events.The least possible value must be not less than the
  master side max_allowed_packet.
+ --slave-pr-mode=name 
+ Parallel-replication based on SCHEMA or TABLE
  --slave-rows-search-algorithms=name 
  Set of searching algorithms that the slave will use while
  searching for records from the storage engine to either
@@ -1456,6 +1458,7 @@ slave-max-allowed-packet 1073741824
 slave-net-timeout 3600
 slave-parallel-workers 0
 slave-pending-jobs-size-max 16777216
+slave-pr-mode TABLE
 slave-rows-search-algorithms TABLE_SCAN,INDEX_SCAN
 slave-skip-errors (No default value)
 slave-sql-verify-checksum TRUE

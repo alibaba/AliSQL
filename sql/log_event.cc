@@ -2616,6 +2616,8 @@ Log_event::continue_group(Relay_log_info *rli)
 /**
    @param end_group_sets_max_dbs  when true the group terminal event 
                           can carry partition info, see a note below.
+   @param rli relay log info
+
    @return true  in cases the current event
                  carries partition data,
            false otherwise
@@ -2627,9 +2629,11 @@ Log_event::continue_group(Relay_log_info *rli)
          assigning OVER_MAX_DBS_IN_EVENT_MTS to mts_accessed_dbs
          of COMMIT query event.
 */
-bool Log_event::contains_partition_info(bool end_group_sets_max_dbs)
+bool Log_event::contains_partition_info(bool end_group_sets_max_dbs,
+                                        Relay_log_info *rli)
 {
   bool res;
+  bool table_mode = (rli->pr_mode == SLAVE_PR_MODE_TABLE);
 
   switch (get_type_code()) {
   case TABLE_MAP_EVENT:
@@ -2641,6 +2645,16 @@ bool Log_event::contains_partition_info(bool end_group_sets_max_dbs)
   case QUERY_EVENT:
     if (ends_group() && end_group_sets_max_dbs)
     {
+      res= true;
+      static_cast<Query_log_event*>(this)->mts_accessed_dbs=
+        OVER_MAX_DBS_IN_EVENT_MTS;
+    }
+    else if (table_mode && (!starts_group() && !ends_group()))
+    {
+      /*
+        In table mode MTS replication, all query event is executed
+        serially by worker 0.
+      */
       res= true;
       static_cast<Query_log_event*>(this)->mts_accessed_dbs=
         OVER_MAX_DBS_IN_EVENT_MTS;
@@ -2776,7 +2790,7 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli)
 
   // mini-group representative
 
-  if (contains_partition_info(rli->mts_end_group_sets_max_dbs))
+  if (contains_partition_info(rli->mts_end_group_sets_max_dbs, rli))
   {
     int i= 0;
     Mts_db_names mts_dbs;
@@ -2830,9 +2844,24 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli)
         to satisfy hashcmp() implementation.
       */
       const char all_db[NAME_LEN]= {0};
+
+      char map_key[NAME_LEN * 2 + 3] = {0};
+
+      if (mts_dbs.num != OVER_MAX_DBS_IN_EVENT_MTS)
+      {
+        if (get_type_code() == TABLE_MAP_EVENT &&
+            rli->pr_mode == SLAVE_PR_MODE_TABLE)
+        {
+          Table_map_log_event *ev= (Table_map_log_event *) this;
+          ev->set_full_name(map_key);
+        }
+        else
+          strcpy(map_key, mts_dbs.name[i]);
+      }
+
       if (!(ret_worker=
             map_db_to_worker(mts_dbs.num == OVER_MAX_DBS_IN_EVENT_MTS ?
-                             all_db : mts_dbs.name[i], rli,
+                             all_db : map_key, rli,
                              &mts_assigned_partitions[i],
                              /*
                                todo: optimize it. Although pure
@@ -2851,7 +2880,7 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli)
       DBUG_ASSERT(mts_dbs.num != OVER_MAX_DBS_IN_EVENT_MTS || !thd->temporary_tables);
       DBUG_ASSERT(!strcmp(mts_assigned_partitions[i]->db,
                           mts_dbs.num != OVER_MAX_DBS_IN_EVENT_MTS ?
-                          mts_dbs.name[i] : all_db));
+                          map_key : all_db));
       DBUG_ASSERT(ret_worker == mts_assigned_partitions[i]->worker);
       DBUG_ASSERT(mts_assigned_partitions[i]->usage >= 0);
     }

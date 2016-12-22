@@ -1517,7 +1517,7 @@ public:
   /**
      @return TRUE  if events carries partitioning data (database names).
   */
-  bool contains_partition_info(bool);
+  bool contains_partition_info(bool, Relay_log_info*);
 
   /*
     @return  the number of updated by the event databases.
@@ -3902,6 +3902,10 @@ public:
   const Table_id& get_table_id() const { return m_table_id; }
   const char *get_table_name() const { return m_tblnam; }
   const char *get_db_name() const    { return m_dbnam; }
+  void set_full_name(char *buf)
+  {
+    sprintf(buf, "%s\1%s", m_dbnam, m_tblnam);
+  }
 
   virtual Log_event_type get_type_code() { return TABLE_MAP_EVENT; }
   virtual bool is_valid() const { return m_memory != NULL; /* we check malloc */ }

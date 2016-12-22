@@ -193,6 +193,9 @@ public:
    */
   bool error_on_rli_init_info;
 
+  /* MTS distributing mode, see enum_slave_pr_mode */
+  ulong pr_mode;
+
   /*
     Let's call a group (of events) :
       - a transaction

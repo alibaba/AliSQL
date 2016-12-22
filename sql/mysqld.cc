@@ -551,6 +551,7 @@ bool thread_cache_size_specified= false;
 bool host_cache_size_specified= false;
 bool table_definition_cache_specified= false;
 my_bool opt_rds_allow_unsafe_stmt_with_gtid= FALSE;
+ulong slave_pr_mode_options;
 
 my_bool ic_reduce_hint_enable= 0;
 HASH ic_gather_hash;

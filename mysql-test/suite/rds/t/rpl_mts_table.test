@@ -1,0 +1,35 @@
+--source include/have_log_bin.inc
+--source include/master-slave.inc
+connection master;
+reset master;
+create table t1(c int) engine=innodb;
+create table t2(c int) engine=innodb;
+create table t3(c int) engine=innodb;
+insert into t1 values(1);
+insert into t2 values(2);
+insert into t3 values(3);
+insert into t2 values(2);
+
+connection slave;
+stop slave;
+change master to master_auto_position=1;
+start slave;
+
+connection master;
+--sync_slave_with_master
+
+stop slave;
+set global relay_log_info_repository='FILE';
+
+start slave;
+connection master;
+insert into t3 values(3);
+drop table t3;
+drop table t2;
+drop table t1;
+--sync_slave_with_master
+stop slave;
+set global relay_log_info_repository='TABLE';
+change master to master_auto_position=0;
+start slave;
+--source include/rpl_end.inc

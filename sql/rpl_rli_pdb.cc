@@ -2041,7 +2041,7 @@ int slave_worker_exec_job(Slave_worker *worker, Relay_log_info *rli)
   else if (!is_gtid_event(ev))
   {
     if ((part_event=
-         ev->contains_partition_info(worker->end_group_sets_max_dbs)))
+         ev->contains_partition_info(worker->end_group_sets_max_dbs, rli)))
     {
       uint num_dbs=  ev->mts_number_dbs();
       DYNAMIC_ARRAY *ep= &worker->curr_group_exec_parts;

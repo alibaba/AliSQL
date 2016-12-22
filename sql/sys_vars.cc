@@ -4954,3 +4954,10 @@ static Sys_var_mybool Sys_rds_allow_unsafe_stmt_with_gtid(
        GLOBAL_VAR(opt_rds_allow_unsafe_stmt_with_gtid),
        CMD_LINE(OPT_ARG), DEFAULT(FALSE),
        &PLock_sys_rds_allow_unsafe_stmt_with_gtid, NOT_IN_BINLOG);
+
+static const char *slave_pr_mode_names[]= {"SCHEMA", "TABLE", 0};
+static Sys_var_enum Slave_pr_mode(
+       "slave_pr_mode",
+       "Parallel-replication based on SCHEMA or TABLE",
+       GLOBAL_VAR(slave_pr_mode_options),CMD_LINE(REQUIRED_ARG),
+       slave_pr_mode_names, DEFAULT(SLAVE_PR_MODE_TABLE));
