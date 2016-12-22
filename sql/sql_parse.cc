@@ -102,7 +102,7 @@
 #include "table_cache.h" // table_cache_manager
 
 #include "sql_filter.h"
-
+#include "rpl_gtid.h" // set executed_gtid_set
 #include "sql_digest.h"
 
 #include <algorithm>
@@ -3836,6 +3836,10 @@ end_with_restore_list:
                            NullS :
                            thd->security_ctx->priv_user),
                           lex->verbose);
+    break;
+  case SQLCOM_SET_EXECUTED_GTID_SET:
+    if (!add_executed_gtid_set(thd, lex->add_executed_gtid_set_string))
+      my_ok(thd);
     break;
   case SQLCOM_SHOW_PRIVILEGES:
     res= mysqld_show_privileges(thd);
@@ -8659,4 +8663,75 @@ merge_charset_and_collation(const CHARSET_INFO *cs, const CHARSET_INFO *cl)
     return cl;
   }
   return cs;
+}
+
+/*
+  Add gtid_set 'set' to executed_gtid_set and flush binary log
+  to make the change of executed_gtid_set persistent.
+
+  If something wrong when write and rotate binlog,
+  logged_gtid_set(executed_gtid_set) will remove the given
+  gtid_set that has been added.
+
+  If some gtid included in @param set be added in executed_gtid_set
+  after global_sid_lock->unlock(), if something wrong when write and
+  rotate binlog, it will also be removed when rollback.
+
+  @param thd Thread handle.
+  @param set The gtid_set to be added to executed_gtid_set.
+
+  @retval false Success
+          true  Error
+*/
+bool add_executed_gtid_set(THD *thd, char *set)
+{
+  DBUG_ENTER("add_executed_gtid_set()");
+
+  /* SUPER_ACL is necessary */
+  if (!thd || check_global_access(thd, SUPER_ACL))
+    DBUG_RETURN(true);
+
+  if (0 == gtid_mode)
+  {
+    my_error(ER_SET_EXECUTED_GTID_SET_FAIL, MYF(0), "gtid not open");
+    DBUG_RETURN(true);
+  }
+
+  int error= 1;
+  enum_return_status ret= RETURN_STATUS_REPORTED_ERROR;
+
+  /* add set to gtid_executed_set */
+  global_sid_lock->wrlock();
+  ret= gtid_state->add_executed_gtids(set);
+  global_sid_lock->unlock();
+
+  if (RETURN_STATUS_OK != ret)
+    DBUG_RETURN(true);
+
+  /* write binlog and rotate */
+  if (!mysql_bin_log.is_open())
+  {
+    my_error(ER_SET_EXECUTED_GTID_SET_FAIL, MYF(0), "binlog not open");
+    DBUG_RETURN(true);
+  }
+
+  error= write_bin_log(thd, FALSE, thd->query(), thd->query_length());
+
+  if (0 == error)
+    error= mysql_bin_log.commit(thd, true);
+
+  if (0 == error)
+    error= mysql_bin_log.rotate_and_purge(thd, true);
+
+  DBUG_EXECUTE_IF("add_executed_gtid_set_rotate_error", error= 1;);
+  if (error)
+  {
+    global_sid_lock->wrlock();
+    gtid_state->remove_executed_gtids(set);
+    global_sid_lock->unlock();
+
+    my_error(ER_SET_EXECUTED_GTID_SET_FAIL, MYF(0), "write binlog or binlog rotate failed");
+    DBUG_RETURN(true);
+  }
+  DBUG_RETURN(false);
 }

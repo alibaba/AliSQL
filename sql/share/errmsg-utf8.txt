@@ -7124,3 +7124,6 @@ ER_DEFINED_COMPRESS_COLUMN
 
 ER_UNMATCH_AFFECTED_ROWS
   eng "The affected row number does not match that of user specified."
+
+ER_SET_EXECUTED_GTID_SET_FAIL
+  eng "set executed_gtid_set fail, error: '%s'."

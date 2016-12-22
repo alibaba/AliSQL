@@ -1,0 +1,77 @@
+source include/have_debug.inc;
+source include/have_binlog_format_row.inc;
+source include/master-slave.inc;
+--disable_warnings
+
+let $UUID = `select @@server_uuid`;
+
+grant usage on *.* to tmp@localhost;
+connect (conn,127.0.0.1,tmp,,test,$MASTER_MYPORT);
+
+connection master;
+
+--replace_result $UUID UUID
+show global variables like 'gtid_executed';
+
+create table t1(id int) engine = InnoDB;
+insert into t1 values(1),(2),(3);
+
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:1-2';
+
+--replace_result $UUID UUID
+show global variables like 'gtid_executed';
+
+set session debug='+d,add_executed_gtid_set_rotate_error';
+
+--error ER_SET_EXECUTED_GTID_SET_FAIL
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:3-4';
+
+set session debug='-d,add_executed_gtid_set_rotate_error';
+
+sync_slave_with_master;
+connection slave;
+
+--replace_result $UUID UUID
+show global variables like 'gtid_executed';
+
+stop slave;
+source include/wait_for_slave_to_stop.inc;
+
+connection master;
+
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:1-20';
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:9-70';
+set executed_gtid_set '00000000-0000-0000-0000-000000000001:9-70';
+
+--error 1772
+set executed_gtid_set 'eb0597f-34f7-11e5-be40-00163e000ea5:9-70';
+set executed_gtid_set '00000000-0000-0000-0000-000000000001:8-6';
+--error 1772
+set executed_gtid_set '00000000-0000-0000-0000-000000000001:8--16';
+
+--replace_result $UUID UUID
+show global variables like 'gtid_executed';
+
+connection slave;
+start slave;
+source include/wait_for_slave_to_start.inc;
+
+connection master;
+sync_slave_with_master;
+
+connection slave;
+--replace_result $UUID UUID
+show global variables like 'gtid_executed';
+
+connection conn;
+--error 1227
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:1-2000';
+
+connection master;
+--replace_result $UUID UUID
+show global variables like 'gtid_executed';
+drop user tmp@localhost;
+drop table t1;
+sync_slave_with_master;
+
+source include/rpl_end.inc;

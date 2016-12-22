@@ -425,6 +425,29 @@ enum_return_status Gtid_state::add_lost_gtids(const char *text)
   DBUG_RETURN(RETURN_STATUS_OK);
 }
 
+enum_return_status Gtid_state::add_executed_gtids(const char *text)
+{
+  DBUG_ENTER("Gtid_state::add_executed_gtids()");
+  sid_lock->assert_some_wrlock();
+
+  DBUG_PRINT("info", ("add_executed_gtids '%s'", text));
+
+  PROPAGATE_REPORTED_ERROR(logged_gtids.add_gtid_text(text));
+
+  DBUG_RETURN(RETURN_STATUS_OK);
+}
+
+enum_return_status Gtid_state::remove_executed_gtids(const char *text)
+{
+  DBUG_ENTER("Gtid_state::remove_executed_gtids()");
+  sid_lock->assert_some_wrlock();
+
+  DBUG_PRINT("info", ("remove_executed_gtids '%s'", text));
+
+  PROPAGATE_REPORTED_ERROR(logged_gtids.remove_gtid_text(text));
+
+  DBUG_RETURN(RETURN_STATUS_OK);
+}
 
 int Gtid_state::init()
 {

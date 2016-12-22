@@ -135,6 +135,7 @@ void init_update_queries(void);
 bool check_simple_select();
 Item *negate_expression(THD *thd, Item *expr);
 bool check_stack_overrun(THD *thd, long margin, uchar *dummy);
+bool add_executed_gtid_set(THD *thd, char *set);
 
 /* Variables */
 

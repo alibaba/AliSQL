@@ -2453,6 +2453,7 @@ struct LEX: public Query_tables_list
   bool rb_on_fail; /* has hint rollback_on_fail */
   ulonglong ic_reduce_id; /* queue_on_pk's id */
   ulonglong target_affect_row; /* arg of target_affect_row */
+  char *add_executed_gtid_set_string; /* arg of add_executed_gtid_set()  */
 private:
   bool m_broken; ///< see mark_broken()
   /// Current SP parsing context.

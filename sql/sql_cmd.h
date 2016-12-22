@@ -91,6 +91,7 @@ enum enum_sql_command {
   SQLCOM_ALTER_USER,
   SQLCOM_SHOW_SQL_FILTERS,
 
+  SQLCOM_SET_EXECUTED_GTID_SET,
   /*
     When a command is added here, be sure it's also added in mysqld.cc
     in "struct show_var_st status_vars[]= {" ...

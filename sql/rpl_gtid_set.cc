@@ -554,6 +554,29 @@ parse_error:
   RETURN_REPORTED_ERROR;
 }
 
+enum_return_status Gtid_set::remove_gtid_text(const char *text)
+{
+  DBUG_ENTER("Gtid_set::remove_gtid_text");
+
+  /*
+    Init a empty Gtid_set, and add_gtid_text() to the new Gtid_set.
+    Remove the new Gtid set from this Gtid set.
+  */
+  Gtid_set *tmp_gtid_set= new Gtid_set(sid_map);
+
+  enum_return_status ret= tmp_gtid_set->add_gtid_text(text);
+
+  if (RETURN_STATUS_OK != ret)
+    goto end;
+
+  ret= this->remove_gtid_set(tmp_gtid_set);
+
+end:
+  delete tmp_gtid_set;
+
+  RETURN_STATUS(ret);
+}
+
 bool Gtid_set::is_valid(const char *text)
 {
   DBUG_ENTER("Gtid_set::is_valid(const char*)");

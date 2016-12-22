@@ -992,6 +992,16 @@ public:
     @return RETURN_STATUS_OK or RETURN_STATUS_REPORTED_ERROR.
   */
   enum_return_status add_gtid_text(const char *text, bool *anonymous= NULL);
+  /*
+    Remove the set of GTIDs represented by the given string to this Gtid_set.
+    Before calling this function, global_sid_lock->wrlock() should be held.
+
+    The string must have the format defined above.
+
+    @param text The string to parse.
+  */
+  enum_return_status remove_gtid_text(const char *text);
+
   /**
     Decodes a Gtid_set from the given string.
 
@@ -2286,6 +2296,23 @@ public:
     @return RETURN_STATUS_OK or RETURN_STATUS_REPORTED_ERROR.
    */
   enum_return_status add_lost_gtids(const char *text);
+  /*
+    Not check if the logged_gtids is empty.
+    For set_executed_gtid_set.
+
+    @param text The string to parse.
+    @return RETURN_STATUS_OK or RETURN_STATUS_REPORTED_ERROR.
+  */
+  enum_return_status add_executed_gtids(const char *text);
+
+  /*
+    Remove the given Gtid_set that contains the groups in the given
+    string to logged_gtids.
+
+    @param text The string to parse.
+    @return RETURN_STATUS_OK or RETURN_STATUS_REPORTED_ERROR.
+  */
+  enum_return_status remove_executed_gtids(const char *text);
   /// Return a pointer to the Gtid_set that contains the logged groups.
   const Gtid_set *get_logged_gtids() const { return &logged_gtids; }
   /// Return a pointer to the Gtid_set that contains the logged groups.

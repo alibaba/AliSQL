@@ -1,0 +1,56 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+grant usage on *.* to tmp@localhost;
+show global variables like 'gtid_executed';
+Variable_name	Value
+gtid_executed	UUID:1
+create table t1(id int) engine = InnoDB;
+insert into t1 values(1),(2),(3);
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:1-2';
+show global variables like 'gtid_executed';
+Variable_name	Value
+gtid_executed	00000000-0000-0000-0000-000000000000:1-2,
+UUID:1-4
+set session debug='+d,add_executed_gtid_set_rotate_error';
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:3-4';
+ERROR HY000: set executed_gtid_set fail, error: 'write binlog or binlog rotate failed'.
+set session debug='-d,add_executed_gtid_set_rotate_error';
+show global variables like 'gtid_executed';
+Variable_name	Value
+gtid_executed	00000000-0000-0000-0000-000000000000:1-4,
+UUID:1-5
+stop slave;
+include/wait_for_slave_to_stop.inc
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:1-20';
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:9-70';
+set executed_gtid_set '00000000-0000-0000-0000-000000000001:9-70';
+set executed_gtid_set 'eb0597f-34f7-11e5-be40-00163e000ea5:9-70';
+ERROR HY000: Malformed GTID set specification 'eb0597f-34f7-11e5-be40-00163e000ea5:9-70'.
+set executed_gtid_set '00000000-0000-0000-0000-000000000001:8-6';
+set executed_gtid_set '00000000-0000-0000-0000-000000000001:8--16';
+ERROR HY000: Malformed GTID set specification '00000000-0000-0000-0000-000000000001:8--16'.
+show global variables like 'gtid_executed';
+Variable_name	Value
+gtid_executed	00000000-0000-0000-0000-000000000000:1-70,
+00000000-0000-0000-0000-000000000001:9-70,
+UUID:1-9
+start slave;
+include/wait_for_slave_to_start.inc
+show global variables like 'gtid_executed';
+Variable_name	Value
+gtid_executed	00000000-0000-0000-0000-000000000000:1-70,
+00000000-0000-0000-0000-000000000001:9-70,
+UUID:1-9
+set executed_gtid_set '00000000-0000-0000-0000-000000000000:1-2000';
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+show global variables like 'gtid_executed';
+Variable_name	Value
+gtid_executed	00000000-0000-0000-0000-000000000000:1-70,
+00000000-0000-0000-0000-000000000001:9-70,
+UUID:1-9
+drop user tmp@localhost;
+drop table t1;
+include/rpl_end.inc

@@ -210,6 +210,7 @@ static SYMBOL symbols[] = {
   { "EVERY",		SYM(EVERY_SYM)},
   { "EXCHANGE",         SYM(EXCHANGE_SYM)},
   { "EXECUTE",		SYM(EXECUTE_SYM)},
+  { "EXECUTED_GTID_SET",SYM(EXECUTED_GTID_SET)},
   { "EXISTS",		SYM(EXISTS)},
   { "EXIT",             SYM(EXIT_SYM)},
   { "EXPANSION",	SYM(EXPANSION_SYM)},

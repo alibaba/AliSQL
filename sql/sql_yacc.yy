@@ -1218,6 +1218,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  EVERY_SYM                     /* SQL-2003-N */
 %token  EXCHANGE_SYM
 %token  EXECUTE_SYM                   /* SQL-2003-R */
+%token  EXECUTED_GTID_SET
 %token  EXISTS                        /* SQL-2003-R */
 %token  EXIT_SYM
 %token  EXPANSION_SYM
@@ -14637,6 +14638,13 @@ start_option_value_list:
           {
             if (sp_create_assignment_instr(YYTHD, YY_TOKEN_END))
               MYSQL_YYABORT;
+          }
+        | EXECUTED_GTID_SET TEXT_STRING_sys
+          {
+            THD *thd= YYTHD;
+            LEX *lex= thd->lex;
+            lex->sql_command= SQLCOM_SET_EXECUTED_GTID_SET;
+            lex->add_executed_gtid_set_string= $2.str;
           }
         | option_type
           {
