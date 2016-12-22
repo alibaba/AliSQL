@@ -70,6 +70,8 @@ char *rds_sql_select_filter= NULL;
 char *rds_sql_update_filter= NULL;
 char *rds_sql_delete_filter= NULL;
 
+my_bool opt_anonymous_in_gtid_out_enable;
+
 TYPELIB bool_typelib={ array_elements(bool_values)-1, "", bool_values, 0 };
 
 /*
@@ -1852,6 +1854,14 @@ static Sys_var_ulong Sys_pseudo_thread_id(
        NO_CMD_LINE, VALID_RANGE(0, ULONG_MAX), DEFAULT(0),
        BLOCK_SIZE(1), NO_MUTEX_GUARD, IN_BINLOG,
        ON_CHECK(check_has_super));
+
+static Sys_var_mybool Sys_anonymous_in_gtid_out_enable(
+       "anonymous_in_gtid_out_enable",
+       "If ON, gtid_mode enabled slave instance can replicate from "
+       "gtid_mode disabled master instance, such as MySQL 5.1/5.5 or "
+       "MySQL 5.6 with gtid_mode=OFF. The default value is OFF.",
+       GLOBAL_VAR(opt_anonymous_in_gtid_out_enable), CMD_LINE(OPT_ARG),
+       DEFAULT(FALSE));
 
 static bool check_ic_reduce_hint_enable(sys_var *self, THD *thd, set_var *var)
 {

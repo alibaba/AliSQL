@@ -354,6 +354,8 @@ bool mts_checkpoint_routine(Relay_log_info *rli, ulonglong period,
                             bool force, bool need_data_lock);
 #endif /* HAVE_REPLICATION */
 
+extern my_bool opt_anonymous_in_gtid_out_enable;
+
 /* masks for start/stop operations on io and sql slave threads */
 #define SLAVE_IO  1
 #define SLAVE_SQL 2

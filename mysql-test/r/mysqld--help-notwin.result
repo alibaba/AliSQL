@@ -16,6 +16,11 @@ The following options may be given as the first argument:
  without corresponding xxx_init() or xxx_deinit(). That
  also means that one can load any function from any
  library, for example exit() from libc.so
+ --anonymous-in-gtid-out-enable 
+ If ON, gtid_mode enabled slave instance can replicate
+ from gtid_mode disabled master instance, such as MySQL
+ 5.1/5.5 or MySQL 5.6 with gtid_mode=OFF. The default
+ value is OFF.
  -a, --ansi          Use ANSI SQL syntax instead of MySQL syntax. This mode
  will also set transaction isolation level 'serializable'.
  --auto-increment-increment[=#] 
@@ -1183,6 +1188,7 @@ The following options may be given as the first argument:
 Variables (--variable-name=value)
 abort-slave-event-count 0
 allow-suspicious-udfs FALSE
+anonymous-in-gtid-out-enable FALSE
 auto-increment-increment 1
 auto-increment-offset 1
 autocommit TRUE
@@ -1207,10 +1213,10 @@ block-encryption-mode aes-128-ecb
 bulk-insert-buffer-size 8388608
 character-set-client-handshake TRUE
 character-set-filesystem binary
-character-set-server gbk
+character-set-server latin1
 character-sets-dir MYSQL_CHARSETSDIR/
 chroot (No default value)
-collation-server gbk_chinese_ci
+collation-server latin1_swedish_ci
 completion-type NO_CHAIN
 concurrent-insert AUTO
 connect-timeout 10

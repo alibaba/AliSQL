@@ -2699,8 +2699,21 @@ when it try to get the value of TIME_ZONE global variable from master.";
       mysql_free_result(master_res);
       break;
     }
-    if (mi->master_gtid_mode > gtid_mode + 1 ||
-        gtid_mode > mi->master_gtid_mode + 1)
+    /**
+     * Add opt_anonymout_in_gtid_out_enable to control whether a gtid_mode
+     * check is a must when slave connect to master. If the switch is ON,
+     * gtid_mode check between master node and slave node in replication
+     * is disabled, so that the migration from 5.1 or 5.5 to 5.6 will be
+     * more graceful, since we don't need reboot to switch from
+     * file-position-based replicate protocol to GTID protocol; if the
+     * switch is OFF, gtid_mode is checked.
+     *
+     * This strategy is from booking.com, a detail description is at
+     * http://blog.booking.com/mysql-5.6-gtids-evaluation-and-online-migration.html
+     *
+     */
+    if (!opt_anonymous_in_gtid_out_enable && (mi->master_gtid_mode > gtid_mode + 1 ||
+                                              gtid_mode > mi->master_gtid_mode + 1))
     {
       mi->report(ERROR_LEVEL, ER_SLAVE_FATAL_ERROR,
                  "The slave IO thread stops because the master has "
