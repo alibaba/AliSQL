@@ -2921,6 +2921,34 @@ srv_fts_close(void)
 }
 #endif
 
+void
+dict_table_persist_autoinc_at_shutdown()
+{
+	ulint   i;
+
+	/* Free the hash elements. We don't remove them from the table
+	because we are going to destroy the table anyway. */
+	for (i = 0; i < hash_get_n_cells(dict_sys->table_hash); i++) {
+		dict_table_t*   table;
+
+		table = static_cast<dict_table_t*>HASH_GET_FIRST(dict_sys->table_hash, i);
+
+		while (table) {
+
+			dict_table_t*   prev_table = table;
+			table = static_cast<dict_table_t*>HASH_GET_NEXT(name_hash, prev_table);
+#ifdef UNIV_DEBUG
+			ut_a(prev_table->magic_n == DICT_TABLE_MAGIC_N);
+#endif
+			/* persist autoinc value when dict table move from dict cache */
+			if (prev_table->autoinc > 0) {
+
+				btr_root_set_auto_inc(prev_table, prev_table->autoinc);
+			}
+		}
+	}
+}
+
 /****************************************************************//**
 Shuts down the InnoDB database.
 @return	DB_SUCCESS or error code */
@@ -2946,6 +2974,12 @@ innobase_shutdown_for_mysql(void)
 		fts_optimize_start_shutdown();
 
 		fts_optimize_end();
+	}
+
+	/* persist autoinc value when normal shutdown */
+	if (srv_autoinc_persistent && srv_n_autoinc_interval > 1) {
+
+		dict_table_persist_autoinc_at_shutdown();
 	}
 
 	/* 1. Flush the buffer pool to disk, write the current lsn to

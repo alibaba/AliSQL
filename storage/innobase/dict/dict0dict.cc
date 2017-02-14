@@ -705,12 +705,28 @@ UNIV_INTERN
 void
 dict_table_autoinc_initialize(
 /*==========================*/
-	dict_table_t*	table,	/*!< in/out: table */
-	ib_uint64_t	value)	/*!< in: next value to assign to a row */
+	dict_table_t*	table,		/*!< in/out: table */
+	ulonglong	increment,	/*!< in: auto increment value */
+	ib_uint64_t	value)		/*!< in: next value to assign to a row */
 {
 	ut_ad(dict_table_autoinc_own(table));
 
 	table->autoinc = value;
+	table->old_autoinc = table->autoinc;
+	if (dict_table_is_discarded(table)) {
+
+		return;
+	}
+
+	if (srv_autoinc_persistent) {
+
+		btr_root_set_auto_inc(table,
+			(value + (srv_n_autoinc_interval - 1) * increment));
+	} else {
+
+		/* init value 0 when srv_autoinc_persistent is off */
+		btr_root_set_auto_inc(table, 0);
+	}
 }
 
 /************************************************************************
@@ -802,14 +818,25 @@ void
 dict_table_autoinc_update_if_greater(
 /*=================================*/
 
-	dict_table_t*	table,	/*!< in/out: table */
-	ib_uint64_t	value)	/*!< in: value which was assigned to a row */
+	dict_table_t*	table,		/*!< in/out: table */
+	ulonglong	increment,	/*!< in: auto increment value */
+	ib_uint64_t	value)		/*!< in: value which was assigned
+					to a row */
 {
 	ut_ad(dict_table_autoinc_own(table));
 
 	if (value > table->autoinc) {
 
 		table->autoinc = value;
+	}
+
+	if (srv_autoinc_persistent
+	    && ((table->autoinc - table->old_autoinc) / increment
+		>= srv_n_autoinc_interval)) {
+
+		table->old_autoinc = table->autoinc;
+		btr_root_set_auto_inc(table,
+			(value + (srv_n_autoinc_interval - 1) * increment));
 	}
 }
 
@@ -1441,7 +1468,7 @@ dict_make_room_in_cache(
 
 		if (dict_table_can_be_evicted(table)) {
 
-			dict_table_remove_from_cache_low(table, TRUE);
+			dict_table_remove_from_cache_low(table, TRUE, TRUE);
 
 			++n_evicted;
 		}
@@ -1720,6 +1747,14 @@ dict_table_rename_in_cache(
 		if (!success) {
 			return(DB_ERROR);
 		}
+	}
+
+	/* persist autoinc value when dict table move from dict cache */
+	if (srv_autoinc_persistent
+	    && srv_n_autoinc_interval > 1
+	    && table->autoinc > 0) {
+
+		btr_root_set_auto_inc(table, table->autoinc);
 	}
 
 	/* Remove table from the hash tables of tables */
@@ -2025,8 +2060,9 @@ void
 dict_table_remove_from_cache_low(
 /*=============================*/
 	dict_table_t*	table,		/*!< in, own: table */
-	ibool		lru_evict)	/*!< in: TRUE if table being evicted
+	ibool		lru_evict,	/*!< in: TRUE if table being evicted
 					to make room in the table LRU list */
+	ibool		autoinc_persistent)/*!< in, own: autoinc_persistent */
 {
 	dict_foreign_t*	foreign;
 	dict_index_t*	index;
@@ -2052,6 +2088,15 @@ dict_table_remove_from_cache_low(
 		foreign = *it;
 		foreign->referenced_table = NULL;
 		foreign->referenced_index = NULL;
+	}
+
+	/* persist autoinc value when dict table move from dict cache */
+	if (autoinc_persistent
+	    && srv_autoinc_persistent
+	    && srv_n_autoinc_interval > 1
+	    && table->autoinc > 0) {
+
+		btr_root_set_auto_inc(table, table->autoinc);
 	}
 
 	/* Remove the indexes from the cache */
@@ -2127,7 +2172,7 @@ dict_table_remove_from_cache(
 /*=========================*/
 	dict_table_t*	table)	/*!< in, own: table */
 {
-	dict_table_remove_from_cache_low(table, FALSE);
+	dict_table_remove_from_cache_low(table, FALSE, FALSE);
 }
 
 /****************************************************************//**

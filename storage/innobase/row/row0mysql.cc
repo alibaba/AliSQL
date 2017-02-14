@@ -4059,7 +4059,7 @@ next_rec:
 
 	/* Reset auto-increment. */
 	dict_table_autoinc_lock(table);
-	dict_table_autoinc_initialize(table, 1);
+	dict_table_autoinc_initialize(table, 1, 1);
 	dict_table_autoinc_unlock(table);
 
 	trx_commit_for_mysql(trx);

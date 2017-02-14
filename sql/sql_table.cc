@@ -5495,6 +5495,7 @@ bool mysql_create_like_table(THD* thd, TABLE_LIST* table, TABLE_LIST* src_table,
   local_create_info.options|= create_info->options & HA_LEX_CREATE_TMP_TABLE;
   /* Reset auto-increment counter for the new table. */
   local_create_info.auto_increment_value= 0;
+  local_create_info.auto_increment_increment= thd->variables.auto_increment_increment;
   /*
     Do not inherit values of DATA and INDEX DIRECTORY options from
     the original table. This is documented behavior.
@@ -7106,6 +7107,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     /* Table has an autoincrement, copy value to new table */
     table->file->info(HA_STATUS_AUTO);
     create_info->auto_increment_value= table->file->stats.auto_increment_value;
+    create_info->auto_increment_increment= thd->variables.auto_increment_increment;
   }
   if (!(used_fields & HA_CREATE_USED_KEY_BLOCK_SIZE))
     create_info->key_block_size= table->s->key_block_size;
@@ -7150,6 +7152,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
 	    !(used_fields & HA_CREATE_USED_AUTO))
 	{
 	  create_info->auto_increment_value=0;
+          create_info->auto_increment_increment= thd->variables.auto_increment_increment;
 	  create_info->used_fields|=HA_CREATE_USED_AUTO;
 	}
 	break;

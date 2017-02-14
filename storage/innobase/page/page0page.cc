@@ -541,9 +541,8 @@ page_create_empty(
 
 	ut_ad(fil_page_get_type(page) == FIL_PAGE_INDEX);
 
-	if (dict_index_is_sec_or_ibuf(index) && page_is_leaf(page)) {
+	if (page_is_leaf(page)) {
 		max_trx_id = page_get_max_trx_id(page);
-		ut_ad(max_trx_id);
 	}
 
 	if (page_zip) {

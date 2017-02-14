@@ -306,10 +306,11 @@ UNIV_INTERN
 void
 dict_table_autoinc_initialize(
 /*==========================*/
-	dict_table_t*	table,	/*!< in/out: table */
-	ib_uint64_t	value)	/*!< in: next value to assign to a row */
+	dict_table_t*	table,		/*!< in/out: table */
+	ulonglong	increment,	/*!< in: auto increment value */
+	ib_uint64_t	value)		/*!< in: next value to assign to
+					a row */
 	MY_ATTRIBUTE((nonnull));
-
 /** Store autoinc value when the table is evicted.
 @param[in]	table	table evicted */
 UNIV_INTERN
@@ -342,8 +343,10 @@ void
 dict_table_autoinc_update_if_greater(
 /*=================================*/
 
-	dict_table_t*	table,	/*!< in/out: table */
-	ib_uint64_t	value)	/*!< in: value which was assigned to a row */
+	dict_table_t*	table,		/*!< in/out: table */
+	ulonglong	increment,	/*!< in: auto increment value */
+	ib_uint64_t	value)		/*!< in: value which was assigned
+					to a row */
 	MY_ATTRIBUTE((nonnull));
 /********************************************************************//**
 Release the autoinc lock. */
@@ -389,8 +392,9 @@ void
 dict_table_remove_from_cache_low(
 /*=============================*/
 	dict_table_t*	table,		/*!< in, own: table */
-	ibool		lru_evict);	/*!< in: TRUE if table being evicted
+	ibool		lru_evict,	/*!< in: TRUE if table being evicted
 					to make room in the table LRU list */
+	ibool		autoinc_persistent); /*!< in, own: autoinc_persistent */
 /**********************************************************************//**
 Renames a table object.
 @return	TRUE if success */

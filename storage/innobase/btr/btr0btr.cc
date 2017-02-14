@@ -763,6 +763,57 @@ btr_root_get(
 }
 
 /**************************************************************//**
+Get the auto-inc value from the root node of cluster index and x-latches it.
+@return	auto-inc value */
+UNIV_INTERN
+ulonglong
+btr_root_get_auto_inc(
+/*==================*/
+	dict_table_t*	table)	/*!< in: dict table */
+{
+	ulonglong	auto_inc;
+	dict_index_t*	index;
+	mtr_t		mtr;
+	page_t*		root;
+
+	/* Get cluster index */
+	index = dict_table_get_first_index(table);
+
+	mtr_start(&mtr);
+	mtr_s_lock(dict_index_get_lock(index), &mtr);
+	root = btr_root_get(index, &mtr);
+	auto_inc= page_get_max_trx_id(root);
+	mtr_commit(&mtr);
+
+	return (auto_inc);
+}
+
+/**************************************************************//**
+Set the auto-inc value to the root node of a cluster index.
+*/
+UNIV_INTERN
+void
+btr_root_set_auto_inc(
+/*==================*/
+	dict_table_t*	table,	/*!< in: table */
+	ulonglong	value)	/*!< in: auto_inc value */
+{
+	dict_index_t*  index;
+	buf_block_t*   block;
+	mtr_t	       mtr;
+
+	/* Get cluster index */
+	index = dict_table_get_first_index(table);
+
+	mtr_start(&mtr);
+	mtr_s_lock(dict_index_get_lock(index), &mtr);
+	block = btr_root_block_get(index, RW_X_LATCH, &mtr);
+	/* Reuse trx_id position which is unnecessary for cluester index */
+	page_set_max_trx_id(block, buf_block_get_page_zip(block), value, &mtr);
+	mtr_commit(&mtr);
+}
+
+/**************************************************************//**
 Gets the height of the B-tree (the level of the root, when the leaf
 level is assumed to be 0). The caller must hold an S or X latch on
 the index.
@@ -1125,6 +1176,10 @@ btr_page_alloc_low(
 	page_t*		root;
 
 	root = btr_root_get(index, mtr);
+	ut_ad(srv_autoinc_persistent
+	      || !dict_index_is_clust(index)
+	      || page_get_max_trx_id(root) == 0);
+
 
 	if (level == 0) {
 		seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_LEAF;
@@ -1283,6 +1338,10 @@ btr_page_free_low(
 	}
 
 	root = btr_root_get(index, mtr);
+
+	ut_ad(srv_autoinc_persistent
+	      || !dict_index_is_clust(index)
+	      || page_get_max_trx_id(root) == 0);
 
 	if (level == 0) {
 		seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_LEAF;
@@ -4189,6 +4248,10 @@ btr_print_size(
 	mtr_start(&mtr);
 
 	root = btr_root_get(index, &mtr);
+
+	ut_ad(srv_autoinc_persistent
+	      || !dict_index_is_clust(index)
+	      || page_get_max_trx_id(root) == 0);
 
 	seg = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
 

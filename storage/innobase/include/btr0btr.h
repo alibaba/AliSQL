@@ -246,6 +246,23 @@ btr_height_get(
 	mtr_t*		mtr)	/*!< in/out: mini-transaction */
 	MY_ATTRIBUTE((nonnull, warn_unused_result));
 /**************************************************************//**
+Gets the auto-inc value from the root node of a tree and x-latches it.
+@return	       auto-inc value */
+UNIV_INTERN
+ulonglong
+btr_root_get_auto_inc(
+/*==================*/
+	dict_table_t*	table); /*!< in: dict table */
+/**************************************************************//**
+set the auto-inc value to the root node of a tree.
+*/
+UNIV_INTERN
+void
+btr_root_set_auto_inc(
+/*==================*/
+	dict_table_t*	table,	/*!< in: table */
+	ulonglong	value);	/*!< in: auto_inc value */
+/**************************************************************//**
 Gets a buffer page and declares its latching order level. */
 UNIV_INLINE
 buf_block_t*

@@ -5890,7 +5890,8 @@ foreign_fail:
 			dict_table_t* t = ctx->new_table;
 
 			dict_table_autoinc_lock(t);
-			dict_table_autoinc_initialize(t, ctx->max_autoinc);
+			dict_table_autoinc_initialize(t,
+				prebuilt->autoinc_increment, ctx->max_autoinc);
 			dict_table_autoinc_unlock(t);
 		}
 

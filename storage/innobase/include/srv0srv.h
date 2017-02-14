@@ -263,6 +263,8 @@ extern ulint	srv_log_buffer_size;
 extern ulong	srv_flush_log_at_trx_commit;
 extern uint	srv_flush_log_at_timeout;
 extern char	srv_adaptive_flushing;
+extern char     srv_autoinc_persistent;
+extern ulong    srv_n_autoinc_interval;
 
 /* If this flag is TRUE, then we will load the indexes' (and tables') metadata
 even if they are marked as "corrupted". Mostly it is for DBA to process

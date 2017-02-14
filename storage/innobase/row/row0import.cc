@@ -1919,7 +1919,10 @@ PageConverter::update_index_page(
 	btr_page_set_index_id(
 		page, m_page_zip_ptr, m_index->m_srv_index->id, 0);
 
-	page_set_max_trx_id(block, m_page_zip_ptr, m_trx->id, 0);
+	if (dict_index_is_sec_or_ibuf(m_index->m_srv_index) && page_is_leaf(page)) {
+
+		page_set_max_trx_id(block, m_page_zip_ptr, m_trx->id, 0);
+	}
 
 	if (page_is_empty(block->frame)) {
 
@@ -3784,7 +3787,8 @@ row_import_for_mysql(
 			table_name, autoinc);
 
 		dict_table_autoinc_lock(table);
-		dict_table_autoinc_initialize(table, autoinc);
+		dict_table_autoinc_initialize(table,
+			prebuilt->autoinc_increment, autoinc);
 		dict_table_autoinc_unlock(table);
 	}
 

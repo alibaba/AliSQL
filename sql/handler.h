@@ -1057,6 +1057,7 @@ typedef struct st_ha_create_information
   const char *alias;
   ulonglong max_rows,min_rows;
   ulonglong auto_increment_value;
+  ulonglong auto_increment_increment;
   ulong table_options;
   ulong avg_row_length;
   ulong used_fields;

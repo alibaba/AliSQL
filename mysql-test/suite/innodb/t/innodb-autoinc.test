@@ -699,3 +699,76 @@ INSERT INTO t VALUES (NULL);
 SELECT * FROM t;
 SHOW CREATE TABLE t;
 DROP TABLE t;
+
+#
+# Test  innodb_autoinc_persistent
+#
+
+# Reset the AUTOINC session variables
+SET @@SESSION.AUTO_INCREMENT_INCREMENT=1, @@SESSION.AUTO_INCREMENT_OFFSET=1;
+SET @@INSERT_ID=1;
+SHOW VARIABLES LIKE "%auto_inc%";
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (c1 INT AUTO_INCREMENT, PRIMARY KEY(c1)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES(null);
+INSERT INTO t1 VALUES(null);
+SELECT * FROM t1;
+SHOW CREATE TABLE t1;
+
+
+--echo # restart: --innodb_autoinc_persistent=on
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+# Do something while server is down
+--enable_reconnect
+# Write file to make mysql-test-run.pl start up the server again
+--exec echo "restart: --innodb_autoinc_persistent=on" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES(null);
+INSERT INTO t1 VALUES(null);
+SELECT * FROM t1;
+DELETE FROM t1 WHERE c1 in(3,4);
+SELECT * FROM t1;
+
+--echo # restart: --innodb_autoinc_persistent=on
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+# Do something while server is down
+--enable_reconnect
+# Write file to make mysql-test-run.pl start up the server again
+--exec echo "restart: --innodb_autoinc_persistent=on" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+SHOW CREATE TABLE t1;
+
+update t1 set c1=1000 where c1=1;
+select * from t1;
+SHOW CREATE TABLE t1;
+
+--echo # restart: --innodb_autoinc_persistent=on --innodb_autoinc_persistent_interval=10
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+# Do something while server is down
+--enable_reconnect
+# Write file to make mysql-test-run.pl start up the server again
+--exec echo "restart: --innodb_autoinc_persistent=on --innodb_autoinc_persistent_interval=10" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+SHOW CREATE TABLE t1;
+insert into t1 values(null),(null),(null),(null),(null),(null),(null),(null),(null),(null),(null),(null);
+select * from t1;
+
+--echo # restart: --innodb_autoinc_persistent=on innodb_autoinc_persistent_interval=10
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+# Do something while server is down
+--enable_reconnect
+# Write file to make mysql-test-run.pl start up the server again
+--exec echo "restart: --innodb_autoinc_persistent=on --innodb_autoinc_persistent_interval=10" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;

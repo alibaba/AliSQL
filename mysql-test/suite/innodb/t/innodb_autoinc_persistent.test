@@ -1,0 +1,26 @@
+# Variable name: innodb_autoinc_persistent
+# Scope: Global
+# Access type: Static
+# Data type: boolen
+# Default value: OFF
+
+--source include/have_innodb.inc
+
+SELECT COUNT(@@GLOBAL.innodb_autoinc_persistent);
+
+SET @@GLOBAL.innodb_autoinc_persistent=OFF;
+SET @@GLOBAL.innodb_autoinc_persistent=ON;
+SET @@GLOBAL.innodb_autoinc_persistent=OFF;
+
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT COUNT(@@local.innodb_autoinc_persistent);
+--echo Expected error 'Variable is a GLOBAL variable'
+
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT COUNT(@@SESSION.innodb_autoinc_persistent);
+--echo Expected error 'Variable is a GLOBAL variable'
+
+# Check the default value
+SELECT VARIABLE_NAME, VARIABLE_VALUE
+FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+WHERE VARIABLE_NAME = 'innodb_autoinc_persistent';

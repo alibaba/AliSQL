@@ -1169,6 +1169,7 @@ struct dict_table_t{
 				acquired the AUTOINC lock or not. Of course
 				only one transaction can be granted the
 				lock but there can be multiple waiters. */
+	ib_uint64_t     old_autoinc;/* previous autoinc */
 	const trx_t*	autoinc_trx;
 				/*!< The transaction that currently holds the
 				the AUTOINC lock on this table.

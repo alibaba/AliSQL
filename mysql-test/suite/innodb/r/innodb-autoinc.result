@@ -1384,3 +1384,95 @@ t	CREATE TABLE `t` (
   KEY `i` (`i`)
 ) ENGINE=InnoDB AUTO_INCREMENT=401 DEFAULT CHARSET=latin1
 DROP TABLE t;
+SET @@SESSION.AUTO_INCREMENT_INCREMENT=1, @@SESSION.AUTO_INCREMENT_OFFSET=1;
+SET @@INSERT_ID=1;
+SHOW VARIABLES LIKE "%auto_inc%";
+Variable_name	Value
+auto_increment_increment	1
+auto_increment_offset	1
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (c1 INT AUTO_INCREMENT, PRIMARY KEY(c1)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES(null);
+INSERT INTO t1 VALUES(null);
+SELECT * FROM t1;
+c1
+1
+2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+# restart: --innodb_autoinc_persistent=on
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(null);
+INSERT INTO t1 VALUES(null);
+SELECT * FROM t1;
+c1
+1
+2
+3
+4
+DELETE FROM t1 WHERE c1 in(3,4);
+SELECT * FROM t1;
+c1
+1
+2
+# restart: --innodb_autoinc_persistent=on
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+update t1 set c1=1000 where c1=1;
+select * from t1;
+c1
+2
+1000
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+# restart: --innodb_autoinc_persistent=on --innodb_autoinc_persistent_interval=10
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+insert into t1 values(null),(null),(null),(null),(null),(null),(null),(null),(null),(null),(null),(null);
+select * from t1;
+c1
+2
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+1000
+# restart: --innodb_autoinc_persistent=on innodb_autoinc_persistent_interval=10
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=latin1
+DROP TABLE t1;

@@ -4850,6 +4850,17 @@ ha_innobase::innobase_initialize_autoinc()
 
 			auto_inc = innobase_next_autoinc(
 				read_auto_inc, 1, 1, 0, col_max_value);
+			if (srv_autoinc_persistent) {
+
+				ulonglong	auto_inc_persistent;
+				auto_inc_persistent = btr_root_get_auto_inc(prebuilt->table);
+				/* auto_inc_persistent = 0 when srv_autoinc_persistent=off,
+				then we use SELECT MAX(col_name); */
+				if (auto_inc_persistent > 0) {
+
+					auto_inc = auto_inc_persistent;
+				}
+			}
 
 			break;
 		}
@@ -4884,7 +4895,9 @@ ha_innobase::innobase_initialize_autoinc()
 		}
 	}
 
-	dict_table_autoinc_initialize(prebuilt->table, auto_inc);
+	dict_table_autoinc_initialize(prebuilt->table,
+				      prebuilt->autoinc_increment,
+				      auto_inc);
 }
 
 /*****************************************************************//**
@@ -6655,7 +6668,9 @@ ha_innobase::innobase_reset_autoinc(
 
 	if (error == DB_SUCCESS) {
 
-		dict_table_autoinc_initialize(prebuilt->table, autoinc);
+		dict_table_autoinc_initialize(prebuilt->table,
+					      prebuilt->autoinc_increment,
+					      autoinc);
 
 		dict_table_autoinc_unlock(prebuilt->table);
 	}
@@ -6679,7 +6694,8 @@ ha_innobase::innobase_set_max_autoinc(
 
 	if (error == DB_SUCCESS) {
 
-		dict_table_autoinc_update_if_greater(prebuilt->table, auto_inc);
+		dict_table_autoinc_update_if_greater(prebuilt->table,
+			prebuilt->autoinc_increment, auto_inc);
 
 		dict_table_autoinc_unlock(prebuilt->table);
 	}
@@ -10025,7 +10041,8 @@ ha_innobase::create(
 		auto_inc_value = create_info->auto_increment_value;
 
 		dict_table_autoinc_lock(innobase_table);
-		dict_table_autoinc_initialize(innobase_table, auto_inc_value);
+		dict_table_autoinc_initialize(innobase_table,
+			create_info->auto_increment_increment, auto_inc_value);
 		dict_table_autoinc_unlock(innobase_table);
 	}
 
@@ -13589,7 +13606,9 @@ ha_innobase::get_auto_increment(
 			current = innobase_next_autoinc(
 				current, 1, increment, 1, col_max_value);
 
-			dict_table_autoinc_initialize(prebuilt->table, current);
+			dict_table_autoinc_initialize(prebuilt->table,
+				prebuilt->autoinc_increment,
+				current);
 
 			*first_value = current;
 		}
@@ -13606,7 +13625,7 @@ ha_innobase::get_auto_increment(
 		} else {
 			/* Update the table autoinc variable */
 			dict_table_autoinc_update_if_greater(
-				prebuilt->table, prebuilt->autoinc_last_value);
+				prebuilt->table, prebuilt->autoinc_increment, prebuilt->autoinc_last_value);
 		}
 	} else {
 		/* This will force write_row() into attempting an update
@@ -14649,7 +14668,7 @@ innodb_internal_table_validate(
 
 		DBUG_EXECUTE_IF("innodb_evict_autoinc_table",
 			mutex_enter(&dict_sys->mutex);
-			dict_table_remove_from_cache_low(user_table, TRUE);
+				dict_table_remove_from_cache_low(user_table, TRUE, TRUE);
 			mutex_exit(&dict_sys->mutex);
 		);
 	}
@@ -16177,6 +16196,18 @@ static MYSQL_SYSVAR_ULONG(flush_log_at_trx_commit, srv_flush_log_at_trx_commit,
   " or 2 (write at commit, flush once per second).",
   NULL, NULL, 1, 0, 2, 0);
 
+/* when autoinc_persistent=on and autoinc_persistent_interval=1 the sever
+   performance degradation less than 1% */
+static MYSQL_SYSVAR_BOOL(autoinc_persistent, srv_autoinc_persistent,
+  PLUGIN_VAR_RQCMDARG,
+  "Innodb table's auto_increment max value whether persist in cluster btr root page (off by default).",
+  NULL, NULL, FALSE);
+
+static MYSQL_SYSVAR_ULONG(autoinc_persistent_interval, srv_n_autoinc_interval,
+  PLUGIN_VAR_RQCMDARG,
+  "The interval of persist max auto increment value (default 1).",
+  NULL, NULL, 1, 1, 10000, 0);
+
 static MYSQL_SYSVAR_STR(flush_method, innobase_file_flush_method,
   PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
   "With which method to flush data.", NULL, NULL, NULL);
@@ -16944,6 +16975,8 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(force_load_corrupted),
   MYSQL_SYSVAR(locks_unsafe_for_binlog),
   MYSQL_SYSVAR(lock_wait_timeout),
+  MYSQL_SYSVAR(autoinc_persistent),
+  MYSQL_SYSVAR(autoinc_persistent_interval),
 #ifdef UNIV_LOG_ARCHIVE
   MYSQL_SYSVAR(log_arch_dir),
   MYSQL_SYSVAR(log_archive),

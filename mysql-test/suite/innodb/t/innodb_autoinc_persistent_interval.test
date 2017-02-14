@@ -1,0 +1,46 @@
+# Variable Name:innodb_autoinc_persistent_interval
+# Scope: GLOBAL
+# Access Type: Dynamic
+# Data Type: Numeric
+# Default Value: 1
+# Range: 1 - 10000
+
+
+--source include/have_innodb.inc
+#                 Save initial value                        #
+#############################################################
+SET @start_global_value = @@global.innodb_autoinc_persistent_interval;
+SELECT @start_global_value;
+
+# Check the default value
+SELECT VARIABLE_NAME, VARIABLE_VALUE
+FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+WHERE VARIABLE_NAME = 'innodb_autoinc_persistent_interval';
+
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT COUNT(@@local.innodb_autoinc_persistent_interval);
+--echo Expected error 'Variable is a GLOBAL variable'
+
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT COUNT(@@SESSION.innodb_autoinc_persistent_interval);
+--echo Expected error 'Variable is a GLOBAL variable'
+
+--Error ER_GLOBAL_VARIABLE
+SET innodb_autoinc_persistent_interval = 100;
+
+SET global innodb_autoinc_persistent_interval = 100;
+
+SELECT @@global.innodb_autoinc_persistent_interval;
+
+SET global innodb_autoinc_persistent_interval = 0;
+SET global innodb_autoinc_persistent_interval = 10001;
+
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_autoinc_persistent_interval = 30.34;
+
+####################################
+##     Restore initial value        #
+#####################################
+
+SET @@global.innodb_autoinc_persistent_interval = @start_global_value;
+SELECT @@global.innodb_autoinc_persistent_interval;
