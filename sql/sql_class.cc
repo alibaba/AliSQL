@@ -675,6 +675,33 @@ void *thd_get_ha_data(const THD *thd, const struct handlerton *hton)
   return *thd_ha_data(thd, hton);
 }
 
+/* Autonomous transaction context attr setting */
+extern "C"
+void **thd_atm_ha_data(const THD *thd)
+{
+  return (void **) &thd->atm_ctx.ha_data.ha_ptr;
+}
+extern "C"
+void *thd_get_atm_ha_data(const THD *thd)
+{
+  return *thd_atm_ha_data(thd);
+}
+extern "C"
+void thd_set_atm_ha_data(THD *thd, const void *ha_data)
+{
+  *thd_atm_ha_data(thd)= (void*) ha_data;
+}
+
+extern "C"
+unsigned long thd_get_atm_lock_type(const THD *thd)
+{
+  return (unsigned long)(thd->atm_ctx.lock_type);
+}
+extern "C"
+void thd_set_atm_lock_type(THD *thd, unsigned long lock_type)
+{
+  thd->atm_ctx.lock_type= lock_type;
+}
 
 /**
   Provide a handler data setter to simplify coding
@@ -1120,6 +1147,8 @@ THD::THD(bool enable_plugins)
     m_token_array= (unsigned char*) my_malloc(max_digest_length,
                                               MYF(MY_WME));
   }
+
+  atm_ctx.reset();
 }
 
 

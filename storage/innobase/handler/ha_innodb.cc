@@ -38,6 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sql_acl.h>	// PROCESS_ACL
 #include <debug_sync.h> // DEBUG_SYNC
 #include <my_base.h>	// HA_OPTION_*
+#include <sql_class.h>
 #include <mysys_err.h>
 #include <mysql/innodb_priv.h>
 #include <my_check_opt.h>
@@ -7249,7 +7250,105 @@ calc_row_difference(
 
 	return(DB_SUCCESS);
 }
+/**********************************************************************//**
+Begin InnoDB autonomous transaction.
+@return	error number or 0 */
+UNIV_INTERN
+int
+ha_innobase::begin_autonomous_trans()
+/*=================================*/
+{
+	trx_t*         atm_trx;
+	DBUG_ENTER("ha_innobase::begin_autonomous_trans");
 
+	trx_t*&	parent_trx = thd_to_trx(user_thd);
+	ut_ad(parent_trx == prebuilt->trx);
+
+	/* Backup trx */
+	thd_set_atm_ha_data(user_thd, parent_trx);
+	thd_set_atm_lock_type(user_thd, prebuilt->select_lock_type);
+
+	/* Allocate autonomous trx */
+	atm_trx = innobase_trx_allocate(user_thd);
+	ut_a(!trx_is_started(atm_trx));
+
+	/* Autonomous trx
+	     1. dirty read directly.
+	     2. lock_x mode. */
+	atm_trx->autonomy= true;
+	atm_trx->isolation_level= TRX_ISO_READ_UNCOMMITTED;
+	prebuilt->select_lock_type= LOCK_X;
+	++atm_trx->will_lock;
+
+	/* Overlap current trx */
+	parent_trx = atm_trx;
+	row_update_prebuilt_trx(prebuilt, atm_trx);
+
+	/* Register 2pc as transaction context, ignore statement context. */
+	trans_register_autonomous_ha(user_thd, TRUE, innodb_hton_ptr, false);
+	trx_register_for_2pc(prebuilt->trx);
+
+	DBUG_RETURN(0);
+}
+/**********************************************************************//**
+Restore the parent trx.
+@return	error number or 0 */
+UNIV_INTERN
+int
+ha_innobase::end_autonomous_trans()
+/*===============================*/
+{
+	trx_t*          atm_trx;
+	DBUG_ENTER("ha_innobase::end_autonomous_trans");
+
+	trx_t*& trx = thd_to_trx(user_thd);
+	ut_ad(trx == prebuilt->trx);
+	atm_trx = prebuilt->trx;
+
+	/* Restore trx */
+	trx = (trx_t *)thd_get_atm_ha_data(user_thd);
+	prebuilt->select_lock_type = thd_get_atm_lock_type(user_thd);
+	row_update_prebuilt_trx(prebuilt, trx);
+	ut_ad(thd_to_trx(user_thd) == prebuilt->trx);
+
+	/* Clean up atm trx */
+	trx_rollback_for_mysql(atm_trx);
+	trx_free_for_mysql(atm_trx);
+	DBUG_RETURN(0);
+}
+/**********************************************************************//**
+Updates a row given as a parameter to a new value. Notes that it happened
+within autonomous transaction.
+@return	error number or 0 */
+UNIV_INTERN
+int
+ha_innobase::atm_update_row(
+/*========================*/
+	const uchar*	old_row,	/*!< in: old row in MySQL format */
+	uchar*		new_row)	/*!< in: new row in MySQL format */
+{
+	int            error;
+	dberr_t        db_err;
+	DBUG_ENTER("ha_innobase::atm_update_row");
+	ut_ad(thd_to_trx(user_thd) == prebuilt->trx);
+
+	if (high_level_read_only) {
+		ib_senderrf(ha_thd(), IB_LOG_LEVEL_WARN, ER_READ_ONLY_MODE);
+		DBUG_RETURN(HA_ERR_TABLE_READONLY);
+	}
+	/* Lock table */
+	db_err= row_lock_table_for_mysql(prebuilt, prebuilt->table,
+					 LOCK_X);
+	if (db_err != DB_SUCCESS) {
+		error = convert_error_code_to_mysql(db_err, 0,
+						    user_thd);
+		DBUG_RETURN(error);
+	}
+	build_template(true);
+	error= update_row(old_row, new_row);
+
+	DBUG_RETURN(error);
+}
 /**********************************************************************//**
 Updates a row given as a parameter to a new value. Note that we are given
 whole rows, not just the fields which are updated: this incurs some

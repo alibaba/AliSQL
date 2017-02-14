@@ -2003,6 +2003,13 @@ static Sys_var_ulong Sys_rds_sql_max_iops(
        VALID_RANGE(0, ULONG_MAX), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
        NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_rds_sql_max_iops));
 
+static Sys_var_mybool Sys_sequence_read_skip_cache(
+       "sequence_read_skip_cache",
+       "Skip sequence cache, read the based table directly.",
+       SESSION_ONLY(sequence_read_skip_cache), NO_CMD_LINE,
+       DEFAULT(FALSE), NO_MUTEX_GUARD,
+       NOT_IN_BINLOG, ON_CHECK(0));
+
 static bool 
 check_net_buffer_length(sys_var *self, THD *thd,  set_var *var)
 {

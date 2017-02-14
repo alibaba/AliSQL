@@ -2940,6 +2940,26 @@ void MDL_context::release_statement_locks()
 {
   DBUG_ENTER("MDL_context::release_transactional_locks");
   release_locks_stored_before(MDL_STATEMENT, NULL);
+  release_autonomous_transactional_locks();
+  DBUG_VOID_RETURN;
+}
+
+void MDL_context::release_autonomous_transactional_locks()
+{
+  MDL_ticket *ticket;
+  enum_mdl_duration duration;
+  DBUG_ENTER("MDL_context::release_autonomous_transactional_locks");
+  duration= MDL_TRANSACTION;
+  Ticket_iterator it(m_tickets[duration]);
+
+  if (m_tickets[duration].is_empty())
+    DBUG_VOID_RETURN;
+
+  while ((ticket= it++))
+  {
+    if (ticket->get_autonomy())
+      release_lock(duration, ticket);
+  }
   DBUG_VOID_RETURN;
 }
 

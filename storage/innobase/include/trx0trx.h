@@ -1055,6 +1055,7 @@ struct trx_t{
 	bool		api_trx;	/*!< trx started by InnoDB API */
 	bool		api_auto_commit;/*!< automatic commit */
 	bool		read_write;	/*!< if read and write operation */
+	bool		autonomy;	/*!< whether autonomous transaction */
 
 	/*------------------------------*/
 	char detailed_error[256];	/*!< detailed error message for last

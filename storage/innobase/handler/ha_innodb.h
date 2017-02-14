@@ -124,6 +124,11 @@ class ha_innobase: public handler
 
 	int write_row(uchar * buf);
 	int update_row(const uchar * old_data, uchar * new_data);
+
+	int atm_update_row(const uchar * old_data, uchar * new_data);
+	int begin_autonomous_trans();
+	int end_autonomous_trans();
+
 	int delete_row(const uchar * buf);
 	bool was_semi_consistent_read();
 	void try_semi_consistent_read(bool yes);

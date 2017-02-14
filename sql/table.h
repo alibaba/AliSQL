@@ -723,6 +723,9 @@ struct TABLE_SHARE
   handlerton *default_part_db_type;
 #endif
 
+  handlerton *seq_db_type;
+  bool is_sequence;
+
   /**
     Cache the checked structure of this table.
 
@@ -1219,6 +1222,9 @@ public:
 #endif
   MDL_ticket *mdl_ticket;
 
+  /* If true, will iterator the sequence nextval. */
+  bool iter_sequence;
+
   void init(THD *thd, TABLE_LIST *tl);
   bool fill_item_list(List<Item> *item_list) const;
   void reset_item_list(List<Item> *item_list) const;
@@ -1697,6 +1703,9 @@ public:
   Field_translator *field_translation;	/* array of VIEW fields */
   /* pointer to element after last one in translation table above */
   Field_translator *field_translation_end;
+
+  /*If true, it the SELECT FOR SEQUENCE syntax. */
+  bool sequence_read;
   /*
     List (based on next_local) of underlying tables of this view. I.e. it
     does not include the tables of subqueries used in the view. Is set only

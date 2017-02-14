@@ -4898,6 +4898,23 @@ bool create_table_impl(THD *thd,
   }
 #endif
 
+  /* Change the table engine to sequence engine. */
+  if (thd->lex->seq_create_info)
+  {
+    Sequence_create_info *seq_create_info= thd->lex->seq_create_info;
+
+    DBUG_ASSERT(thd->lex->sql_command == SQLCOM_CREATE_TABLE);
+    DBUG_ASSERT(seq_create_info->base_db_type == create_info->db_type);
+    DBUG_ASSERT(create_info->db_type != sequence_hton);
+
+    create_info->db_type= sequence_hton;
+    delete file;
+
+    if (!(file= get_ha_sequence(seq_create_info)))
+    {
+      DBUG_RETURN(TRUE);
+    }
+  }
   if (mysql_prepare_create_table(thd, create_info, alter_info,
                                  internal_tmp_table,
                                  &db_options, file,
@@ -9558,6 +9575,16 @@ static bool check_engine(THD *thd, const char *db_name,
       DBUG_RETURN(true);
     }
     *new_engine= myisam_hton;
+  }
+
+  /* Refuse the sequence engine as the table engine. */
+  if (*new_engine == sequence_hton
+      && !thd->lex->seq_create_info)
+  {
+    my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+               ha_resolve_storage_engine_name(*new_engine), "SEQUENCE");
+    *new_engine= NULL;
+    DBUG_RETURN(true);
   }
 
   /*

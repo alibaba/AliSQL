@@ -887,6 +887,14 @@ mysqld_show_create(THD *thd, TABLE_LIST *table_list)
     goto exit;
   }
 
+  if (thd->lex->only_sequence
+      && table_list->table
+      && !table_list->table->s->is_sequence)
+  {
+    my_error(ER_WRONG_OBJECT, MYF(0),
+             table_list->db, table_list->table_name, "SEQUENCE");
+    goto exit;
+  }
   buffer.length(0);
 
   if (table_list->view)
@@ -1418,6 +1426,8 @@ int store_create_info(THD *thd, TABLE_LIST *table_list, String *packet,
 
   if (share->tmp_table)
     packet->append(STRING_WITH_LEN("CREATE TEMPORARY TABLE "));
+  else if (share->is_sequence)
+    packet->append(STRING_WITH_LEN("CREATE SEQUENCE "));
   else
     packet->append(STRING_WITH_LEN("CREATE TABLE "));
   if (create_info_arg &&

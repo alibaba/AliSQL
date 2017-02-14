@@ -27,6 +27,7 @@
 #include "sql_array.h"
 #include "mem_root_array.h"
 #include "sql_alter.h"                // Alter_info
+#include "sql_sequence.h"
 
 /* YACC and LEX Definitions */
 
@@ -519,7 +520,8 @@ public:
                                         enum_mdl_type mdl_type= MDL_SHARED_READ,
 					List<Index_hint> *hints= 0,
                                         List<String> *partition_names= 0,
-                                        LEX_STRING *option= 0);
+                                        LEX_STRING *option= 0,
+                                        bool sequence_read= false);
   virtual void set_lock_for_tables(thr_lock_type lock_type) {}
 
   friend class st_select_lex_unit;
@@ -921,7 +923,8 @@ public:
                                 enum_mdl_type mdl_type= MDL_SHARED_READ,
 				List<Index_hint> *hints= 0,
                                 List<String> *partition_names= 0,
-                                LEX_STRING *option= 0);
+                                LEX_STRING *option= 0,
+                                bool sequence_read= false);
   TABLE_LIST* get_table_list();
   bool init_nested_join(THD *thd);
   TABLE_LIST *end_nested_join(THD *thd);
@@ -2454,6 +2457,8 @@ struct LEX: public Query_tables_list
   ulonglong ic_reduce_id; /* queue_on_pk's id */
   ulonglong target_affect_row; /* arg of target_affect_row */
   char *add_executed_gtid_set_string; /* arg of add_executed_gtid_set()  */
+  Sequence_create_info *seq_create_info;
+  bool native_create_sequence;
 private:
   bool m_broken; ///< see mark_broken()
   /// Current SP parsing context.
@@ -2506,6 +2511,8 @@ public:
   Event_parse_data *event_parse_data;
 
   bool only_view;       /* used for SHOW CREATE TABLE/VIEW */
+
+  bool only_sequence;   /* used for SHOW CREATE SEQUENCE */
   /*
     field_list was created for view and should be removed before PS/SP
     rexecuton

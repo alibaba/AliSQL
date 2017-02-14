@@ -450,6 +450,7 @@ my_bool old_mode;
 handlerton *heap_hton;
 handlerton *myisam_hton;
 handlerton *partition_hton;
+handlerton *sequence_hton;
 
 uint opt_server_id_bits= 0;
 ulong opt_server_id_mask= 0;

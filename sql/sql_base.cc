@@ -1485,7 +1485,8 @@ void close_thread_table(THD *thd, TABLE **table_ptr)
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE,
                                              table->s->db.str,
                                              table->s->table_name.str,
-                                             MDL_SHARED));
+                                             MDL_SHARED)
+              || table->s->is_sequence);
   table->mdl_ticket= NULL;
 
   mysql_mutex_lock(&thd->LOCK_thd_data);
@@ -3229,7 +3230,10 @@ share_found:
 
 table_found:
   table->mdl_ticket= mdl_ticket;
-
+  /* If query sequence, release MDL when statement end. */
+  if (table->s->is_sequence
+      && mdl_ticket->get_type() == MDL_SHARED_READ)
+    mdl_ticket->set_autonomy(true);
   table->next= thd->open_tables;		/* Link into simple list */
   thd->set_open_tables(table);
 
@@ -3259,6 +3263,11 @@ table_found:
     DBUG_RETURN(true);
   }
 #endif
+  if (table_list->sequence_read && !table->s->is_sequence)
+  {
+    my_error(ER_SYNTAX_ERROR, MYF(0));
+    DBUG_RETURN(true);
+  }
 
   table->init(thd, table_list);
 
@@ -9638,6 +9647,109 @@ void close_log_table(THD *thd, Open_tables_backup *backup)
 {
   close_system_tables(thd, backup);
 }
+/*
+  Lock sequence table.
+  The sequence nextval value reading actual modified the cache, so
+  we need MDL_SHARE_WRIETE on table and global read lock.
+
+  @param thd    The current thread
+  @param table  Opened TABLE object
+
+  @return
+    0           Success
+    !=0         Failure
+*/
+bool lock_sequence_table(THD *thd, TABLE *table)
+{
+  bool error= false;
+  MDL_request_list mdl_requests;
+  MDL_request mdl_request;
+  MDL_request global_request;
+  DBUG_ENTER("lock_sequence_table");
+  DBUG_ASSERT(thd && table);
+  DBUG_ASSERT(table->in_use == thd);
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE,
+                                        table->s->db.str,
+                                        table->s->table_name.str,
+                                        MDL_SHARED));
+  /* Require row binlog format */
+  if (!(thd->is_current_stmt_binlog_format_row()))
+  {
+    my_error(ER_SEQUENCE_BINLOG_FORMAT, MYF(0));
+    DBUG_RETURN(TRUE);
+  }
+  /* Already hold global read lock. */
+  if (thd->global_read_lock.can_acquire_protection())
+    DBUG_RETURN(TRUE);
+
+  global_request.init(MDL_key::GLOBAL, "", "",
+                      MDL_INTENTION_EXCLUSIVE,
+                      MDL_STATEMENT);
+
+  mdl_request.init(MDL_key::TABLE, table->s->db.str,
+                   table->s->table_name.str,
+                   MDL_SHARED_WRITE,
+                   MDL_TRANSACTION);
+
+  mdl_requests.push_front(&global_request);
+  mdl_requests.push_front(&mdl_request);
+  if (thd->mdl_context.acquire_locks(&mdl_requests,
+                         thd->variables.lock_wait_timeout))
+    DBUG_RETURN(TRUE);
+
+  DBUG_ASSERT(mdl_request.ticket);
+  mdl_request.ticket->set_autonomy(true);
+  DBUG_RETURN(error);
+}
+/*
+  Release the transactional locks, include MDL_SHARE_READ when open table
+  and MDL_SHARE_WRITE when modify cache.
+
+  @param thd            current thread
+  @param table          opened TABLE
+
+  @return
+     false              Success
+     true               Failure
+*/
+bool unlock_sequence_table(THD *thd, TABLE *table) //no cover begin
+{
+  bool error= false;
+  DBUG_ENTER("unlock_sequence_table");
+  thd->mdl_context.release_autonomous_transactional_locks();
+  table->mdl_ticket= NULL;
+  DBUG_RETURN(error);
+} //no cover end
+
+/*
+  Check mdl lock and read_only.
+  We will prevent query sequence when read_only excluding
+  super_acl user or slave thread.
+
+  @param thd            current thread
+  @param table          opened TABLE
+
+  @return
+     false              Success
+     true               Failure
+*/
+bool check_lock_sequence_table(THD *thd, TABLE *table)
+{
+  bool is_superuser= false;
+  DBUG_ENTER("lock_sequence_table_check");
+  is_superuser= thd->security_ctx->master_access & SUPER_ACL;
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE,
+                                             table->s->db.str,
+                                             table->s->table_name.str,
+                                             MDL_SHARED_WRITE));
+  if (!is_superuser && opt_readonly && !thd->slave_thread)
+  {
+    my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--read-only");
+    DBUG_RETURN(TRUE);
+  }
+  DBUG_RETURN(false);
+}
+
 
 /**
   @} (end of group Data_Dictionary)

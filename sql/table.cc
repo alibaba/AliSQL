@@ -1147,14 +1147,21 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   if (share->frm_version == FRM_VER_TRUE_VARCHAR -1 && head[33] == 5)
     share->frm_version= FRM_VER_TRUE_VARCHAR;
 
+  legacy_db_type= (enum legacy_db_type) (uint) *(head+3);
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-  if (*(head+61) &&
+  if (*(head+61) && legacy_db_type == DB_TYPE_PARTITION_DB &&
       !(share->default_part_db_type= 
         ha_checktype(thd, (enum legacy_db_type) (uint) *(head+61), 1, 0)))
     goto err;
   DBUG_PRINT("info", ("default_part_db_type = %u", head[61]));
 #endif
-  legacy_db_type= (enum legacy_db_type) (uint) *(head+3);
+
+  if (legacy_db_type == DB_TYPE_SEQUENCE_DB)
+  {
+    share->seq_db_type= ha_checktype(thd,
+                         (enum legacy_db_type) (uint) *(head+61), 1, 0);
+    share->is_sequence= true;
+  }
   DBUG_ASSERT(share->db_plugin == NULL);
   /*
     if the storage engine is dynamic, no point in resolving it by its
@@ -3834,6 +3841,8 @@ void TABLE::init(THD *thd, TABLE_LIST *tl)
   pos_in_table_list= tl;
 
   clear_column_bitmaps();
+
+  iter_sequence= tl->sequence_read;
 
   DBUG_ASSERT(key_read == 0);
 

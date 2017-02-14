@@ -395,6 +395,7 @@ enum legacy_db_type
   DB_TYPE_PERFORMANCE_SCHEMA,
   DB_TYPE_TOKUDB=41,
   DB_TYPE_FIRST_DYNAMIC=42,
+  DB_TYPE_SEQUENCE_DB,
   DB_TYPE_DEFAULT=127 // Must be last
 };
 
@@ -2042,6 +2043,18 @@ public:
   int ha_external_lock(THD *thd, int lock_type);
   int ha_write_row(uchar * buf);
   int ha_update_row(const uchar * old_data, uchar * new_data);
+
+  /* Autonomous transaction interface */
+  int ha_atm_update_row(const uchar *old_data, uchar *new_data);
+
+  virtual int begin_autonomous_trans()
+  {
+    return HA_ERR_WRONG_COMMAND;
+  }
+  virtual int end_autonomous_trans()
+  {
+    return HA_ERR_WRONG_COMMAND;
+  }
   int ha_delete_row(const uchar * buf);
   void ha_release_auto_increment();
 
@@ -3116,6 +3129,7 @@ protected:
 private:
   /* Private helpers */
   inline void mark_trx_read_write();
+  inline void mark_atm_trx_read_write();
   /*
     Low-level primitives for storage engines.  These should be
     overridden by the storage engine class. To call these methods, use
@@ -3150,6 +3164,12 @@ private:
   */
   virtual int update_row(const uchar *old_data MY_ATTRIBUTE((unused)),
                          uchar *new_data MY_ATTRIBUTE((unused)))
+  {
+    return HA_ERR_WRONG_COMMAND;
+  }
+
+  virtual int atm_update_row(const uchar *old_data MY_ATTRIBUTE((unused)),
+                             uchar *new_data MY_ATTRIBUTE((unused)))
   {
     return HA_ERR_WRONG_COMMAND;
   }
@@ -3495,6 +3515,7 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock= false);
 int ha_rollback_trans(THD *thd, bool all);
 int ha_prepare(THD *thd);
 int ha_recover(HASH *commit_list);
+void ha_coalesce_atm_trx(THD *thd);
 
 /*
  transactions: interface to low-level handlerton functions. These are
@@ -3519,6 +3540,7 @@ int ha_make_pushed_joins(THD *thd, const AQP::Join_plan* plan);
 
 /* these are called by storage engines */
 void trans_register_ha(THD *thd, bool all, handlerton *ht);
+void trans_register_autonomous_ha(THD *thd, bool all, handlerton *ht, bool binlog);
 
 /*
   Storage engine has to assume the transaction will end up with 2pc if

@@ -509,6 +509,9 @@ void lex_start(THD *thd)
   lex->mark_broken(false);
   lex->force_drop_table= 0;
   lex->skip_force_pos= 0;
+  lex->seq_create_info= NULL;
+  lex->only_sequence= false;
+  lex->native_create_sequence= false;
   DBUG_VOID_RETURN;
 }
 
@@ -2136,7 +2139,8 @@ TABLE_LIST *st_select_lex_node::add_table_to_list(THD *thd, Table_ident *table,
                                                   enum_mdl_type mdl_type,
 						  List<Index_hint> *hints,
                                                   List<String> *partition_names,
-                                                  LEX_STRING *option)
+                                                  LEX_STRING *option,
+                                                  bool sequence_read)
 {
   return 0;
 }
@@ -3015,6 +3019,9 @@ LEX::LEX()
   memset(&mi, 0, sizeof(LEX_MASTER_INFO));
   reset_query_tables_list(TRUE);
   wait_time= ULONG_MAX;
+  seq_create_info= NULL;
+  native_create_sequence= false;
+  only_sequence= false;
 }
 
 

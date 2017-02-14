@@ -7656,7 +7656,129 @@ Group_cache *THD::get_group_cache(bool is_transactional)
 
   DBUG_RETURN(&cache_data->group_cache);
 }
+/**
+  Begin autonomous transaction binlog handler.
+  Mainly used to backup binlog cache and transaction context.
 
+  @retval
+    False               Success
+
+  @retval
+    True                Failure
+*/
+bool THD::begin_autonomous_binlog()
+{
+  bool is_superuser= false;
+  binlog_cache_mngr *parent_cache_mngr= NULL;
+  DBUG_ENTER("THD::begin_autonomous_binlog");
+
+  is_superuser= security_ctx->master_access & SUPER_ACL;
+  if (opt_bin_log)
+    parent_cache_mngr= thd_get_cache_mngr(this);
+
+  DBUG_ASSERT(parent_cache_mngr == NULL ||
+                parent_cache_mngr != atm_ctx.ha_data.binlog_ptr);
+
+  /* Require row binlog format */
+  if (!(is_current_stmt_binlog_format_row()))
+  {
+    my_error(ER_SEQUENCE_BINLOG_FORMAT, MYF(0));
+    DBUG_RETURN(TRUE);
+  }
+  atm_ctx.release_mdl= false;
+  atm_ctx.binlog_inited= false;
+  atm_ctx.ha_inited= false;
+  atm_ctx.mdl_request.init(MDL_key::COMMIT, "", "",
+                           MDL_INTENTION_EXCLUSIVE,
+                           MDL_EXPLICIT);
+  if (mdl_context.acquire_lock(&(atm_ctx.mdl_request),
+                               variables.lock_wait_timeout))
+  {
+    DBUG_RETURN(TRUE);
+  }
+  atm_ctx.release_mdl= true;
+
+  if (!is_superuser && opt_readonly && !slave_thread)
+  {
+    my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--read-only");
+    goto err;
+  }
+  /* Backup original binlog cache. */
+  atm_ctx.ha_data.reset_binlog();
+  if (opt_bin_log)
+  {
+    atm_ctx.ha_data.set_binlog(parent_cache_mngr);
+    thd_set_ha_data(this, binlog_hton, NULL);
+
+    if (binlog_setup_trx_data())
+    {
+      thd_set_ha_data(this, binlog_hton, parent_cache_mngr);
+      atm_ctx.ha_data.reset_binlog();
+      goto err;
+    }
+  }
+  /* Backup original transaction */
+  transaction.back(&atm_ctx.ha_trans);
+
+  DBUG_ASSERT(transaction.xid_state.xid.is_null());
+  transaction.xid_state.xid.set(next_query_id());
+
+  atm_ctx.binlog_inited= true;
+  DBUG_RETURN(FALSE);
+
+err:
+  if (atm_ctx.release_mdl)
+  {
+    DBUG_ASSERT(atm_ctx.mdl_request.ticket);
+    mdl_context.release_lock(atm_ctx.mdl_request.ticket);
+    atm_ctx.mdl_request.ticket= NULL;
+    atm_ctx.release_mdl= false;
+  }
+  DBUG_RETURN(TRUE);
+}
+/**
+  End autonomous binlog transaction.
+  Mainly used to restore binlog cache and transaction.
+
+  @retval
+    False               Success
+
+  @retval
+    True                Failure
+*/
+bool THD::end_autonomous_binlog()
+{
+  binlog_cache_mngr *atm_cache_mngr= NULL;
+  DBUG_ENTER("THD::end_autonomous_binlog");
+  DBUG_ASSERT(atm_ctx.binlog_inited);
+
+  /* Restore binlog cache */
+  if (opt_bin_log)
+  {
+    atm_cache_mngr= thd_get_cache_mngr(this);
+    thd_set_ha_data(this, binlog_hton, atm_ctx.ha_data.binlog_ptr);
+    atm_cache_mngr->~binlog_cache_mngr();
+    my_free(atm_cache_mngr);
+  }
+  atm_ctx.ha_data.reset_binlog();
+  atm_ctx.binlog_inited= false;
+
+  /* Restore transaction */
+  transaction.reset();
+  transaction.restore(&atm_ctx.ha_trans);
+
+  /* Reset the ha trx */
+  atm_ctx.ha_data.reset_ha();
+  atm_ctx.ha_inited= false;
+
+  if (atm_ctx.release_mdl)
+  {
+    DBUG_ASSERT(atm_ctx.mdl_request.ticket);
+    mdl_context.release_lock(atm_ctx.mdl_request.ticket);
+    atm_ctx.release_mdl= false;
+  }
+  DBUG_RETURN(FALSE);
+}
 /*
   These functions are placed in this file since they need access to
   binlog_hton, which has internal linkage.
@@ -7736,7 +7858,37 @@ void register_binlog_handler(THD *thd, bool trx)
   }
   DBUG_VOID_RETURN;
 }
+/**
+  Register autonomous transaction binlog handler.
 
+  @param thd            Thread local
+  @param trx            whether transaction or statement
+*/
+void register_autonomous_binlog_handler(THD *thd, bool trx)
+{
+  binlog_cache_mngr *cache_mngr;
+  DBUG_ENTER("register_autonomous_binlog_handler");
+  cache_mngr= thd_get_cache_mngr(thd);
+
+  /* Autonomous transaction only register transaction context. */
+  DBUG_ASSERT(cache_mngr && trx);
+
+  if (cache_mngr->trx_cache.get_prev_position() == MY_OFF_T_UNDEF)
+  {
+    /* Set an implicit savepoint in order to be able to truncate a trx-cache. */
+    my_off_t pos= 0;
+    binlog_trans_log_savepos(thd, &pos);
+    cache_mngr->trx_cache.set_prev_position(pos);
+
+    /* Set callbacks in order to be able to call commmit or rollback. */
+    if (trx)
+      trans_register_autonomous_ha(thd, TRUE, binlog_hton, true);
+
+    /* Ha_info comes from thd->atm_ctx context. */
+    thd->atm_ctx.ha_data.ha_binlog_info.set_trx_read_write();
+  }
+  DBUG_VOID_RETURN;
+}
 /**
   Function to start a statement and optionally a transaction for the
   binary log.
@@ -7865,6 +8017,47 @@ int THD::binlog_write_table_map(TABLE *table, bool is_transactional,
   DBUG_RETURN(0);
 }
 
+/**
+  Write the autonomous transaction table map event to binary log.
+
+  @param table                  a pointer to the table
+  @param is_transactional       whether a transactional table
+
+  @return
+    0           Success
+    !=0         Failure
+*/
+int THD::autonomous_binlog_write_table_map(TABLE *table, bool is_transactional)
+{
+  int error;
+  binlog_cache_mngr *cache_mngr;
+  binlog_cache_data *cache_data;
+
+  DBUG_ENTER("THD::autonomous_binlog_write_table_map");
+  DBUG_ASSERT(is_current_stmt_binlog_format_row() && mysql_bin_log.is_open());
+  DBUG_ASSERT(table->s->table_map_id.is_valid());
+
+  cache_mngr= thd_get_cache_mngr(this);
+  cache_data= cache_mngr->get_binlog_cache_data(is_transactional);
+
+  Table_map_log_event
+    the_event(this, table, table->s->table_map_id, is_transactional);
+
+  register_autonomous_binlog_handler(this, true);
+
+  if (cache_data->is_binlog_empty())
+  {
+    Query_log_event qinfo(this, STRING_WITH_LEN("BEGIN"),
+                          is_transactional, FALSE, TRUE, 0, TRUE);
+
+    if (cache_data->write_event(this, &qinfo))
+      DBUG_RETURN(1);
+  }
+  if ((error= cache_data->write_event(this, &the_event)))
+    DBUG_RETURN(error);
+
+  DBUG_RETURN(0);
+}
 /**
   This function retrieves a pending row event from a cache which is
   specified through the parameter @c is_transactional. Respectively, when it

@@ -578,6 +578,7 @@ typedef struct system_variables
   */
   my_bool show_old_temporals;
   ulong rds_sql_max_iops;
+  my_bool sequence_read_skip_cache;
 } SV;
 
 
@@ -2344,6 +2345,10 @@ public:
   static bool binlog_row_event_extra_data_eq(const uchar* a,
                                              const uchar* b);
 
+  /* Binlog autonomous transaction function */
+  bool begin_autonomous_binlog();
+  bool end_autonomous_binlog();
+
 #ifndef MYSQL_CLIENT
   int binlog_setup_trx_data();
 
@@ -2352,6 +2357,8 @@ public:
   */
   int binlog_write_table_map(TABLE *table, bool is_transactional,
                              bool binlog_rows_query);
+  int autonomous_binlog_write_table_map(TABLE *table, bool is_transactional);
+
   int binlog_write_row(TABLE* table, bool is_transactional,
                        const uchar *new_data,
                        const uchar* extra_row_info);
@@ -2612,7 +2619,97 @@ public:
       */
       all.add_unsafe_rollback_flags(stmt.get_unsafe_rollback_flags());
     }
+
+    void back(struct st_transactions *trans)
+    {
+      memcpy(trans, this, sizeof(*this));
+      memset(this, 0, sizeof(*this));
+      xid_state.xid.null();
+      init_sql_alloc(&mem_root, ALLOC_ROOT_MIN_BLOCK_SIZE, 0);
+    }
+
+    void restore(struct st_transactions *trans)
+    {
+      memcpy(this, trans, sizeof(*this));
+    }
+
+    void reset()
+    {
+      free_root(&mem_root, MYF(0));
+      memset(this, 0, sizeof(*this));
+    }
   } transaction;
+
+  /* autonomous transaction context */
+  struct st_autonomy_context {
+
+    /* autonomous storage engine  */
+    struct st_autonomy_data {
+      /* Storage engine specific thread local data. */
+
+      /* THD binlog cache */
+      void  *binlog_ptr;
+
+      Ha_trx_info ha_binlog_info;
+      /* TODO: Current only one storage engine participate in
+         autonomous transaction, and life time is transaction. */
+
+      /* storage engine trx */
+      void *ha_ptr;
+
+      /* life time: autonomous transaction */
+      Ha_trx_info ha_info;
+
+      void reset()
+      {
+        binlog_ptr= NULL;
+        ha_ptr= NULL;
+        ha_info.reset();
+        ha_binlog_info.reset();
+      };
+      void reset_binlog()
+      {
+        binlog_ptr= NULL;
+        ha_binlog_info.reset();
+      };
+      void reset_ha()
+      {
+        ha_ptr= NULL;
+        ha_info.reset();
+      };
+      void set_binlog(void *ptr)
+      {
+        binlog_ptr= ptr;
+      };
+      void set_ha(void *ptr)
+      {
+        ha_ptr= ptr;
+      }
+    } ha_data;
+
+    /* autonomous transaction */
+    struct st_transactions   ha_trans;
+
+    /* isolation level */
+    ulonglong isolation_level;
+
+    /* For the storage engine. */
+    ulonglong lock_type;
+
+    /* Commit MDL lock */
+    MDL_request mdl_request;
+
+    bool release_mdl;
+    bool binlog_inited;
+    bool ha_inited;
+
+    void reset()
+    {
+      ha_data.reset();
+      ha_trans.reset();
+    }
+  } atm_ctx;
+
   Global_read_lock global_read_lock;
   Field      *dup_field;
 #ifndef __WIN__

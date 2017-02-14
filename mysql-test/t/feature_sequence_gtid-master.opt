@@ -1,0 +1,5 @@
+--binlog_format=row
+--query_cache_type=1
+--gtid_mode=ON
+--enforce-gtid-consistency=ON
+--log-slave-updates

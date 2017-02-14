@@ -7164,9 +7164,13 @@ lock_trx_has_rec_x_lock(
 	ut_ad(heap_no > PAGE_HEAP_NO_SUPREMUM);
 
 	lock_mutex_enter();
-	ut_a(lock_table_has(trx, table, LOCK_IX));
-	ut_a(lock_rec_has_expl(LOCK_X | LOCK_REC_NOT_GAP,
-			       block, heap_no, trx));
+	if (trx->autonomy) {
+		ut_a(lock_table_has(trx, table, LOCK_X));
+	} else {
+		ut_a(lock_table_has(trx, table, LOCK_IX));
+		ut_a(lock_rec_has_expl(LOCK_X | LOCK_REC_NOT_GAP,
+				       block, heap_no, trx));
+	}
 	lock_mutex_exit();
 	return(true);
 }

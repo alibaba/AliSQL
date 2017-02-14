@@ -417,6 +417,7 @@ extern HASH global_table_stats;
 extern HASH global_index_stats;
 extern const char *opt_date_time_formats[];
 extern handlerton *partition_hton;
+extern handlerton *sequence_hton;
 extern handlerton *myisam_hton;
 extern handlerton *heap_hton;
 extern uint opt_server_id_bits;

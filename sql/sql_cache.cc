@@ -3688,6 +3688,12 @@ Query_cache::process_and_count_tables(THD *thd, TABLE_LIST *tables_used,
                     "other non-cacheable table(s)"));
         DBUG_RETURN(0);
       }
+      if (tables_used->table->s->db_type()->db_type == DB_TYPE_SEQUENCE_DB) //no cover begin
+      {
+        DBUG_ASSERT(tables_used->table->s->is_sequence);
+        DBUG_ASSERT(0);
+        DBUG_RETURN(0);
+      }//no cover end
 #ifdef WITH_MYISAMMRG_STORAGE_ENGINE      
       /*
         XXX FIXME: Some generic mechanism is required here instead of this

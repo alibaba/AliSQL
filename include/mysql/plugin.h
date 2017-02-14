@@ -673,6 +673,10 @@ void *thd_get_ha_data(const MYSQL_THD thd, const struct handlerton *hton);
 */
 void thd_set_ha_data(MYSQL_THD thd, const struct handlerton *hton,
                      const void *ha_data);
+void *thd_get_atm_ha_data(const MYSQL_THD thd);
+void thd_set_atm_ha_data(MYSQL_THD thd, const void *ha_data);
+unsigned long thd_get_atm_lock_type(const MYSQL_THD thd);
+void thd_set_atm_lock_type(MYSQL_THD thd, unsigned long lock_type);
 #ifdef __cplusplus
 }
 #endif

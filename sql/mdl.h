@@ -589,6 +589,12 @@ public:
   }
   enum_mdl_type get_type() const { return m_type; }
   MDL_lock *get_lock() const { return m_lock; }
+
+  bool get_autonomy() const { return m_autonomy; }
+  void set_autonomy(bool value)
+  {
+    m_autonomy= value;
+  }
   void downgrade_lock(enum_mdl_type type);
 
   bool has_stronger_or_equal_type(enum_mdl_type type) const;
@@ -612,7 +618,8 @@ private:
      m_duration(duration_arg),
 #endif
      m_ctx(ctx_arg),
-     m_lock(NULL)
+     m_lock(NULL),
+     m_autonomy(false)
   {}
 
   static MDL_ticket *create(MDL_context *ctx_arg, enum_mdl_type type_arg
@@ -640,6 +647,9 @@ private:
     Pointer to the lock object for this lock ticket. Externally accessible.
   */
   MDL_lock *m_lock;
+
+  /* whether autonomous transaction lock. */
+  bool m_autonomy;
 
 private:
   MDL_ticket(const MDL_ticket &);               /* not implemented */
@@ -775,6 +785,7 @@ public:
 
   void release_statement_locks();
   void release_transactional_locks();
+  void release_autonomous_transactional_locks();
   void rollback_to_savepoint(const MDL_savepoint &mdl_savepoint);
 
   MDL_context_owner *get_owner() { return m_owner; }

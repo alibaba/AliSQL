@@ -46,6 +46,7 @@
 #ifdef WITH_PARTITION_STORAGE_ENGINE
 #include "ha_partition.h"
 #endif
+#include "ha_sequence.h"
 
 using std::min;
 using std::max;
@@ -455,7 +456,28 @@ handler *get_new_handler(TABLE_SHARE *share, MEM_ROOT *alloc,
   DBUG_RETURN(get_new_handler(share, alloc, ha_default_handlerton(current_thd)));
 }
 
+handler *get_ha_sequence(Sequence_create_info *seq_create_info)
+{
+  ha_sequence *sequence;
+  DBUG_ENTER("get_ha_sequence");
 
+  if ((sequence = new ha_sequence(sequence_hton, seq_create_info)))
+  {
+    if (sequence->initialize_sequence(current_thd->mem_root))
+    {
+      delete sequence;
+      sequence= 0;
+    }
+    else
+      sequence->init();
+  }
+  else
+  {
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
+             static_cast<int>(sizeof(ha_sequence)));
+  }
+  DBUG_RETURN(((handler*) sequence));
+}
 #ifdef WITH_PARTITION_STORAGE_ENGINE
 handler *get_ha_partition(partition_info *part_info)
 {
@@ -756,6 +778,8 @@ int ha_initialize_handlerton(st_plugin_int *plugin)
   case DB_TYPE_PARTITION_DB:
     partition_hton= hton;
     break;
+  case DB_TYPE_SEQUENCE_DB:
+    sequence_hton= hton;
   default:
     break;
   };
@@ -1213,7 +1237,70 @@ void trans_register_ha(THD *thd, bool all, handlerton *ht_arg)
     thd->transaction.xid_state.xid.set(thd->query_id);
   DBUG_VOID_RETURN;
 }
+/**
+  Register autonomous transaction engine handler.
 
+  SYNOPSIS
+    thd         current thread
+    all         whether transaction or statement
+    ht_arg      storage engine handlerton
+    binlog      whether binlog or storage engine
+*/
+void trans_register_autonomous_ha(THD *thd, bool all, handlerton *ht_arg,
+                                  bool binlog)
+{
+  THD_TRANS *trans;
+  Ha_trx_info *ha_info;
+  DBUG_ENTER("trans_register_autonomous_ha");
+  DBUG_PRINT("enter",("%s", all ? "all" : "stmt"));
+
+  DBUG_ASSERT(all);
+
+  if (all)
+    trans= &thd->transaction.all;
+  else
+    trans= &thd->transaction.stmt; //no cover line
+
+  /* Ha_info comes from thd->atm_ctx context. */
+  if (binlog)
+    ha_info= &thd->atm_ctx.ha_data.ha_binlog_info;
+  else
+    ha_info= &thd->atm_ctx.ha_data.ha_info;
+
+  DBUG_ASSERT(!(ha_info->is_started()));
+
+  ha_info->register_ha(trans, ht_arg);
+
+  trans->no_2pc|=(ht_arg->prepare==0);
+  DBUG_ASSERT(!(thd->transaction.xid_state.xid.is_null()));
+  DBUG_VOID_RETURN;
+}
+/**
+  Coalesce the autonomous transaction participant.
+
+  SYNOPSIS
+    thd         current thread
+*/
+void ha_coalesce_atm_trx(THD *thd)
+{
+  THD_TRANS *trans;
+  Ha_trx_info *ha_info;
+  unsigned rw_ha_count= 0;
+  DBUG_ENTER("ha_coalesce_atm_trx");
+
+  trans= &thd->transaction.all;
+  ha_info= trans->ha_list;
+  if (ha_info)
+  {
+    for (; ha_info; ha_info= ha_info->next())
+    {
+      if (ha_info->is_trx_read_write())
+        rw_ha_count++;
+    }
+  }
+  trans->rw_ha_count= rw_ha_count;
+  DBUG_VOID_RETURN;
+}
 /**
   @retval
     0   ok
@@ -4289,6 +4376,31 @@ handler::mark_trx_read_write()
   }
 }
 
+inline
+void
+handler::mark_atm_trx_read_write()
+{
+  /* ha_info comes from thd->atm_ctx */
+  Ha_trx_info *ha_info= &ha_thd()->atm_ctx.ha_data.ha_info;
+  /*
+    When a storage engine method is called, the transaction must
+    have been started, unless it's a DDL call, for which the
+    storage engine starts the transaction internally, and commits
+    it internally, without registering in the ha_list.
+    Unfortunately here we can't know know for sure if the engine
+    has registered the transaction or not, so we must check.
+  */
+  if (ha_info->is_started())
+  {
+    DBUG_ASSERT(has_transactions());
+    /*
+      table_share can be NULL in ha_delete_table(). See implementation
+      of standalone function ha_delete_table() in sql_base.cc.
+    */
+    if (table_share == NULL || table_share->tmp_table == NO_TMP_TABLE)
+      ha_info->set_trx_read_write();
+  }
+}
 
 /**
   Repair table: public interface.
@@ -7207,6 +7319,36 @@ static bool check_table_binlog_row_based(THD *thd, TABLE *table)
 }
 
 
+/*
+  Write table map to the binary log.
+
+  SYNOPSIS
+    autonomous_write_table_map()
+    thd      Pointer to THD structure
+    table    Opened table
+
+  RETURN VALUE
+    0        Success
+    !=0      Failure
+*/
+static int autonomous_write_table_map(THD *thd, TABLE *table)
+{
+  bool has_trans;
+  int error;
+  DBUG_ENTER("autonomous_write_table_map");
+
+  if (!check_table_binlog_row_based(thd, table))
+    DBUG_RETURN(0);
+
+  has_trans= thd->lex->sql_command == SQLCOM_CREATE_TABLE
+                || table->file->has_transactions();
+  if ((error= thd->autonomous_binlog_write_table_map(table, has_trans)))
+    DBUG_RETURN(error);
+
+  DBUG_RETURN(0);
+}
+
+
 /** @brief
    Write table maps for all (manually or automatically) locked tables
    to the binary log.
@@ -7295,6 +7437,33 @@ static int write_locked_table_maps(THD *thd)
 
 typedef bool Log_func(THD*, TABLE*, bool,
                       const uchar*, const uchar*);
+
+/*
+  Binlog the autonomous transaction row event.
+
+  RETURN VALUES
+    0           Success
+    !=0         Failure
+*/
+int autonomous_binlog_log_row(TABLE *table,
+                              const uchar *before_record,
+                              const uchar *after_record,
+                              Log_func *log_func)
+{
+  bool error= 0;
+  THD *const thd= table->in_use;
+  if (check_table_binlog_row_based(thd, table))
+  {
+    if (!(error= autonomous_write_table_map(thd, table)))
+    {
+      bool const has_trans= thd->lex->sql_command == SQLCOM_CREATE_TABLE
+                              || table->file->has_transactions();
+      error=
+        (*log_func)(thd, table, has_trans, before_record, after_record);
+    }
+  }
+  return error ? HA_ERR_RBR_LOGGING_FAILED : 0;
+}
 
 int binlog_log_row(TABLE* table,
                           const uchar *before_record,
@@ -7495,6 +7664,27 @@ int handler::ha_update_row(const uchar *old_data, uchar *new_data)
   if (unlikely(error))
     return error;
   if (unlikely(error= binlog_log_row(table, old_data, new_data, log_func)))
+    return error;
+  return 0;
+}
+
+/* Autonomous transaction interface */
+int handler::ha_atm_update_row(const uchar *old_data, uchar *new_data)
+{
+  int error;
+  Log_func *log_func= Update_rows_log_event::binlog_row_logging_function;
+  DBUG_ASSERT(new_data == table->record[0]);
+  DBUG_ASSERT(old_data == table->record[1]);
+
+  mark_atm_trx_read_write();
+
+  MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_UPDATE_ROW, active_index, 0,
+    { error= atm_update_row(old_data, new_data); limit_io(ha_thd()); })
+
+  MYSQL_UPDATE_ROW_DONE(error);
+  if (unlikely(error))
+    return error;
+  if (unlikely(error= autonomous_binlog_log_row(table, old_data, new_data, log_func)))
     return error;
   return 0;
 }

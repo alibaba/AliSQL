@@ -127,6 +127,7 @@ bool mysql_create_frm(THD *thd, const char *file_name,
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   partition_info *part_info= thd->work_part_info;
 #endif
+  Sequence_create_info *seq_create_info= thd->lex->seq_create_info;
   Pack_header_error_handler pack_header_error_handler;
   int error;
   const uint format_section_header_size= 8;
@@ -298,6 +299,11 @@ bool mysql_create_frm(THD *thd, const char *file_name,
     DBUG_PRINT("info", ("part_db_type = %d", fileinfo[61]));
   }
 #endif
+  if (seq_create_info)
+  {
+    DBUG_ASSERT(!part_info);
+    fileinfo[61]= (uchar) ha_legacy_type(seq_create_info->base_db_type);
+  }
   int2store(fileinfo+59,db_file->extra_rec_buf_length());
 
   if (mysql_file_pwrite(file, fileinfo, 64, 0L, MYF_RW) ||

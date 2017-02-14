@@ -1,0 +1,61 @@
+use test;
+create sequence s cache 2;
+###########################################
+sequence write error.
+###########################################
+use test;
+SET GLOBAL DEBUG='d,sequence_write_error';
+create sequence s1 cache 2;
+ERROR HY000: Sequence 'test.s1' access error.
+select * for s1;
+ERROR HY000: Sequence requires binlog_format= row
+set session binlog_format= row;
+select * for s1;
+currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
+select * for s1;
+currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
+select * for s1;
+currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
+drop sequence s1;
+SET GLOBAL DEBUG='';
+###########################################
+sequence engine error.
+###########################################
+SET GLOBAL DEBUG='d,sequence_engine_error';
+create sequence s1 cache 2;
+ERROR 42000: Unknown storage engine 'InnoDB'
+###########################################
+sequence handler when create sequence.
+###########################################
+SET GLOBAL DEBUG='d,sequence_handler_error';
+create sequence s1 cache 2;
+ERROR HY000: Sequence '(null).(null)' access error.
+select * for s;
+currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
+0	1	1	9223372036854775807	1	1	2	0	0
+flush tables;
+select * for s;
+ERROR HY000: Sequence '(null).(null)' access error.
+show global variables like 'innodb_read_only';
+Variable_name	Value
+innodb_read_only	ON
+use test;
+set session binlog_format= row;
+###########################################
+read_only create error.
+###########################################
+show global variables like 'innodb_read_only';
+Variable_name	Value
+innodb_read_only	ON
+use test;
+create sequence s1 cache 5;
+ERROR HY000: InnoDB is in read only mode.
+###########################################
+read_only query error.
+###########################################
+select * for s;
+ERROR HY000: Table 's' is read only
+select * for s;
+ERROR HY000: Table 's' is read only
+select * for s;
+ERROR HY000: Table 's' is read only

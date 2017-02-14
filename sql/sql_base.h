@@ -472,6 +472,9 @@ inline bool open_and_lock_tables(THD *thd, TABLE_LIST *tables,
                               &prelocking_strategy);
 }
 
+bool lock_sequence_table(THD *thd, TABLE *table);
+bool unlock_sequence_table(THD *thd, TABLE *table);
+bool check_lock_sequence_table(THD *thd, TABLE *table);
 
 /**
   A context of open_tables() function, used to recover

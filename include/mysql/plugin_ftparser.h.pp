@@ -205,6 +205,10 @@ void mysql_query_cache_invalidate4(void* thd,
 void *thd_get_ha_data(const void* thd, const struct handlerton *hton);
 void thd_set_ha_data(void* thd, const struct handlerton *hton,
                      const void *ha_data);
+void *thd_get_atm_ha_data(const void* thd);
+void thd_set_atm_ha_data(void* thd, const void *ha_data);
+unsigned long thd_get_atm_lock_type(const void *thd);
+void thd_set_atm_lock_type(void *thd, unsigned long lock_type);
 enum enum_ftparser_mode
 {
   MYSQL_FTPARSER_SIMPLE_MODE= 0,

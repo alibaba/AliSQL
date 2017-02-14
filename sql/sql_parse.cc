@@ -2996,7 +2996,11 @@ case SQLCOM_PREPARE:
     bool link_to_local;
     TABLE_LIST *create_table= first_table;
     TABLE_LIST *select_tables= lex->create_last_non_select_table->next_global;
-
+    if (lex->seq_create_info)
+    {
+      if (prepare_create_sequence(thd, lex, create_table))
+        goto error;
+    }
     /*
       Code below (especially in mysql_create_table() and select_create
       methods) may modify HA_CREATE_INFO structure in LEX, so we have to
@@ -3213,6 +3217,14 @@ case SQLCOM_PREPARE:
         /* Regular CREATE TABLE */
         res= mysql_create_table(thd, create_table,
                                 &create_info, &alter_info);
+
+        if (!res && lex->seq_create_info
+            && lex->native_create_sequence)
+        {
+          res= sequence_insert(thd, lex, create_table);
+          if (res)
+            break;
+        }
       }
       if (!res)
         my_ok(thd);
@@ -6897,7 +6909,8 @@ TABLE_LIST *st_select_lex::add_table_to_list(THD *thd,
 					     enum_mdl_type mdl_type,
 					     List<Index_hint> *index_hints_arg,
                                              List<String> *partition_names,
-                                             LEX_STRING *option)
+                                             LEX_STRING *option,
+                                             bool sequence_read)
 {
   register TABLE_LIST *ptr;
   TABLE_LIST *previous_table_ref; /* The table preceding the current one. */
@@ -7063,6 +7076,9 @@ TABLE_LIST *st_select_lex::add_table_to_list(THD *thd,
     ptr->effective_algorithm= DERIVED_ALGORITHM_TMPTABLE;
     ptr->derived_key_list.empty();
   }
+  /* If select for sequence, will iterator the nextval. */
+  ptr->sequence_read= sequence_read;
+
   DBUG_RETURN(ptr);
 }
 

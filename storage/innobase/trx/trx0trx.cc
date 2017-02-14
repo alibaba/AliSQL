@@ -293,6 +293,8 @@ trx_create(void)
 
 	trx->lock.n_rec_locks = 0;
 
+	trx->autonomy = false;
+
 	return(trx);
 }
 
