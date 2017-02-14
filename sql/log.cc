@@ -1632,6 +1632,7 @@ MYSQL_LOG::MYSQL_LOG()
     log_state(LOG_CLOSED)
 #ifdef HAVE_PSI_INTERFACE
   , m_key_LOCK_log(key_LOG_LOCK_log)
+  , m_key_LOCK_binlog_end_pos(key_BINLOG_LOCK_binlog_end_pos)
 #endif
 {
   /*
@@ -1648,6 +1649,7 @@ void MYSQL_LOG::init_pthread_objects()
   DBUG_ASSERT(inited == 0);
   inited= 1;
   mysql_mutex_init(m_key_LOCK_log, &LOCK_log, MY_MUTEX_INIT_SLOW);
+  mysql_mutex_init(m_key_LOCK_binlog_end_pos, &LOCK_binlog_end_pos, MY_MUTEX_INIT_FAST);
 }
 
 /*
@@ -1704,6 +1706,7 @@ void MYSQL_LOG::cleanup()
   {
     inited= 0;
     mysql_mutex_destroy(&LOCK_log);
+    mysql_mutex_destroy(&LOCK_binlog_end_pos);
     close(0);
   }
   DBUG_VOID_RETURN;

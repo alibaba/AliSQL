@@ -357,6 +357,9 @@ public:
     mi_description_event= fdle;
   }
 
+  /*semi_ack is used to identify if the current binlog event needs an ACK
+  from slave, or if delay_master is enabled; */
+  int semi_ack;
 private:
   void init_master_log_pos();
 

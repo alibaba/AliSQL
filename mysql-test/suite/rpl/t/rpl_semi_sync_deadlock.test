@@ -96,7 +96,7 @@ while ($i < $n)
 --enable_query_log
 SET DEBUG_SYNC= 'RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
+SET GLOBAL rpl_semi_sync_master_timeout= default;
 --source include/sync_slave_sql_with_master.inc
 
---source include/uninstall_semisync.inc
 --source include/rpl_end.inc

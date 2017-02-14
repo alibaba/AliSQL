@@ -94,6 +94,7 @@ int ignored_error_code(int err_code);
 #define LOG_READ_TRUNC  -6
 #define LOG_READ_TOO_LARGE -7
 #define LOG_READ_CHECKSUM_FAILURE -8
+#define LOG_READ_BINLOG_LAST_VALID_POS -9
 
 #define LOG_EVENT_OFFSET 4
 
@@ -1229,7 +1230,6 @@ public:
     @retval LOG_READ_TOO_LARGE  event too large
    */
   static int read_log_event(IO_CACHE* file, String* packet,
-                            mysql_mutex_t* log_lock,
                             uint8 checksum_alg_arg,
                             const char *log_file_name_arg= NULL,
                             bool* is_binlog_active= NULL);

@@ -107,6 +107,10 @@ SET(SQL_SHARED_SOURCES
   scheduler.cc 
   set_var.cc 
   signal_handler.cc
+  semisync.cc
+  semisync_master.cc
+  semisync_slave.cc
+  semisync_master_ack_receiver.cc
   sp.cc
   sp_cache.cc
   sp_head.cc

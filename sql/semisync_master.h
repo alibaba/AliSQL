@@ -1,5 +1,6 @@
 /* Copyright (C) 2007 Google Inc.
-   Copyright (c) 2008, 2015, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,19 +20,16 @@
 #define SEMISYNC_MASTER_H
 
 #include "semisync.h"
+#include "semisync_master_ack_receiver.h"
 
-#ifdef HAVE_PSI_INTERFACE
-extern PSI_mutex_key key_ss_mutex_LOCK_binlog_;
-extern PSI_cond_key key_ss_cond_COND_binlog_send_;
-#endif
-
-extern PSI_stage_info stage_waiting_for_semi_sync_ack_from_slave;
+enum enum_wait_point {
+  WAIT_AFTER_SYNC,
+  WAIT_AFTER_COMMIT
+};
 
 struct TranxNode {
   char             log_name_[FN_REFLEN];
-  my_off_t         log_pos_;
-  mysql_cond_t     cond;
-  int              n_waiters;
+  my_off_t          log_pos_;
   struct TranxNode *next_;            /* the next node in the sorted list */
   struct TranxNode *hash_next_;    /* the next node during hash collision */
 };
@@ -129,7 +127,6 @@ public:
     trx_node->log_pos_= 0;
     trx_node->next_= 0;
     trx_node->hash_next_= 0;
-    trx_node->n_waiters= 0;
     return trx_node;
   }
 
@@ -248,12 +245,6 @@ private:
       /* New Block is always the current_block */
       current_block= block;
       ++block_num;
-
-      for (int i=0; i< BLOCK_TRANX_NODES; i++)
-        mysql_cond_init(key_ss_cond_COND_binlog_send_,
-                        &current_block->nodes[i].cond,
-                        NULL);
-
       return 0;
     }
     return 1;
@@ -265,8 +256,6 @@ private:
    */
   void free_block(Block *block)
   {
-    for (int i=0; i< BLOCK_TRANX_NODES; i++)
-      mysql_cond_destroy(&block->nodes[i].cond);
     my_free(block);
     --block_num;
   }
@@ -340,11 +329,6 @@ private:
   }
 
 public:
-  int signal_waiting_sessions_all();
-  int signal_waiting_sessions_up_to(const char *log_file_name,
-                                    my_off_t log_file_pos);
-  TranxNode* find_active_tranx_node(const char *log_file_name,
-                                    my_off_t log_file_pos);
   ActiveTranx(mysql_mutex_t *lock, unsigned long trace_level);
   ~ActiveTranx();
 
@@ -359,7 +343,7 @@ public:
    * position.
    * If log_file_name is NULL, everything will be cleared: the sorted
    * list and the hash table will be reset to empty.
-   * 
+   *
    * Return:
    *  0: success;  non-zero: error
    */
@@ -377,17 +361,6 @@ public:
   static int compare(const char *log_file_name1, my_off_t log_file_pos1,
                      const char *log_file_name2, my_off_t log_file_pos2);
 
-  /* Find out if active tranx node list is empty or not
-   *
-   * Return:
-   *   True :  If there are no nodes
-   *   False:  othewise
-  */
-  bool is_empty()
-  {
-    return (trx_front_ == NULL);
-  }
-
 };
 
 /**
@@ -401,6 +374,11 @@ class ReplSemiSyncMaster
 
   /* True when initObject has been called */
   bool init_done_;
+
+  /* This cond variable is signaled when enough binlog has been sent to slave,
+   * so that a waiting trx can return the 'ok' to the client for a commit.
+   */
+  mysql_cond_t  COND_binlog_send_;
 
   /* Mutex that protects the following state variables and the active
    * transaction list.
@@ -453,8 +431,12 @@ class ReplSemiSyncMaster
 
   bool            state_;                    /* whether semi-sync is switched */
 
+  /*Waiting for ACK before/after innodb commit*/
+  ulong wait_point_;
   void lock();
   void unlock();
+  void cond_broadcast();
+  int  cond_timewait(struct timespec *wait_time);
 
   /* Is semi-sync replication on? */
   bool is_on() {
@@ -476,8 +458,9 @@ class ReplSemiSyncMaster
   ReplSemiSyncMaster();
   ~ReplSemiSyncMaster();
 
-  bool getMasterEnabled() {
-    return master_enabled_;
+
+  bool getMasterEnabled() { //no cover line
+    return master_enabled_; //no cover line
   }
   void setTraceLevel(unsigned long trace_level) {
     trace_level_ = trace_level;
@@ -488,6 +471,17 @@ class ReplSemiSyncMaster
   /* Set the transaction wait timeout period, in milliseconds. */
   void setWaitTimeout(unsigned long wait_timeout) {
     wait_timeout_ = wait_timeout;
+  }
+
+  /*set the ACK point, after binlog sync or after transaction commit*/
+  void setWaitPoint(unsigned long ack_point)
+  {
+    wait_point_ = ack_point;
+  }
+
+  ulong waitPoint() //no cover line
+  {
+    return wait_point_; //no cover line
   }
 
   /* Initialize this class after MySQL parameters are initialized. this
@@ -503,31 +497,29 @@ class ReplSemiSyncMaster
 
   /* Add a semi-sync replication slave */
   void add_slave();
-    
+
   /* Remove a semi-sync replication slave */
   void remove_slave();
 
-  /* Is the slave servered by the thread requested semi-sync */
-  bool is_semi_sync_slave();
+  /* It parses a reply packet and call reportReplyBinlog to handle it. */
+  int reportReplyPacket(uint32 server_id, const uchar *packet,
+                        ulong packet_len);
 
   /* In semi-sync replication, reports up to which binlog position we have
-   * received replies from the slave indicating that it already get the events
-   * or that was skipped in the master.
+   * received replies from the slave indicating that it already get the events.
    *
    * Input:
    *  server_id     - (IN)  master server id number
    *  log_file_name - (IN)  binlog file name
    *  end_offset    - (IN)  the offset in the binlog file up to which we have
-   *                        the replies from the slave or that was skipped
-   *  skipped_event - (IN)  if the event was skipped
+   *                        the replies from the slave
    *
    * Return:
    *  0: success;  non-zero: error
    */
   int reportReplyBinlog(uint32 server_id,
                         const char* log_file_name,
-                        my_off_t end_offset,
-                        bool skipped_event= false);
+                        my_off_t end_offset);
 
   /* Commit a transaction in the final step.  This function is called from
    * InnoDB before returning from the low commit.  If semi-sync is switch on,
@@ -547,42 +539,61 @@ class ReplSemiSyncMaster
   int commitTrx(const char* trx_wait_binlog_name,
                 my_off_t trx_wait_binlog_pos);
 
+  /*Wait for ACK after writing/sync binlog to file*/
+  int waitAfterSync(const char* log_file, my_off_t log_pos);
+
+  /*Wait for ACK after commting the transaction*/
+  int waitAfterCommit(THD* thd, bool all);
+
+  /*Wait after the transaction is rollback*/
+  int waitAfterRollback(THD *thd, bool all);
+  /*Store the current binlog position in active_tranxs_. This position should
+   * be acked by slave*/
+  int reportBinlogUpdate(const char *log_file,my_off_t log_pos);
+
+  void dump_start(THD* thd,
+                  const char *log_file,
+                  my_off_t log_pos);
+
+  void dump_end(THD* thd);
+
   /* Reserve space in the replication event packet header:
    *  . slave semi-sync off: 1 byte - (0)
    *  . slave semi-sync on:  3 byte - (0, 0xef, 0/1}
-   * 
+   *
    * Input:
-   *  header   - (IN)  the header buffer
-   *  size     - (IN)  size of the header buffer
+   *  packet   - (IN)  the header buffer
    *
    * Return:
    *  size of the bytes reserved for header
    */
-  int reserveSyncHeader(unsigned char *header, unsigned long size);
+  int reserveSyncHeader(String* packet);
 
   /* Update the sync bit in the packet header to indicate to the slave whether
    * the master will wait for the reply of the event.  If semi-sync is switched
    * off and we detect that the slave is catching up, we switch semi-sync on.
    * 
    * Input:
+   *  THD           - (IN)  current dump thread
    *  packet        - (IN)  the packet containing the replication event
    *  log_file_name - (IN)  the event ending position's file name
    *  log_file_pos  - (IN)  the event ending position's file offset
+   *  need_sync     - (IN)  identify if flushNet is needed to call.
    *  server_id     - (IN)  master server id number
    *
    * Return:
    *  0: success;  non-zero: error
    */
-  int updateSyncHeader(unsigned char *packet,
+  int updateSyncHeader(THD* thd, unsigned char *packet,
                        const char *log_file_name,
-		       my_off_t log_file_pos,
-		       uint32 server_id);
+                       my_off_t log_file_pos,
+                       bool* need_sync);
 
   /* Called when a transaction finished writing binlog events.
    *  . update the 'largest' transactions' binlog event position
    *  . insert the ending position in the active transaction list if
    *    semi-sync is on
-   * 
+   *
    * Input:  (the transaction events' ending binlog position)
    *  log_file_name - (IN)  transaction ending position's file name
    *  log_file_pos  - (IN)  transaction ending position's file offset
@@ -592,34 +603,16 @@ class ReplSemiSyncMaster
    */
   int writeTranxInBinlog(const char* log_file_name, my_off_t log_file_pos);
 
+  int skipSlaveReply(const char *event_buf,
+                     uint32 server_id,
+                     const char* skipped_log_file,
+                     my_off_t skipped_log_pos);
   /* Read the slave's reply so that we know how much progress the slave makes
    * on receive replication events.
-   * 
-   * Input:
-   *  net          - (IN)  the connection to master
-   *  server_id    - (IN)  master server id number
-   *  event_buf    - (IN)  pointer to the event packet
-   *
-   * Return:
-   *  0: success;  non-zero: error
    */
-  int readSlaveReply(NET *net, uint32 server_id, const char *event_buf);
-
-  /* In semi-sync replication, this method simulates the reception of
-   * an reply and executes reportReplyBinlog directly when a transaction
-   * is skipped in the master.
-   *
-   * Input:
-   *  event_buf     - (IN)  pointer to the event packet
-   *  server_id     - (IN)  master server id numbe
-   *  log_file_name - (IN)  the event ending position's file name
-   *  log_file_pos  - (IN)  the event ending position's file offset
-   *
-   * Return:
-   *  0: success;  non-zero: error
-   */
-  int skipSlaveReply(const char *event_buf, uint32 server_id,
-                     const char* log_file_name, my_off_t log_file_pos);
+  int flushNet(THD* thd, const char *event_buf,
+                     const char* skipped_log_file,
+                     my_off_t skipped_log_pos);
 
   /* Export internal statistics for semi-sync replication. */
   void setExportStats();
@@ -627,12 +620,20 @@ class ReplSemiSyncMaster
   /* 'reset master' command is issued from the user and semi-sync need to
    * go off for that.
    */
-  int resetMaster();
+  int afterResetMaster();
+
+  /*called before reset master*/
+  int beforeResetMaster();
+
+  void checkAndSwitch();
 };
 
+extern ReplSemiSyncMaster repl_semisync_master;
+extern Ack_receiver ack_receiver;
 /* System and status variables for the master component */
 extern char rpl_semi_sync_master_enabled;
 extern char rpl_semi_sync_master_status;
+extern unsigned long rpl_semi_sync_master_wait_point;
 extern unsigned long rpl_semi_sync_master_clients;
 extern unsigned long rpl_semi_sync_master_timeout;
 extern unsigned long rpl_semi_sync_master_trace_level;
@@ -650,6 +651,8 @@ extern unsigned long long rpl_semi_sync_master_net_wait_num;
 extern unsigned long long rpl_semi_sync_master_trx_wait_num;
 extern unsigned long long rpl_semi_sync_master_net_wait_time;
 extern unsigned long long rpl_semi_sync_master_trx_wait_time;
+extern unsigned long long rpl_semi_sync_master_request_ack;
+extern unsigned long long rpl_semi_sync_master_get_ack;
 
 /*
   This indicates whether we should keep waiting if no semi-sync slave

@@ -1188,7 +1188,6 @@ bool Log_event::write_header(IO_CACHE* file, ulong event_data_length)
 */
 
 int Log_event::read_log_event(IO_CACHE* file, String* packet,
-                              mysql_mutex_t* log_lock,
                               uint8 checksum_alg_arg,
                               const char *log_file_name_arg,
                               bool* is_binlog_active)
@@ -1199,11 +1198,19 @@ int Log_event::read_log_event(IO_CACHE* file, String* packet,
   uchar ev_offset= packet->length();
   DBUG_ENTER("Log_event::read_log_event(IO_CACHE *, String *, mysql_mutex_t, uint8)");
 
-  if (log_lock)
-    mysql_mutex_lock(log_lock);
-
-  if (log_file_name_arg)
-    *is_binlog_active= mysql_bin_log.is_active(log_file_name_arg);
+  if (log_file_name_arg
+      && mysql_bin_log.is_active(log_file_name_arg))
+  {
+    if (is_binlog_active)
+      *is_binlog_active= true;
+    if(mysql_bin_log.get_binlog_end_pos_without_lock() == my_b_tell(file))
+    {
+      /* Check if reaching the end of file without lock. We have to double
+       * check it with lock if the log file becomes unactive. */
+      result= LOG_READ_BINLOG_LAST_VALID_POS;
+      goto end;
+    }
+  }
 
   if (my_b_read(file, (uchar*) buf, sizeof(buf)))
   {
@@ -1297,8 +1304,6 @@ int Log_event::read_log_event(IO_CACHE* file, String* packet,
   }
 
 end:
-  if (log_lock)
-    mysql_mutex_unlock(log_lock);
   DBUG_PRINT("info", ("read_log_event returns %d", result));
   DBUG_RETURN(result);
 }

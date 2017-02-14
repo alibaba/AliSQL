@@ -61,12 +61,15 @@ where event_name like "%MYSQL_BIN_LOG%"
 EVENT_NAME	COUNT_STAR
 wait/synch/cond/sql/MYSQL_BIN_LOG::COND_done	NONE
 wait/synch/cond/sql/MYSQL_BIN_LOG::prep_xids_cond	NONE
+wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_binlog_end_pos	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_commit	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_commit_queue	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_done	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_flush_queue	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_index	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_log	MANY
+wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_semisync	NONE
+wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_semisync_queue	NONE
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_sync	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_sync_queue	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_xids	NONE
@@ -86,6 +89,7 @@ where event_name like "%MYSQL_RELAY_LOG%"
 EVENT_NAME	COUNT_STAR	SUM_TIMER_WAIT	MIN_TIMER_WAIT	AVG_TIMER_WAIT	MAX_TIMER_WAIT
 wait/synch/cond/sql/MYSQL_RELAY_LOG::COND_done	0	0	0	0	0
 wait/synch/cond/sql/MYSQL_RELAY_LOG::prep_xids_cond	0	0	0	0	0
+wait/synch/mutex/sql/MYSQL_RELAY_LOG::LOCK_binlog_end_pos	0	0	0	0	0
 wait/synch/mutex/sql/MYSQL_RELAY_LOG::LOCK_commit	0	0	0	0	0
 wait/synch/mutex/sql/MYSQL_RELAY_LOG::LOCK_commit_queue	0	0	0	0	0
 wait/synch/mutex/sql/MYSQL_RELAY_LOG::LOCK_done	0	0	0	0	0
@@ -153,12 +157,15 @@ where event_name like "%MYSQL_BIN_LOG%"
 EVENT_NAME	COUNT_STAR
 wait/synch/cond/sql/MYSQL_BIN_LOG::COND_done	NONE
 wait/synch/cond/sql/MYSQL_BIN_LOG::prep_xids_cond	NONE
+wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_binlog_end_pos	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_commit	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_commit_queue	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_done	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_flush_queue	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_index	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_log	MANY
+wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_semisync	NONE
+wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_semisync_queue	NONE
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_sync	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_sync_queue	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_xids	NONE
@@ -200,6 +207,7 @@ where event_name like "%MYSQL_RELAY_LOG%"
 EVENT_NAME	COUNT_STAR
 wait/synch/cond/sql/MYSQL_RELAY_LOG::COND_done	NONE
 wait/synch/cond/sql/MYSQL_RELAY_LOG::prep_xids_cond	NONE
+wait/synch/mutex/sql/MYSQL_RELAY_LOG::LOCK_binlog_end_pos	NONE
 wait/synch/mutex/sql/MYSQL_RELAY_LOG::LOCK_commit	NONE
 wait/synch/mutex/sql/MYSQL_RELAY_LOG::LOCK_commit_queue	NONE
 wait/synch/mutex/sql/MYSQL_RELAY_LOG::LOCK_done	NONE

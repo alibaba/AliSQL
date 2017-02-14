@@ -29,6 +29,7 @@
 #include "sql_show.h"
 #include "sql_parse.h"
 #include "rpl_mi.h"
+#include "semisync_master.h"
 #include <list>
 #include <string>
 #include <my_stacktrace.h>
@@ -1493,7 +1494,16 @@ Stage_manager::enroll_for(StageID stage, THD *thd, mysql_mutex_t *stage_mutex)
   */
   if (!leader)
   {
-    DEBUG_SYNC(thd, "wait_as_follower");
+#if defined(ENABLED_DEBUG_SYNC)
+    if (stage == FLUSH_STAGE)
+      DEBUG_SYNC(thd, "wait_as_follower");
+
+    if (stage == SEMISYNC_STAGE)
+      DEBUG_SYNC(thd, "after_semisync_queue");
+
+    if (stage == SYNC_STAGE)
+      DEBUG_SYNC(thd, "after_sync_queue");
+#endif
 #ifndef DBUG_OFF
     mysql_mutex_lock(&m_lock_preempt);
     /*
@@ -2525,7 +2535,8 @@ bool mysql_show_binlog_events(THD* thd)
 
 
 MYSQL_BIN_LOG::MYSQL_BIN_LOG(uint *sync_period)
-  :bytes_written(0), file_id(1), open_count(1),
+  :binlog_end_pos(0),
+   bytes_written(0), file_id(1), open_count(1),
    sync_period_ptr(sync_period), sync_counter(0),
    m_prep_xids(0),
    is_relay_log(0), signal_cnt(0),
@@ -2560,6 +2571,7 @@ void MYSQL_BIN_LOG::cleanup()
     mysql_mutex_destroy(&LOCK_commit);
     mysql_mutex_destroy(&LOCK_sync);
     mysql_mutex_destroy(&LOCK_xids);
+    mysql_mutex_destroy(&LOCK_semisync);
     mysql_cond_destroy(&update_cond);
     my_atomic_rwlock_destroy(&m_prep_xids_lock);
     mysql_cond_destroy(&m_prep_xids_cond);
@@ -2575,6 +2587,7 @@ void MYSQL_BIN_LOG::init_pthread_objects()
   mysql_mutex_init(m_key_LOCK_index, &LOCK_index, MY_MUTEX_INIT_SLOW);
   mysql_mutex_init(m_key_LOCK_commit, &LOCK_commit, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(m_key_LOCK_sync, &LOCK_sync, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(m_key_LOCK_semisync, &LOCK_semisync, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(m_key_LOCK_xids, &LOCK_xids, MY_MUTEX_INIT_FAST);
   mysql_cond_init(m_key_update_cond, &update_cond, 0);
   my_atomic_rwlock_init(&m_prep_xids_lock);
@@ -2583,6 +2596,7 @@ void MYSQL_BIN_LOG::init_pthread_objects()
 #ifdef HAVE_PSI_INTERFACE
                    m_key_LOCK_flush_queue,
                    m_key_LOCK_sync_queue,
+                   m_key_LOCK_semisync_queue,
                    m_key_LOCK_commit_queue,
                    m_key_LOCK_done, m_key_COND_done
 #endif
@@ -3442,6 +3456,8 @@ bool MYSQL_BIN_LOG::open_binlog(const char *log_name,
   close_purge_index_file();
 #endif
 
+  /* Notify the dump thread that binlog is rotated to a new file. */
+  update_binlog_end_pos();
   DBUG_RETURN(0);
 
 err:
@@ -5079,7 +5095,8 @@ int MYSQL_BIN_LOG::new_file_impl(bool need_lock_log, Format_description_log_even
     log rotation should give the waiting thread a signal to
     discover EOF and move on to the next log.
   */
-  signal_update();
+  flush_io_cache(&log_file);
+  update_binlog_end_pos();
 
   old_name=name;
   name=0;				// Don't free name
@@ -5218,7 +5235,8 @@ bool MYSQL_BIN_LOG::after_append_to_relay_log(Master_info *mi)
     }
   }
 
-  signal_update();
+  /* Notify the SQL thread that a new event has been appended. */
+  update_binlog_end_pos();
 
   DBUG_RETURN(error);
 }
@@ -5967,7 +5985,7 @@ bool MYSQL_BIN_LOG::write_incident(Incident_log_event *ev, bool need_lock_log,
     if (!error && !(error= flush_and_sync()))
     {
       bool check_purge= false;
-      signal_update();
+      update_binlog_end_pos();
       error= rotate(true, &check_purge);
       if (!error && check_purge)
         purge();
@@ -6174,9 +6192,9 @@ int MYSQL_BIN_LOG::wait_for_update_bin_log(THD* thd,
   DBUG_ENTER("wait_for_update_bin_log");
 
   if (!timeout)
-    mysql_cond_wait(&update_cond, &LOCK_log);
+    mysql_cond_wait(&update_cond, &LOCK_binlog_end_pos);
   else
-    ret= mysql_cond_timedwait(&update_cond, &LOCK_log,
+    ret= mysql_cond_timedwait(&update_cond, &LOCK_binlog_end_pos,
                               const_cast<struct timespec *>(timeout));
   DBUG_RETURN(ret);
 }
@@ -6213,7 +6231,8 @@ void MYSQL_BIN_LOG::close(uint exiting)
                   relay_log_checksum_alg != BINLOG_CHECKSUM_ALG_UNDEF);
       s.write(&log_file);
       bytes_written+= s.data_written;
-      signal_update();
+      flush_io_cache(&log_file);
+      update_binlog_end_pos();
     }
 #endif /* HAVE_REPLICATION */
 
@@ -6277,14 +6296,6 @@ void MYSQL_BIN_LOG::set_max_size(ulong max_size_arg)
   DBUG_VOID_RETURN;
 }
 
-
-void MYSQL_BIN_LOG::signal_update()
-{
-  DBUG_ENTER("MYSQL_BIN_LOG::signal_update");
-  signal_cnt++;
-  mysql_cond_broadcast(&update_cond);
-  DBUG_VOID_RETURN;
-}
 
 /****** transaction coordinator log for 2pc - binlog() based solution ******/
 
@@ -6851,7 +6862,8 @@ MYSQL_BIN_LOG::process_after_commit_stage_queue(THD *thd, THD *first)
       */
       excursion.try_to_attach_to(head);
       bool all= head->transaction.flags.real_commit;
-      (void) RUN_HOOK(transaction, after_commit, (head, all));
+      repl_semisync_master.waitAfterCommit(thd, all);
+      DEBUG_SYNC(thd, "after_group_after_commit");
       /*
         When after_commit finished for the transaction, clear the run_hooks flag.
         This allow other parts of the system to check if after_commit was called.
@@ -6866,6 +6878,7 @@ MYSQL_BIN_LOG::process_after_commit_stage_queue(THD *thd, THD *first)
 static const char* g_stage_name[] = {
   "FLUSH",
   "SYNC",
+  "SEMISYNC",
   "COMMIT",
 };
 #endif
@@ -7045,8 +7058,10 @@ MYSQL_BIN_LOG::finish_commit(THD *thd)
     */
     if ((thd->commit_error != THD::CE_COMMIT_ERROR ) && thd->transaction.flags.run_hooks)
     {
-      (void) RUN_HOOK(transaction, after_commit, (thd, all));
+      repl_semisync_master.waitAfterCommit(thd, all);
       thd->transaction.flags.run_hooks= false;
+
+      DEBUG_SYNC(thd, "after_call_after_commit");
     }
   }
   else if (thd->transaction.flags.xid_written)
@@ -7080,6 +7095,35 @@ MYSQL_BIN_LOG::finish_commit(THD *thd)
     (using binlog_error_action). Hence treat only COMMIT_ERRORs as errors.
   */
   return (thd->commit_error == THD::CE_COMMIT_ERROR);
+}
+
+/**
+ If semisync is enabled and using AFTER_SYNC, then this function is called
+ and waiting for ACK from slave.
+ * **/
+static inline int call_after_sync(THD *queue_head)
+{
+  const char *log_file= NULL;
+  my_off_t pos= 0;
+
+  /* Quickly return if semisync master is disabled. */
+  if (!repl_semisync_master.getMasterEnabled())
+    return 0;
+
+  DBUG_ASSERT(queue_head != NULL);
+  /* Loop for the largest binlog position of current group. */
+  for (THD *thd= queue_head; thd != NULL; thd= thd->next_to_commit)
+    if (likely(thd->commit_error == THD::CE_NONE))
+      thd->get_trans_fixed_pos(&log_file, &pos);
+
+  if (DBUG_EVALUATE_IF("simulate_after_sync_hook_error", 1, 0) ||
+      repl_semisync_master.waitAfterSync(log_file, pos))
+  {
+    sql_print_error("Failed to call 'waitAfterSync'");
+    return ER_ERROR_ON_WRITE;
+  }
+
+  return 0;
 }
 
 /**
@@ -7251,6 +7295,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
     anything more since it is possible that a thread entered and
     appointed itself leader for the flush phase.
   */
+  bool update_binlog_end_pos_after_sync= (get_sync_period() == 1);
   DEBUG_SYNC(thd, "waiting_to_enter_flush_stage");
   if (change_stage(thd, Stage_manager::FLUSH_STAGE, thd, NULL, &LOCK_log))
   {
@@ -7263,6 +7308,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
   mysql_mutex_t *leave_mutex_before_commit_stage= NULL;
   my_off_t flush_end_pos= 0;
   bool need_LOCK_log;
+  bool failed_semisync_report= false;
   if (unlikely(!is_open()))
   {
     final_queue= stage_manager.fetch_queue_for(Stage_manager::FLUSH_STAGE);
@@ -7293,14 +7339,16 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
   {
     const char *file_name_ptr= log_file_name + dirname_length(log_file_name);
     DBUG_ASSERT(flush_end_pos != 0);
-    if (RUN_HOOK(binlog_storage, after_flush,
-                 (thd, file_name_ptr, flush_end_pos)))
+    if (DBUG_EVALUATE_IF("failed_report_binlog_update", 1, 0)
+        || (repl_semisync_master.reportBinlogUpdate(file_name_ptr, flush_end_pos)))
     {
-      sql_print_error("Failed to run 'after_flush' hooks");
+      sql_print_error("Failed to call reportBinlogUpdate");
       flush_error= ER_ERROR_ON_WRITE;
+      failed_semisync_report= true;
     }
 
-    signal_update();
+    if (!update_binlog_end_pos_after_sync)
+      update_binlog_end_pos();
     DBUG_EXECUTE_IF("crash_commit_after_log", DBUG_SUICIDE(););
   }
 
@@ -7328,6 +7376,8 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
                           thd->thread_id, thd->commit_error));
     DBUG_RETURN(finish_commit(thd));
   }
+
+  DEBUG_SYNC(thd, "before_update_pos");
   final_queue= stage_manager.fetch_queue_for(Stage_manager::SYNC_STAGE);
   if (flush_error == 0 && total_bytes > 0)
   {
@@ -7339,6 +7389,43 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit)
   if (need_LOCK_log)
     mysql_mutex_unlock(&LOCK_log);
   leave_mutex_before_commit_stage= &LOCK_sync;
+
+  /* Notify dump thread after fsync binlog if sync_binlog equals to 1. */
+  if (update_binlog_end_pos_after_sync)
+  {
+    THD *tmp_thd= final_queue;
+
+    while (tmp_thd->next_to_commit != NULL)
+      tmp_thd= tmp_thd->next_to_commit;
+
+    update_binlog_end_pos(tmp_thd->get_trans_pos());
+  }
+
+  /* If semisync is enabled and using AFTER_SYNC, enter into semisync
+  stage. So we can still write/sync binlog while waiting for ACK*/
+  if (repl_semisync_master.getMasterEnabled()
+      && repl_semisync_master.waitPoint() == WAIT_AFTER_SYNC)
+  {
+    if (change_stage(thd, Stage_manager::SEMISYNC_STAGE, final_queue,
+                     &LOCK_sync, &LOCK_semisync))
+    {
+      DBUG_PRINT("return", ("Thread ID: %lu, commit_error: %d",
+                            thd->thread_id, thd->commit_error));
+      DBUG_RETURN(finish_commit(thd));
+    }
+
+    DEBUG_SYNC(thd, "before_semisync_fetch");
+    THD *semisync_queue =
+      stage_manager.fetch_queue_for(Stage_manager::SEMISYNC_STAGE);
+
+    if (!failed_semisync_report)
+      call_after_sync(semisync_queue);
+
+    DEBUG_SYNC(thd, "after_call_after_sync");
+    final_queue= semisync_queue;
+    leave_mutex_before_commit_stage= (&LOCK_semisync);
+  }
+
   /*
     Stage #3: Commit all transactions in order.
 

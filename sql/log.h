@@ -288,6 +288,7 @@ public:
  protected:
   /* LOCK_log is inited by init_pthread_objects() */
   mysql_mutex_t LOCK_log;
+  mysql_mutex_t LOCK_binlog_end_pos;
   char *name;
   char log_file_name[FN_REFLEN];
   char time_buff[20], db[NAME_LEN + 1];
@@ -302,6 +303,7 @@ public:
   PSI_file_key m_log_file_key;
   /** The instrumentation key to use for @ LOCK_log. */
   PSI_mutex_key m_key_LOCK_log;
+  PSI_mutex_key m_key_LOCK_binlog_end_pos;
 #endif
 };
 
@@ -335,6 +337,10 @@ enum enum_slow_query_log_table_field
   SQLT_FIELD_COUNT
 };
 
+/* Tell the io thread if we can delay the master info sync. */
+#define SEMI_SYNC_SLAVE_DELAY_SYNC 1
+/* Tell the io thread if the current event needs a ack. */
+#define SEMI_SYNC_NEED_ACK  2
 
 class MYSQL_QUERY_LOG: public MYSQL_LOG
 {

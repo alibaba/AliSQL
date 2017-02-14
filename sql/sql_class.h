@@ -3055,6 +3055,8 @@ public:
                           pos_var ? *pos_var : 0));
     DBUG_VOID_RETURN;
   }
+
+  my_off_t get_trans_pos() { return m_trans_end_pos; }
   /**@}*/
 
 
@@ -4232,6 +4234,9 @@ public:
 
   /* Store lsn for engine when preparing finished. */
   engine_lsn_map* prepared_engine;
+
+  /* If this is a semisync slave connection. */
+  bool semi_sync_slave;
 };
 
 

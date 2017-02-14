@@ -27,6 +27,7 @@
 #include "rpl_handler.h"
 #include "rpl_master.h"
 #include "debug_sync.h"
+#include "semisync_master.h"
 
 int max_binlog_dump_events = 0; // unlimited
 my_bool opt_sporadic_binlog_dump_fail = 0;
@@ -432,16 +433,20 @@ static int reset_transmit_packet(THD *thd, ushort flags,
   packet->length(0);
   packet->set("\0", 1, &my_charset_bin);
 
-  if (observe_transmission &&
-      RUN_HOOK(binlog_transmit, reserve_header, (thd, flags, packet)))
-  {
-    *errmsg= "Failed to run hook 'reserve_header'";
-    my_errno= ER_UNKNOWN_ERROR;
-    ret= 1;
-  }
+  if (thd->semi_sync_slave)
+    repl_semisync_master.reserveSyncHeader(packet);
+
   *ev_offset= packet->length();
   DBUG_PRINT("info", ("rpl_master.cc:reset_transmit_packet returns %d", ret));
   return ret;
+}
+
+bool is_semi_sync_slave()
+{
+  int null_value;
+  long long val= 0;
+  get_user_var_int("rpl_semi_sync_slave", &val, &null_value);
+  return val;
 }
 
 static int send_file(THD *thd)
@@ -520,7 +525,8 @@ static int send_file(THD *thd)
 
 int test_for_non_eof_log_read_errors(int error, const char **errmsg)
 {
-  if (error == LOG_READ_EOF)
+  if (error == LOG_READ_EOF ||
+      error == LOG_READ_BINLOG_LAST_VALID_POS)
     return 0;
   my_errno= ER_MASTER_FATAL_ERROR_READING_BINLOG;
   switch (error) {
@@ -844,7 +850,7 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
   LOG_INFO linfo;
   char *log_file_name = linfo.log_file_name;
   char search_file_name[FN_REFLEN], *name;
-
+  bool need_sync= false;
   ulong ev_offset;
   bool using_gtid_protocol= slave_gtid_executed != NULL;
   bool searching_first_gtid= using_gtid_protocol;
@@ -862,11 +868,11 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
   const char *errmsg = "Unknown error";
   char error_text[MAX_SLAVE_ERRMSG]; // to be send to slave via my_message()
   NET* net = &thd->net;
-  mysql_mutex_t *log_lock;
   mysql_cond_t *log_cond;
   uint8 current_checksum_alg= BINLOG_CHECKSUM_ALG_UNDEF;
   Format_description_log_event fdle(BINLOG_VERSION), *p_fdle= &fdle;
   Gtid first_gtid;
+  size_t dirlen= 0;
 
 #ifndef DBUG_OFF
   int left_events = max_binlog_dump_events;
@@ -1059,13 +1065,11 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
   if (log_warnings > 1)
     sql_print_information("Start binlog_dump to master_thread_id(%lu) slave_server(%u), pos(%s, %lu)",
                           thd->thread_id, thd->server_id, log_ident, (ulong)pos);
-  if (RUN_HOOK(binlog_transmit, transmit_start,
-               (thd, flags, log_ident, pos, &observe_transmission)))
-  {
-    errmsg= "Failed to run hook 'transmit_start'";
-    my_errno= ER_UNKNOWN_ERROR;
-    GOTO_ERR;
-  }
+
+  /* Check if the dump thread is created by a slave with semisync enabled. */
+  thd->semi_sync_slave = is_semi_sync_slave();
+  repl_semisync_master.dump_start(thd, log_ident, pos);
+
   has_transmit_started= true;
   /* reset transmit packet for the fake rotate event below */
   if (reset_transmit_packet(thd, flags, &ev_offset, &errmsg,
@@ -1125,7 +1129,6 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
     only at shutdown).
   */
   p_coord->pos= pos; // the first hb matches the slave's last seen value
-  log_lock= mysql_bin_log.get_log_lock();
   log_cond= mysql_bin_log.get_log_cond();
   if (pos > BIN_LOG_HEADER_SIZE)
   {
@@ -1139,7 +1142,7 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
        Try to find a Format_description_log_event at the beginning of
        the binlog
      */
-    if (!(error = Log_event::read_log_event(&log, packet, log_lock, 0)))
+    if (!(error = Log_event::read_log_event(&log, packet, 0, log_file_name)))
     { 
       DBUG_PRINT("info", ("read_log_event returned 0 on line %d", __LINE__));
       /*
@@ -1222,6 +1225,7 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
   /* seek to the requested position, to start the requested dump */
   my_b_seek(&log, pos);			// Seek will done on next read
 
+  dirlen= dirname_length(log_file_name);
   while (!net->error && net->vio != 0 && !thd->killed)
   {
     Log_event_type event_type= UNKNOWN_EVENT;
@@ -1240,7 +1244,7 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
                     };);
     bool is_active_binlog= false;
     while (!thd->killed &&
-           !(error= Log_event::read_log_event(&log, packet, log_lock,
+           !(error= Log_event::read_log_event(&log, packet,
                                               current_checksum_alg,
                                               log_file_name,
                                               &is_active_binlog)))
@@ -1429,15 +1433,12 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
                  event_type, searching_first_gtid, skip_group, log_file_name,
                  my_b_tell(&log)));
       pos = my_b_tell(&log);
-      if (observe_transmission &&
-          RUN_HOOK(binlog_transmit, before_send_event,
-                   (thd, flags, packet, log_file_name, pos)))
-      {
-        my_errno= ER_UNKNOWN_ERROR;
-        errmsg= "run 'before_send_event' hook failed";
-        GOTO_ERR;
-      }
 
+
+      DBUG_ASSERT(dirlen == dirname_length(log_file_name));
+      repl_semisync_master.updateSyncHeader(thd, (uchar *)packet->c_ptr(),
+                                            log_file_name+dirlen,
+                                            pos, &need_sync);
       /* The present event was skipped, so store the event coordinates */
       if (skip_group)
       {
@@ -1517,15 +1518,9 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
 	}
       }
 
-      if (observe_transmission &&
-          RUN_HOOK(binlog_transmit, after_send_event,
-                   (thd, flags, packet, log_file_name, skip_group ? pos : 0)))
-      {
-        errmsg= "Failed to run hook 'after_send_event'";
-        my_errno= ER_UNKNOWN_ERROR;
-        GOTO_ERR;
-      }
 
+      if (need_sync)
+        repl_semisync_master.flushNet(thd, packet->c_ptr(), log_file_name, skip_group ? pos : 0);
       /* reset transmit packet for next loop */
       if (reset_transmit_packet(thd, flags, &ev_offset, &errmsg,
                                 observe_transmission))
@@ -1603,14 +1598,12 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
           has not been updated since last read.
 	*/
 
-        mysql_mutex_lock(log_lock);
-        switch (error= Log_event::read_log_event(&log, packet, (mysql_mutex_t*) 0,
-                                                 current_checksum_alg)) {
+        switch (error= Log_event::read_log_event(&log, packet,
+                                   current_checksum_alg, log_file_name)) {
 	case 0:
           DBUG_PRINT("info", ("read_log_event returned 0 on line %d",
                               __LINE__));
 	  /* we read successfully, so we'll need to send it to the slave */
-          mysql_mutex_unlock(log_lock);
 	  read_packet = 1;
           p_coord->pos= uint4korr(packet->ptr() + ev_offset + LOG_POS_OFFSET);
           event_type= (Log_event_type)((*packet)[LOG_EVENT_OFFSET+ev_offset]);
@@ -1618,7 +1611,22 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
 	  break;
 
 	case LOG_READ_EOF:
+          /** if we reach here, the binlog must be rotated. */
+          break;
+	case LOG_READ_BINLOG_LAST_VALID_POS:
         {
+          /* We have to double check if really reaching the end of file
+          with lock. */
+          mysql_bin_log.lock_binlog_end_pos();
+          /* There is a race contention that log_file_name may be changed
+          while rotating the binlog. But that's ok. */
+          if (!mysql_bin_log.is_active(log_file_name) ||
+              my_b_tell(&log) < mysql_bin_log.get_binlog_end_pos())
+          {
+            mysql_bin_log.unlock_binlog_end_pos();
+            break;
+          }
+
           int ret;
           ulong signal_cnt;
 	  DBUG_PRINT("wait",("waiting for data in binary log"));
@@ -1658,7 +1666,7 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
           if (thd->server_id == 0 || ((flags & BINLOG_DUMP_NON_BLOCK) != 0))
 	  {
             DBUG_PRINT("info", ("stopping dump thread because server_id==0 or the BINLOG_DUMP_NON_BLOCK flag is set: server_id=%u flags=%d", thd->server_id, flags));
-            mysql_mutex_unlock(log_lock);
+            mysql_bin_log.unlock_binlog_end_pos();
             DBUG_EXECUTE_IF("inject_hb_event_on_mysqlbinlog_dump_thread",
             {
               /*
@@ -1689,7 +1697,7 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
               DBUG_ASSERT(heartbeat_ts);
               set_timespec_nsec(*heartbeat_ts, heartbeat_period);
             }
-            thd->ENTER_COND(log_cond, log_lock,
+            thd->ENTER_COND(log_cond, mysql_bin_log.get_binlog_end_pos_lock(),
                             &stage_master_has_sent_all_binlog_to_slave,
                             &old_stage);
             /*
@@ -1756,7 +1764,6 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
         break;
             
         default:
-          mysql_mutex_unlock(log_lock);
           test_for_non_eof_log_read_errors(error, &errmsg);
           GOTO_ERR;
         }
@@ -1848,14 +1855,11 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
 
             THD_STAGE_INFO(thd, stage_sending_binlog_event_to_slave);
             pos = my_b_tell(&log);
-            if (observe_transmission &&
-                RUN_HOOK(binlog_transmit, before_send_event,
-                         (thd, flags, packet, log_file_name, pos)))
-            {
-              my_errno= ER_UNKNOWN_ERROR;
-              errmsg= "run 'before_send_event' hook failed";
-              GOTO_ERR;
-            }
+
+            DBUG_ASSERT(dirlen == dirname_length(log_file_name));
+            repl_semisync_master.updateSyncHeader(thd, (uchar *)packet->c_ptr(),
+                                                  log_file_name+dirlen,
+                                                  pos, &need_sync);
 
             if (my_net_write(net, (uchar*) packet->ptr(), packet->length()) )
             {
@@ -1878,15 +1882,9 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
 
           if(!goto_next_binlog)
           {
-            if (observe_transmission &&
-                RUN_HOOK(binlog_transmit, after_send_event,
-                         (thd, flags, packet, log_file_name,
-                          skip_group ? pos : 0)))
-            {
-              my_errno= ER_UNKNOWN_ERROR;
-              errmsg= "Failed to run hook 'after_send_event'";
-              GOTO_ERR;
-            }
+            if (need_sync)
+              repl_semisync_master.flushNet(thd, packet->c_ptr(), log_file_name, skip_group ? pos : 0);
+
           }
 
           /* Save the skip group for next iteration */
@@ -1970,7 +1968,7 @@ end:
   mysql_file_close(file, MYF(MY_WME));
 
   if (has_transmit_started)
-    (void) RUN_HOOK(binlog_transmit, transmit_stop, (thd, flags));
+    repl_semisync_master.dump_end(thd);
   my_eof(thd);
   THD_STAGE_INFO(thd, stage_waiting_to_finalize_termination);
   mysql_mutex_lock(&LOCK_thread_count);
@@ -2003,7 +2001,7 @@ err:
   }
   end_io_cache(&log);
   if (has_transmit_started)
-    (void) RUN_HOOK(binlog_transmit, transmit_stop, (thd, flags));
+    repl_semisync_master.dump_end(thd);
   /*
     Exclude  iteration through thread list
     this is needed for purge_logs() - it will iterate through
@@ -2162,10 +2160,12 @@ int reset_master(THD* thd)
     return 1;
   }
 
-  if (mysql_bin_log.reset_logs(thd))
-    return 1;
-  (void) RUN_HOOK(binlog_transmit, after_reset_master, (thd, 0 /* flags */));
-  return 0;
+  bool ret= 0;
+  /* Temporarily disable master semisync before reseting master. */
+  repl_semisync_master.beforeResetMaster();
+  ret= mysql_bin_log.reset_logs(thd);
+  repl_semisync_master.afterResetMaster();
+  return ret;
 }
 
 

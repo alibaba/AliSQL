@@ -123,6 +123,7 @@ public:
   enum StageID {
     FLUSH_STAGE,
     SYNC_STAGE,
+    SEMISYNC_STAGE,
     COMMIT_STAGE,
     STAGE_COUNTER
   };
@@ -131,6 +132,7 @@ public:
 #ifdef HAVE_PSI_INTERFACE
             PSI_mutex_key key_LOCK_flush_queue,
             PSI_mutex_key key_LOCK_sync_queue,
+            PSI_mutex_key key_LOCK_semisync_queue,
             PSI_mutex_key key_LOCK_commit_queue,
             PSI_mutex_key key_LOCK_done,
             PSI_cond_key key_COND_done
@@ -155,6 +157,11 @@ public:
     m_queue[SYNC_STAGE].init(
 #ifdef HAVE_PSI_INTERFACE
                              key_LOCK_sync_queue
+#endif
+                             );
+    m_queue[SEMISYNC_STAGE].init(
+#ifdef HAVE_PSI_INTERFACE
+                             key_LOCK_semisync_queue
 #endif
                              );
     m_queue[COMMIT_STAGE].init(
@@ -306,6 +313,7 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   PSI_mutex_key m_key_COND_done;
 
   PSI_mutex_key m_key_LOCK_commit_queue;
+  PSI_mutex_key m_key_LOCK_semisync_queue;
   PSI_mutex_key m_key_LOCK_done;
   PSI_mutex_key m_key_LOCK_flush_queue;
   PSI_mutex_key m_key_LOCK_sync_queue;
@@ -313,6 +321,8 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   PSI_mutex_key m_key_LOCK_commit;
   /** The instrumentation key to use for @ LOCK_sync. */
   PSI_mutex_key m_key_LOCK_sync;
+   /** The instrumentation key to use for @ LOCK_semisync. */
+  PSI_mutex_key m_key_LOCK_semisync;
   /** The instrumentation key to use for @ LOCK_xids. */
   PSI_mutex_key m_key_LOCK_xids;
   /** The instrumentation key to use for @ update_cond. */
@@ -328,8 +338,11 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   mysql_mutex_t LOCK_index;
   mysql_mutex_t LOCK_commit;
   mysql_mutex_t LOCK_sync;
+  mysql_mutex_t LOCK_semisync;
   mysql_mutex_t LOCK_xids;
   mysql_cond_t update_cond;
+  /* Trace the end position of current binary log file. */
+  my_off_t binlog_end_pos;
   ulonglong bytes_written;
   IO_CACHE index_file;
   char index_file_name[FN_REFLEN];
@@ -496,8 +509,11 @@ public:
                     PSI_mutex_key key_LOCK_done,
                     PSI_mutex_key key_LOCK_flush_queue,
                     PSI_mutex_key key_LOCK_log,
+                    PSI_mutex_key key_LOCK_binlog_end_pos,
                     PSI_mutex_key key_LOCK_sync,
                     PSI_mutex_key key_LOCK_sync_queue,
+                    PSI_mutex_key key_LOCK_semisync,
+                    PSI_mutex_key key_LOCK_semisync_queue,
                     PSI_mutex_key key_LOCK_xids,
                     PSI_cond_key key_COND_done,
                     PSI_cond_key key_update_cond,
@@ -508,14 +524,18 @@ public:
     m_key_COND_done= key_COND_done;
 
     m_key_LOCK_commit_queue= key_LOCK_commit_queue;
+    m_key_LOCK_semisync_queue = key_LOCK_semisync_queue;
     m_key_LOCK_done= key_LOCK_done;
     m_key_LOCK_flush_queue= key_LOCK_flush_queue;
     m_key_LOCK_sync_queue= key_LOCK_sync_queue;
+    m_key_LOCK_semisync_queue= key_LOCK_semisync_queue;
 
     m_key_LOCK_index= key_LOCK_index;
     m_key_LOCK_log= key_LOCK_log;
+    m_key_LOCK_binlog_end_pos= key_LOCK_binlog_end_pos;
     m_key_LOCK_commit= key_LOCK_commit;
     m_key_LOCK_sync= key_LOCK_sync;
+    m_key_LOCK_semisync= key_LOCK_semisync;
     m_key_LOCK_xids= key_LOCK_xids;
     m_key_update_cond= key_update_cond;
     m_key_prep_xids_cond= key_prep_xids_cond;
@@ -620,7 +640,36 @@ public:
     DBUG_VOID_RETURN;
   }
   void set_max_size(ulong max_size_arg);
-  void signal_update();
+  void signal_update()
+  {
+    DBUG_ENTER("MYSQL_BIN_LOG::signal_update");
+    signal_cnt++;
+    mysql_cond_broadcast(&update_cond);
+    DBUG_VOID_RETURN;
+  }
+
+  void update_binlog_end_pos()
+  {
+    if (is_relay_log)
+      signal_update();
+    else
+    {
+      lock_binlog_end_pos();
+      binlog_end_pos= my_b_safe_tell(&log_file);
+      signal_update();
+      unlock_binlog_end_pos();
+    }
+  }
+
+  void update_binlog_end_pos(my_off_t pos)
+  {
+    lock_binlog_end_pos();
+    if (pos > binlog_end_pos)
+      binlog_end_pos= pos;
+    signal_update();
+    unlock_binlog_end_pos();
+  }
+
   int wait_for_update_relay_log(THD* thd, const struct timespec * timeout);
   int  wait_for_update_bin_log(THD* thd, const struct timespec * timeout);
 public:
@@ -742,6 +791,23 @@ public:
   inline void unlock_index() { mysql_mutex_unlock(&LOCK_index);}
   inline IO_CACHE *get_index_file() { return &index_file;}
   inline uint32 get_open_count() { return open_count; }
+
+  my_off_t get_binlog_end_pos()
+  {
+    mysql_mutex_assert_not_owner(&LOCK_log);
+    mysql_mutex_assert_owner(&LOCK_binlog_end_pos);
+    return binlog_end_pos;
+  }
+
+  my_off_t get_binlog_end_pos_without_lock()
+  {
+    mysql_mutex_assert_not_owner(&LOCK_log);
+    mysql_mutex_assert_not_owner(&LOCK_binlog_end_pos);
+    return binlog_end_pos;
+  }
+  mysql_mutex_t* get_binlog_end_pos_lock() { return &LOCK_binlog_end_pos; }
+  void lock_binlog_end_pos() { mysql_mutex_lock(&LOCK_binlog_end_pos); }
+  void unlock_binlog_end_pos() { mysql_mutex_unlock(&LOCK_binlog_end_pos); }
 };
 
 typedef struct st_load_file_info

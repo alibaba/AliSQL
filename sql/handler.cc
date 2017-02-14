@@ -41,6 +41,7 @@
 #include <my_bit.h>
 #include <list>
 #include <mysqld.h>
+#include "semisync_master.h"
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
 #include "ha_partition.h"
@@ -420,7 +421,7 @@ handlerton *ha_checktype(THD *thd, enum legacy_db_type database_type,
     return NULL;
   }
 
-  (void) RUN_HOOK(transaction, after_rollback, (thd, FALSE));
+  repl_semisync_master.waitAfterRollback(thd, FALSE);
 
   switch (database_type) {
   case DB_TYPE_MRG_ISAM:
@@ -1604,7 +1605,8 @@ int ha_commit_low(THD *thd, bool all, bool run_after_commit)
              MYSQL_LOG_BIN::finish_commit).
     */
     if (!error)
-      (void) RUN_HOOK(transaction, after_commit, (thd, all));
+      repl_semisync_master.waitAfterCommit(thd, all);
+
     thd->transaction.flags.run_hooks= false;
   }
   DBUG_RETURN(error);
@@ -1649,7 +1651,7 @@ int ha_rollback_low(THD *thd, bool all)
       thd->transaction.xid_state.xa_state != XA_NOTR)
     thd->transaction.xid_state.rm_error= thd->get_stmt_da()->sql_errno();
 
-  (void) RUN_HOOK(transaction, after_rollback, (thd, all));
+  repl_semisync_master.waitAfterRollback(thd, all);
   return error;
 }
 

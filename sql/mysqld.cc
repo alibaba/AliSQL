@@ -112,6 +112,9 @@
 #include <poll.h>
 #endif
 
+#include "semisync_master.h"
+#include "semisync_slave.h"
+
 #ifdef HAVE_FESETROUND
 #include <fenv.h>
 #endif
@@ -435,7 +438,6 @@ my_bool opt_show_slave_auth_info;
 my_bool opt_log_slave_updates= 0;
 char *opt_slave_skip_errors;
 my_bool opt_slave_allow_batching= 0;
-
 /**
   compatibility option:
     - index usage hints (USE INDEX without a FOR clause) behave as in 5.0
@@ -1871,6 +1873,7 @@ void clean_up(bool print_message)
 
   memcached_shutdown();
 
+  ack_receiver.stop();
   /*
     make sure that handlers finish up
     what they have that is dependent on the binlog
@@ -3851,8 +3854,11 @@ int init_common_variables()
                              key_BINLOG_LOCK_done,
                              key_BINLOG_LOCK_flush_queue,
                              key_BINLOG_LOCK_log,
+                             key_BINLOG_LOCK_binlog_end_pos,
                              key_BINLOG_LOCK_sync,
                              key_BINLOG_LOCK_sync_queue,
+                             key_BINLOG_LOCK_semisync,
+                             key_BINLOG_LOCK_semisync_queue,
                              key_BINLOG_LOCK_xids,
                              key_BINLOG_COND_done,
                              key_BINLOG_update_cond,
@@ -4064,6 +4070,13 @@ int init_common_variables()
   /* RDS : set to max_connections if thread_running_high_watermark is 0 */
   if (thread_running_high_watermark == 0)
     thread_running_high_watermark= max_connections;
+
+#ifdef HAVE_REPLICATION
+  if (repl_semisync_master.initObject() ||
+      repl_semisync_slave.initObject())
+    return 1;
+#endif
+
   unireg_init(opt_specialflag); /* Set up extern variabels */
   if (!(my_default_lc_messages=
         my_locale_by_name(lc_messages)))
@@ -5659,6 +5672,8 @@ int mysqld_main(int argc, char **argv)
           if (flush_io_cache(mysql_bin_log.get_log_file()) ||
               mysql_file_sync(mysql_bin_log.get_log_file()->file, MYF(MY_WME)))
             unireg_abort(1);
+
+          mysql_bin_log.update_binlog_end_pos();
         }
         else
           global_sid_lock->unlock();
@@ -8036,6 +8051,28 @@ show_ssl_get_server_not_after(THD *thd, SHOW_VAR *var, char *buff)
 
 #endif /* HAVE_OPENSSL && !EMBEDDED_LIBRARY */
 
+#define SHOW_FNAME(name)                        \
+    rpl_semi_sync_master_show_##name
+
+#define DEF_SHOW_FUNC(name, show_type)                                       \
+    static  int SHOW_FNAME(name)(MYSQL_THD thd, SHOW_VAR *var, char *buff)   \
+    {                                                                        \
+      repl_semisync_master.setExportStats();                                 \
+      var->type= show_type;                                                  \
+      var->value= (char *)&rpl_semi_sync_master_##name;                      \
+      return 0;                                                              \
+    }
+
+DEF_SHOW_FUNC(status, SHOW_BOOL)
+DEF_SHOW_FUNC(clients, SHOW_LONG)
+DEF_SHOW_FUNC(wait_sessions, SHOW_LONG)
+DEF_SHOW_FUNC(trx_wait_time, SHOW_LONGLONG)
+DEF_SHOW_FUNC(trx_wait_num, SHOW_LONGLONG)
+DEF_SHOW_FUNC(net_wait_time, SHOW_LONGLONG)
+DEF_SHOW_FUNC(net_wait_num, SHOW_LONGLONG)
+DEF_SHOW_FUNC(avg_net_wait_time, SHOW_LONG)
+DEF_SHOW_FUNC(avg_trx_wait_time, SHOW_LONG)
+
 
 /*
   Variables shown by SHOW STATUS in alphabetical order
@@ -8195,6 +8232,26 @@ SHOW_VAR status_vars[]= {
   {"Uptime",                   (char*) &show_starttime,         SHOW_FUNC},
 #ifdef ENABLED_PROFILING
   {"Uptime_since_flush_status",(char*) &show_flushstatustime,   SHOW_FUNC},
+#endif
+#ifdef HAVE_REPLICATION
+  {"Rpl_semi_sync_master_status", (char*) &SHOW_FNAME(status), SHOW_FUNC},
+  {"Rpl_semi_sync_master_clients", (char*) &SHOW_FNAME(clients), SHOW_FUNC},
+  {"Rpl_semi_sync_master_yes_tx", (char*) &rpl_semi_sync_master_yes_transactions, SHOW_LONG},
+  {"Rpl_semi_sync_master_no_tx", (char*) &rpl_semi_sync_master_no_transactions, SHOW_LONG},
+  {"Rpl_semi_sync_master_wait_sessions", (char*) &SHOW_FNAME(wait_sessions), SHOW_FUNC},
+  {"Rpl_semi_sync_master_no_times", (char*) &rpl_semi_sync_master_off_times, SHOW_LONG},
+  {"Rpl_semi_sync_master_timefunc_failures", (char*) &rpl_semi_sync_master_timefunc_fails, SHOW_LONG},
+  {"Rpl_semi_sync_master_wait_pos_backtraverse", (char*) &rpl_semi_sync_master_wait_pos_backtraverse, SHOW_LONG},
+  {"Rpl_semi_sync_master_tx_wait_time", (char*) &SHOW_FNAME(trx_wait_time), SHOW_FUNC},
+  {"Rpl_semi_sync_master_tx_waits", (char*) &SHOW_FNAME(trx_wait_num), SHOW_FUNC},
+  {"Rpl_semi_sync_master_tx_avg_wait_time", (char*) &SHOW_FNAME(avg_trx_wait_time), SHOW_FUNC},
+  {"Rpl_semi_sync_master_net_wait_time", (char*) &SHOW_FNAME(net_wait_time), SHOW_FUNC},
+  {"Rpl_semi_sync_master_net_waits", (char*) &SHOW_FNAME(net_wait_num), SHOW_FUNC},
+  {"Rpl_semi_sync_master_net_avg_wait_time", (char*) &SHOW_FNAME(avg_net_wait_time), SHOW_FUNC},
+  {"Rpl_semi_sync_master_request_ack", (char*) &rpl_semi_sync_master_request_ack, SHOW_LONGLONG},
+  {"Rpl_semi_sync_master_get_ack", (char*)&rpl_semi_sync_master_get_ack, SHOW_LONGLONG},
+  {"Rpl_semi_sync_slave_status", (char*) &rpl_semi_sync_slave_status, SHOW_BOOL},
+  {"Rpl_semi_sync_slave_send_ack", (char*) &rpl_semi_sync_slave_send_ack, SHOW_LONGLONG},
 #endif
   {NullS, NullS, SHOW_LONG}
 };
@@ -9567,6 +9624,8 @@ PSI_mutex_key key_BINLOG_LOCK_index;
 PSI_mutex_key key_BINLOG_LOCK_log;
 PSI_mutex_key key_BINLOG_LOCK_sync;
 PSI_mutex_key key_BINLOG_LOCK_sync_queue;
+PSI_mutex_key key_BINLOG_LOCK_semisync;
+PSI_mutex_key key_BINLOG_LOCK_semisync_queue;
 PSI_mutex_key key_BINLOG_LOCK_xids;
 PSI_mutex_key
   key_delayed_insert_mutex, key_hash_filo_lock, key_LOCK_active_mi,
@@ -9579,7 +9638,7 @@ PSI_mutex_key
   key_LOCK_slave_net_timeout,
   key_LOCK_server_started, key_LOCK_status,
   key_LOCK_system_variables_hash, key_LOCK_table_share, key_LOCK_thd_data,
-  key_LOCK_user_conn, key_LOCK_uuid_generator, key_LOG_LOCK_log,
+  key_LOCK_user_conn, key_LOCK_uuid_generator, key_LOG_LOCK_log, key_BINLOG_LOCK_binlog_end_pos,
   key_master_info_data_lock, key_master_info_run_lock,
   key_master_info_sleep_lock,
   key_mutex_slave_reporting_capability_err_lock, key_relay_log_info_data_lock,
@@ -9600,12 +9659,16 @@ PSI_mutex_key key_RELAYLOG_LOCK_done;
 PSI_mutex_key key_RELAYLOG_LOCK_flush_queue;
 PSI_mutex_key key_RELAYLOG_LOCK_index;
 PSI_mutex_key key_RELAYLOG_LOCK_log;
+PSI_mutex_key key_RELAYLOG_LOCK_binlog_end_pos;
 PSI_mutex_key key_RELAYLOG_LOCK_sync;
 PSI_mutex_key key_RELAYLOG_LOCK_sync_queue;
 PSI_mutex_key key_RELAYLOG_LOCK_xids;
 PSI_mutex_key key_LOCK_sql_rand;
 PSI_mutex_key key_gtid_ensure_index_mutex;
 PSI_mutex_key key_LOCK_thread_created;
+
+PSI_mutex_key key_ss_mutex_LOCK_binlog_;
+PSI_mutex_key key_ss_mutex_Ack_receiver_mutex;
 
 static PSI_mutex_info all_server_mutexes[]=
 {
@@ -9628,6 +9691,8 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_BINLOG_LOCK_log, "MYSQL_BIN_LOG::LOCK_log", 0},
   { &key_BINLOG_LOCK_sync, "MYSQL_BIN_LOG::LOCK_sync", 0},
   { &key_BINLOG_LOCK_sync_queue, "MYSQL_BIN_LOG::LOCK_sync_queue", 0 },
+  { &key_BINLOG_LOCK_semisync, "MYSQL_BIN_LOG::LOCK_semisync", 0 },
+  { &key_BINLOG_LOCK_semisync_queue, "MYSQL_BIN_LOG::LOCK_semisync_queue", 0 },
   { &key_BINLOG_LOCK_xids, "MYSQL_BIN_LOG::LOCK_xids", 0 },
   { &key_RELAYLOG_LOCK_commit, "MYSQL_RELAY_LOG::LOCK_commit", 0},
   { &key_RELAYLOG_LOCK_commit_queue, "MYSQL_RELAY_LOG::LOCK_commit_queue", 0 },
@@ -9635,6 +9700,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_RELAYLOG_LOCK_flush_queue, "MYSQL_RELAY_LOG::LOCK_flush_queue", 0 },
   { &key_RELAYLOG_LOCK_index, "MYSQL_RELAY_LOG::LOCK_index", 0},
   { &key_RELAYLOG_LOCK_log, "MYSQL_RELAY_LOG::LOCK_log", 0},
+  { &key_RELAYLOG_LOCK_binlog_end_pos, "MYSQL_RELAY_LOG::LOCK_binlog_end_pos", 0},
   { &key_RELAYLOG_LOCK_sync, "MYSQL_RELAY_LOG::LOCK_sync", 0},
   { &key_RELAYLOG_LOCK_sync_queue, "MYSQL_RELAY_LOG::LOCK_sync_queue", 0 },
   { &key_RELAYLOG_LOCK_xids, "MYSQL_RELAY_LOG::LOCK_xids", 0},
@@ -9666,6 +9732,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_uuid_generator, "LOCK_uuid_generator", PSI_FLAG_GLOBAL},
   { &key_LOCK_sql_rand, "LOCK_sql_rand", PSI_FLAG_GLOBAL},
   { &key_LOG_LOCK_log, "LOG::LOCK_log", 0},
+  { &key_BINLOG_LOCK_binlog_end_pos, "MYSQL_BIN_LOG::LOCK_binlog_end_pos", 0},
   { &key_master_info_data_lock, "Master_info::data_lock", 0},
   { &key_master_info_run_lock, "Master_info::run_lock", 0},
   { &key_master_info_sleep_lock, "Master_info::sleep_lock", 0},
@@ -9688,6 +9755,9 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_gtid_ensure_index_mutex, "Gtid_state", PSI_FLAG_GLOBAL},
   { &key_LOCK_thread_created, "LOCK_thread_created", PSI_FLAG_GLOBAL },
   { &key_rwlock_LOCK_filter_list, "LOCK_filter_list", PSI_FLAG_GLOBAL},
+  { &key_LOCK_thread_created, "LOCK_thread_created", PSI_FLAG_GLOBAL },
+  { &key_ss_mutex_LOCK_binlog_, "LOCK_binlog_", 0},
+  { &key_ss_mutex_Ack_receiver_mutex, "Ack_receiver::m_mutex", 0},
   { &key_rwlock_LOCK_unsafe_stmt, "LOCK_unsafe_stmt", PSI_FLAG_GLOBAL}
 };
 
@@ -9748,6 +9818,9 @@ PSI_cond_key key_BINLOG_prep_xids_cond;
 PSI_cond_key key_RELAYLOG_prep_xids_cond;
 PSI_cond_key key_gtid_ensure_index_cond;
 
+PSI_cond_key key_ss_cond_COND_binlog_send_;
+PSI_cond_key key_ss_cond_Ack_receiver_cond;
+
 static PSI_cond_info all_server_conds[]=
 {
 #if (defined(_WIN32) || defined(HAVE_SMEM)) && !defined(EMBEDDED_LIBRARY)
@@ -9787,12 +9860,14 @@ static PSI_cond_info all_server_conds[]=
   { &key_COND_thread_cache, "COND_thread_cache", PSI_FLAG_GLOBAL},
   { &key_COND_flush_thread_cache, "COND_flush_thread_cache", PSI_FLAG_GLOBAL},
   { &key_gtid_ensure_index_cond, "Gtid_state", PSI_FLAG_GLOBAL},
+  { &key_ss_cond_COND_binlog_send_, "COND_binlog_send_", 0},
+  { &key_ss_cond_Ack_receiver_cond, "Ack_receiver::m_cond", 0},
   { &key_COND_connection_count, "COND_connection_count", PSI_FLAG_GLOBAL}
 };
 
 PSI_thread_key key_thread_bootstrap, key_thread_delayed_insert,
   key_thread_handle_manager, key_thread_main,
-  key_thread_one_connection, key_thread_signal_hand;
+  key_thread_one_connection, key_thread_signal_hand, key_ss_thread_Ack_receiver_thread;
 
 static PSI_thread_info all_server_threads[]=
 {
@@ -9817,7 +9892,8 @@ static PSI_thread_info all_server_threads[]=
   { &key_thread_handle_manager, "manager", PSI_FLAG_GLOBAL},
   { &key_thread_main, "main", PSI_FLAG_GLOBAL},
   { &key_thread_one_connection, "one_connection", 0},
-  { &key_thread_signal_hand, "signal_handler", PSI_FLAG_GLOBAL}
+  { &key_thread_signal_hand, "signal_handler", PSI_FLAG_GLOBAL},
+  { &key_ss_thread_Ack_receiver_thread, "Ack_receiver", PSI_FLAG_GLOBAL}
 };
 
 #ifdef HAVE_MMAP
@@ -9973,6 +10049,11 @@ PSI_stage_info stage_slave_waiting_worker_to_release_partition= { 0, "Waiting fo
 PSI_stage_info stage_slave_waiting_worker_to_free_events= { 0, "Waiting for Slave Workers to free pending events", 0};
 PSI_stage_info stage_slave_waiting_worker_queue= { 0, "Waiting for Slave Worker queue", 0};
 PSI_stage_info stage_slave_waiting_event_from_coordinator= { 0, "Waiting for an event from Coordinator", 0};
+PSI_stage_info stage_waiting_for_semi_sync_ack_from_slave={ 0, "Waiting for semi-sync ACK from slave", 0};
+
+PSI_stage_info stage_waiting_for_semi_sync_slave={ 0, "Waiting for semi-sync slave connection", 0};
+
+PSI_stage_info stage_reading_semi_sync_ack={ 0, "Reading semi-sync ACK from slave", 0};
 
 #ifdef HAVE_PSI_INTERFACE
 
@@ -10073,7 +10154,10 @@ PSI_stage_info *all_server_stages[]=
   & stage_waiting_for_the_next_event_in_relay_log,
   & stage_waiting_for_the_slave_thread_to_advance_position,
   & stage_waiting_to_finalize_termination,
-  & stage_waiting_to_get_readlock
+  & stage_waiting_to_get_readlock,
+  & stage_waiting_for_semi_sync_ack_from_slave,
+  & stage_waiting_for_semi_sync_slave,
+  & stage_reading_semi_sync_ack
 };
 
 PSI_socket_key key_socket_tcpip, key_socket_unix, key_socket_client_connection;
