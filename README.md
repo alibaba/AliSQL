@@ -10,6 +10,9 @@ AliSQL has been an open source project since August 2016. It is being actively d
 [Changes in AliSQL 5.6.32 (2016-10-14) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2016-10-14))  
 [Changes in AliSQL 5.6.32 (2016-09-15) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2016-09-15))  
 
+## AliSQL Compiler Guide
+[AliSQL-Compiler-Guide](http://blog.fungo.me/2016/10/compile-alisql-from-source/)
+
 # AliSQL benchmark
 [Performance benchmark ](https://github.com/alibaba/AliSQL/wiki/AliSQL-Performance-benchmark)  
 [Performance benchmark for inventory ](https://github.com/alibaba/AliSQL/wiki/AliSQL-Performance-benchmark-for-inventory)  
