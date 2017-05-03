@@ -1327,10 +1327,12 @@ too_big:
 		records on an empty non-leaf page.  This prevents
 		infinite page splits. */
 
+		/*TODO: REC_COMFORT didn't support compress now. */
 		if (entry->n_fields >= n_uniq
 		    && (REC_NODE_PTR_SIZE
 			+ rec_get_converted_size_comp_prefix(
-				index, entry->fields, n_uniq, NULL)
+				index, entry->fields, n_uniq, NULL,
+				ULINT_UNDEFINED, ULINT_UNDEFINED, 0)
 			/* On a compressed page, there is
 			a two-byte entry in the dense
 			page directory for every record.

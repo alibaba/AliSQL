@@ -1271,6 +1271,11 @@ row_ins_foreign_check_on_constraint(
 
 	cascade->state = UPD_NODE_UPDATE_CLUSTERED;
 
+	if (dict_table_is_comfort(foreign->foreign_table)) {
+		upd_set_info_bits(cascade->update,
+					upd_get_info_bits(cascade->update)
+					| REC_INFO_REC_COMFORT_FLAG);
+	}
 	err = row_update_cascade_for_mysql(thr, cascade,
 					   foreign->foreign_table);
 
@@ -2850,6 +2855,10 @@ row_ins_clust_index_entry(
 	dberr_t	err;
 	ulint	n_uniq;
 
+	ut_ad(dict_index_is_clust(index));
+	ut_ad(!dict_index_need_comfort(index) ||
+			(dtuple_get_info_bits(entry)
+			 & REC_INFO_REC_COMFORT_FLAG));
 	if (!index->table->foreign_set.empty()) {
 		err = row_ins_check_foreign_constraints(
 			index->table, index, entry, thr);
@@ -2907,6 +2916,10 @@ row_ins_sec_index_entry(
 	dberr_t		err;
 	mem_heap_t*	offsets_heap;
 	mem_heap_t*	heap;
+
+	ut_ad(!dict_index_need_comfort(index));
+	ut_ad(!(dtuple_get_info_bits(entry)
+		& REC_INFO_REC_COMFORT_FLAG));
 
 	if (!index->table->foreign_set.empty()) {
 		err = row_ins_check_foreign_constraints(index->table, index,
@@ -3039,6 +3052,9 @@ row_ins_index_entry_step(
 
 	row_ins_index_entry_set_vals(node->index, node->entry, node->row);
 
+	ut_ad(!dict_index_need_comfort(node->index) ||
+			(dtuple_get_info_bits(node->entry)
+			 & REC_INFO_REC_COMFORT_FLAG));
 	ut_ad(dtuple_check_typed(node->entry));
 
 	err = row_ins_index_entry(node->index, node->entry, thr);

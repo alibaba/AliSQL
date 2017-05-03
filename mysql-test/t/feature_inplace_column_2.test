@@ -1,0 +1,264 @@
+--source include/master-slave.inc
+--source include/have_innodb.inc
+--source include/have_binlog_format_row.inc
+
+connection master;
+use test;
+create table t( col varchar(200) default 'xpchild',
+		col1 int,
+		col2 char(100),
+		col3 varchar(100),
+                key ind(col),
+		key ind_1(col1),
+		key ind_2(col2),
+		key ind_3(col3))engine=innodb row_format=comfort;
+
+
+insert into t(col, col1, col2, col3)  values('xp1', 2, 'xp', 'xpchild');
+insert into t(col, col1, col2, col3)  values('xp2', 2, 'xp', 'xpchild');
+commit;
+
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+
+###########################################################################
+
+select count(*) from t;
+checksum table t;
+
+alter table t add col4 varchar(1000);
+select col4 from t limit 10;
+checksum table t;
+
+update t set col4=concat(col3, col1);
+commit;
+select col4 from t limit 10;
+checksum table t;
+
+###########################################################################
+
+--echo ###########################################
+--echo delete and insert same record
+--echo ###########################################
+delete from t where col='xp1';
+insert into t values('xp1', 2, 'xp', 'xpchild', 'xp');
+commit;
+select * from t where col='xp1';
+
+--echo ###########################################
+--echo create index on added column
+--echo ###########################################
+create index t_ind_4 on t(col4);
+select * from t where col4='xp';
+
+--echo ###########################################
+--echo alter table add more than one column
+--echo ###########################################
+alter table t add col5 int, add col6 int;
+select * from t where col='xp1';
+
+--echo ###########################################
+--echo alter table add clob column
+--echo ###########################################
+
+alter table t add col7 text;
+select * from t where col='xp1';
+
+update t set col7=repeat('xpchild', 10000) where col='xp1';
+commit;
+select * from t where col='xp1' or col ='xp2';
+
+--echo ###########################################
+--echo transport tablespace
+--echo ###########################################
+--let $MYSQLD_DATADIR= `SELECT @@datadir`
+connect (master_1,127.0.0.1,root,,test,$MASTER_MYPORT);
+connect (master_2,127.0.0.1,root,,test,$MASTER_MYPORT);
+
+connection master;
+show create table test.t;
+create database db_1;
+
+
+connection master_1;
+use test;
+flush table t for export;
+
+connection master_2;
+use db_1;
+create table t( col varchar(200) default 'xpchild',
+col1 int,
+col2 char(100),
+col3 varchar(100),
+col4 varchar(1000) DEFAULT NULL,
+col5 int(11) DEFAULT NULL,
+col6 int(11) DEFAULT NULL,
+col7 text,
+key ind(col),
+key ind_1(col1),
+key ind_2(col2),
+key ind_3(col3),
+KEY `t_ind_4` (`col4`(767))
+)engine=innodb row_format=comfort;
+
+set sql_log_bin=off;
+alter table t discard tablespace;
+
+--exec cp -rf $MYSQLD_DATADIR/test/t.cfg  $MYSQLD_DATADIR/db_1/
+--exec cp -rf $MYSQLD_DATADIR/test/t.ibd  $MYSQLD_DATADIR/db_1/
+
+alter table t import tablespace;
+select count(*) from t;
+show create table t;
+checksum table t;
+
+connection master_1;
+use test;
+unlock tables;
+
+
+connection master;
+checksum table db_1.t;
+checksum table test.t;
+drop table db_1.t;
+drop database db_1;
+
+
+--echo ###########################################
+--echo online copy data operation
+--echo ###########################################
+
+alter table t drop index ind_1;
+alter table t drop index ind_2;
+alter table t drop index ind_3;
+alter table t drop index t_ind_4;
+
+alter table t drop column col3, drop column col4, drop column col5, drop column col6, drop column col7;
+alter table t add col3 int default 10;
+alter table t row_format=compact;
+alter table t row_format=comfort;
+alter table t add col4 int;
+show create table t;
+select count(*) from t;
+checksum table t;
+
+
+--echo ###########################################
+--echo online dml operation
+--echo ###########################################
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t add col5 int;
+
+connection master_2;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, col) where col= 'xp1';
+update t set col3=concat(col3, col) where col= 'xp2';
+update t set col='xp3' where col= 'xp1';
+select * from t where col='xp3';
+delete from t where col='xp2';
+commit;
+
+connection master_1;
+--reap
+
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+select count(*)  from t;
+checksum table t;
+
+insert into t(col, col1, col2, col3)  values('xp1', 2, 'xp', 'xpchild');
+insert into t(col, col1, col2, col3)  values('xp2', 2, 'xp', 'xpchild');
+commit;
+
+
+--echo ###########################################
+--echo online copy data  and dml operation
+--echo ###########################################
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t add col6 int default 100;
+
+connection master_2;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, col) where col ='xp1';
+update t set col3=concat(col3, col) where col = 'xp2';
+update t set col='xp3' where col='xp1';
+select * from t where col='xp2';
+delete from t where col='xp2';
+commit;
+
+connection master_1;
+--reap
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+select count(*)  from t;
+checksum table t;
+
+
+insert into t(col, col1, col2, col3)  values('xp1', 2, 'xp', 'xpchild');
+insert into t(col, col1, col2, col3)  values('xp2', 2, 'xp', 'xpchild');
+commit;
+
+
+--echo ###########################################
+--echo online index data and dml operation
+--echo ###########################################
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t add index ind_col4(col4);
+
+connection master_2;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, col) where col= 'xp1';
+update t set col3=concat(col3, col) where col= 'xp2';
+update t set col4=100 where col='xp2';
+delete from t where col='xp2';
+commit;
+
+connection master_1;
+--reap
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+select count(*)  from t;
+checksum table t;
+
+
+
+
+
+
+
+connection master;
+use test;
+drop table t;
+
+--sync_slave_with_master
+--source include/rpl_end.inc

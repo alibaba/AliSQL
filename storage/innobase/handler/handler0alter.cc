@@ -95,7 +95,12 @@ static const Alter_inplace_info::HA_ALTER_FLAGS INNOBASE_ALTER_NOREBUILD
 	| INNOBASE_FOREIGN_OPERATIONS
 	| Alter_inplace_info::DROP_INDEX
 	| Alter_inplace_info::DROP_UNIQUE_INDEX
-	| Alter_inplace_info::ALTER_COLUMN_NAME;
+	| Alter_inplace_info::ALTER_COLUMN_NAME
+	| Alter_inplace_info::ADD_COLUMN_FOR_COMFORT;
+
+static const Alter_inplace_info::HA_ALTER_FLAGS INNOBASE_COMFORT_ADD_COLUMN
+	= Alter_inplace_info::ADD_COLUMN
+	| Alter_inplace_info::ADD_COLUMN_FOR_COMFORT;
 
 /* Report an InnoDB error to the client by invoking my_error(). */
 static UNIV_COLD MY_ATTRIBUTE((nonnull))
@@ -211,6 +216,10 @@ innobase_need_rebuild(
 		return(false);
 	}
 
+	/* Add column comfortably didn't need rebuild. */
+	if (ha_alter_info->handler_flags == INNOBASE_COMFORT_ADD_COLUMN) {
+		return(false);
+	}
 	return(!!(ha_alter_info->handler_flags & INNOBASE_ALTER_REBUILD));
 }
 
@@ -2012,6 +2021,9 @@ struct ha_innobase_inplace_ctx : public inplace_alter_handler_ctx
 	/** temporary table name to use for old table when renaming tables */
 	const char*	tmp_name;
 
+	/** added fields if comfortably */
+	Field**		add_fields;
+
 	ha_innobase_inplace_ctx(row_prebuilt_t*& prebuilt_arg,
 				dict_index_t** drop_arg,
 				ulint num_to_drop_arg,
@@ -2025,7 +2037,8 @@ struct ha_innobase_inplace_ctx : public inplace_alter_handler_ctx
 				const char** col_names_arg,
 				ulint add_autoinc_arg,
 				ulonglong autoinc_col_min_value_arg,
-				ulonglong autoinc_col_max_value_arg) :
+				ulonglong autoinc_col_max_value_arg,
+				Field** fields) :
 		inplace_alter_handler_ctx(),
 		prebuilt (prebuilt_arg),
 		add_index (0), add_key_numbers (0), num_to_add_index (0),
@@ -2041,7 +2054,8 @@ struct ha_innobase_inplace_ctx : public inplace_alter_handler_ctx
 		sequence(prebuilt->trx->mysql_thd,
 			 autoinc_col_min_value_arg, autoinc_col_max_value_arg),
 		max_autoinc (0),
-		tmp_name (0)
+		tmp_name (0),
+		add_fields(fields)
 	{
 #ifdef UNIV_DEBUG
 		for (ulint i = 0; i < num_to_add_index; i++) {
@@ -2548,6 +2562,48 @@ innobase_get_col_names(
 	}
 
 	DBUG_RETURN(cols);
+}
+/** Get the new added fields
+@param ha_alter_info	Data used during in-place alter
+@param altered_table	MySQL table that is being altered
+@param table		MySQL table as it is before the ALTER operation
+@param user_table	InnoDB table as it is before the ALTER operation
+@param heap		Memory heap for the allocation
+@return array of new added columns in rebuilt_table, or NULL if not added */
+static
+Field**
+innobase_get_add_fields(
+	Alter_inplace_info*	ha_alter_info,
+	const TABLE*		altered_table,
+	const TABLE*		table,
+	const dict_table_t*	user_table,
+	mem_heap_t*		heap)
+{
+	Field**		add_fields;
+	Field*		field;
+	uint		j;
+	uint		n_fields;
+
+	DBUG_ENTER("innobase_get_add_fields");
+	DBUG_ASSERT(altered_table->s->fields > table->s->fields);
+	DBUG_ASSERT(ha_alter_info->handler_flags == INNOBASE_COMFORT_ADD_COLUMN);
+
+	n_fields = altered_table->s->fields - table->s->fields;
+	add_fields = static_cast<Field **>(
+				mem_heap_zalloc(heap, sizeof(Field *) * (n_fields +1)));
+
+	j = 0;
+	for (uint i = 0; i < altered_table->s->fields; i++) {
+		field = altered_table->field[i];
+		if (field->flags & FIELD_IS_ADDED) {
+			add_fields[j] = field;
+			j++;
+		}
+	}
+	DBUG_ASSERT(j == n_fields);
+	add_fields[n_fields] = NULL;
+
+	DBUG_RETURN(add_fields);
 }
 
 /** Update internal structures with concurrent writes blocked,
@@ -3322,6 +3378,7 @@ ha_innobase::prepare_inplace_alter_table(
 	dict_table_t*	indexed_table;	/*!< Table where indexes are created */
 	mem_heap_t*     heap;
 	const char**	col_names;
+	Field**		add_fields = NULL;
 	int		error;
 	ulint		flags;
 	ulint		flags2;
@@ -3554,6 +3611,18 @@ check_if_ok_to_rename:
 		col_names = NULL;
 	}
 
+	if (ha_alter_info->handler_flags == INNOBASE_COMFORT_ADD_COLUMN) {
+		add_fields = innobase_get_add_fields(
+				ha_alter_info, altered_table, table,
+				indexed_table, heap);
+		for (Field **field= add_fields; *field; field++) {
+			if (dict_col_name_is_reserved((*field)->field_name)) {
+				my_error(ER_WRONG_COLUMN_NAME, MYF(0),
+					 (*field)->field_name);
+				goto err_exit;
+			}
+		}
+	}
 	if (ha_alter_info->handler_flags
 	    & Alter_inplace_info::DROP_FOREIGN_KEY) {
 		DBUG_ASSERT(ha_alter_info->alter_info->drop_list.elements > 0);
@@ -3774,7 +3843,8 @@ err_exit:
 	if (!(ha_alter_info->handler_flags & INNOBASE_ALTER_DATA)
 	    || (ha_alter_info->handler_flags
 		== Alter_inplace_info::CHANGE_CREATE_OPTION
-		&& !innobase_need_rebuild(ha_alter_info))) {
+		&& !innobase_need_rebuild(ha_alter_info))
+	    || (ha_alter_info->handler_flags == INNOBASE_COMFORT_ADD_COLUMN)) {
 
 		if (heap) {
 			ha_alter_info->handler_ctx
@@ -3785,7 +3855,8 @@ err_exit:
 					add_fk, n_add_fk,
 					ha_alter_info->online,
 					heap, indexed_table,
-					col_names, ULINT_UNDEFINED, 0, 0);
+					col_names, ULINT_UNDEFINED, 0, 0,
+					add_fields);
 		}
 
 func_exit:
@@ -3891,7 +3962,8 @@ found_col:
 		heap, prebuilt->table, col_names,
 		add_autoinc_col_no,
 		ha_alter_info->create_info->auto_increment_value,
-		autoinc_col_max_value);
+		autoinc_col_max_value,
+		add_fields);
 
 	DBUG_RETURN(prepare_inplace_alter_table_dict(
 			    ha_alter_info, altered_table, table,
@@ -3931,6 +4003,10 @@ ha_innobase::inplace_alter_table(
 #endif /* UNIV_SYNC_DEBUG */
 
 	DEBUG_SYNC(user_thd, "innodb_inplace_alter_table_enter");
+
+	if (ha_alter_info->handler_flags == INNOBASE_COMFORT_ADD_COLUMN) {
+		DBUG_RETURN(false);
+	}
 
 	if (!(ha_alter_info->handler_flags & INNOBASE_ALTER_DATA)) {
 ok_exit:
@@ -4557,6 +4633,180 @@ processed_field:
 
 	return(false);
 }
+/** Convert a MySQL type to an InnoDB type.
+@param field		MySQL TABLE Field.
+@param mtype		mtype of InnoDB
+@param prtype		prtype of InnoDB
+@param len		data len of InnoDB
+@retval void		*/
+static
+void
+innobase_get_type_from_field(
+/*=========================*/
+	Field*		field,
+	ulint*		mtype,
+	ulint*		prtype,
+	ulint*		len)
+{
+	ulint		is_unsigned;
+	ulint		charset_no;
+	ulint		col_len;
+
+	DBUG_ENTER("innobase_get_type_from_field");
+
+	ulint		field_type = (ulint) field->type();
+	ulint		col_type = get_innobase_type_from_mysql_type(
+					&is_unsigned, field);
+	if(!field->real_maybe_null()) {
+		field_type |= DATA_NOT_NULL;
+	}
+	if (field->binary()) {
+		field_type |= DATA_BINARY_TYPE;
+	}
+	if (is_unsigned) {
+		field_type |= DATA_UNSIGNED;
+	}
+	if (dtype_is_string_type(col_type)) {
+		charset_no = (ulint) field->charset()->number;
+		if (charset_no > MAX_CHAR_COLL_NUM) {
+			ut_error;
+		}
+	} else {
+		charset_no = 0;
+	}
+	col_len = field->pack_length();
+	if (field->type() == MYSQL_TYPE_VARCHAR){
+		uint32 length_bytes
+			= static_cast<const Field_varstring*>(
+						field)->length_bytes;
+		col_len -= length_bytes;
+		if (length_bytes == 2) {
+			field_type |= DATA_LONG_TRUE_VARCHAR;
+		}
+	}
+	*mtype = col_type;
+	*prtype = dtype_form_prtype(field_type, charset_no);
+	*len = col_len;
+	DBUG_VOID_RETURN;
+}
+/** Add a column in the data dictionary tables.
+@param user_table	InnoDB table that was being altered
+@param trx		data dictionary transaction
+@param table_name	Table name in MySQL
+@param field		Added column
+@param pos		the relative added column position
+@retval true		Failure
+@retval false		Success */
+static
+bool
+innobase_add_column_try(
+/*====================*/
+	dict_table_t*	user_table,
+	trx_t*		trx,
+	const char*	table_name,
+	Field*		field,
+	ulint		pos)
+{
+	pars_info_t*	info;
+	dberr_t		error;
+	DBUG_ENTER("innobase_add_column_try");
+	DBUG_ASSERT(trx_get_dict_operation(trx) == TRX_DICT_OP_INDEX);
+	ut_ad(trx->dict_operation_lock_mode == RW_X_LATCH);
+	ut_ad(mutex_own(&dict_sys->mutex));
+
+	/* Update SYS_TABLE.n_cols.*/
+	info = pars_info_create();
+	pars_info_add_ull_literal(info, "table_id", user_table->id);
+
+	trx->op_info = "Updating column in SYS_TABLES";
+	/* N_COLS include compact format bit.*/
+	error = que_eval_sql(
+		info,
+		"PROCEDURE UPDATE_SYS_TABLES_PROC () IS\n"
+		"BEGIN\n"
+		"UPDATE SYS_TABLES SET N_COLS=N_COLS+1\n"
+		"WHERE ID=:table_id;\n"
+		"END;\n",
+		FALSE, trx);
+
+	if (error != DB_SUCCESS) {
+		my_error_innodb(error, table_name, 0);
+		trx->error_state = DB_SUCCESS;
+		trx->op_info = "";
+		DBUG_RETURN(true);
+	}
+
+	ulint mtype;
+	ulint prtype;
+	ulint len;
+	innobase_get_type_from_field(field, &mtype, &prtype, &len);
+	/* Insert SYS_COLUMNS */
+	info = pars_info_create();
+	pars_info_add_ull_literal(info,  "table_id", user_table->id);
+	pars_info_add_int4_literal(info, "pos", user_table->n_def + pos - DATA_N_SYS_COLS);
+	pars_info_add_str_literal(info,  "name", field->field_name);
+	pars_info_add_int4_literal(info, "mtype", mtype);
+	pars_info_add_int4_literal(info, "prtype", prtype);
+	pars_info_add_int4_literal(info, "len", len);
+	pars_info_add_int4_literal(info, "prec", 0);
+
+	trx->op_info = "inserting column in SYS_COLUMNS";
+
+	error = que_eval_sql(
+		info,
+		"PROCEDURE INSERT_SYS_COLUMNS_PROC () IS\n"
+		"BEGIN\n"
+		"INSERT INTO SYS_COLUMNS VALUES\n"
+		"(:table_id, :pos, :name, :mtype, :prtype, :len, :prec);\n"
+		"END;\n",
+		FALSE, trx);
+
+	if (error != DB_SUCCESS) {
+		my_error_innodb(error, table_name, 0);
+		trx->error_state = DB_SUCCESS;
+		trx->op_info = "";
+		DBUG_RETURN(true);
+	}
+	DBUG_RETURN(false);
+}
+
+/** Add columns in the data dictionary tables.
+@param ha_alter_info	Data used during in-place alter.
+@param ctx		In-place ALTER TABLE context
+@param table		the TABLE
+@param trx		data dictionary transaction
+@param table_name	Table name in MySQL
+@retval true		Failure
+@retval false		Success */
+static
+bool
+innobase_add_columns_try(
+/*=====================*/
+	Alter_inplace_info*		ha_alter_info,
+	ha_innobase_inplace_ctx*	ctx,
+	const TABLE*			TABLE,
+	trx_t*				trx,
+	const char*			table_name)
+{
+	ulint pos;
+	DBUG_ASSERT(ctx);
+	DBUG_ASSERT(ha_alter_info->handler_flags ==
+		    INNOBASE_COMFORT_ADD_COLUMN);
+	DBUG_ASSERT(!ctx->need_rebuild());
+	DBUG_ASSERT(ctx->add_fields);
+
+	pos = 0;
+	for (Field **fp = ctx->add_fields; *fp; fp++) {
+		DBUG_ASSERT((*fp)->flags & FIELD_IS_ADDED);
+		if (innobase_add_column_try(
+				ctx->old_table, trx, table_name,
+				*fp, pos)) {
+			return(true);
+		}
+		pos++;
+	}
+	return(false);
+}
 
 /** Rename columns in the data dictionary cache
 as part of commit_cache_norebuild().
@@ -4600,7 +4850,157 @@ processed_field:
 		continue;
 	}
 }
+/** Add column in the data dictionary cache.
+@param ctx		In-place ALTER TABLE context
+@param user_table	InnoDB table that was being altered
+@param field		Added MySQL table field */
+static
+void
+innobase_add_column_cache(
+/*======================*/
+	ha_innobase_inplace_ctx*	ctx,
+	dict_table_t*			user_table,
+	Field*				field)
+{
+	ulint mtype;
+	ulint prtype;
+	ulint len;
+	ulint n_cols;
+	dict_col_t *alter_cols;
+	dict_col_t *save_cols;
+	const char *save_col_names;
+	char *col_name;
+	dict_col_t *col;
+	dict_col_t *new_col;
+	ulint save_size;
 
+	dict_index_t*	clust_index;
+	dict_index_t*	index;
+	ulint		n_fields;
+	dict_field_t*	save_fields;
+	dict_field_t*	alter_fields;
+	dict_field_t*	dfield;
+
+	/* Step 1: user_table add column into dictionary cache */
+	n_cols = user_table->n_cols;
+	innobase_get_type_from_field(field, &mtype, &prtype, &len);
+	save_size = mem_heap_get_size(user_table->heap);
+	alter_cols = static_cast<dict_col_t*>(
+			mem_heap_alloc(user_table->heap,
+			(n_cols + 1) * sizeof(dict_col_t)));
+
+	/* Save the cols and col_names.*/
+	save_cols = user_table->cols;
+	save_col_names = user_table->col_names;
+
+	/* Reinit the dict_table_t cols and col_names. */
+	user_table->n_cols = n_cols + 1;
+	user_table->n_def = 0;
+	/* Notes: the saved cols and col_names memory is not freed
+	although it will be never used. */
+	user_table->col_names = NULL;
+	user_table->cols = alter_cols;
+	col_name= (char *)save_col_names;
+
+	/* The new column will be added into after user_def cols,
+	before SYS_COLS(ROW_ID, TRX_ID, ROLL_PTR) in dict_table_t */
+	for (ulint i= 0; i < n_cols; i++) {
+		col = (dict_col_t*)save_cols + i;
+		if (i == n_cols - DATA_N_SYS_COLS) {
+			dict_mem_table_add_col(user_table, user_table->heap,
+					field->field_name,
+					mtype, prtype, len);
+		}
+		dict_mem_table_add_col(user_table, user_table->heap,
+					col_name,
+					col->mtype, col->prtype, col->len);
+		new_col = dict_table_get_nth_col(user_table, user_table->n_def - 1);
+		dict_col_copy_ord_prefix(new_col, col);
+		if (col_name) {
+			col_name += strlen(col_name) + 1;
+		}
+	}
+
+	/* Change the dict_sys->size. */
+	dict_sys->size += mem_heap_get_size(user_table->heap) - save_size;
+
+	/* Step 2: cluster_index add fields into dictionary cache */
+	/* Reinit the dict_index_t fields. */
+	clust_index = dict_table_get_first_index(user_table);
+	n_fields = clust_index->n_fields;
+	save_size = mem_heap_get_size(clust_index->heap);
+	/* Save the cluster index fields. */
+	save_fields = clust_index->fields;
+	alter_fields = static_cast<dict_field_t*>(
+				mem_heap_alloc(clust_index->heap,
+						1 + (n_fields + 1) * sizeof(dict_index_t)));
+	clust_index->n_null_arr = static_cast<unsigned int*>(
+				mem_heap_alloc(clust_index->heap,
+					       1 + (n_fields +1) * sizeof(unsigned int)));
+	clust_index->n_def= 0;
+	clust_index->fields= alter_fields;
+	clust_index->n_nullable= 0;
+	clust_index->n_fields= n_fields + 1;
+
+	/*The new column will added into after last field in dict_index_t */
+	for (ulint i = 0; i < n_fields; i++) {
+		dfield = (dict_field_t*)(save_fields) + i;
+		if (dfield->col->ind < n_cols - DATA_N_SYS_COLS) {
+			col = dict_table_get_nth_col(user_table, dfield->col->ind);
+		} else {
+			col = dict_table_get_nth_col(user_table, dfield->col->ind + 1);
+		}
+		dict_index_add_col(clust_index, user_table, col, dfield->prefix_len);
+	}
+	col = dict_table_get_nth_col(user_table, n_cols - DATA_N_SYS_COLS);
+
+	/* Non-support the prefix since it is not indexed column. */
+	dict_index_add_col(clust_index, user_table, col, 0);
+
+	/* Update dict_sys->size */
+	dict_sys->size += mem_heap_get_size(clust_index->heap) - save_size;
+
+	/* Step 3: update secondary index */
+	index = dict_table_get_next_index(clust_index);
+	while (index != NULL) {
+		n_fields = index->n_fields;
+		for (ulint i = 0; i < n_fields; i++) {
+			dfield = index->fields + i;
+			if (dfield->col->ind >= n_cols - DATA_N_SYS_COLS) {
+				dfield->col = dict_table_get_nth_col(user_table,
+								     dfield->col->ind + 1);
+			} else {
+				dfield->col = dict_table_get_nth_col(user_table,
+								     dfield->col->ind);
+			}
+
+		}
+		index= dict_table_get_next_index(index);
+	}
+}
+/** Add columns in the data dictionary cache
+as part of commit_cache_norebuild().
+@param ha_alter_info	Data used during in-place alter.
+@param ctx		In-place ALTER TABLE context
+@param table		the TABLE
+@param user_table	InnoDB table that was being altered */
+static
+void
+innobase_add_columns_cache(
+/*=======================*/
+	Alter_inplace_info*		ha_alter_info,
+	ha_innobase_inplace_ctx*	ctx,
+	const TABLE*			table,
+	dict_table_t*			user_table)
+{
+	if (!(ha_alter_info->handler_flags == INNOBASE_COMFORT_ADD_COLUMN)) {
+		return;
+	}
+	for (Field **fp = ctx->add_fields; *fp; fp++) {
+		DBUG_ASSERT((*fp)->flags & FIELD_IS_ADDED);
+		innobase_add_column_cache(ctx, user_table, *fp);
+	}
+}
 /** Get the auto-increment value of the table on commit.
 @param ha_alter_info	Data used during in-place alter
 @param ctx		In-place ALTER TABLE context
@@ -5208,13 +5608,15 @@ commit_try_norebuild(
 		}
 	}
 
-	if (!(ha_alter_info->handler_flags
-	      & Alter_inplace_info::ALTER_COLUMN_NAME)) {
+	if (ha_alter_info->handler_flags & Alter_inplace_info:: ALTER_COLUMN_NAME) {
+		DBUG_RETURN(innobase_rename_columns_try(ha_alter_info, ctx,
+							old_table, trx, table_name));
+	} else if (ha_alter_info->handler_flags == INNOBASE_COMFORT_ADD_COLUMN) {
+		DBUG_RETURN(innobase_add_columns_try(ha_alter_info, ctx,
+						     old_table, trx, table_name));
+	} else {
 		DBUG_RETURN(false);
 	}
-
-	DBUG_RETURN(innobase_rename_columns_try(ha_alter_info, ctx,
-						old_table, trx, table_name));
 }
 
 /** Commit the changes to the data dictionary cache
@@ -5833,6 +6235,10 @@ foreign_fail:
 				innobase_rename_columns_cache(
 					ha_alter_info, table,
 					ctx->new_table);
+
+				innobase_add_columns_cache(
+					ha_alter_info, ctx,
+					table, ctx->new_table);
 			}
 		}
 		DBUG_INJECT_CRASH("ib_commit_inplace_crash",

@@ -406,7 +406,7 @@ enum row_type { ROW_TYPE_NOT_USED=-1, ROW_TYPE_DEFAULT, ROW_TYPE_FIXED,
                 ROW_TYPE_PAGE,
                 ROW_TYPE_TOKU_UNCOMPRESSED, ROW_TYPE_TOKU_ZLIB,
                 ROW_TYPE_TOKU_QUICKLZ, ROW_TYPE_TOKU_LZMA,
-                ROW_TYPE_TOKU_FAST, ROW_TYPE_TOKU_SMALL };
+                ROW_TYPE_TOKU_FAST, ROW_TYPE_TOKU_SMALL, ROW_TYPE_COMFORT };
 
 
 /* Specifies data storage format for individual columns */
@@ -1234,6 +1234,11 @@ public:
     and OPTIMIZE TABLE operations.
   */
   static const HA_ALTER_FLAGS RECREATE_TABLE             = 1L << 29;
+
+  /**
+     Add column comfortably for ALTER TABLE ADD COLUMN.
+  */
+  static const HA_ALTER_FLAGS ADD_COLUMN_FOR_COMFORT     = 1L << 30;
 
   /**
     Create options (like MAX_ROWS) for the new version of table.

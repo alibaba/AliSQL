@@ -1421,6 +1421,13 @@ row_get_prebuilt_insert_row(
 
 	dict_table_copy_types(row, table);
 
+	/* Set table tuple flag if comfort row_format.
+	   But it only affact clust_index. */
+	if (dict_table_is_comfort(table)) {
+		dtuple_set_info_bits(row,
+				     dtuple_get_info_bits(row)
+				     | REC_INFO_REC_COMFORT_FLAG);
+	}
 	ins_node_set_new_row(node, row);
 
 	prebuilt->ins_graph = static_cast<que_fork_t*>(

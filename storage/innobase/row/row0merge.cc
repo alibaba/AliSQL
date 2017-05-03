@@ -1018,7 +1018,13 @@ err_exit:
 
 		*mrec = *buf + extra_size;
 
-		rec_init_offsets_temp(*mrec, index, offsets);
+		/* Important:
+		   The merged record is readed from clust index, then write
+		   into temp file.
+		   Firstly the tuple generated through 'temp' without rec_comfort,
+		   so rec_init_offsets_temp didn't need to deal with rec_comfort.
+		*/
+		rec_init_offsets_temp(*mrec, index, offsets, false);
 
 		data_size = rec_offs_data_size(offsets);
 
@@ -1037,7 +1043,7 @@ err_exit:
 
 	*mrec = b + extra_size;
 
-	rec_init_offsets_temp(*mrec, index, offsets);
+	rec_init_offsets_temp(*mrec, index, offsets, false);
 
 	data_size = rec_offs_data_size(offsets);
 	ut_ad(extra_size + data_size < sizeof *buf);
@@ -2520,7 +2526,13 @@ row_merge_insert_index_tuples(
 
 			dtuple = row_rec_to_index_entry_low(
 				mrec, index, offsets, &n_ext, tuple_heap);
-
+			if (dict_index_need_comfort(index)) {
+				ut_ad(!(dtuple_get_info_bits(dtuple)
+					& REC_INFO_REC_COMFORT_FLAG));
+				dtuple_set_info_bits(dtuple,
+					(dtuple_get_info_bits(dtuple)
+					| REC_INFO_REC_COMFORT_FLAG));
+			}
 			if (!n_ext) {
 				/* There are no externally stored columns. */
 			} else {

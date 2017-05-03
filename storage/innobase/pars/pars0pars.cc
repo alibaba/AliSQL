@@ -1222,6 +1222,12 @@ pars_process_assign_list(
 
 	node->update = upd_create(n_assigns, pars_sym_tab_global->heap);
 
+	/* If comfort table, set update vector rec_comfort flag. */
+	if (dict_table_is_comfort(node->table)) {
+		upd_set_info_bits(node->update, upd_get_info_bits(node->update)
+						| REC_INFO_REC_COMFORT_FLAG);
+	}
+
 	assign_node = col_assign_list;
 
 	changes_field_size = UPD_NODE_NO_SIZE_CHANGE;
@@ -1378,6 +1384,13 @@ pars_insert_statement(
 			    dict_table_get_n_cols(node->table));
 
 	dict_table_copy_types(row, table_sym->table);
+	/* Set table tuple flag if comfort row_format.
+	   But it only affact clust_index. */
+	if (dict_table_is_comfort(node->table)) {
+		dtuple_set_info_bits(row,
+				     dtuple_get_info_bits(row)
+				     | REC_INFO_REC_COMFORT_FLAG);
+	}
 
 	ins_node_set_new_row(node, row);
 

@@ -67,7 +67,8 @@ enum rec_format_enum {
 	REC_FORMAT_REDUNDANT	= 0,	/*!< REDUNDANT row format */
 	REC_FORMAT_COMPACT	= 1,	/*!< COMPACT row format */
 	REC_FORMAT_COMPRESSED	= 2,	/*!< COMPRESSED row format */
-	REC_FORMAT_DYNAMIC	= 3	/*!< DYNAMIC row format */
+	REC_FORMAT_DYNAMIC	= 3,	/*!< DYNAMIC row format */
+	REC_FORMAT_COMFORT	= 4	/*!< COMFORT row format */
 };
 typedef enum rec_format_enum rec_format_t;
 

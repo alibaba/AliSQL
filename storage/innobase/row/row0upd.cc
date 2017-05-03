@@ -915,6 +915,9 @@ row_upd_build_difference_binary(
 
 	update = upd_create(dtuple_get_n_fields(entry), heap);
 
+	if (dtuple_get_info_bits(entry) & REC_INFO_REC_COMFORT_FLAG) {
+		update->info_bits |= REC_INFO_REC_COMFORT_FLAG;
+	}
 	n_diff = 0;
 
 	trx_id_pos = dict_index_get_sys_col_pos(index, DATA_TRX_ID);

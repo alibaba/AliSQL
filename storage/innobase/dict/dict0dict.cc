@@ -216,6 +216,14 @@ ibool
 dict_lru_validate(void);
 /*===================*/
 /**********************************************************************//**
+Validate the index n_null_arr.
+@return TRUE if valid  */
+static
+ibool
+dict_index_validate(
+/*================*/
+	const dict_index_t*	index);		/*!< in: index */
+/**********************************************************************//**
 Check if table is in the dictionary table LRU list.
 @return TRUE if table found */
 static
@@ -2897,6 +2905,9 @@ dict_index_add_col(
 	if (!(col->prtype & DATA_NOT_NULL)) {
 		index->n_nullable++;
 	}
+
+	index->n_null_arr[index->n_def -1] = index->n_nullable;
+	ut_ad(dict_index_validate(index));
 }
 
 #ifndef UNIV_HOTBACKUP
@@ -5155,6 +5166,8 @@ dict_index_build_node_ptr(
 	dtype_set(dfield_get_type(field), DATA_SYS_CHILD, DATA_NOT_NULL, 4);
 
 	rec_copy_prefix_to_dtuple(tuple, rec, index, n_unique, heap);
+	/* Inherit tuple->info_bits from phyical record, Maybe the node_ptr
+	has rec_comfort flag. if flag, it also will include n_fields. */
 	dtuple_set_info_bits(tuple, dtuple_get_info_bits(tuple)
 			     | REC_STATUS_NODE_PTR);
 
@@ -6456,7 +6469,30 @@ dict_lru_validate(void)
 
 	return(TRUE);
 }
+/**********************************************************************//**
+Validate the index n_null_arr.
+@return TRUE if valid  */
+static
+ibool
+dict_index_validate(
+/*================*/
+	const dict_index_t*	index)		/*!< in: index */
+{
+	unsigned int n_nulls;
+	dict_field_t*	field;
 
+	n_nulls= 0;
+	for (uint i = 0; i < index->n_def; i++) {
+		field = dict_index_get_nth_field(index, i);
+		if (!(field->col->prtype & DATA_NOT_NULL)) {
+			n_nulls++;
+			ut_a(index->n_null_arr[i] == n_nulls);
+		}
+	}
+	ut_a(n_nulls == index->n_nullable);
+
+	return(TRUE);
+}
 /**********************************************************************//**
 Check if a table exists in the dict table LRU list.
 @return TRUE if table found in LRU list */
@@ -6782,6 +6818,8 @@ dict_tf_to_row_format_string(
 		return("ROW_TYPE_COMPRESSED");
 	case REC_FORMAT_DYNAMIC:
 		return("ROW_TYPE_DYNAMIC");
+	case REC_FORMAT_COMFORT:
+		return("ROW_TYPE_COMFORT");
 	}
 
 	ut_error;

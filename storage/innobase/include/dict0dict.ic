@@ -88,6 +88,21 @@ dict_col_copy_type(
 	type->len = col->len;
 	type->mbminmaxlen = col->mbminmaxlen;
 }
+/*********************************************************************//**
+Copy the column ord_part and max_prefix. */
+UNIV_INLINE
+void
+dict_col_copy_ord_prefix(
+/*=====================*/
+	dict_col_t*		new_col,	/*!< in/out: column */
+	const dict_col_t*	old_col)	/*!< in: column */
+{
+	ut_ad(new_col != NULL);
+	ut_ad(old_col != NULL);
+
+	new_col->ord_part = old_col->ord_part;
+	new_col->max_prefix = old_col->max_prefix;
+}
 #endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG
@@ -510,7 +525,40 @@ dict_table_is_comp(
 
 	return(table->flags & DICT_TF_COMPACT);
 }
+/********************************************************************//**
+Check whether the table uses the comfort row format.
+@return	TRUE if table uses the comfort row format */
+UNIV_INLINE
+ibool
+dict_table_is_comfort(
+/*==================*/
+	const dict_table_t*	table)	/*!< in: table */
+{
+	ut_ad(table);
 
+	return(DICT_TF_GET_COMFORT(table->flags));
+}
+/********************************************************************//**
+Check whether the index needs rec_comfort format.
+@return	TRUE if the index needs rec_comfort format */
+UNIV_INLINE
+ibool
+dict_index_need_comfort(
+/*====================*/
+	const dict_index_t*	index)	/*!< in: index */
+{
+	ut_ad(index && index->table);
+
+	/* Only the cluster index apply rec_comfort format,
+	secondary index will keep compact. */
+	if (dict_table_is_comfort(index->table) &&
+	    dict_index_is_clust(index)) {
+		ut_ad(dict_table_is_comp(index->table));
+		ut_ad(!dict_table_is_temporary(index->table));
+		return(true);
+	}
+	return(false);
+}
 /************************************************************************
 Check if the table has an FTS index. */
 UNIV_INLINE
@@ -537,6 +585,7 @@ dict_tf_is_valid(
 	ulint	compact = DICT_TF_GET_COMPACT(flags);
 	ulint	zip_ssize = DICT_TF_GET_ZIP_SSIZE(flags);
 	ulint	atomic_blobs = DICT_TF_HAS_ATOMIC_BLOBS(flags);
+	ulint	comfort = DICT_TF_GET_COMFORT(flags);
 	ulint	unused = DICT_TF_GET_UNUSED(flags);
 
 	/* Make sure there are no bits that we do not know about. */
@@ -572,7 +621,14 @@ dict_tf_is_valid(
 			return(false);
 		}
 	}
-
+	/* Comfort not support compress */
+	if (comfort) {
+		if (!compact
+		    || atomic_blobs
+		    || zip_ssize) {
+			return(false);
+		}
+	}
 	/* CREATE TABLE ... DATA DIRECTORY is supported for any row format,
 	so the DATA_DIR flag is compatible with all other table flags. */
 
@@ -669,6 +725,10 @@ dict_tf_get_rec_format(
 		return(REC_FORMAT_REDUNDANT);
 	}
 
+	if (DICT_TF_GET_COMFORT(flags)) {
+		return(REC_FORMAT_COMFORT);
+	}
+
 	if (!DICT_TF_HAS_ATOMIC_BLOBS(flags)) {
 		return(REC_FORMAT_COMPACT);
 	}
@@ -740,6 +800,10 @@ dict_tf_set(
 		*flags = DICT_TF_COMPACT
 			| (1 << DICT_TF_POS_ATOMIC_BLOBS);
 		ut_ad(zip_ssize == 0);
+		break;
+	case REC_FORMAT_COMFORT:
+		*flags = DICT_TF_COMPACT
+			| (1 << DICT_TF_POS_COMFORT);
 		break;
 	}
 
@@ -815,7 +879,8 @@ dict_sys_tables_type_to_tf(
 	/* ZIP_SSIZE, ATOMIC_BLOBS & DATA_DIR are the same. */
 	flags |= type & (DICT_TF_MASK_ZIP_SSIZE
 			 | DICT_TF_MASK_ATOMIC_BLOBS
-			 | DICT_TF_MASK_DATA_DIR);
+			 | DICT_TF_MASK_DATA_DIR
+			 | DICT_TF_MASK_COMFORT);
 
 	return(flags);
 }
@@ -846,7 +911,8 @@ dict_tf_to_sys_tables_type(
 	/* ZIP_SSIZE, ATOMIC_BLOBS & DATA_DIR are the same. */
 	type |= flags & (DICT_TF_MASK_ZIP_SSIZE
 			 | DICT_TF_MASK_ATOMIC_BLOBS
-			 | DICT_TF_MASK_DATA_DIR);
+			 | DICT_TF_MASK_DATA_DIR
+			 | DICT_TF_MASK_COMFORT);
 
 	return(type);
 }

@@ -4132,6 +4132,8 @@ ha_innobase::get_row_type() const
 			return(ROW_TYPE_COMPRESSED);
 		case REC_FORMAT_DYNAMIC:
 			return(ROW_TYPE_DYNAMIC);
+		case REC_FORMAT_COMFORT:
+			return(ROW_TYPE_COMFORT);
 		}
 	}
 	ut_ad(0);
@@ -7410,6 +7412,11 @@ ha_innobase::update_row(
 	error = calc_row_difference(uvect, (uchar*) old_row, new_row, table,
 				    upd_buf, upd_buf_size, prebuilt, user_thd);
 
+	/* If comfort table, set update vector rec_comfort flag. */
+	if (dict_table_is_comfort(prebuilt->table)) {
+		upd_set_info_bits(uvect, upd_get_info_bits(uvect)
+						| REC_INFO_REC_COMFORT_FLAG);
+	}
 	if (error != DB_SUCCESS) {
 		goto func_exit;
 	}
@@ -7523,6 +7530,12 @@ ha_innobase::delete_row(
 		row_get_prebuilt_update_vector(prebuilt);
 	}
 
+	/* If comfort table, set update vector rec_comfort flag. */
+	if (dict_table_is_comfort(prebuilt->table)) {
+		upd_set_info_bits(prebuilt->upd_node->update,
+				  upd_get_info_bits(prebuilt->upd_node->update)
+				  | REC_INFO_REC_COMFORT_FLAG);
+	}
 	/* This is a delete */
 
 	prebuilt->upd_node->is_delete = TRUE;
@@ -9244,6 +9257,8 @@ get_row_format_name(
 		return("DEFAULT");
 	case ROW_TYPE_FIXED:
 		return("FIXED");
+	case ROW_TYPE_COMFORT:
+		return("COMFORT");
 	case ROW_TYPE_PAGE:
 	case ROW_TYPE_NOT_USED:
 	default:
@@ -9371,6 +9386,7 @@ create_options_are_invalid(
 		CHECK_ERROR_ROW_TYPE_NEEDS_FILE_PER_TABLE(use_tablespace);
 		CHECK_ERROR_ROW_TYPE_NEEDS_GT_ANTELOPE;
 		break;
+	case ROW_TYPE_COMFORT:
 	case ROW_TYPE_DYNAMIC:
 		CHECK_ERROR_ROW_TYPE_NEEDS_FILE_PER_TABLE(use_tablespace);
 		CHECK_ERROR_ROW_TYPE_NEEDS_GT_ANTELOPE;
@@ -9739,6 +9755,38 @@ index_bad:
 		innodb_row_format = REC_FORMAT_REDUNDANT;
 		break;
 
+	case ROW_TYPE_COMFORT:
+		zip_allowed = FALSE;
+		if (!use_tablespace) {
+			push_warning_printf(
+				thd, Sql_condition::WARN_LEVEL_WARN,
+				ER_ILLEGAL_HA_CREATE_OPTION,
+				"InnoDB: ROW_FORMAT=%s requires"
+				" innodb_file_per_table.",
+				get_row_format_name(row_format));
+			push_warning(
+				thd, Sql_condition::WARN_LEVEL_WARN,
+				ER_ILLEGAL_HA_CREATE_OPTION,
+				"InnoDB: assuming ROW_FORMAT=COMPACT.");
+			innodb_row_format = REC_FORMAT_COMPACT;
+			break;
+		} else if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
+			push_warning_printf(
+				thd, Sql_condition::WARN_LEVEL_WARN,
+				ER_ILLEGAL_HA_CREATE_OPTION,
+				"InnoDB: ROW_FORMAT=%s didn't support"
+				" temporary table.",
+				get_row_format_name(row_format));
+			push_warning(
+				thd, Sql_condition::WARN_LEVEL_WARN,
+				ER_ILLEGAL_HA_CREATE_OPTION,
+				"InnoDB: assuming ROW_FORMAT=COMPACT.");
+			innodb_row_format = REC_FORMAT_COMPACT;
+			break;
+		} else {
+			innodb_row_format = REC_FORMAT_COMFORT;
+			break;
+		}
 	case ROW_TYPE_COMPRESSED:
 	case ROW_TYPE_DYNAMIC:
 		if (!use_tablespace) {

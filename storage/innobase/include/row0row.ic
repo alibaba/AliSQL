@@ -127,6 +127,20 @@ row_build_index_entry(
 
 	ut_ad(dtuple_check_typed(row));
 	entry = row_build_index_entry_low(row, ext, index, heap);
+
+	/*If comfort format table and cluster_index. dtuple add comfort flag.
+	it will apply the node_ptr and ordinary record except of infimum and
+	supremum.*/
+	if (dict_index_need_comfort(index)) {
+		ut_ad((dtuple_get_info_bits(row)
+			& REC_INFO_REC_COMFORT_FLAG));
+		ut_ad(!(dtuple_get_info_bits(entry)
+			& REC_INFO_REC_COMFORT_FLAG));
+
+		dtuple_set_info_bits(entry,
+			(dtuple_get_info_bits(entry)
+			| REC_INFO_REC_COMFORT_FLAG));
+	}
 	ut_ad(!entry || dtuple_check_typed(entry));
 	return(entry);
 }

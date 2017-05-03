@@ -5834,6 +5834,7 @@ static bool fill_alter_inplace_info(THD *thd,
   KEY_PART_INFO *end;
   uint candidate_key_count= 0;
   Alter_info *alter_info= ha_alter_info->alter_info;
+  bool comfort_add_column= false;
   DBUG_ENTER("fill_alter_inplace_info");
 
   /* Allocate result buffers. */
@@ -5907,9 +5908,11 @@ static bool fill_alter_inplace_info(THD *thd,
   */
   for (f_ptr= table->field; (field= *f_ptr); f_ptr++)
   {
-    /* Clear marker for renamed or dropped field
+    /* Clear marker for renamed, added or dropped field
     which we are going to set later. */
-    field->flags&= ~(FIELD_IS_RENAMED | FIELD_IS_DROPPED);
+
+    /* For the safety although old field is never added again. */
+    field->flags&= ~(FIELD_IS_ADDED | FIELD_IS_RENAMED | FIELD_IS_DROPPED);
 
     /* Use transformed info to evaluate flags for storage engine. */
     uint new_field_index= 0;
@@ -6023,7 +6026,6 @@ static bool fill_alter_inplace_info(THD *thd,
     }
   }
 
-#ifndef DBUG_OFF
   new_field_it.init(alter_info->create_list);
   while ((new_field= new_field_it++))
   {
@@ -6034,10 +6036,10 @@ static bool fill_alter_inplace_info(THD *thd,
         Again corresponding storage engine flag should be already set.
       */
       DBUG_ASSERT(ha_alter_info->handler_flags & Alter_inplace_info::ADD_COLUMN);
-      break;
+
+      new_field->flags|= FIELD_IS_ADDED;
     }
   }
-#endif /* DBUG_OFF */
 
   /*
     Go through keys and check if the original ones are compatible
@@ -6239,6 +6241,26 @@ static bool fill_alter_inplace_info(THD *thd,
       ha_alter_info->handler_flags|= Alter_inplace_info::ADD_INDEX;
   }
 
+  /** Only last nullable and no default value columns can be added
+      comfortably for comfort row_format table.
+  */
+  if (table->s->row_type == ROW_TYPE_COMFORT &&
+      ha_alter_info->handler_flags == Alter_inplace_info::ADD_COLUMN)
+  {
+    comfort_add_column= true;
+    new_field_it.init(alter_info->create_list);
+    while ((new_field= new_field_it++))
+    {
+      if (!new_field->field
+          && (!f_maybe_null(new_field->pack_flag)
+              || new_field->def))
+        comfort_add_column = false;
+    }
+  }
+
+  if (comfort_add_column)
+    ha_alter_info->handler_flags|= Alter_inplace_info::ADD_COLUMN_FOR_COMFORT;
+
   DBUG_RETURN(false);
 }
 
@@ -6258,6 +6280,9 @@ static void update_altered_table(const Alter_inplace_info &ha_alter_info,
   uint field_idx, add_key_idx;
   KEY *key;
   KEY_PART_INFO *end, *key_part;
+  Alter_info *alter_info= ha_alter_info.alter_info;
+  Create_field *cfield;
+  List_iterator_fast<Create_field> cfield_it;
 
   /*
     Clear marker for all fields, as we are going to set it only
@@ -6279,6 +6304,19 @@ static void update_altered_table(const Alter_inplace_info &ha_alter_info,
     end= key->key_part + key->user_defined_key_parts;
     for (key_part= key->key_part; key_part < end; key_part++)
       altered_table->field[key_part->fieldnr]->flags|= FIELD_IN_ADD_INDEX;
+  }
+
+  /* Mark the added fields. */
+  field_idx= 0;
+  cfield_it.init(alter_info->create_list);
+  while ((cfield= cfield_it++))
+  {
+     if (cfield->flags & FIELD_IS_ADDED)
+     {
+       DBUG_ASSERT(!cfield->field);
+       altered_table->field[field_idx]->flags|= FIELD_IS_ADDED;
+     }
+     field_idx++;
   }
 }
 
@@ -6775,6 +6813,10 @@ static bool mysql_inplace_alter_table(THD *thd,
     goto rollback;
   }
 
+  DBUG_EXECUTE_IF("alter_table_sleep_for_online",
+                  {
+                    sleep(10);
+                  });
   // Upgrade to EXCLUSIVE before commit.
   if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME))
     goto rollback;

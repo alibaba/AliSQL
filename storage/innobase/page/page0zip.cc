@@ -2223,6 +2223,7 @@ page_zip_decompress_node_ptrs(
 {
 	ulint		heap_status = REC_STATUS_NODE_PTR
 		| PAGE_HEAP_NO_USER_LOW << REC_HEAP_NO_SHIFT;
+	ulint		info_bits = 0;
 	ulint		slot;
 	const byte*	storage;
 
@@ -2262,6 +2263,8 @@ page_zip_decompress_node_ptrs(
 			ut_ad(0);
 		}
 
+		/* Clear the info_bits. */
+		rec_set_info_bits_new(rec, info_bits);
 		/* Read the offsets. The status bits are needed here. */
 		offsets = rec_get_offsets(rec, index, offsets,
 					  ULINT_UNDEFINED, &heap);
@@ -2411,6 +2414,7 @@ page_zip_decompress_sec(
 {
 	ulint	heap_status	= REC_STATUS_ORDINARY
 		| PAGE_HEAP_NO_USER_LOW << REC_HEAP_NO_SHIFT;
+	ulint	info_bits = 0;
 	ulint	slot;
 
 	ut_a(!dict_index_is_clust(index));
@@ -2450,6 +2454,8 @@ page_zip_decompress_sec(
 			    d_stream, rec, heap_status)) {
 			ut_ad(0);
 		}
+		/* Clear the info_bits */
+		rec_set_info_bits_new(rec, info_bits);
 	}
 
 	/* Decompress the data of the last record and any trailing garbage,
@@ -2663,6 +2669,7 @@ page_zip_decompress_clust(
 	ulint		slot;
 	ulint		heap_status	= REC_STATUS_ORDINARY
 		| PAGE_HEAP_NO_USER_LOW << REC_HEAP_NO_SHIFT;
+	ulint		info_bits = 0;
 	const byte*	storage;
 	const byte*	externs;
 
@@ -2706,6 +2713,8 @@ page_zip_decompress_clust(
 			    d_stream, rec, heap_status)) {
 			ut_ad(0);
 		}
+		/* Clear the info_bits */
+		rec_set_info_bits_new(rec, info_bits);
 
 		/* Read the offsets. The status bits are needed here. */
 		offsets = rec_get_offsets(rec, index, offsets,

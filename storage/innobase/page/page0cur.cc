@@ -982,6 +982,24 @@ page_cur_insert_rec_low(
 
 	ut_ad(!page_rec_is_supremum(current_rec));
 
+#ifndef DBUG_OFF
+	if (dict_table_is_comp(index->table)) {
+		ulint rec_comfort = rec_get_rec_comfort_flag(rec);
+		ulint current_rec_comfort = rec_get_rec_comfort_flag(current_rec);
+
+		if (rec_comfort && !current_rec_comfort) {
+			ut_ad(page_rec_is_infimum(current_rec));
+		}
+		if (rec_comfort) {
+			ut_ad(rec_get_n_fields_comfort(rec) > 0);
+		}
+		if (current_rec_comfort) {
+			ut_ad(rec_comfort);
+			ut_ad(rec_get_n_fields_comfort(rec) > 0);
+			ut_ad(rec_get_n_fields_comfort(current_rec) > 0);
+		}
+	}
+#endif
 	/* 1. Get the size of the physical record in the page */
 	rec_size = rec_offs_size(offsets);
 

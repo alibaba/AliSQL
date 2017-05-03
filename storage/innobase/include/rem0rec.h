@@ -40,6 +40,9 @@ B-tree page that is the leftmost page on its level
 /* The deleted flag in info bits */
 #define REC_INFO_DELETED_FLAG	0x20UL	/* when bit is set to 1, it means the
 					record has been delete marked */
+/* When the bit is set to 1, it means the record format is REC_COMFORT,
+then extra size will include 1 or 2 bytes to save n_fields in record. */
+#define REC_INFO_REC_COMFORT_FLAG	0x40UL
 
 /* Number of extra bytes in an old-style record,
 in addition to the data and the offsets */
@@ -141,6 +144,47 @@ rec_set_next_offs_new(
 	rec_t*	rec,	/*!< in/out: new-style physical record */
 	ulint	next)	/*!< in: offset of the next record */
 	MY_ATTRIBUTE((nonnull));
+/******************************************************//**
+The following function is used to set record n_fields
+of a new-style record. */
+UNIV_INLINE
+void
+rec_set_n_fields_comfort(
+/*=====================*/
+	rec_t*	rec,		/*!< in/out: compact physical record */
+	ulint	n_fields);	/*!< in: n_fields */
+/******************************************************//**
+The following function is used to get the n_fields of comfort record
+@return	the n_fields */
+UNIV_INLINE
+ulint
+rec_get_n_fields_comfort(
+/*=====================*/
+	const rec_t*	rec);	/*!< in: compact physical record */
+/******************************************************//**
+The following function tells if record is rec_comfort.
+@return	nonzero if rec_comfort */
+UNIV_INLINE
+ulint
+rec_get_rec_comfort_flag(
+/*=====================*/
+	const rec_t*	rec);	/*!< in: compact physical record */
+/******************************************************//**
+The following function tells n_field_bytes which used to save n_fields.
+@return	the n_fields_bytes */
+UNIV_INLINE
+ulint
+rec_get_n_fields_bytes_comfort(
+/*===========================*/
+	ulint	n_fields);	/*!< in: n_fields */
+/******************************************************//**
+The following function is used to set the rec_comfort bit. */
+UNIV_INLINE
+void
+rec_set_rec_comfort_flag(
+/*=====================*/
+	rec_t*		rec,	/*!< in/out: compact physical record */
+	ulint		flag);	/*!< in: nonzero if rec_comfort */
 /******************************************************//**
 The following function is used to get the number of fields
 in an old-style record.
@@ -772,8 +816,10 @@ rec_init_offsets_temp(
 /*==================*/
 	const rec_t*		rec,	/*!< in: temporary file record */
 	const dict_index_t*	index,	/*!< in: record descriptor */
-	ulint*			offsets)/*!< in/out: array of offsets;
+	ulint*			offsets,/*!< in/out: array of offsets;
 					in: n=rec_offs_n_fields(offsets) */
+	ulint			rec_comfort)
+					/*!< in: whether comfort record */
 	MY_ATTRIBUTE((nonnull));
 
 /*********************************************************//**
@@ -860,7 +906,13 @@ rec_get_converted_size_comp_prefix(
 	const dict_index_t*	index,	/*!< in: record descriptor */
 	const dfield_t*		fields,	/*!< in: array of data fields */
 	ulint			n_fields,/*!< in: number of data fields */
-	ulint*			extra)	/*!< out: extra size */
+	ulint*			extra,	/*!< out: extra size */
+	ulint			status,	/*!< in: status bits of the record */
+	ulint			n_null_by_fields,
+					/*!< in: number of fields determines
+					n_nulls */
+	ulint			rec_comfort)
+					/*!< in: whether comfort record */
 	MY_ATTRIBUTE((warn_unused_result, nonnull(1,2)));
 /**********************************************************//**
 Determines the size of a data tuple in ROW_FORMAT=COMPACT.
@@ -876,7 +928,9 @@ rec_get_converted_size_comp(
 	ulint			status,	/*!< in: status bits of the record */
 	const dfield_t*		fields,	/*!< in: array of data fields */
 	ulint			n_fields,/*!< in: number of data fields */
-	ulint*			extra)	/*!< out: extra size */
+	ulint*			extra,	/*!< out: extra size */
+	ulint			rec_comfort)
+					/*!< in: whether comfort record */
 	MY_ATTRIBUTE((nonnull(1,3)));
 /**********************************************************//**
 The following function returns the size of a data tuple when converted to

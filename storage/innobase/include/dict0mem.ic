@@ -51,10 +51,13 @@ dict_mem_fill_index_struct(
 		index->name = mem_heap_strdup(heap, index_name);
 		index->fields = (dict_field_t*) mem_heap_alloc(
 			heap, 1 + n_fields * sizeof(dict_field_t));
+		index->n_null_arr = (unsigned int*) mem_heap_alloc(
+			heap, 1 + n_fields * sizeof(unsigned int));
 	} else {
 		index->name = index_name;
 		index->heap = NULL;
 		index->fields = NULL;
+		index->n_null_arr = NULL;
 	}
 
 	/* Assign a ulint to a 4-bit-mapped field.

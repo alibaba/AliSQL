@@ -79,7 +79,18 @@ most significant bytes and bits are written below less significant.
 				5 bits heap number
 			4	8 bits heap number
 			5	4 bits n_owned
-				4 bits info bits
+				2 bits info bits
+				1 bit  for rec_comfort
+				1 bit  unused
+			6	8 bits relative offset of n_fields for rec_comfort
+			7	8 bits relative offset of n_fields for rec_comfort
+
+NOTE:
+	1 bytes if n_fields <  128
+	2 bytes if n_fields >= 128
+
+	1xxxxxxx xxxxxxxx
+
 */
 
 /* We list the byte offsets from the origin of the record, the mask,
@@ -117,6 +128,10 @@ and the shift needed to obtain each bit-field of the record. */
 #define REC_NEW_INFO_BITS	5	/* This is single byte bit-field */
 #define	REC_INFO_BITS_MASK	0xF0UL
 #define REC_INFO_BITS_SHIFT	0
+
+#define REC_COMFORT_N_FIELDS_BITS	7
+#define	REC_COMFORT_N_FIELDS_BITS_MASK	0xFFFFUL
+#define REC_COMFORT_N_FIELDS_BITS_SHIFT	0
 
 #if REC_OLD_SHORT_MASK << (8 * (REC_OLD_SHORT - 3)) \
 		^ REC_OLD_N_FIELDS_MASK << (8 * (REC_OLD_N_FIELDS - 4)) \
@@ -414,7 +429,68 @@ rec_set_next_offs_new(
 
 	mach_write_to_2(rec - REC_NEXT, field_value);
 }
+/******************************************************//**
+The following function is used to set record n_fields
+of a new-style record. */
+UNIV_INLINE
+void
+rec_set_n_fields_comfort(
+/*=====================*/
+	rec_t*	rec,		/*!< in/out: compact physical record */
+	ulint	n_fields)	/*!< in: n_fields */
+{
+	byte* lens;
+	ut_ad(rec);
 
+	n_fields &= REC_COMFORT_N_FIELDS_BITS_MASK;
+	ut_a(n_fields < 16384);
+
+	lens = rec - REC_COMFORT_N_FIELDS_BITS + 1;
+	if (n_fields < 128) {
+		*lens = n_fields;
+	} else if (n_fields >= 128) {
+		*lens-- = (byte) (n_fields >> 8) | 0X80;
+		*lens = (byte) n_fields;
+	} else {
+		ut_a(0);
+	}
+}
+/******************************************************//**
+The following function is used to get the n_fields of comfort record
+@return	the n_fields */
+UNIV_INLINE
+ulint
+rec_get_n_fields_comfort(
+/*=====================*/
+	const rec_t*	rec)	/*!< in: compact physical record */
+{
+	ulint n_fields;
+	const byte* lens;
+	ut_ad(rec);
+
+	lens = rec - REC_COMFORT_N_FIELDS_BITS + 1;
+	n_fields = *lens--;
+
+	if (n_fields & 0x80) {
+		n_fields <<= 8;
+		n_fields |= *lens;
+		n_fields &= 0x7fff;
+	}
+	return(n_fields);
+}
+/******************************************************//**
+The following function tells n_field_bytes which used to save n_fields.
+@return	the n_fields_bytes */
+UNIV_INLINE
+ulint
+rec_get_n_fields_bytes_comfort(
+/*===========================*/
+	ulint	n_fields)	/*!< in: n_fields */
+{
+	ut_ad(n_fields > 0 && n_fields < 16384);
+
+	return(n_fields < 128 ? 1 : 2);
+}
 /******************************************************//**
 The following function is used to get the number of fields
 in an old-style record.
@@ -682,6 +758,39 @@ rec_get_deleted_flag(
 	}
 }
 
+/******************************************************//**
+The following function tells if record is rec_comfort.
+@return	nonzero if rec_comfort */
+UNIV_INLINE
+ulint
+rec_get_rec_comfort_flag(
+/*=====================*/
+	const rec_t*	rec)	/*!< in: compact physical record */
+{
+	return(rec_get_bit_field_1(rec, REC_NEW_INFO_BITS,
+				   REC_INFO_REC_COMFORT_FLAG,
+				   REC_INFO_BITS_SHIFT));
+}
+/******************************************************//**
+The following function is used to set the rec_comfort bit. */
+UNIV_INLINE
+void
+rec_set_rec_comfort_flag(
+/*=====================*/
+	rec_t*		rec,	/*!< in/out: compact physical record */
+	ulint		flag)	/*!< in: nonzero if rec_comfort */
+{
+	ulint	val;
+
+	val = rec_get_info_bits(rec, TRUE);
+
+	if (flag) {
+		val |= REC_INFO_REC_COMFORT_FLAG;
+	} else {
+		val &= ~REC_INFO_REC_COMFORT_FLAG;
+	}
+	rec_set_info_bits_new(rec, val);
+}
 /******************************************************//**
 The following function is used to set the deleted bit. */
 UNIV_INLINE
@@ -1604,7 +1713,9 @@ rec_get_converted_size(
 						   dtuple_get_info_bits(dtuple)
 						   & REC_NEW_STATUS_MASK,
 						   dtuple->fields,
-						   dtuple->n_fields, NULL));
+						   dtuple->n_fields, NULL,
+						   dtuple_get_info_bits(dtuple)
+						   & REC_INFO_REC_COMFORT_FLAG));
 	}
 
 	data_size = dtuple_get_data_size(dtuple, 0);

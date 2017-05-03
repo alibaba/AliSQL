@@ -172,6 +172,9 @@ rec_get_n_extern_new(
 	ulint		null_mask;
 	ulint		n_extern;
 	ulint		i;
+	ulint		rec_comfort;
+	ulint		n_null		= 0;
+	ulint		rec_fields	= 0;
 
 	ut_ad(dict_table_is_comp(index->table));
 	ut_ad(rec_get_status(rec) == REC_STATUS_ORDINARY);
@@ -182,7 +185,22 @@ rec_get_n_extern_new(
 	}
 
 	nulls = rec - (REC_N_NEW_EXTRA_BYTES + 1);
-	lens = nulls - UT_BITS_IN_BYTES(index->n_nullable);
+
+	/* If comfort record format. then:
+	     1  bit : comfort flag
+	     16 bits: n_fields */
+	rec_comfort = rec_get_rec_comfort_flag(rec);
+	if (rec_comfort) {
+		rec_fields = rec_get_n_fields_comfort(rec);
+		nulls = nulls - rec_get_n_fields_bytes_comfort(rec_fields);
+		ut_ad(rec_fields > 0);
+		n_null = index->n_null_arr[rec_fields -1];
+	} else {
+		rec_fields = 0;
+		n_null = index->n_nullable;
+	}
+
+	lens = nulls - UT_BITS_IN_BYTES(n_null);
 	null_mask = 1;
 	n_extern = 0;
 	i = 0;
@@ -194,6 +212,12 @@ rec_get_n_extern_new(
 		const dict_col_t*	col
 			= dict_field_get_col(field);
 		ulint			len;
+
+		if (rec_comfort && i >= rec_fields) {
+			ut_ad(!(col->prtype & DATA_NOT_NULL));
+			continue;
+		}
+
 
 		if (!(col->prtype & DATA_NOT_NULL)) {
 			/* nullable field => read the null flag */
@@ -251,16 +275,35 @@ rec_init_offsets_comp_ordinary(
 					format for temporary files in
 					index creation */
 	const dict_index_t*	index,	/*!< in: record descriptor */
-	ulint*			offsets)/*!< in/out: array of offsets;
+	ulint*			offsets,/*!< in/out: array of offsets;
 					in: n=rec_offs_n_fields(offsets) */
+	ulint			rec_comfort)
+					/*!< in: whether comfort record */
 {
 	ulint		i		= 0;
 	ulint		offs		= 0;
 	ulint		any_ext		= 0;
-	ulint		n_null		= index->n_nullable;
+	ulint		rec_fields	= 0;
+	ulint		n_null		= 0;
+	ulint		rec_fields_bytes = 0;
+
+	if (rec_comfort) {
+                /*If temp is true, the rec didn't include REC_N_NEW_EXTRA_BYTES; */
+		rec_fields = rec_get_n_fields_comfort(temp
+						      ? rec + REC_N_NEW_EXTRA_BYTES
+						      : rec);
+		ut_ad(rec_fields > 0);
+		rec_fields_bytes = rec_get_n_fields_bytes_comfort(rec_fields);
+		n_null = index->n_null_arr[rec_fields - 1];
+	} else {
+		rec_fields = 0;
+		n_null = index->n_nullable;
+	}
 	const byte*	nulls		= temp
 		? rec - 1
 		: rec - (1 + REC_N_NEW_EXTRA_BYTES);
+
+	nulls -= (rec_comfort ? rec_fields_bytes : 0);
 	const byte*	lens		= nulls - UT_BITS_IN_BYTES(n_null);
 	ulint		null_mask	= 1;
 
@@ -287,7 +330,12 @@ rec_init_offsets_comp_ordinary(
 		const dict_col_t*	col
 			= dict_field_get_col(field);
 		ulint			len;
-
+		/* If added column comfortably, make up SQL_NULL value. */
+		if (rec_comfort && i >= rec_fields) {
+			ut_ad(!(col->prtype & DATA_NOT_NULL));
+			len = offs | REC_OFFS_SQL_NULL;
+			goto resolved;
+		}
 		if (!(col->prtype & DATA_NOT_NULL)) {
 			/* nullable field => read the null flag */
 			ut_ad(n_null--);
@@ -390,12 +438,20 @@ rec_init_offsets(
 		dict_field_t*	field;
 		ulint		null_mask;
 		ulint		status = rec_get_status(rec);
+		ulint		rec_comfort = rec_get_rec_comfort_flag(rec);
 		ulint		n_node_ptr_field = ULINT_UNDEFINED;
-
+#ifndef DBUG_OFF
+		/* Maybe dummy table/index not include comfort flag. */
+		if (dict_index_need_comfort(index)) {
+			ut_ad(rec_comfort
+			      || status == REC_STATUS_INFIMUM
+			      || status == REC_STATUS_SUPREMUM);
+		}
+#endif
 		switch (UNIV_EXPECT(status, REC_STATUS_ORDINARY)) {
 		case REC_STATUS_INFIMUM:
 		case REC_STATUS_SUPREMUM:
-			/* the field is 8 bytes long */
+			/* INFIMUM or SUPERMUM didn't occupy 2 bytes for COMFORT row_format. */
 			rec_offs_base(offsets)[0]
 				= REC_N_NEW_EXTRA_BYTES | REC_OFFS_COMPACT;
 			rec_offs_base(offsets)[1] = 8;
@@ -406,12 +462,31 @@ rec_init_offsets(
 			break;
 		case REC_STATUS_ORDINARY:
 			rec_init_offsets_comp_ordinary(
-				rec, false, index, offsets);
+				rec, false, index, offsets, rec_comfort);
 			return;
 		}
 
+		ut_ad(status == REC_STATUS_NODE_PTR);
+
 		nulls = rec - (REC_N_NEW_EXTRA_BYTES + 1);
-		lens = nulls - UT_BITS_IN_BYTES(index->n_nullable);
+
+		ulint	rec_fields;
+		ulint	n_null;
+		if (rec_comfort) {
+			rec_fields = rec_get_n_fields_comfort(rec);
+			nulls = nulls - rec_get_n_fields_bytes_comfort(rec_fields);
+			ut_ad(rec_fields > 0);
+			/* Cluster index branch node will never changed
+			after added column comfortably. */
+			ut_ad(rec_fields
+			      == dict_index_get_n_unique_in_tree(index));
+			n_null = index->n_null_arr[rec_fields - 1];
+			/* The cluster index pk colums are always not null */
+			ut_ad(n_null == 0);
+		} else {
+			n_null = index->n_nullable;
+		}
+		lens = nulls - UT_BITS_IN_BYTES(n_null);
 		offs = 0;
 		null_mask = 1;
 
@@ -555,7 +630,8 @@ rec_get_offsets_func(
 	ut_ad(rec);
 	ut_ad(index);
 	ut_ad(heap);
-
+	/* The n_fields will be all n_fields in index
+	or n_fields_cmp for compare.*/
 	if (dict_table_is_comp(index->table)) {
 		switch (UNIV_EXPECT(rec_get_status(rec),
 				    REC_STATUS_ORDINARY)) {
@@ -605,7 +681,9 @@ rec_get_offsets_func(
 	rec_init_offsets(rec, index, offsets);
 	return(offsets);
 }
-
+/* TODO: COMFORT page_format doesn't support compress now.
+So rec_get_offsets_reverse didn't deal with rec_fields
+and comfort flag temporarily. */
 /******************************************************//**
 The following function determines the offsets to each field
 in the record.  It can reuse a previously allocated array. */
@@ -796,21 +874,51 @@ rec_get_converted_size_comp_prefix_low(
 	const dfield_t*		fields,	/*!< in: array of data fields */
 	ulint			n_fields,/*!< in: number of data fields */
 	ulint*			extra,	/*!< out: extra size */
-	bool			temp)	/*!< in: whether this is a
+	bool			temp,	/*!< in: whether this is a
 					temporary file record */
+	ulint			status,	/*!< in: record status */
+	ulint			n_null_by_fields,
+					/*!< in: n_null array index */
+	ulint			rec_comfort)
+					/*!< in: whether comfort record */
 {
 	ulint	extra_size;
 	ulint	data_size;
 	ulint	i;
-	ulint	n_null	= index->n_nullable;
+
+#ifndef DBUG_OFF
+	if (temp) {
+		ut_ad(status == ULINT_UNDEFINED &&
+		      n_null_by_fields == ULINT_UNDEFINED &&
+		      ! rec_comfort);
+	}
+	if (rec_comfort) {
+		if (status == REC_STATUS_ORDINARY) {
+			ut_ad(n_null_by_fields == n_fields);
+			ut_ad(index->n_nullable ==
+			      index->n_null_arr[n_null_by_fields -1 ]);
+		} else if (status == REC_STATUS_NODE_PTR){
+			ut_ad(n_null_by_fields == n_fields);
+			ut_ad(index->n_null_arr[n_null_by_fields - 1] == 0);
+		} else {
+			ut_error;
+		}
+	}
+#endif
+	ulint	n_null	= rec_comfort ?
+				index->n_null_arr[n_null_by_fields - 1]
+				: index->n_nullable;
 	ut_ad(n_fields > 0);
 	ut_ad(n_fields <= dict_index_get_n_fields(index));
 	ut_ad(!temp || extra);
 
 	extra_size = temp
 		? UT_BITS_IN_BYTES(n_null)
-		: REC_N_NEW_EXTRA_BYTES
-		+ UT_BITS_IN_BYTES(n_null);
+		: REC_N_NEW_EXTRA_BYTES + UT_BITS_IN_BYTES(n_null);
+
+	if (rec_comfort) {
+		extra_size += rec_get_n_fields_bytes_comfort(n_null_by_fields);
+	}
 	data_size = 0;
 
 	if (temp && dict_table_is_comp(index->table)) {
@@ -903,11 +1011,17 @@ rec_get_converted_size_comp_prefix(
 	const dict_index_t*	index,	/*!< in: record descriptor */
 	const dfield_t*		fields,	/*!< in: array of data fields */
 	ulint			n_fields,/*!< in: number of data fields */
-	ulint*			extra)	/*!< out: extra size */
+	ulint*			extra,	/*!< out: extra size */
+	ulint			status,	/*!< in: record status */
+	ulint			n_null_by_fields,
+					/*!< in: n_null array index */
+	ulint			rec_comfort)
+					/*!< in: whether comfort record */
 {
 	ut_ad(dict_table_is_comp(index->table));
 	return(rec_get_converted_size_comp_prefix_low(
-		       index, fields, n_fields, extra, false));
+		       index, fields, n_fields, extra, false,
+		       status, n_null_by_fields, rec_comfort));
 }
 
 /**********************************************************//**
@@ -924,21 +1038,33 @@ rec_get_converted_size_comp(
 	ulint			status,	/*!< in: status bits of the record */
 	const dfield_t*		fields,	/*!< in: array of data fields */
 	ulint			n_fields,/*!< in: number of data fields */
-	ulint*			extra)	/*!< out: extra size */
+	ulint*			extra,	/*!< out: extra size */
+	ulint			rec_comfort)
+					/*!< in: whether comfort record */
 {
 	ulint	size;
+	ulint	n_null_by_fields	=	0;
+
 	ut_ad(n_fields > 0);
 
+	/* if the dict_table_t is comfort,  the cluster_index record:
+	     rec_status_ordinary: n_fields(2bytes)
+	     rec_status_node_ptr: n_fields(2bytes)
+	     rec_status_infimum : 0
+	     rec_status_supremum: 0
+	*/
 	switch (UNIV_EXPECT(status, REC_STATUS_ORDINARY)) {
 	case REC_STATUS_ORDINARY:
 		ut_ad(n_fields == dict_index_get_n_fields(index));
 		size = 0;
+		n_null_by_fields = rec_comfort ? n_fields : n_fields;
 		break;
 	case REC_STATUS_NODE_PTR:
 		n_fields--;
 		ut_ad(n_fields == dict_index_get_n_unique_in_tree(index));
 		ut_ad(dfield_get_len(&fields[n_fields]) == REC_NODE_PTR_SIZE);
 		size = REC_NODE_PTR_SIZE; /* child page number */
+		n_null_by_fields = rec_comfort ? n_fields : n_fields;
 		break;
 	case REC_STATUS_INFIMUM:
 	case REC_STATUS_SUPREMUM:
@@ -953,7 +1079,8 @@ rec_get_converted_size_comp(
 	}
 
 	return(size + rec_get_converted_size_comp_prefix_low(
-		       index, fields, n_fields, extra, false));
+		       index, fields, n_fields, extra, false,
+		       status, n_null_by_fields, rec_comfort));
 }
 
 /***********************************************************//**
@@ -1139,9 +1266,11 @@ rec_convert_dtuple_to_rec_comp(
 	const dfield_t*		fields,	/*!< in: array of data fields */
 	ulint			n_fields,/*!< in: number of data fields */
 	ulint			status,	/*!< in: status bits of the record */
-	bool			temp)	/*!< in: whether to use the
+	bool			temp,	/*!< in: whether to use the
 					format for temporary files in
 					index creation */
+	ibool			rec_comfort)
+					/*!< in: whether comfort record */
 {
 	const dfield_t*	field;
 	const dtype_t*	type;
@@ -1154,6 +1283,7 @@ rec_convert_dtuple_to_rec_comp(
 	ulint		fixed_len;
 	ulint		null_mask	= 1;
 	ulint		n_null;
+	ulint		n_null_by_fields;
 
 	ut_ad(temp || dict_table_is_comp(index->table));
 	ut_ad(n_fields > 0);
@@ -1175,16 +1305,34 @@ rec_convert_dtuple_to_rec_comp(
 		case REC_STATUS_ORDINARY:
 			ut_ad(n_fields <= dict_index_get_n_fields(index));
 			n_node_ptr_field = ULINT_UNDEFINED;
+
+			ut_a(dict_table_is_comp(index->table));
+
+			if (rec_comfort) {
+				n_null_by_fields = n_fields;
+				nulls = nulls - rec_get_n_fields_bytes_comfort(n_null_by_fields);
+				ut_ad(n_fields == dict_index_get_n_fields(index));
+			}
 			break;
 		case REC_STATUS_NODE_PTR:
 			ut_ad(n_fields
 			      == dict_index_get_n_unique_in_tree(index) + 1);
 			n_node_ptr_field = n_fields - 1;
+
+			if (rec_comfort) {
+				n_null_by_fields = n_fields -1;
+				nulls = nulls - rec_get_n_fields_bytes_comfort(n_null_by_fields);
+			}
 			break;
 		case REC_STATUS_INFIMUM:
 		case REC_STATUS_SUPREMUM:
 			ut_ad(n_fields == 1);
+			ut_ad(index->n_nullable == 0);
 			n_node_ptr_field = ULINT_UNDEFINED;
+
+			/* infimum and supermum keep original. */
+			rec_comfort = false;
+
 			break;
 		default:
 			ut_error;
@@ -1193,13 +1341,20 @@ rec_convert_dtuple_to_rec_comp(
 	}
 
 	end = rec;
-	n_null = index->n_nullable;
+	if (rec_comfort) {
+		n_null = index->n_null_arr[n_null_by_fields - 1];
+	} else {
+		n_null = index->n_nullable;
+	}
 	lens = nulls - UT_BITS_IN_BYTES(n_null);
 	/* clear the SQL-null flags */
 	memset(lens + 1, 0, nulls - lens);
 
-	/* Store the data and the offsets */
-
+	/* Store the n_fields */
+	if (rec_comfort) {
+		rec_set_n_fields_comfort(rec, n_null_by_fields);
+	}
+	/* maybe not full tuple as the index. such as search by pk.*/
 	for (i = 0, field = fields; i < n_fields; i++, field++) {
 		const dict_field_t*	ifield;
 
@@ -1306,14 +1461,18 @@ rec_convert_dtuple_to_rec_new(
 	ulint	extra_size;
 	ulint	status;
 	rec_t*	rec;
+	ibool	rec_comfort;
+
+	rec_comfort = dtuple_get_info_bits(dtuple) & REC_INFO_REC_COMFORT_FLAG;
 
 	status = dtuple_get_info_bits(dtuple) & REC_NEW_STATUS_MASK;
+
 	rec_get_converted_size_comp(
-		index, status, dtuple->fields, dtuple->n_fields, &extra_size);
+		index, status, dtuple->fields, dtuple->n_fields, &extra_size, rec_comfort);
 	rec = buf + extra_size;
 
 	rec_convert_dtuple_to_rec_comp(
-		rec, index, dtuple->fields, dtuple->n_fields, status, false);
+		rec, index, dtuple->fields, dtuple->n_fields, status, false, rec_comfort);
 
 	/* Set the info bits of the record */
 	rec_set_info_and_status_bits(rec, dtuple_get_info_bits(dtuple));
@@ -1373,6 +1532,15 @@ rec_convert_dtuple_to_rec(
 			mem_heap_free(heap);
 		}
 	}
+
+	if (dict_table_is_comp(index->table)) {
+		ulint rec_comfort = dtuple_get_info_bits(dtuple)
+					& REC_INFO_REC_COMFORT_FLAG;
+		if (rec_comfort) {
+			ut_ad(rec_get_rec_comfort_flag(rec));
+			ut_ad(rec_get_n_fields_comfort(rec) > 0);
+		}
+	}
 #endif /* UNIV_DEBUG */
 	return(rec);
 }
@@ -1391,7 +1559,8 @@ rec_get_converted_size_temp(
 	ulint*			extra)	/*!< out: extra size */
 {
 	return(rec_get_converted_size_comp_prefix_low(
-		       index, fields, n_fields, extra, true));
+		       index, fields, n_fields, extra, true,
+		       ULINT_UNDEFINED, ULINT_UNDEFINED, 0));
 }
 
 /******************************************************//**
@@ -1403,10 +1572,13 @@ rec_init_offsets_temp(
 /*==================*/
 	const rec_t*		rec,	/*!< in: temporary file record */
 	const dict_index_t*	index,	/*!< in: record descriptor */
-	ulint*			offsets)/*!< in/out: array of offsets;
+	ulint*			offsets,/*!< in/out: array of offsets;
 					in: n=rec_offs_n_fields(offsets) */
+	ulint			rec_comfort)
+					/*!< in: whether comfort record */
 {
-	rec_init_offsets_comp_ordinary(rec, true, index, offsets);
+        /* REC_COMFORT didn't support temp table. */
+	rec_init_offsets_comp_ordinary(rec, true, index, offsets, rec_comfort);
 }
 
 /*********************************************************//**
@@ -1422,7 +1594,7 @@ rec_convert_dtuple_to_temp(
 	ulint			n_fields)	/*!< in: number of fields */
 {
 	rec_convert_dtuple_to_rec_comp(rec, index, fields, n_fields,
-				       REC_STATUS_ORDINARY, true);
+				       REC_STATUS_ORDINARY, true, false);
 }
 
 /**************************************************************//**
@@ -1449,6 +1621,7 @@ rec_copy_prefix_to_dtuple(
 	ut_ad(rec_validate(rec, offsets));
 	ut_ad(dtuple_check_typed(tuple));
 
+	/* Inherit the record info bits */
 	dtuple_set_info_bits(tuple, rec_get_info_bits(
 				     rec, dict_table_is_comp(index->table)));
 
@@ -1537,6 +1710,9 @@ rec_copy_prefix_to_buf(
 	ulint		prefix_len;
 	ulint		null_mask;
 	ulint		status;
+	ulint		rec_comfort;
+	ulint		rec_fields = 0;
+	ulint		n_null = 0;
 
 	UNIV_PREFETCH_RW(*buf);
 
@@ -1549,6 +1725,7 @@ rec_copy_prefix_to_buf(
 	}
 
 	status = rec_get_status(rec);
+	rec_comfort = rec_get_rec_comfort_flag(rec);
 
 	switch (status) {
 	case REC_STATUS_ORDINARY:
@@ -1566,8 +1743,24 @@ rec_copy_prefix_to_buf(
 		return(NULL);
 	}
 
+
 	nulls = rec - (REC_N_NEW_EXTRA_BYTES + 1);
-	lens = nulls - UT_BITS_IN_BYTES(index->n_nullable);
+
+	if (rec_comfort) {
+		rec_fields = rec_get_n_fields_comfort(rec);
+		nulls = nulls - rec_get_n_fields_bytes_comfort(rec_fields);
+		ut_ad(rec_fields > 0);
+		/* Cluster index branch node will never changed. */
+		if (status == REC_STATUS_NODE_PTR) {
+			ut_ad(rec_fields
+				== dict_index_get_n_unique_in_tree(index));
+		}
+		n_null = index->n_null_arr[rec_fields - 1];
+	} else {
+		n_null = index->n_nullable;
+	}
+
+	lens = nulls - UT_BITS_IN_BYTES(n_null);
 	UNIV_PREFETCH_R(lens);
 	prefix_len = 0;
 	null_mask = 1;
@@ -1579,6 +1772,10 @@ rec_copy_prefix_to_buf(
 
 		field = dict_index_get_nth_field(index, i);
 		col = dict_field_get_col(field);
+		if (rec_comfort && i >= rec_fields) {
+			ut_ad(!(col->prtype & DATA_NOT_NULL));
+			continue;
+		}
 
 		if (!(col->prtype & DATA_NOT_NULL)) {
 			/* nullable field => read the null flag */

@@ -1127,6 +1127,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  COLUMN_SYM                    /* SQL-2003-R */
 %token  COLUMN_FORMAT_SYM
 %token  COLUMN_NAME_SYM               /* SQL-2003-N */
+%token  COMFORT_SYM
 %token  COMMENT_SYM
 %token  COMMITTED_SYM                 /* SQL-2003-N */
 %token  COMMIT_SYM                    /* SQL-2003-R */
@@ -6392,6 +6393,7 @@ row_types:
         | TOKU_LZMA_SYM         { $$= ROW_TYPE_TOKU_LZMA; }
         | TOKU_FAST_SYM         { $$= ROW_TYPE_TOKU_FAST; }
         | TOKU_SMALL_SYM        { $$= ROW_TYPE_TOKU_SMALL; }
+        | COMFORT_SYM    { $$= ROW_TYPE_COMFORT; }
         ;
 
 merge_insert_types:
@@ -14452,6 +14454,7 @@ keyword_sp:
         | COLUMN_NAME_SYM          {}
         | COLUMN_FORMAT_SYM        {}
         | COLUMNS                  {}
+        | COMFORT_SYM              {}
         | COMMITTED_SYM            {}
         | COMPACT_SYM              {}
         | COMPLETION_SYM           {}

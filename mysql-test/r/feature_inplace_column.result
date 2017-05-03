@@ -1,0 +1,1136 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+create table t(id int primary key auto_increment,
+col1 int,
+col2 char(100),
+col3 varchar(100),
+key ind_1(col1),
+key ind_2(col2),
+key ind_3(col3))engine=innodb row_format=comfort;
+insert into t values(1, 2, 'xp', 'xpchild');
+commit;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+select count(*) from t;
+count(*)
+256
+checksum table t;
+Table	Checksum
+test.t	4121441081
+alter table t add col4 varchar(1000);
+select col4 from t limit 10;
+col4
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+checksum table t;
+Table	Checksum
+test.t	4121441081
+update t set col4=concat(col3, id);
+commit;
+select col4 from t limit 10;
+col4
+xpchild1
+xpchild2
+xpchild3
+xpchild4
+xpchild6
+xpchild7
+xpchild8
+xpchild9
+xpchild13
+xpchild14
+checksum table t;
+Table	Checksum
+test.t	2445242583
+###########################################
+delete and insert same record
+###########################################
+delete from t where id=1;
+insert into t values(1, 2, 'xp', 'xpchild', 'xp');
+commit;
+select * from t where id=1;
+id	col1	col2	col3	col4
+1	2	xp	xpchild	xp
+###########################################
+create index on added column
+###########################################
+create index t_ind_4 on t(col4);
+Warnings:
+Warning	1071	Specified key was too long; max key length is 767 bytes
+select * from t where col4='xp';
+id	col1	col2	col3	col4
+1	2	xp	xpchild	xp
+###########################################
+alter table add more than one column
+###########################################
+alter table t add col5 int, add col6 int;
+select * from t where id=1;
+id	col1	col2	col3	col4	col5	col6
+1	2	xp	xpchild	xp	NULL	NULL
+include/rpl_restart_server.inc [server_number=1]
+use test;
+select * from t where id=1;
+id	col1	col2	col3	col4	col5	col6
+1	2	xp	xpchild	xp	NULL	NULL
+###########################################
+alter table add clob column
+###########################################
+alter table t add col7 text;
+select * from t where id=1;
+id	col1	col2	col3	col4	col5	col6	col7
+1	2	xp	xpchild	xp	NULL	NULL	NULL
+update t set col7=repeat('xpchild', 20) where id=1;
+commit;
+select * from t where id=1 or id =2;
+id	col1	col2	col3	col4	col5	col6	col7
+1	2	xp	xpchild	xp	NULL	NULL	xpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchildxpchild
+2	2	xp	xpchild	xpchild2	NULL	NULL	NULL
+###########################################
+transport tablespace
+###########################################
+show create table test.t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` varchar(100) DEFAULT NULL,
+  `col4` varchar(1000) DEFAULT NULL,
+  `col5` int(11) DEFAULT NULL,
+  `col6` int(11) DEFAULT NULL,
+  `col7` text,
+  PRIMARY KEY (`id`),
+  KEY `ind_1` (`col1`),
+  KEY `ind_2` (`col2`),
+  KEY `ind_3` (`col3`),
+  KEY `t_ind_4` (`col4`(767))
+) ENGINE=InnoDB AUTO_INCREMENT=377 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+create database db_1;
+use test;
+flush table t for export;
+use db_1;
+CREATE TABLE `t` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`col1` int(11) DEFAULT NULL,
+`col2` char(100) DEFAULT NULL,
+`col3` varchar(100) DEFAULT NULL,
+`col4` varchar(1000) DEFAULT NULL,
+`col5` int(11) DEFAULT NULL,
+`col6` int(11) DEFAULT NULL,
+`col7` text,
+PRIMARY KEY (`id`),
+KEY `ind_1` (`col1`),
+KEY `ind_2` (`col2`),
+KEY `ind_3` (`col3`),
+KEY `t_ind_4` (`col4`(767))
+) ENGINE=InnoDB  ROW_FORMAT=COMFORT;
+set sql_log_bin=off;
+alter table t discard tablespace;
+alter table t import tablespace;
+select count(*) from t;
+count(*)
+256
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` varchar(100) DEFAULT NULL,
+  `col4` varchar(1000) DEFAULT NULL,
+  `col5` int(11) DEFAULT NULL,
+  `col6` int(11) DEFAULT NULL,
+  `col7` text,
+  PRIMARY KEY (`id`),
+  KEY `ind_1` (`col1`),
+  KEY `ind_2` (`col2`),
+  KEY `ind_3` (`col3`),
+  KEY `t_ind_4` (`col4`(767))
+) ENGINE=InnoDB AUTO_INCREMENT=377 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+checksum table t;
+Table	Checksum
+db_1.t	884810925
+use test;
+unlock tables;
+checksum table db_1.t;
+Table	Checksum
+db_1.t	884810925
+checksum table test.t;
+Table	Checksum
+test.t	884810925
+drop table db_1.t;
+drop database db_1;
+###########################################
+online copy data operation
+###########################################
+alter table t drop index ind_1;
+alter table t drop index ind_2;
+alter table t drop index ind_3;
+alter table t drop index t_ind_4;
+alter table t drop column col3, drop column col4, drop column col5, drop column col6, drop column col7;
+alter table t add col3 int default 10;
+alter table t row_format=compact;
+alter table t row_format=comfort;
+alter table t add col4 int;
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` int(11) DEFAULT '10',
+  `col4` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=377 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*) from t;
+count(*)
+256
+checksum table t;
+Table	Checksum
+test.t	3716192793
+###########################################
+online dml operation
+###########################################
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+alter table t add col5 int;;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, id) where id <100;
+update t set col3=concat(col3, id) where id <100;
+update t set id=2000000 where id= 7;
+select * from t where id=2000000;
+id	col1	col2	col3	col4
+2000000	2	xp7	107	NULL
+delete from t where id >100 and id <200;
+commit;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` int(11) DEFAULT '10',
+  `col4` int(11) DEFAULT NULL,
+  `col5` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=888 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*)  from t;
+count(*)
+448
+checksum table t;
+Table	Checksum
+test.t	2204218509
+###########################################
+online copy data  and dml operation
+###########################################
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+alter table t add col6 int default 100;;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, id) where id <200;
+update t set col3=concat(col3, id) where id <200;
+update t set id=1000000 where id=6;
+select * from t where id=1000000;
+id	col1	col2	col3	col4	col5
+1000000	2	xp66	1066	NULL	NULL
+delete from t where id >200 and id <300;
+commit;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` int(11) DEFAULT '10',
+  `col4` int(11) DEFAULT NULL,
+  `col5` int(11) DEFAULT NULL,
+  `col6` int(11) DEFAULT '100',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1399 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*)  from t;
+count(*)
+845
+checksum table t;
+Table	Checksum
+test.t	35111721
+###########################################
+online index data and dml operation
+###########################################
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+alter table t add index ind_col4(col4);;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, id) where id <200;
+update t set col3=concat(col3, id) where id <200;
+update t set col4=100 where id <200;
+delete from t where id >300 and id <400;
+commit;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` int(11) DEFAULT '10',
+  `col4` int(11) DEFAULT NULL,
+  `col5` int(11) DEFAULT NULL,
+  `col6` int(11) DEFAULT '100',
+  PRIMARY KEY (`id`),
+  KEY `ind_col4` (`col4`)
+) ENGINE=InnoDB AUTO_INCREMENT=2422 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*)  from t;
+count(*)
+1591
+checksum table t;
+Table	Checksum
+test.t	81458920
+###########################################
+>127 col
+###########################################
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+alter table t add column col10 int, add column col11 int, add column col12 int, add column col13 int, add column col14 int, add column col15 int, add column col16 int, add column col17 int, add column col18 int, add column col19 int, add column col20 int, add column col21 int, add column col22 int, add column col23 int, add column col24 int, add column col25 int, add column col26 int, add column col27 int, add column col28 int, add column col29 int, add column col30 int, add column col31 int, add column col32 int, add column col33 int, add column col34 int, add column col35 int, add column col36 int, add column col37 int, add column col38 int, add column col39 int, add column col40 int, add column col41 int, add column col42 int, add column col43 int, add column col44 int, add column col45 int, add column col46 int, add column col47 int, add column col48 int, add column col49 int, add column col50 int, add column col51 int, add column col52 int, add column col53 int, add column col54 int, add column col55 int, add column col56 int, add column col57 int, add column col58 int, add column col59 int, add column col60 int, add column col61 int, add column col62 int, add column col63 int, add column col64 int, add column col65 int, add column col66 int, add column col67 int, add column col68 int, add column col69 int, add column col70 int, add column col71 int, add column col72 int, add column col73 int, add column col74 int, add column col75 int, add column col76 int, add column col77 int, add column col78 int, add column col79 int, add column col80 int, add column col81 int, add column col82 int, add column col83 int, add column col84 int, add column col85 int, add column col86 int, add column col87 int, add column col88 int, add column col89 int, add column col90 int, add column col91 int, add column col92 int, add column col93 int, add column col94 int, add column col95 int, add column col96 int, add column col97 int, add column col98 int, add column col99 int, add column col100 int, add column col101 int, add column col102 int, add column col103 int, add column col104 int, add column col105 int, add column col106 int, add column col107 int, add column col108 int, add column col109 int, add column col110 int, add column col111 int, add column col112 int, add column col113 int, add column col114 int, add column col115 int, add column col116 int, add column col117 int, add column col118 int, add column col119 int, add column col120 int, add column col121 int, add column col122 int, add column col123 int, add column col124 int, add column col125 int, add column col126 int, add column col127 int, add column col128 int, add column col129 int, add column col130 int, add column col131 int, add column col132 int, add column col133 int, add column col134 int, add column col135 int, add column col136 int, add column col137 int, add column col138 int, add column col139 int, add column col140 int, add column col141 int, add column col142 int, add column col143 int, add column col144 int, add column col145 int, add column col146 int, add column col147 int, add column col148 int, add column col149 int, add column col150 int, add column col151 int, add column col152 int, add column col153 int, add column col154 int, add column col155 int, add column col156 int, add column col157 int, add column col158 int, add column col159 int, add column col160 int, add column col161 int, add column col162 int, add column col163 int, add column col164 int, add column col165 int, add column col166 int, add column col167 int, add column col168 int, add column col169 int, add column col170 int, add column col171 int, add column col172 int, add column col173 int, add column col174 int, add column col175 int, add column col176 int, add column col177 int, add column col178 int, add column col179 int, add column col180 int, add column col181 int, add column col182 int, add column col183 int, add column col184 int, add column col185 int, add column col186 int, add column col187 int, add column col188 int, add column col189 int, add column col190 int, add column col191 int, add column col192 int, add column col193 int, add column col194 int, add column col195 int, add column col196 int, add column col197 int, add column col198 int, add column col199 int, add column col200 int, add column col201 int, add column col202 int, add column col203 int, add column col204 int, add column col205 int, add column col206 int, add column col207 int, add column col208 int, add column col209 int, add column col210 int, add column col211 int, add column col212 int, add column col213 int, add column col214 int, add column col215 int, add column col216 int, add column col217 int, add column col218 int, add column col219 int, add column col220 int, add column col221 int, add column col222 int, add column col223 int, add column col224 int, add column col225 int, add column col226 int, add column col227 int, add column col228 int, add column col229 int, add column col230 int, add column col231 int, add column col232 int, add column col233 int, add column col234 int, add column col235 int, add column col236 int, add column col237 int, add column col238 int, add column col239 int, add column col240 int, add column col241 int, add column col242 int, add column col243 int, add column col244 int, add column col245 int, add column col246 int, add column col247 int, add column col248 int, add column col249 int, add column col250 int, add column col251 int, add column col252 int, add column col253 int, add column col254 int, add column col255 int, add column col256 int, add column col257 int, add column col258 int, add column col259 int, add column col260 int, add column col261 int, add column col262 int, add column col263 int, add column col264 int, add column col265 int, add column col266 int, add column col267 int, add column col268 int, add column col269 int, add column col270 int, add column col271 int, add column col272 int, add column col273 int, add column col274 int, add column col275 int, add column col276 int, add column col277 int, add column col278 int, add column col279 int, add column col280 int, add column col281 int, add column col282 int, add column col283 int, add column col284 int, add column col285 int, add column col286 int, add column col287 int, add column col288 int, add column col289 int, add column col290 int, add column col291 int, add column col292 int, add column col293 int, add column col294 int, add column col295 int, add column col296 int, add column col297 int, add column col298 int, add column col299 int;;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, id) where id <200;
+update t set col3=concat(col3, id) where id <200;
+delete from t where id >300 and id <400;
+commit;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` int(11) DEFAULT '10',
+  `col4` int(11) DEFAULT NULL,
+  `col5` int(11) DEFAULT NULL,
+  `col6` int(11) DEFAULT '100',
+  `col10` int(11) DEFAULT NULL,
+  `col11` int(11) DEFAULT NULL,
+  `col12` int(11) DEFAULT NULL,
+  `col13` int(11) DEFAULT NULL,
+  `col14` int(11) DEFAULT NULL,
+  `col15` int(11) DEFAULT NULL,
+  `col16` int(11) DEFAULT NULL,
+  `col17` int(11) DEFAULT NULL,
+  `col18` int(11) DEFAULT NULL,
+  `col19` int(11) DEFAULT NULL,
+  `col20` int(11) DEFAULT NULL,
+  `col21` int(11) DEFAULT NULL,
+  `col22` int(11) DEFAULT NULL,
+  `col23` int(11) DEFAULT NULL,
+  `col24` int(11) DEFAULT NULL,
+  `col25` int(11) DEFAULT NULL,
+  `col26` int(11) DEFAULT NULL,
+  `col27` int(11) DEFAULT NULL,
+  `col28` int(11) DEFAULT NULL,
+  `col29` int(11) DEFAULT NULL,
+  `col30` int(11) DEFAULT NULL,
+  `col31` int(11) DEFAULT NULL,
+  `col32` int(11) DEFAULT NULL,
+  `col33` int(11) DEFAULT NULL,
+  `col34` int(11) DEFAULT NULL,
+  `col35` int(11) DEFAULT NULL,
+  `col36` int(11) DEFAULT NULL,
+  `col37` int(11) DEFAULT NULL,
+  `col38` int(11) DEFAULT NULL,
+  `col39` int(11) DEFAULT NULL,
+  `col40` int(11) DEFAULT NULL,
+  `col41` int(11) DEFAULT NULL,
+  `col42` int(11) DEFAULT NULL,
+  `col43` int(11) DEFAULT NULL,
+  `col44` int(11) DEFAULT NULL,
+  `col45` int(11) DEFAULT NULL,
+  `col46` int(11) DEFAULT NULL,
+  `col47` int(11) DEFAULT NULL,
+  `col48` int(11) DEFAULT NULL,
+  `col49` int(11) DEFAULT NULL,
+  `col50` int(11) DEFAULT NULL,
+  `col51` int(11) DEFAULT NULL,
+  `col52` int(11) DEFAULT NULL,
+  `col53` int(11) DEFAULT NULL,
+  `col54` int(11) DEFAULT NULL,
+  `col55` int(11) DEFAULT NULL,
+  `col56` int(11) DEFAULT NULL,
+  `col57` int(11) DEFAULT NULL,
+  `col58` int(11) DEFAULT NULL,
+  `col59` int(11) DEFAULT NULL,
+  `col60` int(11) DEFAULT NULL,
+  `col61` int(11) DEFAULT NULL,
+  `col62` int(11) DEFAULT NULL,
+  `col63` int(11) DEFAULT NULL,
+  `col64` int(11) DEFAULT NULL,
+  `col65` int(11) DEFAULT NULL,
+  `col66` int(11) DEFAULT NULL,
+  `col67` int(11) DEFAULT NULL,
+  `col68` int(11) DEFAULT NULL,
+  `col69` int(11) DEFAULT NULL,
+  `col70` int(11) DEFAULT NULL,
+  `col71` int(11) DEFAULT NULL,
+  `col72` int(11) DEFAULT NULL,
+  `col73` int(11) DEFAULT NULL,
+  `col74` int(11) DEFAULT NULL,
+  `col75` int(11) DEFAULT NULL,
+  `col76` int(11) DEFAULT NULL,
+  `col77` int(11) DEFAULT NULL,
+  `col78` int(11) DEFAULT NULL,
+  `col79` int(11) DEFAULT NULL,
+  `col80` int(11) DEFAULT NULL,
+  `col81` int(11) DEFAULT NULL,
+  `col82` int(11) DEFAULT NULL,
+  `col83` int(11) DEFAULT NULL,
+  `col84` int(11) DEFAULT NULL,
+  `col85` int(11) DEFAULT NULL,
+  `col86` int(11) DEFAULT NULL,
+  `col87` int(11) DEFAULT NULL,
+  `col88` int(11) DEFAULT NULL,
+  `col89` int(11) DEFAULT NULL,
+  `col90` int(11) DEFAULT NULL,
+  `col91` int(11) DEFAULT NULL,
+  `col92` int(11) DEFAULT NULL,
+  `col93` int(11) DEFAULT NULL,
+  `col94` int(11) DEFAULT NULL,
+  `col95` int(11) DEFAULT NULL,
+  `col96` int(11) DEFAULT NULL,
+  `col97` int(11) DEFAULT NULL,
+  `col98` int(11) DEFAULT NULL,
+  `col99` int(11) DEFAULT NULL,
+  `col100` int(11) DEFAULT NULL,
+  `col101` int(11) DEFAULT NULL,
+  `col102` int(11) DEFAULT NULL,
+  `col103` int(11) DEFAULT NULL,
+  `col104` int(11) DEFAULT NULL,
+  `col105` int(11) DEFAULT NULL,
+  `col106` int(11) DEFAULT NULL,
+  `col107` int(11) DEFAULT NULL,
+  `col108` int(11) DEFAULT NULL,
+  `col109` int(11) DEFAULT NULL,
+  `col110` int(11) DEFAULT NULL,
+  `col111` int(11) DEFAULT NULL,
+  `col112` int(11) DEFAULT NULL,
+  `col113` int(11) DEFAULT NULL,
+  `col114` int(11) DEFAULT NULL,
+  `col115` int(11) DEFAULT NULL,
+  `col116` int(11) DEFAULT NULL,
+  `col117` int(11) DEFAULT NULL,
+  `col118` int(11) DEFAULT NULL,
+  `col119` int(11) DEFAULT NULL,
+  `col120` int(11) DEFAULT NULL,
+  `col121` int(11) DEFAULT NULL,
+  `col122` int(11) DEFAULT NULL,
+  `col123` int(11) DEFAULT NULL,
+  `col124` int(11) DEFAULT NULL,
+  `col125` int(11) DEFAULT NULL,
+  `col126` int(11) DEFAULT NULL,
+  `col127` int(11) DEFAULT NULL,
+  `col128` int(11) DEFAULT NULL,
+  `col129` int(11) DEFAULT NULL,
+  `col130` int(11) DEFAULT NULL,
+  `col131` int(11) DEFAULT NULL,
+  `col132` int(11) DEFAULT NULL,
+  `col133` int(11) DEFAULT NULL,
+  `col134` int(11) DEFAULT NULL,
+  `col135` int(11) DEFAULT NULL,
+  `col136` int(11) DEFAULT NULL,
+  `col137` int(11) DEFAULT NULL,
+  `col138` int(11) DEFAULT NULL,
+  `col139` int(11) DEFAULT NULL,
+  `col140` int(11) DEFAULT NULL,
+  `col141` int(11) DEFAULT NULL,
+  `col142` int(11) DEFAULT NULL,
+  `col143` int(11) DEFAULT NULL,
+  `col144` int(11) DEFAULT NULL,
+  `col145` int(11) DEFAULT NULL,
+  `col146` int(11) DEFAULT NULL,
+  `col147` int(11) DEFAULT NULL,
+  `col148` int(11) DEFAULT NULL,
+  `col149` int(11) DEFAULT NULL,
+  `col150` int(11) DEFAULT NULL,
+  `col151` int(11) DEFAULT NULL,
+  `col152` int(11) DEFAULT NULL,
+  `col153` int(11) DEFAULT NULL,
+  `col154` int(11) DEFAULT NULL,
+  `col155` int(11) DEFAULT NULL,
+  `col156` int(11) DEFAULT NULL,
+  `col157` int(11) DEFAULT NULL,
+  `col158` int(11) DEFAULT NULL,
+  `col159` int(11) DEFAULT NULL,
+  `col160` int(11) DEFAULT NULL,
+  `col161` int(11) DEFAULT NULL,
+  `col162` int(11) DEFAULT NULL,
+  `col163` int(11) DEFAULT NULL,
+  `col164` int(11) DEFAULT NULL,
+  `col165` int(11) DEFAULT NULL,
+  `col166` int(11) DEFAULT NULL,
+  `col167` int(11) DEFAULT NULL,
+  `col168` int(11) DEFAULT NULL,
+  `col169` int(11) DEFAULT NULL,
+  `col170` int(11) DEFAULT NULL,
+  `col171` int(11) DEFAULT NULL,
+  `col172` int(11) DEFAULT NULL,
+  `col173` int(11) DEFAULT NULL,
+  `col174` int(11) DEFAULT NULL,
+  `col175` int(11) DEFAULT NULL,
+  `col176` int(11) DEFAULT NULL,
+  `col177` int(11) DEFAULT NULL,
+  `col178` int(11) DEFAULT NULL,
+  `col179` int(11) DEFAULT NULL,
+  `col180` int(11) DEFAULT NULL,
+  `col181` int(11) DEFAULT NULL,
+  `col182` int(11) DEFAULT NULL,
+  `col183` int(11) DEFAULT NULL,
+  `col184` int(11) DEFAULT NULL,
+  `col185` int(11) DEFAULT NULL,
+  `col186` int(11) DEFAULT NULL,
+  `col187` int(11) DEFAULT NULL,
+  `col188` int(11) DEFAULT NULL,
+  `col189` int(11) DEFAULT NULL,
+  `col190` int(11) DEFAULT NULL,
+  `col191` int(11) DEFAULT NULL,
+  `col192` int(11) DEFAULT NULL,
+  `col193` int(11) DEFAULT NULL,
+  `col194` int(11) DEFAULT NULL,
+  `col195` int(11) DEFAULT NULL,
+  `col196` int(11) DEFAULT NULL,
+  `col197` int(11) DEFAULT NULL,
+  `col198` int(11) DEFAULT NULL,
+  `col199` int(11) DEFAULT NULL,
+  `col200` int(11) DEFAULT NULL,
+  `col201` int(11) DEFAULT NULL,
+  `col202` int(11) DEFAULT NULL,
+  `col203` int(11) DEFAULT NULL,
+  `col204` int(11) DEFAULT NULL,
+  `col205` int(11) DEFAULT NULL,
+  `col206` int(11) DEFAULT NULL,
+  `col207` int(11) DEFAULT NULL,
+  `col208` int(11) DEFAULT NULL,
+  `col209` int(11) DEFAULT NULL,
+  `col210` int(11) DEFAULT NULL,
+  `col211` int(11) DEFAULT NULL,
+  `col212` int(11) DEFAULT NULL,
+  `col213` int(11) DEFAULT NULL,
+  `col214` int(11) DEFAULT NULL,
+  `col215` int(11) DEFAULT NULL,
+  `col216` int(11) DEFAULT NULL,
+  `col217` int(11) DEFAULT NULL,
+  `col218` int(11) DEFAULT NULL,
+  `col219` int(11) DEFAULT NULL,
+  `col220` int(11) DEFAULT NULL,
+  `col221` int(11) DEFAULT NULL,
+  `col222` int(11) DEFAULT NULL,
+  `col223` int(11) DEFAULT NULL,
+  `col224` int(11) DEFAULT NULL,
+  `col225` int(11) DEFAULT NULL,
+  `col226` int(11) DEFAULT NULL,
+  `col227` int(11) DEFAULT NULL,
+  `col228` int(11) DEFAULT NULL,
+  `col229` int(11) DEFAULT NULL,
+  `col230` int(11) DEFAULT NULL,
+  `col231` int(11) DEFAULT NULL,
+  `col232` int(11) DEFAULT NULL,
+  `col233` int(11) DEFAULT NULL,
+  `col234` int(11) DEFAULT NULL,
+  `col235` int(11) DEFAULT NULL,
+  `col236` int(11) DEFAULT NULL,
+  `col237` int(11) DEFAULT NULL,
+  `col238` int(11) DEFAULT NULL,
+  `col239` int(11) DEFAULT NULL,
+  `col240` int(11) DEFAULT NULL,
+  `col241` int(11) DEFAULT NULL,
+  `col242` int(11) DEFAULT NULL,
+  `col243` int(11) DEFAULT NULL,
+  `col244` int(11) DEFAULT NULL,
+  `col245` int(11) DEFAULT NULL,
+  `col246` int(11) DEFAULT NULL,
+  `col247` int(11) DEFAULT NULL,
+  `col248` int(11) DEFAULT NULL,
+  `col249` int(11) DEFAULT NULL,
+  `col250` int(11) DEFAULT NULL,
+  `col251` int(11) DEFAULT NULL,
+  `col252` int(11) DEFAULT NULL,
+  `col253` int(11) DEFAULT NULL,
+  `col254` int(11) DEFAULT NULL,
+  `col255` int(11) DEFAULT NULL,
+  `col256` int(11) DEFAULT NULL,
+  `col257` int(11) DEFAULT NULL,
+  `col258` int(11) DEFAULT NULL,
+  `col259` int(11) DEFAULT NULL,
+  `col260` int(11) DEFAULT NULL,
+  `col261` int(11) DEFAULT NULL,
+  `col262` int(11) DEFAULT NULL,
+  `col263` int(11) DEFAULT NULL,
+  `col264` int(11) DEFAULT NULL,
+  `col265` int(11) DEFAULT NULL,
+  `col266` int(11) DEFAULT NULL,
+  `col267` int(11) DEFAULT NULL,
+  `col268` int(11) DEFAULT NULL,
+  `col269` int(11) DEFAULT NULL,
+  `col270` int(11) DEFAULT NULL,
+  `col271` int(11) DEFAULT NULL,
+  `col272` int(11) DEFAULT NULL,
+  `col273` int(11) DEFAULT NULL,
+  `col274` int(11) DEFAULT NULL,
+  `col275` int(11) DEFAULT NULL,
+  `col276` int(11) DEFAULT NULL,
+  `col277` int(11) DEFAULT NULL,
+  `col278` int(11) DEFAULT NULL,
+  `col279` int(11) DEFAULT NULL,
+  `col280` int(11) DEFAULT NULL,
+  `col281` int(11) DEFAULT NULL,
+  `col282` int(11) DEFAULT NULL,
+  `col283` int(11) DEFAULT NULL,
+  `col284` int(11) DEFAULT NULL,
+  `col285` int(11) DEFAULT NULL,
+  `col286` int(11) DEFAULT NULL,
+  `col287` int(11) DEFAULT NULL,
+  `col288` int(11) DEFAULT NULL,
+  `col289` int(11) DEFAULT NULL,
+  `col290` int(11) DEFAULT NULL,
+  `col291` int(11) DEFAULT NULL,
+  `col292` int(11) DEFAULT NULL,
+  `col293` int(11) DEFAULT NULL,
+  `col294` int(11) DEFAULT NULL,
+  `col295` int(11) DEFAULT NULL,
+  `col296` int(11) DEFAULT NULL,
+  `col297` int(11) DEFAULT NULL,
+  `col298` int(11) DEFAULT NULL,
+  `col299` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ind_col4` (`col4`)
+) ENGINE=InnoDB AUTO_INCREMENT=4469 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*)  from t;
+count(*)
+3182
+checksum table t;
+Table	Checksum
+test.t	2481479552
+###########################################
+temporary table
+###########################################
+use test;
+create temporary table t_t (
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+col3 int
+)engine=innodb row_format=comfort;
+Warnings:
+Warning	1478	InnoDB: ROW_FORMAT=COMFORT didn't support temporary table.
+Warning	1478	InnoDB: assuming ROW_FORMAT=COMPACT.
+insert into t_t values(1, 'xpchild', 1, 1);
+alter table t_t add col4 int;
+Warnings:
+Warning	1478	InnoDB: ROW_FORMAT=COMFORT didn't support temporary table.
+Warning	1478	InnoDB: assuming ROW_FORMAT=COMPACT.
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col1=concat(col1, id) where id <200;
+update t set col4=100 where id <200;
+delete from t where id >300 and id <400;
+commit;
+use test;
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` int(11) DEFAULT '10',
+  `col4` int(11) DEFAULT NULL,
+  `col5` int(11) DEFAULT NULL,
+  `col6` int(11) DEFAULT '100',
+  `col10` int(11) DEFAULT NULL,
+  `col11` int(11) DEFAULT NULL,
+  `col12` int(11) DEFAULT NULL,
+  `col13` int(11) DEFAULT NULL,
+  `col14` int(11) DEFAULT NULL,
+  `col15` int(11) DEFAULT NULL,
+  `col16` int(11) DEFAULT NULL,
+  `col17` int(11) DEFAULT NULL,
+  `col18` int(11) DEFAULT NULL,
+  `col19` int(11) DEFAULT NULL,
+  `col20` int(11) DEFAULT NULL,
+  `col21` int(11) DEFAULT NULL,
+  `col22` int(11) DEFAULT NULL,
+  `col23` int(11) DEFAULT NULL,
+  `col24` int(11) DEFAULT NULL,
+  `col25` int(11) DEFAULT NULL,
+  `col26` int(11) DEFAULT NULL,
+  `col27` int(11) DEFAULT NULL,
+  `col28` int(11) DEFAULT NULL,
+  `col29` int(11) DEFAULT NULL,
+  `col30` int(11) DEFAULT NULL,
+  `col31` int(11) DEFAULT NULL,
+  `col32` int(11) DEFAULT NULL,
+  `col33` int(11) DEFAULT NULL,
+  `col34` int(11) DEFAULT NULL,
+  `col35` int(11) DEFAULT NULL,
+  `col36` int(11) DEFAULT NULL,
+  `col37` int(11) DEFAULT NULL,
+  `col38` int(11) DEFAULT NULL,
+  `col39` int(11) DEFAULT NULL,
+  `col40` int(11) DEFAULT NULL,
+  `col41` int(11) DEFAULT NULL,
+  `col42` int(11) DEFAULT NULL,
+  `col43` int(11) DEFAULT NULL,
+  `col44` int(11) DEFAULT NULL,
+  `col45` int(11) DEFAULT NULL,
+  `col46` int(11) DEFAULT NULL,
+  `col47` int(11) DEFAULT NULL,
+  `col48` int(11) DEFAULT NULL,
+  `col49` int(11) DEFAULT NULL,
+  `col50` int(11) DEFAULT NULL,
+  `col51` int(11) DEFAULT NULL,
+  `col52` int(11) DEFAULT NULL,
+  `col53` int(11) DEFAULT NULL,
+  `col54` int(11) DEFAULT NULL,
+  `col55` int(11) DEFAULT NULL,
+  `col56` int(11) DEFAULT NULL,
+  `col57` int(11) DEFAULT NULL,
+  `col58` int(11) DEFAULT NULL,
+  `col59` int(11) DEFAULT NULL,
+  `col60` int(11) DEFAULT NULL,
+  `col61` int(11) DEFAULT NULL,
+  `col62` int(11) DEFAULT NULL,
+  `col63` int(11) DEFAULT NULL,
+  `col64` int(11) DEFAULT NULL,
+  `col65` int(11) DEFAULT NULL,
+  `col66` int(11) DEFAULT NULL,
+  `col67` int(11) DEFAULT NULL,
+  `col68` int(11) DEFAULT NULL,
+  `col69` int(11) DEFAULT NULL,
+  `col70` int(11) DEFAULT NULL,
+  `col71` int(11) DEFAULT NULL,
+  `col72` int(11) DEFAULT NULL,
+  `col73` int(11) DEFAULT NULL,
+  `col74` int(11) DEFAULT NULL,
+  `col75` int(11) DEFAULT NULL,
+  `col76` int(11) DEFAULT NULL,
+  `col77` int(11) DEFAULT NULL,
+  `col78` int(11) DEFAULT NULL,
+  `col79` int(11) DEFAULT NULL,
+  `col80` int(11) DEFAULT NULL,
+  `col81` int(11) DEFAULT NULL,
+  `col82` int(11) DEFAULT NULL,
+  `col83` int(11) DEFAULT NULL,
+  `col84` int(11) DEFAULT NULL,
+  `col85` int(11) DEFAULT NULL,
+  `col86` int(11) DEFAULT NULL,
+  `col87` int(11) DEFAULT NULL,
+  `col88` int(11) DEFAULT NULL,
+  `col89` int(11) DEFAULT NULL,
+  `col90` int(11) DEFAULT NULL,
+  `col91` int(11) DEFAULT NULL,
+  `col92` int(11) DEFAULT NULL,
+  `col93` int(11) DEFAULT NULL,
+  `col94` int(11) DEFAULT NULL,
+  `col95` int(11) DEFAULT NULL,
+  `col96` int(11) DEFAULT NULL,
+  `col97` int(11) DEFAULT NULL,
+  `col98` int(11) DEFAULT NULL,
+  `col99` int(11) DEFAULT NULL,
+  `col100` int(11) DEFAULT NULL,
+  `col101` int(11) DEFAULT NULL,
+  `col102` int(11) DEFAULT NULL,
+  `col103` int(11) DEFAULT NULL,
+  `col104` int(11) DEFAULT NULL,
+  `col105` int(11) DEFAULT NULL,
+  `col106` int(11) DEFAULT NULL,
+  `col107` int(11) DEFAULT NULL,
+  `col108` int(11) DEFAULT NULL,
+  `col109` int(11) DEFAULT NULL,
+  `col110` int(11) DEFAULT NULL,
+  `col111` int(11) DEFAULT NULL,
+  `col112` int(11) DEFAULT NULL,
+  `col113` int(11) DEFAULT NULL,
+  `col114` int(11) DEFAULT NULL,
+  `col115` int(11) DEFAULT NULL,
+  `col116` int(11) DEFAULT NULL,
+  `col117` int(11) DEFAULT NULL,
+  `col118` int(11) DEFAULT NULL,
+  `col119` int(11) DEFAULT NULL,
+  `col120` int(11) DEFAULT NULL,
+  `col121` int(11) DEFAULT NULL,
+  `col122` int(11) DEFAULT NULL,
+  `col123` int(11) DEFAULT NULL,
+  `col124` int(11) DEFAULT NULL,
+  `col125` int(11) DEFAULT NULL,
+  `col126` int(11) DEFAULT NULL,
+  `col127` int(11) DEFAULT NULL,
+  `col128` int(11) DEFAULT NULL,
+  `col129` int(11) DEFAULT NULL,
+  `col130` int(11) DEFAULT NULL,
+  `col131` int(11) DEFAULT NULL,
+  `col132` int(11) DEFAULT NULL,
+  `col133` int(11) DEFAULT NULL,
+  `col134` int(11) DEFAULT NULL,
+  `col135` int(11) DEFAULT NULL,
+  `col136` int(11) DEFAULT NULL,
+  `col137` int(11) DEFAULT NULL,
+  `col138` int(11) DEFAULT NULL,
+  `col139` int(11) DEFAULT NULL,
+  `col140` int(11) DEFAULT NULL,
+  `col141` int(11) DEFAULT NULL,
+  `col142` int(11) DEFAULT NULL,
+  `col143` int(11) DEFAULT NULL,
+  `col144` int(11) DEFAULT NULL,
+  `col145` int(11) DEFAULT NULL,
+  `col146` int(11) DEFAULT NULL,
+  `col147` int(11) DEFAULT NULL,
+  `col148` int(11) DEFAULT NULL,
+  `col149` int(11) DEFAULT NULL,
+  `col150` int(11) DEFAULT NULL,
+  `col151` int(11) DEFAULT NULL,
+  `col152` int(11) DEFAULT NULL,
+  `col153` int(11) DEFAULT NULL,
+  `col154` int(11) DEFAULT NULL,
+  `col155` int(11) DEFAULT NULL,
+  `col156` int(11) DEFAULT NULL,
+  `col157` int(11) DEFAULT NULL,
+  `col158` int(11) DEFAULT NULL,
+  `col159` int(11) DEFAULT NULL,
+  `col160` int(11) DEFAULT NULL,
+  `col161` int(11) DEFAULT NULL,
+  `col162` int(11) DEFAULT NULL,
+  `col163` int(11) DEFAULT NULL,
+  `col164` int(11) DEFAULT NULL,
+  `col165` int(11) DEFAULT NULL,
+  `col166` int(11) DEFAULT NULL,
+  `col167` int(11) DEFAULT NULL,
+  `col168` int(11) DEFAULT NULL,
+  `col169` int(11) DEFAULT NULL,
+  `col170` int(11) DEFAULT NULL,
+  `col171` int(11) DEFAULT NULL,
+  `col172` int(11) DEFAULT NULL,
+  `col173` int(11) DEFAULT NULL,
+  `col174` int(11) DEFAULT NULL,
+  `col175` int(11) DEFAULT NULL,
+  `col176` int(11) DEFAULT NULL,
+  `col177` int(11) DEFAULT NULL,
+  `col178` int(11) DEFAULT NULL,
+  `col179` int(11) DEFAULT NULL,
+  `col180` int(11) DEFAULT NULL,
+  `col181` int(11) DEFAULT NULL,
+  `col182` int(11) DEFAULT NULL,
+  `col183` int(11) DEFAULT NULL,
+  `col184` int(11) DEFAULT NULL,
+  `col185` int(11) DEFAULT NULL,
+  `col186` int(11) DEFAULT NULL,
+  `col187` int(11) DEFAULT NULL,
+  `col188` int(11) DEFAULT NULL,
+  `col189` int(11) DEFAULT NULL,
+  `col190` int(11) DEFAULT NULL,
+  `col191` int(11) DEFAULT NULL,
+  `col192` int(11) DEFAULT NULL,
+  `col193` int(11) DEFAULT NULL,
+  `col194` int(11) DEFAULT NULL,
+  `col195` int(11) DEFAULT NULL,
+  `col196` int(11) DEFAULT NULL,
+  `col197` int(11) DEFAULT NULL,
+  `col198` int(11) DEFAULT NULL,
+  `col199` int(11) DEFAULT NULL,
+  `col200` int(11) DEFAULT NULL,
+  `col201` int(11) DEFAULT NULL,
+  `col202` int(11) DEFAULT NULL,
+  `col203` int(11) DEFAULT NULL,
+  `col204` int(11) DEFAULT NULL,
+  `col205` int(11) DEFAULT NULL,
+  `col206` int(11) DEFAULT NULL,
+  `col207` int(11) DEFAULT NULL,
+  `col208` int(11) DEFAULT NULL,
+  `col209` int(11) DEFAULT NULL,
+  `col210` int(11) DEFAULT NULL,
+  `col211` int(11) DEFAULT NULL,
+  `col212` int(11) DEFAULT NULL,
+  `col213` int(11) DEFAULT NULL,
+  `col214` int(11) DEFAULT NULL,
+  `col215` int(11) DEFAULT NULL,
+  `col216` int(11) DEFAULT NULL,
+  `col217` int(11) DEFAULT NULL,
+  `col218` int(11) DEFAULT NULL,
+  `col219` int(11) DEFAULT NULL,
+  `col220` int(11) DEFAULT NULL,
+  `col221` int(11) DEFAULT NULL,
+  `col222` int(11) DEFAULT NULL,
+  `col223` int(11) DEFAULT NULL,
+  `col224` int(11) DEFAULT NULL,
+  `col225` int(11) DEFAULT NULL,
+  `col226` int(11) DEFAULT NULL,
+  `col227` int(11) DEFAULT NULL,
+  `col228` int(11) DEFAULT NULL,
+  `col229` int(11) DEFAULT NULL,
+  `col230` int(11) DEFAULT NULL,
+  `col231` int(11) DEFAULT NULL,
+  `col232` int(11) DEFAULT NULL,
+  `col233` int(11) DEFAULT NULL,
+  `col234` int(11) DEFAULT NULL,
+  `col235` int(11) DEFAULT NULL,
+  `col236` int(11) DEFAULT NULL,
+  `col237` int(11) DEFAULT NULL,
+  `col238` int(11) DEFAULT NULL,
+  `col239` int(11) DEFAULT NULL,
+  `col240` int(11) DEFAULT NULL,
+  `col241` int(11) DEFAULT NULL,
+  `col242` int(11) DEFAULT NULL,
+  `col243` int(11) DEFAULT NULL,
+  `col244` int(11) DEFAULT NULL,
+  `col245` int(11) DEFAULT NULL,
+  `col246` int(11) DEFAULT NULL,
+  `col247` int(11) DEFAULT NULL,
+  `col248` int(11) DEFAULT NULL,
+  `col249` int(11) DEFAULT NULL,
+  `col250` int(11) DEFAULT NULL,
+  `col251` int(11) DEFAULT NULL,
+  `col252` int(11) DEFAULT NULL,
+  `col253` int(11) DEFAULT NULL,
+  `col254` int(11) DEFAULT NULL,
+  `col255` int(11) DEFAULT NULL,
+  `col256` int(11) DEFAULT NULL,
+  `col257` int(11) DEFAULT NULL,
+  `col258` int(11) DEFAULT NULL,
+  `col259` int(11) DEFAULT NULL,
+  `col260` int(11) DEFAULT NULL,
+  `col261` int(11) DEFAULT NULL,
+  `col262` int(11) DEFAULT NULL,
+  `col263` int(11) DEFAULT NULL,
+  `col264` int(11) DEFAULT NULL,
+  `col265` int(11) DEFAULT NULL,
+  `col266` int(11) DEFAULT NULL,
+  `col267` int(11) DEFAULT NULL,
+  `col268` int(11) DEFAULT NULL,
+  `col269` int(11) DEFAULT NULL,
+  `col270` int(11) DEFAULT NULL,
+  `col271` int(11) DEFAULT NULL,
+  `col272` int(11) DEFAULT NULL,
+  `col273` int(11) DEFAULT NULL,
+  `col274` int(11) DEFAULT NULL,
+  `col275` int(11) DEFAULT NULL,
+  `col276` int(11) DEFAULT NULL,
+  `col277` int(11) DEFAULT NULL,
+  `col278` int(11) DEFAULT NULL,
+  `col279` int(11) DEFAULT NULL,
+  `col280` int(11) DEFAULT NULL,
+  `col281` int(11) DEFAULT NULL,
+  `col282` int(11) DEFAULT NULL,
+  `col283` int(11) DEFAULT NULL,
+  `col284` int(11) DEFAULT NULL,
+  `col285` int(11) DEFAULT NULL,
+  `col286` int(11) DEFAULT NULL,
+  `col287` int(11) DEFAULT NULL,
+  `col288` int(11) DEFAULT NULL,
+  `col289` int(11) DEFAULT NULL,
+  `col290` int(11) DEFAULT NULL,
+  `col291` int(11) DEFAULT NULL,
+  `col292` int(11) DEFAULT NULL,
+  `col293` int(11) DEFAULT NULL,
+  `col294` int(11) DEFAULT NULL,
+  `col295` int(11) DEFAULT NULL,
+  `col296` int(11) DEFAULT NULL,
+  `col297` int(11) DEFAULT NULL,
+  `col298` int(11) DEFAULT NULL,
+  `col299` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ind_col4` (`col4`)
+) ENGINE=InnoDB AUTO_INCREMENT=8564 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*)  from t;
+count(*)
+6364
+checksum table t;
+Table	Checksum
+test.t	945463901
+drop table t_t;
+###########################################
+foreign key
+###########################################
+use test;
+create table t_c(
+id int,
+col1 varchar(100),
+key ind_id(id)
+)engine=innodb row_format=comfort;
+create table t_p(id int primary key auto_increment,
+cid int,
+col1 varchar(100),
+key `cid`(`cid`),
+FOREIGN KEY (cid) REFERENCES t_c(id) ON DELETE CASCADE ON UPDATE CASCADE
+)engine =innodb row_format=comfort;
+insert into t_c values(1001, 'c_xpchild');
+insert into t_c values(1002, 'c_xpchild');
+insert into t_c values(2001, 'c_xpchild');
+insert into t_c values(2002, 'c_xpchild');
+insert into t_p values(1, 1001, 'p_xpchild');
+insert into t_p values(2, 1002, 'p_xpchild');
+insert into t_p values(3, 2001, 'p_xpchild');
+insert into t_p values(4, 2002, 'p_xpchild');
+commit;
+update t_c set id=10010 where id=1001;
+delete from t_c where id=1002;
+select * from t_c;
+id	col1
+10010	c_xpchild
+2001	c_xpchild
+2002	c_xpchild
+select * from t_p;
+id	cid	col1
+1	10010	p_xpchild
+3	2001	p_xpchild
+4	2002	p_xpchild
+drop table t_p;
+drop table t_c;
+###########################################
+alter change without clust_index
+###########################################
+use test;
+create table t_non_pk(id int, col1 varchar(100), col2 int, col3 int)row_format=comfort;
+insert into t_non_pk values(1, 'xpchild', 1, 1);
+commit;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+alter table t_non_pk add col4 int;;
+use test;
+insert into t_non_pk(col1, col2, col3) select col1, col2, col3 from t_non_pk;
+update t_non_pk set col1=concat(col2, id) where id <200;
+update t_non_pk set col3=100 where id <200;
+delete from t_non_pk where id >300;
+commit;
+use test;
+SET GLOBAL DEBUG='';
+show create table t_non_pk;
+Table	Create Table
+t_non_pk	CREATE TABLE `t_non_pk` (
+  `id` int(11) DEFAULT NULL,
+  `col1` varchar(100) DEFAULT NULL,
+  `col2` int(11) DEFAULT NULL,
+  `col3` int(11) DEFAULT NULL,
+  `col4` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*)  from t_non_pk;
+count(*)
+2
+checksum table t_non_pk;
+Table	Checksum
+test.t_non_pk	99556677
+use test;
+drop table t_non_pk;
+###########################################
+alter change pk
+###########################################
+use test;
+create table t_pk(id int, col1 varchar(100), col2 int, col3 int)row_format=comfort;
+insert into t_pk values(1, 'xpchild', 1, 1);
+insert into t_pk values(2, 'xpchild', 1, 1);
+commit;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+alter table t_pk modify id int auto_increment primary key;;
+use test;
+insert into t_pk(col1, col2, col3) values('xpchild', 3, 3);
+update t_pk set col1=concat(col2, id) where id <200;
+update t_pk set col3=100 where id <200;
+delete from t_pk where id >300;
+commit;
+use test;
+SET GLOBAL DEBUG='';
+show create table t_pk;
+Table	Create Table
+t_pk	CREATE TABLE `t_pk` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` varchar(100) DEFAULT NULL,
+  `col2` int(11) DEFAULT NULL,
+  `col3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*)  from t_pk;
+count(*)
+3
+checksum table t_pk;
+Table	Checksum
+test.t_pk	3697671125
+use test;
+drop table t_pk;
+###########################################
+alter add reserved column
+###########################################
+use test;
+create table t_rd(id int primary key, col1 varchar(100), col2 int, col3 int)row_format=comfort;
+insert into t_rd values(1, 'xpchild', 1, 1);
+insert into t_rd values(2, 'xpchild', 1, 1);
+commit;
+alter table t_rd add DB_TRX_ID int;
+ERROR 42000: Incorrect column name 'DB_TRX_ID'
+alter table t_rd add DB_ROW_ID int;
+ERROR 42000: Incorrect column name 'DB_ROW_ID'
+alter table t_rd add db_roll_ptr int;
+ERROR 42000: Incorrect column name 'db_roll_ptr'
+drop table t_rd;
+###########################################
+alter add column after
+###########################################
+use test;
+create table t_ft(id int primary key, col1 varchar(100), col2 int, col3 int)row_format=comfort;
+insert into t_ft values(1, 'xpchild', 1, 1);
+insert into t_ft values(2, 'xpchild', 1, 1);
+commit;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+alter table t_ft add col4 int after id;;
+use test;
+insert into t_ft(id, col1, col2, col3) values(3, 'xpchild', 3, 3);
+update t_ft set col1=concat(col2, id) where id <200;
+update t_ft set col3=100 where id <200;
+delete from t_ft where id =2;
+commit;
+use test;
+SET GLOBAL DEBUG='';
+show create table t_ft;
+Table	Create Table
+t_ft	CREATE TABLE `t_ft` (
+  `id` int(11) NOT NULL,
+  `col4` int(11) DEFAULT NULL,
+  `col1` varchar(100) DEFAULT NULL,
+  `col2` int(11) DEFAULT NULL,
+  `col3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=COMFORT
+select count(*)  from t_ft;
+count(*)
+2
+checksum table t_ft;
+Table	Checksum
+test.t_ft	1911761813
+select * from t_ft;
+id	col4	col1	col2	col3
+1	NULL	11	1	100
+3	NULL	33	3	100
+use test;
+drop table t_ft;
+drop table test.t;
+include/rpl_end.inc

@@ -123,12 +123,18 @@ innodb-file-per-table, an older engine will not be able to find that table.
 This flag prevents older engines from attempting to open the table and
 allows InnoDB to update_create_info() accordingly. */
 #define DICT_TF_WIDTH_DATA_DIR		1
+/** Width of the reserved */
+#define DICT_TF_WIDTH_RESERVED		4
+/** Width of the COMFORT flag */
+#define DICT_TF_WIDTH_COMFORT		1
 
 /** Width of all the currently known table flags */
 #define DICT_TF_BITS	(DICT_TF_WIDTH_COMPACT		\
 			+ DICT_TF_WIDTH_ZIP_SSIZE	\
 			+ DICT_TF_WIDTH_ATOMIC_BLOBS	\
-			+ DICT_TF_WIDTH_DATA_DIR)
+			+ DICT_TF_WIDTH_DATA_DIR	\
+			+ DICT_TF_WIDTH_RESERVED	\
+			+ DICT_TF_WIDTH_COMFORT)
 
 /** A mask of all the known/used bits in table flags */
 #define DICT_TF_BIT_MASK	(~(~0 << DICT_TF_BITS))
@@ -144,9 +150,15 @@ allows InnoDB to update_create_info() accordingly. */
 /** Zero relative shift position of the DATA_DIR field */
 #define DICT_TF_POS_DATA_DIR		(DICT_TF_POS_ATOMIC_BLOBS	\
 					+ DICT_TF_WIDTH_ATOMIC_BLOBS)
-/** Zero relative shift position of the start of the UNUSED bits */
-#define DICT_TF_POS_UNUSED		(DICT_TF_POS_DATA_DIR		\
+/** Reversed field */
+#define DICT_TF_POS_RESERVED		(DICT_TF_POS_DATA_DIR		\
 					+ DICT_TF_WIDTH_DATA_DIR)
+/** Zero relative shift position of the COMFORT field */
+#define DICT_TF_POS_COMFORT		(DICT_TF_POS_RESERVED		\
+					+ DICT_TF_WIDTH_RESERVED)
+/** Zero relative shift position of the start of the UNUSED bits */
+#define DICT_TF_POS_UNUSED		(DICT_TF_POS_COMFORT		\
+					+ DICT_TF_WIDTH_COMFORT)
 
 /** Bit mask of the COMPACT field */
 #define DICT_TF_MASK_COMPACT				\
@@ -164,6 +176,10 @@ allows InnoDB to update_create_info() accordingly. */
 #define DICT_TF_MASK_DATA_DIR				\
 		((~(~0U << DICT_TF_WIDTH_DATA_DIR))	\
 		<< DICT_TF_POS_DATA_DIR)
+/** Bit mask of the COMFORT field */
+#define DICT_TF_MASK_COMFORT				\
+		((~(~0U << DICT_TF_WIDTH_COMFORT))	\
+		<< DICT_TF_POS_COMFORT)
 
 /** Return the value of the COMPACT field */
 #define DICT_TF_GET_COMPACT(flags)			\
@@ -181,6 +197,10 @@ allows InnoDB to update_create_info() accordingly. */
 #define DICT_TF_HAS_DATA_DIR(flags)			\
 		((flags & DICT_TF_MASK_DATA_DIR)	\
 		>> DICT_TF_POS_DATA_DIR)
+/** Return the value of the COMFORT field */
+#define DICT_TF_GET_COMFORT(flags)			\
+		((flags & DICT_TF_MASK_COMFORT)		\
+		>> DICT_TF_POS_COMFORT)
 /** Return the contents of the UNUSED bits */
 #define DICT_TF_GET_UNUSED(flags)			\
 		(flags >> DICT_TF_POS_UNUSED)
@@ -610,6 +630,9 @@ struct dict_index_t{
 				dict_sys->mutex. Other changes are
 				protected by index->lock. */
 	dict_field_t*	fields;	/*!< array of field descriptions */
+
+	unsigned*	n_null_arr;
+				/*!< array of nullable fields for n_fields */
 #ifndef UNIV_HOTBACKUP
 	UT_LIST_NODE_T(dict_index_t)
 			indexes;/*!< list of indexes of the table */

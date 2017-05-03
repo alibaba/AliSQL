@@ -126,6 +126,7 @@ enum enum_server_command
 #define FIELD_FLAGS_COLUMN_FORMAT_MASK (3 << FIELD_FLAGS_COLUMN_FORMAT)
 #define FIELD_IS_DROPPED (1<< 26)       /* Intern: Field is being dropped */
 #define CLUSTERING_FLAG  (1<< 27)       /* Field has a secondary clustering key */
+#define FIELD_IS_ADDED   (1<< 28)       /* Intern: Field is being added */
 
 #define REFRESH_GRANT		1	/* Refresh grant tables */
 #define REFRESH_LOG		2	/* Start on new log file */

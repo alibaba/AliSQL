@@ -1,0 +1,490 @@
+--source include/master-slave.inc
+--source include/have_innodb.inc
+--source include/have_binlog_format_row.inc
+
+create table t(id int primary key auto_increment,
+		col1 int,
+		col2 char(100),
+		col3 varchar(100),
+		key ind_1(col1),
+		key ind_2(col2),
+		key ind_3(col3))engine=innodb row_format=comfort;
+
+
+insert into t values(1, 2, 'xp', 'xpchild');
+commit;
+
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+insert into t(col1, col2, col3) select col1, col2, col3 from t;
+
+###########################################################################
+
+select count(*) from t;
+checksum table t;
+
+alter table t add col4 varchar(1000);
+select col4 from t limit 10;
+checksum table t;
+
+update t set col4=concat(col3, id);
+commit;
+select col4 from t limit 10;
+checksum table t;
+
+###########################################################################
+
+--echo ###########################################
+--echo delete and insert same record
+--echo ###########################################
+delete from t where id=1;
+insert into t values(1, 2, 'xp', 'xpchild', 'xp');
+commit;
+select * from t where id=1;
+
+--echo ###########################################
+--echo create index on added column
+--echo ###########################################
+create index t_ind_4 on t(col4);
+select * from t where col4='xp';
+
+--echo ###########################################
+--echo alter table add more than one column
+--echo ###########################################
+alter table t add col5 int, add col6 int;
+select * from t where id=1;
+
+--let $rpl_server_number= 1
+--source include/rpl_restart_server.inc
+
+connection master;
+use test;
+select * from t where id=1;
+
+--echo ###########################################
+--echo alter table add clob column
+--echo ###########################################
+
+alter table t add col7 text;
+select * from t where id=1;
+
+update t set col7=repeat('xpchild', 20) where id=1;
+commit;
+select * from t where id=1 or id =2;
+
+--echo ###########################################
+--echo transport tablespace
+--echo ###########################################
+--let $MYSQLD_DATADIR= `SELECT @@datadir`
+connect (master_1,127.0.0.1,root,,test,$MASTER_MYPORT);
+connect (master_2,127.0.0.1,root,,test,$MASTER_MYPORT);
+
+connection master;
+show create table test.t;
+create database db_1;
+
+
+connection master_1;
+use test;
+flush table t for export;
+
+connection master_2;
+use db_1;
+CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `col1` int(11) DEFAULT NULL,
+  `col2` char(100) DEFAULT NULL,
+  `col3` varchar(100) DEFAULT NULL,
+  `col4` varchar(1000) DEFAULT NULL,
+  `col5` int(11) DEFAULT NULL,
+  `col6` int(11) DEFAULT NULL,
+  `col7` text,
+  PRIMARY KEY (`id`),
+  KEY `ind_1` (`col1`),
+  KEY `ind_2` (`col2`),
+  KEY `ind_3` (`col3`),
+  KEY `t_ind_4` (`col4`(767))
+) ENGINE=InnoDB  ROW_FORMAT=COMFORT;
+
+set sql_log_bin=off;
+alter table t discard tablespace;
+
+--exec cp -rf $MYSQLD_DATADIR/test/t.cfg  $MYSQLD_DATADIR/db_1/
+--exec cp -rf $MYSQLD_DATADIR/test/t.ibd  $MYSQLD_DATADIR/db_1/
+
+alter table t import tablespace;
+select count(*) from t;
+show create table t;
+checksum table t;
+
+connection master_1;
+use test;
+unlock tables;
+
+
+connection master;
+checksum table db_1.t;
+checksum table test.t;
+drop table db_1.t;
+drop database db_1;
+
+--echo ###########################################
+--echo online copy data operation
+--echo ###########################################
+
+alter table t drop index ind_1;
+alter table t drop index ind_2;
+alter table t drop index ind_3;
+alter table t drop index t_ind_4;
+
+alter table t drop column col3, drop column col4, drop column col5, drop column col6, drop column col7;
+alter table t add col3 int default 10;
+alter table t row_format=compact;
+alter table t row_format=comfort;
+alter table t add col4 int;
+show create table t;
+select count(*) from t;
+checksum table t;
+
+
+
+--echo ###########################################
+--echo online dml operation
+--echo ###########################################
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t add col5 int;
+
+connection master_2;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, id) where id <100;
+update t set col3=concat(col3, id) where id <100;
+update t set id=2000000 where id= 7;
+select * from t where id=2000000;
+delete from t where id >100 and id <200;
+commit;
+
+connection master_1;
+--reap
+
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+select count(*)  from t;
+checksum table t;
+
+
+
+--echo ###########################################
+--echo online copy data  and dml operation
+--echo ###########################################
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t add col6 int default 100;
+
+connection master_2;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, id) where id <200;
+update t set col3=concat(col3, id) where id <200;
+update t set id=1000000 where id=6;
+select * from t where id=1000000;
+delete from t where id >200 and id <300;
+commit;
+
+connection master_1;
+--reap
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+select count(*)  from t;
+checksum table t;
+
+--echo ###########################################
+--echo online index data and dml operation
+--echo ###########################################
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t add index ind_col4(col4);
+
+connection master_2;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, id) where id <200;
+update t set col3=concat(col3, id) where id <200;
+update t set col4=100 where id <200;
+delete from t where id >300 and id <400;
+commit;
+
+connection master_1;
+--reap
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+select count(*)  from t;
+checksum table t;
+
+
+--echo ###########################################
+--echo >127 col
+--echo ###########################################
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t add column col10 int, add column col11 int, add column col12 int, add column col13 int, add column col14 int, add column col15 int, add column col16 int, add column col17 int, add column col18 int, add column col19 int, add column col20 int, add column col21 int, add column col22 int, add column col23 int, add column col24 int, add column col25 int, add column col26 int, add column col27 int, add column col28 int, add column col29 int, add column col30 int, add column col31 int, add column col32 int, add column col33 int, add column col34 int, add column col35 int, add column col36 int, add column col37 int, add column col38 int, add column col39 int, add column col40 int, add column col41 int, add column col42 int, add column col43 int, add column col44 int, add column col45 int, add column col46 int, add column col47 int, add column col48 int, add column col49 int, add column col50 int, add column col51 int, add column col52 int, add column col53 int, add column col54 int, add column col55 int, add column col56 int, add column col57 int, add column col58 int, add column col59 int, add column col60 int, add column col61 int, add column col62 int, add column col63 int, add column col64 int, add column col65 int, add column col66 int, add column col67 int, add column col68 int, add column col69 int, add column col70 int, add column col71 int, add column col72 int, add column col73 int, add column col74 int, add column col75 int, add column col76 int, add column col77 int, add column col78 int, add column col79 int, add column col80 int, add column col81 int, add column col82 int, add column col83 int, add column col84 int, add column col85 int, add column col86 int, add column col87 int, add column col88 int, add column col89 int, add column col90 int, add column col91 int, add column col92 int, add column col93 int, add column col94 int, add column col95 int, add column col96 int, add column col97 int, add column col98 int, add column col99 int, add column col100 int, add column col101 int, add column col102 int, add column col103 int, add column col104 int, add column col105 int, add column col106 int, add column col107 int, add column col108 int, add column col109 int, add column col110 int, add column col111 int, add column col112 int, add column col113 int, add column col114 int, add column col115 int, add column col116 int, add column col117 int, add column col118 int, add column col119 int, add column col120 int, add column col121 int, add column col122 int, add column col123 int, add column col124 int, add column col125 int, add column col126 int, add column col127 int, add column col128 int, add column col129 int, add column col130 int, add column col131 int, add column col132 int, add column col133 int, add column col134 int, add column col135 int, add column col136 int, add column col137 int, add column col138 int, add column col139 int, add column col140 int, add column col141 int, add column col142 int, add column col143 int, add column col144 int, add column col145 int, add column col146 int, add column col147 int, add column col148 int, add column col149 int, add column col150 int, add column col151 int, add column col152 int, add column col153 int, add column col154 int, add column col155 int, add column col156 int, add column col157 int, add column col158 int, add column col159 int, add column col160 int, add column col161 int, add column col162 int, add column col163 int, add column col164 int, add column col165 int, add column col166 int, add column col167 int, add column col168 int, add column col169 int, add column col170 int, add column col171 int, add column col172 int, add column col173 int, add column col174 int, add column col175 int, add column col176 int, add column col177 int, add column col178 int, add column col179 int, add column col180 int, add column col181 int, add column col182 int, add column col183 int, add column col184 int, add column col185 int, add column col186 int, add column col187 int, add column col188 int, add column col189 int, add column col190 int, add column col191 int, add column col192 int, add column col193 int, add column col194 int, add column col195 int, add column col196 int, add column col197 int, add column col198 int, add column col199 int, add column col200 int, add column col201 int, add column col202 int, add column col203 int, add column col204 int, add column col205 int, add column col206 int, add column col207 int, add column col208 int, add column col209 int, add column col210 int, add column col211 int, add column col212 int, add column col213 int, add column col214 int, add column col215 int, add column col216 int, add column col217 int, add column col218 int, add column col219 int, add column col220 int, add column col221 int, add column col222 int, add column col223 int, add column col224 int, add column col225 int, add column col226 int, add column col227 int, add column col228 int, add column col229 int, add column col230 int, add column col231 int, add column col232 int, add column col233 int, add column col234 int, add column col235 int, add column col236 int, add column col237 int, add column col238 int, add column col239 int, add column col240 int, add column col241 int, add column col242 int, add column col243 int, add column col244 int, add column col245 int, add column col246 int, add column col247 int, add column col248 int, add column col249 int, add column col250 int, add column col251 int, add column col252 int, add column col253 int, add column col254 int, add column col255 int, add column col256 int, add column col257 int, add column col258 int, add column col259 int, add column col260 int, add column col261 int, add column col262 int, add column col263 int, add column col264 int, add column col265 int, add column col266 int, add column col267 int, add column col268 int, add column col269 int, add column col270 int, add column col271 int, add column col272 int, add column col273 int, add column col274 int, add column col275 int, add column col276 int, add column col277 int, add column col278 int, add column col279 int, add column col280 int, add column col281 int, add column col282 int, add column col283 int, add column col284 int, add column col285 int, add column col286 int, add column col287 int, add column col288 int, add column col289 int, add column col290 int, add column col291 int, add column col292 int, add column col293 int, add column col294 int, add column col295 int, add column col296 int, add column col297 int, add column col298 int, add column col299 int;
+
+
+connection master_2;
+use test;
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col2=concat(col2, id) where id <200;
+update t set col3=concat(col3, id) where id <200;
+delete from t where id >300 and id <400;
+commit;
+
+connection master_1;
+--reap
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t;
+select count(*)  from t;
+checksum table t;
+
+
+--echo ###########################################
+--echo temporary table
+--echo ###########################################
+
+connection master;
+use test;
+create temporary table t_t (
+   id int primary key auto_increment,
+   col1 varchar(100),
+   col2 int,
+   col3 int
+  )engine=innodb row_format=comfort;
+
+insert into t_t values(1, 'xpchild', 1, 1);
+alter table t_t add col4 int;
+
+insert into t(col1, col2, col3, col4) select col1, col2, col3, col4 from t;
+update t set col1=concat(col1, id) where id <200;
+update t set col4=100 where id <200;
+delete from t where id >300 and id <400;
+commit;
+
+use test;
+show create table t;
+select count(*)  from t;
+checksum table t;
+drop table t_t;
+
+--echo ###########################################
+--echo foreign key
+--echo ###########################################
+connection master;
+use test;
+
+create table t_c(
+id int,
+col1 varchar(100),
+key ind_id(id)
+)engine=innodb row_format=comfort;
+
+create table t_p(id int primary key auto_increment,
+cid int,
+col1 varchar(100),
+key `cid`(`cid`),
+FOREIGN KEY (cid) REFERENCES t_c(id) ON DELETE CASCADE ON UPDATE CASCADE
+)engine =innodb row_format=comfort;
+
+insert into t_c values(1001, 'c_xpchild');
+insert into t_c values(1002, 'c_xpchild');
+insert into t_c values(2001, 'c_xpchild');
+insert into t_c values(2002, 'c_xpchild');
+
+
+insert into t_p values(1, 1001, 'p_xpchild');
+insert into t_p values(2, 1002, 'p_xpchild');
+insert into t_p values(3, 2001, 'p_xpchild');
+insert into t_p values(4, 2002, 'p_xpchild');
+commit;
+
+
+# update and delete parent row
+update t_c set id=10010 where id=1001;
+delete from t_c where id=1002;
+select * from t_c;
+select * from t_p;
+
+drop table t_p;
+drop table t_c;
+
+--echo ###########################################
+--echo alter change without clust_index
+--echo ###########################################
+connection master;
+use test;
+create table t_non_pk(id int, col1 varchar(100), col2 int, col3 int)row_format=comfort;
+insert into t_non_pk values(1, 'xpchild', 1, 1);
+commit;
+
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t_non_pk add col4 int;
+
+connection master_2;
+use test;
+insert into t_non_pk(col1, col2, col3) select col1, col2, col3 from t_non_pk;
+update t_non_pk set col1=concat(col2, id) where id <200;
+update t_non_pk set col3=100 where id <200;
+delete from t_non_pk where id >300;
+commit;
+
+connection master_1;
+--reap
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t_non_pk;
+select count(*)  from t_non_pk;
+checksum table t_non_pk;
+
+connection master;
+use test;
+drop table t_non_pk;
+
+--echo ###########################################
+--echo alter change pk
+--echo ###########################################
+connection master;
+use test;
+create table t_pk(id int, col1 varchar(100), col2 int, col3 int)row_format=comfort;
+insert into t_pk values(1, 'xpchild', 1, 1);
+insert into t_pk values(2, 'xpchild', 1, 1);
+commit;
+
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t_pk modify id int auto_increment primary key;
+
+connection master_2;
+use test;
+insert into t_pk(col1, col2, col3) values('xpchild', 3, 3);
+update t_pk set col1=concat(col2, id) where id <200;
+update t_pk set col3=100 where id <200;
+delete from t_pk where id >300;
+commit;
+
+connection master_1;
+--reap
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t_pk;
+select count(*)  from t_pk;
+checksum table t_pk;
+
+connection master;
+use test;
+drop table t_pk;
+--echo ###########################################
+--echo alter add reserved column
+--echo ###########################################
+connection master;
+use test;
+create table t_rd(id int primary key, col1 varchar(100), col2 int, col3 int)row_format=comfort;
+insert into t_rd values(1, 'xpchild', 1, 1);
+insert into t_rd values(2, 'xpchild', 1, 1);
+commit;
+
+
+connection master;
+--error ER_WRONG_COLUMN_NAME
+alter table t_rd add DB_TRX_ID int;
+--error ER_WRONG_COLUMN_NAME
+alter table t_rd add DB_ROW_ID int;
+--error ER_WRONG_COLUMN_NAME
+alter table t_rd add db_roll_ptr int;
+
+drop table t_rd;
+
+--echo ###########################################
+--echo alter add column after
+--echo ###########################################
+connection master;
+use test;
+create table t_ft(id int primary key, col1 varchar(100), col2 int, col3 int)row_format=comfort;
+insert into t_ft values(1, 'xpchild', 1, 1);
+insert into t_ft values(2, 'xpchild', 1, 1);
+commit;
+
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='d,alter_table_sleep_for_online';
+
+--send alter table t_ft add col4 int after id;
+
+connection master_2;
+use test;
+insert into t_ft(id, col1, col2, col3) values(3, 'xpchild', 3, 3);
+update t_ft set col1=concat(col2, id) where id <200;
+update t_ft set col3=100 where id <200;
+delete from t_ft where id =2;
+commit;
+
+connection master_1;
+--reap
+
+connection master_1;
+use test;
+SET GLOBAL DEBUG='';
+show create table t_ft;
+select count(*)  from t_ft;
+checksum table t_ft;
+select * from t_ft;
+
+connection master;
+use test;
+drop table t_ft;
+
+
+
+connection master;
+drop table test.t;
+
+--sync_slave_with_master
+--source include/rpl_end.inc

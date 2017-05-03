@@ -67,7 +67,30 @@ upd_get_n_fields(
 
 	return(update->n_fields);
 }
-
+/*********************************************************************//**
+Gets info bits in a update vector.
+@return	info bits */
+UNIV_INLINE
+ulint
+upd_get_info_bits(
+/*==============*/
+	const upd_t*	update)	/*!< in: update vector */
+{
+	ut_ad(update);
+	return(update->info_bits);
+}
+/*********************************************************************//**
+Sets info bits in a update vector. */
+UNIV_INLINE
+void
+upd_set_info_bits(
+/*==============*/
+	upd_t*		update,		/*!< in: update vector */
+	ulint		info_bits)	/*!< in: info bits */
+{
+	ut_ad(update);
+	update->info_bits = info_bits;
+}
 #ifdef UNIV_DEBUG
 /*********************************************************************//**
 Returns the nth field of an update vector.

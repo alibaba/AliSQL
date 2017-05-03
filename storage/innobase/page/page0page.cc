@@ -350,6 +350,12 @@ page_create_low(
 # error "PAGE_BTR_IBUF_FREE_LIST_NODE + FLST_NODE_SIZE > PAGE_DATA"
 #endif
 
+	/* The infimum and supremum record format:
+	   5 bytes for extra size
+	   8 bytes for column
+	 It will exclude comfort flag and n_fields although the table
+	 is comfort format. */
+
 	/* The infimum and supremum records use a dummy index. */
 	if (UNIV_LIKELY(comp)) {
 		index = dict_ind_compact;
@@ -370,6 +376,7 @@ page_create_low(
 
 	/* Create first a data tuple for infimum record */
 	tuple = dtuple_create(heap, 1);
+	/* The infimum and supremum didn't have rec_comfort and n_fields. */
 	dtuple_set_info_bits(tuple, REC_STATUS_INFIMUM);
 	field = dtuple_get_nth_field(tuple, 0);
 
