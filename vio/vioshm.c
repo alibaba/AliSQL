@@ -222,5 +222,21 @@ int vio_shutdown_shared_memory(Vio * vio)
   DBUG_RETURN(0);
 }
 
+int vio_cancel_shared_memory(Vio * vio, int how)
+{
+  DBUG_ENTER("vio_cancel_shared_memory");
+  if (vio->inactive == FALSE)
+  {
+    /*
+      Set event_conn_closed for notification of both client and server that
+      connection is closed
+    */
+    SetEvent(vio->event_conn_closed);
+  }
+
+  vio->inactive= TRUE;
+  DBUG_RETURN(0);
+}
+
 #endif /* #if defined(_WIN32) && defined(HAVE_SMEM) */
 

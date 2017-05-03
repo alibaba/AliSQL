@@ -27,6 +27,8 @@ class THD;
 struct scheduler_functions
 {
   uint max_threads;
+  uint *connection_count;
+  ulong *max_connections;
   bool (*init)(void);
   bool (*init_new_connection_thread)(void);
   void (*add_connection)(THD *thd);
@@ -66,8 +68,21 @@ enum scheduler_types
   SCHEDULER_TYPES_COUNT
 };
 
-void one_thread_per_connection_scheduler();
-void one_thread_scheduler();
+void one_thread_per_connection_scheduler(scheduler_functions *func,
+                                         ulong *arg_max_connection,
+                                         uint *arg_connection_count);
+void one_thread_scheduler(scheduler_functions *func);
+#if !defined(EMBEDDED_LIBRARY)
+#define HAVE_POOL_OF_THREADS 1
+void pool_of_threads_scheduler(scheduler_functions* func,
+                               ulong *arg_max_connections,
+                               uint *arg_connection_count);
+#else
+#define pool_of_threads_scheduler(A, B, C) \
+  one_thread_per_connection_scheduler(A, B, C)
+#endif
+
+extern void scheduler_init();
 
 /*
  To be used for pool-of-threads (implemeneted differently on various OSs)

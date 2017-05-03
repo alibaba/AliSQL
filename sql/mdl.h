@@ -773,6 +773,11 @@ public:
              m_tickets[MDL_EXPLICIT].is_empty());
   }
 
+  inline bool has_explicit_locks() const
+  {
+    return !m_tickets[MDL_EXPLICIT].is_empty();
+  }
+
   MDL_savepoint mdl_savepoint()
   {
     return MDL_savepoint(m_tickets[MDL_STATEMENT].front(),

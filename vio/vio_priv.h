@@ -30,6 +30,7 @@ size_t vio_read_pipe(Vio *vio, uchar * buf, size_t size);
 size_t vio_write_pipe(Vio *vio, const uchar * buf, size_t size);
 my_bool vio_is_connected_pipe(Vio *vio);
 int vio_shutdown_pipe(Vio * vio);
+int vio_cancel_pipe(Vio * vio, int how);
 #endif
 
 #ifdef HAVE_SMEM
@@ -38,6 +39,7 @@ size_t vio_write_shared_memory(Vio *vio, const uchar * buf, size_t size);
 my_bool vio_is_connected_shared_memory(Vio *vio);
 int vio_shutdown_shared_memory(Vio * vio);
 void vio_delete_shared_memory(Vio *vio);
+int vio_cancel_shared_memory(Vio * vio, int how);
 #endif
 
 my_bool vio_buff_has_data(Vio *vio);

@@ -1,0 +1,14 @@
+!include include/default_my.cnf
+
+[mysqld.1]
+loose-thread-handling=   pool-of-threads
+loose-thread_pool_size= 2
+loose-thread_pool_max_threads= 2
+#extra-port=        @ENV.MASTER_EXTRA_PORT
+loose-thread_pool_high_prio_tickets=2
+
+[client]
+connect-timeout=  2
+
+[ENV]
+MASTER_EXTRA_PORT= 13009

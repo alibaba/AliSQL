@@ -57,6 +57,7 @@
 #include "sql_optimizer.h" // JOIN
 #include "global_threads.h"
 #include "sql_filter.h"
+#include "threadpool.h"
 
 #include <algorithm>
 using std::max;
@@ -2365,6 +2366,47 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
   }
   my_eof(thd);
   DBUG_VOID_RETURN;
+}
+
+
+int fill_thread_group_info(THD *thd, TABLE_LIST* tables, Item* __attribute__((unused)))
+{
+  DBUG_ENTER("fill_thread_group_info");
+  DBUG_ASSERT((thd != NULL) && (tables != NULL));
+
+  if (thread_handling != SCHEDULER_POOL_THREADS)
+    DBUG_RETURN(0);
+
+  TABLE *table= tables->table;
+  thread_group_info *thread_groups= (thread_group_info*)malloc(sizeof(thread_group_info) * threadpool_size);
+  if (!thread_groups)
+    DBUG_RETURN(0);
+
+  get_thread_group_info(thread_groups, threadpool_size);
+
+  for (ulong i = 0; i < threadpool_size; i++)
+  {
+    thread_group_info *group= &thread_groups[i];
+
+    table->field[0]->store(group->group_id);
+    table->field[1]->store(group->thread_count);
+    table->field[2]->store(group->active_thread_count);
+    table->field[3]->store(group->connection_count);
+    table->field[4]->store(group->waiting_thread_count);
+    table->field[5]->store(group->dump_thread_count);
+    table->field[6]->store(group->low_queue_count);
+    table->field[7]->store(group->high_queue_count);
+
+    if (schema_table_store_record(thd, table))
+    {
+      free(thread_groups); //no cover line.
+      DBUG_RETURN(1); //no cover line.
+    }
+
+  }
+
+  free(thread_groups);
+  DBUG_RETURN(0);
 }
 
 int fill_schema_processlist(THD* thd, TABLE_LIST* tables, Item* cond)
@@ -8538,6 +8580,19 @@ ST_FIELD_INFO sql_filter_fields_info[] =
   {0, 0, MYSQL_TYPE_STRING, 0, 0, "", SKIP_OPEN_TABLE}
 };
 
+ST_FIELD_INFO thread_group_status_fields_info[] =
+{
+  {"ID", 21, MYSQL_TYPE_LONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE },
+  {"THREAD_COUNT", 21, MYSQL_TYPE_LONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"ACTIVE_THREAD_COUNT", 21, MYSQL_TYPE_LONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE },
+  {"CONNECTION_COUNT", 21, MYSQL_TYPE_LONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"WAITING_THREAD_COUNT", 21, MYSQL_TYPE_LONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"DUMP_COUNT", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"LOW_QUEUE_COUNT", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {"HIGH_QUEUE_COUNT", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "", SKIP_OPEN_TABLE},
+  {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, SKIP_OPEN_TABLE }
+};
+
 
 /** For creating fields of information_schema.OPTIMIZER_TRACE */
 extern ST_FIELD_INFO optimizer_trace_info[];
@@ -8647,6 +8702,8 @@ ST_SCHEMA_TABLE schema_tables[]=
     fill_schema_table_stats, make_old_format, 0, -1, -1, 0, 0},
   {"INDEX_STATISTICS", index_stats_fields_info, create_schema_table,
    fill_schema_index_stats, make_old_format, 0, -1, -1, 0, 0},
+  {"THREAD_GROUP_STATUS", thread_group_status_fields_info, create_schema_table,
+   fill_thread_group_info, make_old_format, 0, -1, -1, 0, 0},
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 

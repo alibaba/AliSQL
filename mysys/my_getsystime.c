@@ -61,6 +61,49 @@ ulonglong my_getsystime()
 #endif
 }
 
+/*
+  return number of nanoseconds since unspecified (but always the same)
+  point in the past
+
+  NOTE:
+  Thus to get the current time we should use the system function
+  with the highest possible resolution
+
+  The value is not anchored to any specific point in time (e.g.epoch) nor
+  is it subject to resetting or drifting by way of adjtime() or settimeofday(),
+  and thus it is *NOT* appropriate for getting the current timestamp. It can be
+  used for calculating time intervals, though.
+*/
+ulonglong my_interval_timer()
+{
+#ifdef HAVE_CLOCK_GETTIME
+  struct timespec tp;
+  clock_gettime(CLOCK_MONOTONIC, &tp);
+  return tp.tv_sec*1000000000ULL+tp.tv_nsec;
+#elif defined(HAVE_GETHRTIME)
+  return gethrtime();
+#elif defined(__WIN__)
+  LARGE_INTEGER t_cnt;
+  if (query_performance_frequency)
+  {
+    QueryPerformanceCounter(&t_cnt);
+    return (t_cnt.QuadPart / query_performance_frequency * 1000000000ULL) +
+            ((t_cnt.QuadPart % query_performance_frequency) * 1000000000ULL /
+             query_performance_frequency);
+  }
+  else
+  {
+    ulonglong newtime;
+    GetSystemTimeAsFileTime((FILETIME*)&newtime);
+    return newtime*100ULL;
+  }
+#else
+  /* TODO: check for other possibilities for hi-res timestamping */
+  struct timeval tv;
+  gettimeofday(&tv,NULL);
+  return tv.tv_sec*1000000000ULL+tv.tv_usec*1000ULL;
+#endif
+}
 
 /**
   Return current time.

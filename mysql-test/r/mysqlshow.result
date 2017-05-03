@@ -113,6 +113,7 @@ Database: information_schema
 | VIEWS                                 |
 | TABLE_STATISTICS                      |
 | INDEX_STATISTICS                      |
+| THREAD_GROUP_STATUS                   |
 | TokuDB_file_map                       |
 | TokuDB_trx                            |
 | INNODB_SYS_DATAFILES                  |
@@ -187,6 +188,7 @@ Database: INFORMATION_SCHEMA
 | VIEWS                                 |
 | TABLE_STATISTICS                      |
 | INDEX_STATISTICS                      |
+| THREAD_GROUP_STATUS                   |
 | TokuDB_file_map                       |
 | TokuDB_trx                            |
 | INNODB_SYS_DATAFILES                  |

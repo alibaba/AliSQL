@@ -1,0 +1,89 @@
+# Start with thread_handling=pool-of-threads
+# and run a number of tests
+
+-- source include/have_debug.inc
+-- source include/have_pool_of_threads.inc
+-- source include/common-tests.inc
+
+# Test that we cannot have more simultaneous connections than
+# --thread-pool-size on the standard port, but _can_ have additional
+# connections on the extra port.
+
+# First set two connections running, and check that extra connection
+# on normal port fails due to --thread-pool-max_threads=2
+connection default;
+set GLOBAL debug="+d,rds_local_pool_of_threads";
+
+connect(con2,localhost,root,,);
+connection con2;
+let $con2_id = `select connection_id()`;
+send SELECT sleep(50000);
+--sleep  2.5
+
+connect(con3,localhost,root,,);
+connection con3;
+let $con3_id = `select connection_id()`;
+send SELECT sleep(50000);
+--sleep  2.5
+
+--disable_abort_on_error
+--disable_result_log
+--disable_query_log
+connect(con4,localhost,root,,);
+--enable_query_log
+--enable_result_log
+--enable_abort_on_error
+let $error = $mysql_errno;
+if (!$error)
+{
+  --echo # -- Error: managed to establish more than --thread_pool_max_threads connections
+}
+if ($error)
+{
+  --echo # -- Success: more than --thread_pool_max_threads normal connections not possible
+}
+
+# This time use the extra port to successfully connect.
+
+connect(extracon,127.0.0.1,root,,test,$MASTER_EXTRA_PORT,);
+connection extracon;
+SELECT 'Connection on extra port ok';
+
+# Kill long queries in other connections
+let @ignore = `select @id := $con3_id`;
+KILL QUERY @id;
+let @ignore = `select @id := $con2_id`;
+KILL QUERY @id;
+
+connect(extracon2,127.0.0.1,root,,test,$MASTER_EXTRA_PORT,);
+connection extracon2;
+SELECT 'Connection on extra port 2 ok';
+
+--disable_query_log
+call mtr.add_suppression("Too many connections");
+--enable_query_log
+--disable_abort_on_error
+--disable_result_log
+--disable_query_log
+connect(extracon3,127.0.0.1,root,,test,$MASTER_EXTRA_PORT,);
+--enable_query_log
+--enable_result_log
+--enable_abort_on_error
+let $error = $mysql_errno;
+if (!$error)
+{
+  --echo # -- Error: managed to establish more than --extra-max-connections + 1 connections
+}
+if ($error)
+{
+  --echo # -- Success: more than --extra-max-connections + 1 normal connections not possible
+}
+
+connection con2;
+--reap
+connection con3;
+--reap
+
+connection default;
+select count(*) from information_schema.THREAD_GROUP_STATUS;
+set GLOBAL debug="-d,rds_local_pool_of_threads";

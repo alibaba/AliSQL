@@ -222,7 +222,7 @@ void kill_blocked_pthreads();
 void refresh_status(THD *thd);
 bool is_secure_file_path(char *path);
 bool is_mysql_datadir_path(const char *path);
-void dec_connection_count();
+void dec_connection_count(THD *thd);
 
 // These are needed for unit testing.
 void set_remaining_args(int argc, char **argv);
@@ -912,6 +912,14 @@ extern "C" void unireg_abort(int exit_code) MY_ATTRIBUTE((noreturn));
 extern "C" void unireg_clear(int exit_code);
 #define unireg_abort(exit_code) do { unireg_clear(exit_code); DBUG_RETURN(exit_code); } while(0)
 #endif
+
+
+extern ulong thread_created;
+extern uint mysqld_extra_port;
+extern uint extra_connection_count;
+extern ulong extra_max_connections;
+
+extern scheduler_functions *thread_scheduler, *extra_thread_scheduler;
 
 inline void table_case_convert(char * name, uint length)
 {

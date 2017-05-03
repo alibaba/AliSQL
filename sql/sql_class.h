@@ -579,6 +579,9 @@ typedef struct system_variables
   my_bool show_old_temporals;
   ulong rds_sql_max_iops;
   my_bool sequence_read_skip_cache;
+
+  uint threadpool_high_prio_tickets;
+  ulong threadpool_high_prio_mode;
 } SV;
 
 
@@ -2186,6 +2189,7 @@ public:
   NET	  net;				// client connection descriptor
   /** Aditional network instrumentation for the server only. */
   NET_SERVER m_net_server_extension;
+  scheduler_functions *scheduler;
   Protocol *protocol;			// Current protocol
   Protocol_text   protocol_text;	// Normal protocol
   Protocol_binary protocol_binary;	// Binary protocol
@@ -2388,6 +2392,8 @@ public:
             binlog_flush_pending_rows_event(stmt_end, TRUE));
   }
   int binlog_flush_pending_rows_event(bool stmt_end, bool is_transactional);
+
+  bool skip_wait_timeout;
 
   /**
     Determine the binlog format of the current statement.
@@ -4052,7 +4058,7 @@ public:
     *p_db_length= db_length;
     return FALSE;
   }
-  thd_scheduler scheduler;
+  thd_scheduler event_scheduler;
 
 public:
   inline Internal_error_handler *get_internal_handler()
@@ -5546,6 +5552,8 @@ inline bool add_group_to_list(THD *thd, Item *item, bool asc)
 {
   return thd->lex->current_select->add_group_to_list(thd, item, asc);
 }
+
+extern pthread_attr_t *get_connection_attrib(void);
 
 #endif /* MYSQL_SERVER */
 

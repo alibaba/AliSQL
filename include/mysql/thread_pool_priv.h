@@ -107,7 +107,7 @@ void end_connection(THD *thd);
 /* Release resources of the THD object */
 void thd_release_resources(THD *thd);
 /* Decrement connection counter */
-void dec_connection_count();
+void dec_connection_count(THD *thd);
 /* Destroy THD object */
 void destroy_thd(THD *thd);
 /* Remove the THD from the set of global threads. */

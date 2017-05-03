@@ -186,6 +186,7 @@ SET(SQL_SHARED_SOURCES
   table_cache.cc
   thr_malloc.cc 
   transaction.cc
+  threadpool_common.cc
   tztime.cc
   uniques.cc
   unireg.cc
@@ -216,6 +217,13 @@ SET(SQL_SOURCE
   mysqld.cc
   sql_client.cc
   )
+
+IF(WIN32)
+  SET(SQL_SOURCE ${SQL_SOURCE} threadpool_win.cc)
+ELSE()
+  SET(SQL_SOURCE ${SQL_SOURCE} threadpool_unix.cc)
+ENDIF()
+
 
 IF (WIN32 AND OPENSSL_APPLINK_C)
   SET_SOURCE_FILES_PROPERTIES(

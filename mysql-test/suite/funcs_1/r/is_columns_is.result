@@ -322,6 +322,14 @@ def	information_schema	TABLE_STATISTICS	ROWS_READ	3	0	NO	bigint	NULL	NULL	19	0	N
 def	information_schema	TABLE_STATISTICS	ROWS_UPDATED	8	0	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint(21)			select	
 def	information_schema	TABLE_STATISTICS	TABLE_NAME	2		NO	varchar	192	576	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(192)			select	
 def	information_schema	TABLE_STATISTICS	TABLE_SCHEMA	1		NO	varchar	192	576	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(192)			select	
+def	information_schema	THREAD_GROUP_STATUS	ACTIVE_THREAD_COUNT	3	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(21) unsigned			select	
+def	information_schema	THREAD_GROUP_STATUS	CONNECTION_COUNT	4	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(21) unsigned			select	
+def	information_schema	THREAD_GROUP_STATUS	DUMP_COUNT	6	0	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(21) unsigned			select	
+def	information_schema	THREAD_GROUP_STATUS	HIGH_QUEUE_COUNT	8	0	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(21) unsigned			select	
+def	information_schema	THREAD_GROUP_STATUS	ID	1	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(21) unsigned			select	
+def	information_schema	THREAD_GROUP_STATUS	LOW_QUEUE_COUNT	7	0	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(21) unsigned			select	
+def	information_schema	THREAD_GROUP_STATUS	THREAD_COUNT	2	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(21) unsigned			select	
+def	information_schema	THREAD_GROUP_STATUS	WAITING_THREAD_COUNT	5	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(21) unsigned			select	
 def	information_schema	TokuDB_file_map	dictionary_name	1		NO	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select	
 def	information_schema	TokuDB_file_map	internal_file_name	2		NO	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select	
 def	information_schema	TokuDB_file_map	table_dictionary_name	5		NO	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select	
@@ -778,6 +786,14 @@ NULL	information_schema	TABLE_STATISTICS	ROWS_CHANGED_X_INDEXES	bigint	NULL	NULL
 NULL	information_schema	TABLE_STATISTICS	ROWS_INSERTED	bigint	NULL	NULL	NULL	NULL	bigint(21)
 NULL	information_schema	TABLE_STATISTICS	ROWS_DELETED	bigint	NULL	NULL	NULL	NULL	bigint(21)
 NULL	information_schema	TABLE_STATISTICS	ROWS_UPDATED	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	THREAD_GROUP_STATUS	ID	int	NULL	NULL	NULL	NULL	int(21) unsigned
+NULL	information_schema	THREAD_GROUP_STATUS	THREAD_COUNT	int	NULL	NULL	NULL	NULL	int(21) unsigned
+NULL	information_schema	THREAD_GROUP_STATUS	ACTIVE_THREAD_COUNT	int	NULL	NULL	NULL	NULL	int(21) unsigned
+NULL	information_schema	THREAD_GROUP_STATUS	CONNECTION_COUNT	int	NULL	NULL	NULL	NULL	int(21) unsigned
+NULL	information_schema	THREAD_GROUP_STATUS	WAITING_THREAD_COUNT	int	NULL	NULL	NULL	NULL	int(21) unsigned
+NULL	information_schema	THREAD_GROUP_STATUS	DUMP_COUNT	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	THREAD_GROUP_STATUS	LOW_QUEUE_COUNT	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	THREAD_GROUP_STATUS	HIGH_QUEUE_COUNT	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
 3.0000	information_schema	TokuDB_file_map	dictionary_name	varchar	256	768	utf8	utf8_general_ci	varchar(256)
 3.0000	information_schema	TokuDB_file_map	internal_file_name	varchar	256	768	utf8	utf8_general_ci	varchar(256)
 3.0000	information_schema	TokuDB_file_map	table_schema	varchar	256	768	utf8	utf8_general_ci	varchar(256)

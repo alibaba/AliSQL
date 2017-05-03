@@ -1,0 +1,36 @@
+--source include/not_windows.inc
+--source include/not_embedded.inc
+
+SET @start_global_value = @@GLOBAL.thread_pool_high_prio_mode;
+
+# Test the default value
+SET @@GLOBAL.thread_pool_high_prio_mode=DEFAULT;
+SELECT @@GLOBAL.thread_pool_high_prio_mode;
+
+# Test that the session value is accepted
+SET @@SESSION.thread_pool_high_prio_mode=DEFAULT;
+SELECT @@SESSION.thread_pool_high_prio_mode;
+
+SHOW GLOBAL VARIABLES LIKE 'thread_pool_high_prio_mode';
+SHOW SESSION VARIABLES LIKE 'thread_pool_high_prio_mode';
+
+SET @@thread_pool_high_prio_mode='transactions';
+SELECT @@thread_pool_high_prio_mode;
+
+SET @@thread_pool_high_prio_mode='statements';
+SELECT @@thread_pool_high_prio_mode;
+
+SET @@thread_pool_high_prio_mode='none';
+SELECT @@thread_pool_high_prio_mode;
+
+--error ER_WRONG_VALUE_FOR_VAR
+SET @@thread_pool_high_prio_mode='foo';
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET @@thread_pool_high_prio_mode=1.1;
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET @@thread_pool_high_prio_mode=1e1;
+
+SET @@GLOBAL.thread_pool_high_prio_mode = @start_global_value;
+select count(*) from information_schema.THREAD_GROUP_STATUS;

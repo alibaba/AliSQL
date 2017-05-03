@@ -1,0 +1,19 @@
+# Start with thread_handling=pool-of-threads
+# and run some basic tests with --thread_pool_high_prio_tickets=2
+
+-- source include/have_pool_of_threads.inc
+
+SELECT @@thread_pool_high_prio_tickets;
+
+-- source include/common-tests.inc
+
+CREATE TABLE t1(a INT);
+
+START TRANSACTION;
+INSERT INTO t1 VALUES (1);
+SELECT * FROM t1;
+INSERT INTO t1 VALUES (2);
+SELECT * FROM t1;
+COMMIT;
+
+DROP TABLE t1;

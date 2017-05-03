@@ -1,0 +1,37 @@
+SET @start_global_value = @@GLOBAL.thread_pool_high_prio_mode;
+SET @@GLOBAL.thread_pool_high_prio_mode=DEFAULT;
+SELECT @@GLOBAL.thread_pool_high_prio_mode;
+@@GLOBAL.thread_pool_high_prio_mode
+transactions
+SET @@SESSION.thread_pool_high_prio_mode=DEFAULT;
+SELECT @@SESSION.thread_pool_high_prio_mode;
+@@SESSION.thread_pool_high_prio_mode
+transactions
+SHOW GLOBAL VARIABLES LIKE 'thread_pool_high_prio_mode';
+Variable_name	Value
+thread_pool_high_prio_mode	transactions
+SHOW SESSION VARIABLES LIKE 'thread_pool_high_prio_mode';
+Variable_name	Value
+thread_pool_high_prio_mode	transactions
+SET @@thread_pool_high_prio_mode='transactions';
+SELECT @@thread_pool_high_prio_mode;
+@@thread_pool_high_prio_mode
+transactions
+SET @@thread_pool_high_prio_mode='statements';
+SELECT @@thread_pool_high_prio_mode;
+@@thread_pool_high_prio_mode
+statements
+SET @@thread_pool_high_prio_mode='none';
+SELECT @@thread_pool_high_prio_mode;
+@@thread_pool_high_prio_mode
+none
+SET @@thread_pool_high_prio_mode='foo';
+ERROR 42000: Variable 'thread_pool_high_prio_mode' can't be set to the value of 'foo'
+SET @@thread_pool_high_prio_mode=1.1;
+ERROR 42000: Incorrect argument type to variable 'thread_pool_high_prio_mode'
+SET @@thread_pool_high_prio_mode=1e1;
+ERROR 42000: Incorrect argument type to variable 'thread_pool_high_prio_mode'
+SET @@GLOBAL.thread_pool_high_prio_mode = @start_global_value;
+select count(*) from information_schema.THREAD_GROUP_STATUS;
+count(*)
+0
