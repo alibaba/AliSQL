@@ -512,6 +512,11 @@ void lex_start(THD *thd)
   lex->seq_create_info= NULL;
   lex->only_sequence= false;
   lex->native_create_sequence= false;
+
+  /* for SELECT ... FROM UPDATE ... */
+  lex->return_update= false;
+  lex->return_update_list.empty();
+  lex->real_query_start= 0;
   DBUG_VOID_RETURN;
 }
 

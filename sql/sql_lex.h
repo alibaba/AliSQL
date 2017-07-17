@@ -2577,6 +2577,10 @@ public:
 
   class Explain_format *explain_format;
 
+  bool return_update;
+  List<Item> return_update_list;
+  uint32 real_query_start;
+
   LEX();
 
   virtual ~LEX()

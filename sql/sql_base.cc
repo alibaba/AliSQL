@@ -8329,8 +8329,13 @@ int setup_wild(THD *thd, TABLE_LIST *tables, List<Item> &fields,
       The assignment below is translated to memcpy() call (at least on some
       platforms). memcpy() expects that source and destination areas do not
       overlap. That problem was detected by valgrind. 
+
+      In SELECT...FROM UPDATE, return fields are in
+      thd->lex->return_update_list, while thd->lex->select_lex.item_list
+      contains fields to be updated.
     */
-    if (&select_lex->item_list != &fields)
+    if (&select_lex->item_list != &fields && 
+      thd->lex->sql_command != SQLCOM_UPDATE)
       select_lex->item_list= fields;
   }
   DBUG_RETURN(0);

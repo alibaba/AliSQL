@@ -8793,7 +8793,14 @@ select:
           select_init
           {
             LEX *lex= Lex;
-            lex->sql_command= SQLCOM_SELECT;
+
+            DBUG_ASSERT(lex->sql_command == SQLCOM_SELECT ||
+                        lex->sql_command == SQLCOM_UPDATE ||
+                        lex->sql_command == SQLCOM_END);
+
+            /* SELECT...UPDATE is regarded as a DML.*/
+            if (lex->sql_command != SQLCOM_UPDATE)
+              lex->sql_command= SQLCOM_SELECT;
           }
         ;
 
@@ -8849,12 +8856,24 @@ select_part2:
             if (sel->linkage != UNION_TYPE)
               mysql_init_select(lex);
             lex->current_select->parsing_place= SELECT_LIST;
+
+            /* SELECT ... FROM UPDATE only applies to top-level SELECT statement. */
+            if (lex->sql_command == SQLCOM_UPDATE && sel != &lex->select_lex)
+            {
+              my_error(ER_CANT_USE_OPTION_HERE, MYF(0), "SELECT...FROM UPDATE");
+              MYSQL_YYABORT;
+            }
           }
           select_options select_item_list
           {
             Select->parsing_place= NO_MATTER;
           }
+          select_part3
+          ;
+
+select_part3:          
           select_into select_lock_type
+        | select_update
         ;
 
 select_into:
@@ -8865,6 +8884,52 @@ select_into:
         | select_from into
         ;
 
+/*
+  Implement Oracle/PG's "UPDATE ... RETURNING..." as "SELECT ... FROM UPDATE..."
+*/
+select_update:
+          FROM UPDATE_SYM
+          {
+            /* SELECT ... FROM UPDATE only applies to top-level SELECT statement. */
+            if (Lex->current_select != &Lex->select_lex)
+            {
+              my_error(ER_CANT_USE_OPTION_HERE, MYF(0), "SELECT...FROM UPDATE");
+              MYSQL_YYABORT;
+            }
+
+            if (Select->options)
+            {
+              my_error(ER_CANT_USE_OPTION_HERE, MYF(0), "SELECT...FROM UPDATE");
+              MYSQL_YYABORT;
+            }
+
+            /* Explain SELECT ... FROM UPDATE is not supported. */
+            if (Lex->describe)
+            {
+              my_error(ER_CANT_USE_OPTION_HERE, MYF(0), "SELECT...FROM UPDATE");
+              MYSQL_YYABORT;
+            }
+            Lex->sql_command= SQLCOM_UPDATE;
+            Lex->duplicates= DUP_ERROR;
+            Lex->return_update= true;
+            Lex->real_query_start= YYLIP->get_tok_start() - YYTHD->query();
+            Lex->return_update_list.swap(Select->item_list);
+            Select->item_list.empty();
+          }
+          opt_low_priority
+          opt_ci_on_success opt_rb_on_fail opt_queue_on_pk opt_target_affect_row
+          opt_ignore table_ident SET update_list
+          {
+            if (!Select->add_table_to_list(YYTHD, $10, NULL, 0,
+                                           TL_READ_DEFAULT,
+                                           MDL_SHARED_READ))
+              MYSQL_YYABORT;
+
+            Select->set_lock_for_tables($4);
+          }
+          where_clause opt_order_clause delete_limit_clause {}
+        ;
+          
 select_from:
           FROM join_table_list where_clause group_clause having_clause
           opt_order_clause opt_limit_clause procedure_analyse_clause

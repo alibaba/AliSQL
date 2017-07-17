@@ -249,11 +249,24 @@ int mysql_update(THD *thd,
 
   DBUG_ENTER("mysql_update");
 
+  select_send result;
+  bool return_update= thd->lex->return_update;
+  List<Item> &return_fields= thd->lex->return_update_list;
+
+
   if (open_normal_and_derived_tables(thd, table_list, 0))
     DBUG_RETURN(1);
 
   if (table_list->multitable_view)
   {
+    /* select result from multitable-view update is not supported */
+    if (return_update)
+    {
+      my_error(ER_NON_UPDATABLE_TABLE, MYF(0), table_list->table_name,
+               "SELECT...FROM UPDATE");
+      DBUG_RETURN(1);
+    }
+
     DBUG_ASSERT(table_list->view != 0);
     DBUG_PRINT("info", ("Switch to multi-update"));
     /* convert to multiupdate */
@@ -315,6 +328,23 @@ int mysql_update(THD *thd,
     DBUG_RETURN(1);				/* purecov: inspected */
   }
 
+  if (return_update)
+  {
+    if (setup_wild(thd, table_list, return_fields, 0, select_lex->with_wild))
+      DBUG_RETURN(1);
+
+    if (setup_fields(thd, Ref_ptr_array(), return_fields, MARK_COLUMNS_READ, 0, 0))
+      DBUG_RETURN(1);
+
+    result.set_thd(thd);
+    result.prepare(return_fields, &(thd->lex->unit));
+
+    if (result.send_result_set_metadata(return_fields,
+                                        Protocol::SEND_NUM_ROWS |
+                                        Protocol::SEND_EOF))
+      DBUG_RETURN(1); 
+  }
+
   if (select_lex->inner_refs_list.elements &&
     fix_inner_refs(thd, all_fields, select_lex, select_lex->ref_pointer_array))
     DBUG_RETURN(1);
@@ -354,7 +384,10 @@ int mysql_update(THD *thd,
                                 "No matching rows after partition pruning");
         goto exit_without_my_ok;
       }
-      my_ok(thd);                            // No matching records
+      if (return_update)
+        result.send_eof();
+      else
+        my_ok(thd);                            // No matching records
       DBUG_RETURN(0);
     }
   }
@@ -445,7 +478,10 @@ int mysql_update(THD *thd,
                                 "No matching rows after partition pruning");
         goto exit_without_my_ok;
       }
-      my_ok(thd);                            // No matching records
+      if (return_update)
+        result.send_eof();
+      else
+        my_ok(thd);                            // No matching records
       DBUG_RETURN(0);
     }
   }
@@ -485,6 +521,9 @@ int mysql_update(THD *thd,
       char buff[MYSQL_ERRMSG_SIZE];
       my_snprintf(buff, sizeof(buff), ER(ER_UPDATE_INFO), 0, 0,
                   (ulong) thd->get_stmt_da()->current_statement_warn_count());
+      if (return_update)
+        result.send_eof();
+      else
       my_ok(thd, 0, 0, buff);
 
       DBUG_PRINT("info",("0 records updated"));
@@ -718,9 +757,10 @@ int mysql_update(THD *thd,
   transactional_table= table->file->has_transactions();
   thd->abort_on_warning= (!ignore && thd->is_strict_mode());
 
-  if (table->triggers &&
+  /* SELECT...FROM UPDATE will not work in bulk update mode. */
+  if (return_update || (table->triggers &&
       table->triggers->has_triggers(TRG_EVENT_UPDATE,
-                                    TRG_ACTION_AFTER))
+                                    TRG_ACTION_AFTER)))
   {
     /*
       The table has AFTER UPDATE triggers that might access to subject 
@@ -847,6 +887,13 @@ int mysql_update(THD *thd,
         else if (ignore && !table->file->is_fatal_error(error,
                                                         HA_CHECK_FK_ERROR))
           warn_fk_constraint_violation(thd, table, error);
+      }
+
+      /* Affected(or saying matched) rows will be send to client. */
+      if (return_update && !error && result.send_data(return_fields))
+      {
+        error= 1;
+        break;
       }
 
       if (table->triggers &&
@@ -1012,8 +1059,11 @@ int mysql_update(THD *thd,
       else
         errcode= query_error_code(thd, killed_status == THD::NOT_KILLED);
 
+      uint32 query_start= return_update? thd->lex->real_query_start: 0;
+
       if (thd->binlog_query(THD::ROW_QUERY_TYPE,
-                            thd->query(), thd->query_length(),
+                            thd->query() + query_start,
+                            thd->query_length() - query_start,
                             transactional_table, FALSE, FALSE, errcode))
       {
         error=1;				// Rollback update
@@ -1034,8 +1084,11 @@ int mysql_update(THD *thd,
     my_snprintf(buff, sizeof(buff), ER(ER_UPDATE_INFO), (ulong) found,
                 (ulong) updated,
                 (ulong) thd->get_stmt_da()->current_statement_warn_count());
-    my_ok(thd, (thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated,
-          id, buff);
+    if (return_update)
+      result.send_eof();
+    else
+      my_ok(thd, (thd->client_capabilities & CLIENT_FOUND_ROWS) ? found : updated,
+            id, buff);
     DBUG_PRINT("info",("%ld records updated", (long) updated));
   }
   thd->count_cuted_fields= CHECK_FIELD_IGNORE;		/* calc cuted fields */
@@ -1341,6 +1394,13 @@ int mysql_multi_update_prepare(THD *thd)
 
   /* following need for prepared statements, to run next time multi-update */
   thd->lex->sql_command= SQLCOM_UPDATE_MULTI;
+
+  if (thd->lex->return_update)
+  {
+    my_error(ER_NON_UPDATABLE_TABLE, MYF(0), table_list->table_name,
+             "SELECT...FROM UPDATE");
+    DBUG_RETURN(1);
+  }
 
   /*
     Open tables and create derived ones, but do not lock and fill them yet.
