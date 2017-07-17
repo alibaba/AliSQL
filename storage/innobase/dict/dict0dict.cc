@@ -564,6 +564,7 @@ dict_table_close(
 					indexes after an aborted online
 					index creation */
 {
+	ibool		drop_aborted;
 	if (!dict_locked) {
 		mutex_enter(&dict_sys->mutex);
 	}
@@ -571,6 +572,10 @@ dict_table_close(
 	ut_ad(mutex_own(&dict_sys->mutex));
 	ut_a(table->n_ref_count > 0);
 
+	drop_aborted = try_drop
+		&& table->drop_aborted
+		&& table->n_ref_count == 1
+		&& dict_table_get_first_index(table);
 	--table->n_ref_count;
 
 	/* Force persistent stats re-read upon next open of the table
@@ -599,12 +604,6 @@ dict_table_close(
 
 	if (!dict_locked) {
 		table_id_t	table_id	= table->id;
-		ibool		drop_aborted;
-
-		drop_aborted = try_drop
-			&& table->drop_aborted
-			&& table->n_ref_count == 1
-			&& dict_table_get_first_index(table);
 
 		mutex_exit(&dict_sys->mutex);
 
