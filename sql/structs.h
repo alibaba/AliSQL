@@ -126,6 +126,11 @@ typedef struct st_key {
     For temporary heap tables this member is NULL.
   */
   ulong *rec_per_key;
+  /**
+    True if this index is visible to the query optimizer. The optimizer may
+    only use visible indexes.
+  */
+  bool is_visible;
   union {
     int  bdb_return_if_eq;
   } handler;

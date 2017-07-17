@@ -1088,6 +1088,25 @@ typedef struct st_ha_create_information
 } HA_CREATE_INFO;
 
 /**
+  Structure describing changes to an index to be caused by ALTER TABLE.
+*/
+
+struct KEY_PAIR
+{
+  /**
+    Pointer to KEY object describing old version of index in
+    TABLE::key_info array for TABLE instance representing old
+    version of table.
+  */
+  KEY *old_key;
+  /**
+    Pointer to KEY object describing new version of index in
+    Alter_inplace_info::key_info_buffer array.
+  */
+  KEY *new_key;
+};
+
+/**
   In-place alter handler context.
 
   This is a superclass intended to be subclassed by individual handlers
@@ -1241,6 +1260,9 @@ public:
   */
   static const HA_ALTER_FLAGS ADD_COLUMN_FOR_COMFORT     = 1L << 30;
 
+  // Change index visibility.
+  static const HA_ALTER_FLAGS ALTER_INDEX_VISIBILITY     = 1L << 31;
+
   /**
     Create options (like MAX_ROWS) for the new version of table.
 
@@ -1302,6 +1324,19 @@ public:
      sorted in increasing order.
   */
   uint *index_add_buffer;
+
+  /** Size of index_altered_visibility_buffer array. */
+  uint index_altered_visibility_count;
+
+  /**
+     Array of KEY_PAIR objects describing indexes of which visibility
+     being changed. For each index changed it contains object with
+     KEY_PAIR::old_key pointing to KEY object belonging to the TABLE
+     instance for old version of table representing old version of
+     index and with KEY_PAIR::new_key pointing to KEY object for new
+     version of index in key_info_buffer member.
+  */
+  KEY_PAIR  *index_altered_visibility_buffer;
 
   /**
      Context information to allow handlers to keep context between in-place
@@ -1369,6 +1404,8 @@ public:
     index_drop_buffer(NULL),
     index_add_count(0),
     index_add_buffer(NULL),
+    index_altered_visibility_count(0),
+    index_altered_visibility_buffer(NULL),
     handler_ctx(NULL),
     group_commit_ctx(NULL),
     handler_flags(0),
@@ -1394,6 +1431,21 @@ public:
   */
   void report_unsupported_error(const char *not_supported,
                                 const char *try_instead);
+
+  /**
+     Add old and new version of key to array of indexes whose visibility
+     being changed.
+  */
+  void add_altered_index_visibility(KEY *old_key, KEY *new_key)
+  {
+    KEY_PAIR *key_pair= index_altered_visibility_buffer +
+      index_altered_visibility_count++;
+    key_pair->old_key= old_key;
+    key_pair->new_key= new_key;
+    DBUG_PRINT("info", ("index had visibility altered: %i to %i",
+                        old_key->is_visible,
+                        new_key->is_visible));
+  }
 };
 
 
@@ -1410,6 +1462,7 @@ typedef struct st_key_create_information
     associated with it was dropped.
   */
   bool check_for_duplicate_indexes;
+  bool is_visible;
 } KEY_CREATE_INFO;
 
 

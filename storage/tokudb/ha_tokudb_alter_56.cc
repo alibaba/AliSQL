@@ -448,6 +448,9 @@ enum_alter_inplace_result ha_tokudb::check_if_supported_inplace_alter(TABLE *alt
         result = HA_ALTER_INPLACE_NO_LOCK_AFTER_PREPARE;
     }
 #endif
+    else if (only_flags(ctx->handler_flags, Alter_inplace_info::ALTER_INDEX_VISIBILITY)) {
+        result = HA_ALTER_INPLACE_NO_LOCK;
+    }
 
     if (result != HA_ALTER_INPLACE_NOT_SUPPORTED && table->s->null_bytes != altered_table->s->null_bytes &&
         (tokudb_debug & TOKUDB_DEBUG_ALTER_TABLE)) {

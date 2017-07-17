@@ -76,7 +76,7 @@ static handlerton *installed_htons[128];
 #define BITMAP_STACKBUF_SIZE (128/8)
 
 KEY_CREATE_INFO default_key_create_info=
-  { HA_KEY_ALG_UNDEF, 0, {NullS, 0}, {NullS, 0}, true };
+  { HA_KEY_ALG_UNDEF, 0, {NullS, 0}, {NullS, 0}, true, true };
 
 /* number of entries in handlertons[] */
 ulong total_ha= 0;
@@ -4680,7 +4680,8 @@ handler::check_if_supported_inplace_alter(TABLE *altered_table,
     Alter_inplace_info::ALTER_COLUMN_NAME |
     Alter_inplace_info::ALTER_COLUMN_DEFAULT |
     Alter_inplace_info::CHANGE_CREATE_OPTION |
-    Alter_inplace_info::ALTER_RENAME;
+    Alter_inplace_info::ALTER_RENAME |
+    Alter_inplace_info::ALTER_INDEX_VISIBILITY;
 
   /* Is there at least one operation that requires copy algorithm? */
   if (ha_alter_info->handler_flags & ~inplace_offline_operations)

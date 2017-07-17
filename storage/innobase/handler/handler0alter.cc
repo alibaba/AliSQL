@@ -82,7 +82,8 @@ static const Alter_inplace_info::HA_ALTER_FLAGS INNOBASE_INPLACE_IGNORE
 	= Alter_inplace_info::ALTER_COLUMN_DEFAULT
 	| Alter_inplace_info::ALTER_COLUMN_COLUMN_FORMAT
 	| Alter_inplace_info::ALTER_COLUMN_STORAGE_TYPE
-	| Alter_inplace_info::ALTER_RENAME;
+	| Alter_inplace_info::ALTER_RENAME
+	| Alter_inplace_info::ALTER_INDEX_VISIBILITY;
 
 /** Operations on foreign key definitions (changing the schema only) */
 static const Alter_inplace_info::HA_ALTER_FLAGS INNOBASE_FOREIGN_OPERATIONS

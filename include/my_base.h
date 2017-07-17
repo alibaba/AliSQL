@@ -260,6 +260,7 @@ enum ha_base_keytype {
 #define HA_SPATIAL		1024    /* For spatial search */
 #define HA_NULL_ARE_EQUAL	2048	/* NULL in key are cmp as equal */
 #define HA_GENERATED_KEY	8192	/* Automaticly generated key */
+#define HA_INVISIBLE_KEY        (1<<30) /* This key is visible */
 #define HA_CLUSTERING           (1<<31) /* TokuDB CLUSTERING key */
 
         /* The combination of the above can be used for key type comparison. */

@@ -25,6 +25,7 @@ Alter_info::Alter_info(const Alter_info &rhs, MEM_ROOT *mem_root)
   alter_list(rhs.alter_list, mem_root),
   key_list(rhs.key_list, mem_root),
   create_list(rhs.create_list, mem_root),
+  alter_index_visibility_list(rhs.alter_index_visibility_list, mem_root),
   flags(rhs.flags),
   keys_onoff(rhs.keys_onoff),
   partition_names(rhs.partition_names, mem_root),
@@ -45,6 +46,7 @@ Alter_info::Alter_info(const Alter_info &rhs, MEM_ROOT *mem_root)
   list_copy_and_replace_each_value(alter_list, mem_root);
   list_copy_and_replace_each_value(key_list, mem_root);
   list_copy_and_replace_each_value(create_list, mem_root);
+  list_copy_and_replace_each_value(alter_index_visibility_list, mem_root);
   /* partition_names are not deeply copied currently */
 }
 

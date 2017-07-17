@@ -3411,6 +3411,50 @@ static void check_duplicate_key(THD *thd,
 }
 
 
+/**
+  Primary/unique key check. Checks that:
+
+  - If the storage engine requires it, that there is an index that is
+    candidate for promotion.
+
+  - If such a promotion occurs, checks that the candidate index is not
+    declared invisible.
+
+  @param file The storage engine handler.
+  @param key_info_buffer All indexes in the table.
+  @param key_count Number of indexes.
+
+  @retval false OK.
+  @retval true An error occured and my_error() was called.
+*/
+
+static bool check_promoted_index(const handler *file,
+                                 const KEY *key_info_buffer,
+                                 uint key_count)
+{
+  bool has_unique_key= false;
+  const KEY *end= key_info_buffer + key_count;
+  for (const KEY *k= key_info_buffer; k < end && !has_unique_key; ++k)
+  {
+    if (!(k->flags & HA_NULL_PART_KEY) && (k->flags & HA_NOSAME))
+    {
+      has_unique_key= true;
+      if (!k->is_visible)
+      {
+        my_error(ER_PK_INDEX_CANT_BE_INVISIBLE, MYF(0));
+        return true;
+      }
+    }
+  }
+
+  if (!has_unique_key && (file->ha_table_flags() & HA_REQUIRE_PRIMARY_KEY))
+  {
+    my_error(ER_REQUIRES_PRIMARY_KEY, MYF(0));
+    return true;
+  }
+  return false;
+}
+
 /*
   Preparation for table creation
 
@@ -3985,6 +4029,17 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     key_info->key_part=key_part_info;
     key_info->usable_key_parts= key_number;
     key_info->algorithm= key->key_create_info.algorithm;
+    key_info->is_visible= key->key_create_info.is_visible;
+    if (!key_info->is_visible)
+    {
+      /* Primary key can not be invisible */
+      if (key->type == Key::PRIMARY)
+      {
+        my_error(ER_PK_INDEX_CANT_BE_INVISIBLE, MYF(0));
+        DBUG_RETURN(TRUE);
+      }
+      key_info->flags|= HA_INVISIBLE_KEY;
+    }
 
     if (key->type == Key::FULLTEXT)
     {
@@ -4375,12 +4430,10 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     key_info++;
   }
 
-  if (!unique_key && !primary_key &&
-      (file->ha_table_flags() & HA_REQUIRE_PRIMARY_KEY))
-  {
-    my_message(ER_REQUIRES_PRIMARY_KEY, ER(ER_REQUIRES_PRIMARY_KEY), MYF(0));
+  if (!primary_key && unique_key &&
+      check_promoted_index(file, *key_info_buffer, *key_count))
     DBUG_RETURN(TRUE);
-  }
+
   if (auto_increment > 0)
   {
     my_message(ER_WRONG_AUTO_KEY, ER(ER_WRONG_AUTO_KEY), MYF(0));
@@ -5774,6 +5827,32 @@ static Create_field *get_field_by_index(Alter_info *alter_info, uint idx)
 }
 
 
+/**
+  Look-up KEY object by index name using case-insensitive comparison.
+
+  @param key_name   Index name.
+  @param key_start  Start of array of KEYs for table.
+  @param key_end    End of array of KEYs for table.
+
+  @note Case-insensitive comparison is necessary to correctly
+        handle renaming of keys.
+
+  @retval non-NULL - pointer to KEY object for index found.
+  @retval NULL     - no index with such name found (or it is marked
+                     as renamed).
+*/
+
+static KEY* find_key_ci(const char *key_name, KEY *key_start, KEY *key_end)
+{
+  for (KEY *key= key_start; key < key_end; key++)
+  {
+    if (! my_strcasecmp(system_charset_info, key_name, key->name))
+      return key;
+  }
+  return NULL;
+}
+
+
 static int compare_uint(const uint *s, const uint *t)
 {
   return (*s < *t) ? -1 : ((*s > *t) ? 1 : 0);
@@ -5842,7 +5921,10 @@ static bool fill_alter_inplace_info(THD *thd,
           (KEY**) thd->alloc(sizeof(KEY*) * table->s->keys)) ||
       ! (ha_alter_info->index_add_buffer=
           (uint*) thd->alloc(sizeof(uint) *
-                            alter_info->key_list.elements)))
+                            alter_info->key_list.elements)) ||
+      ! (ha_alter_info->index_altered_visibility_buffer=
+         (KEY_PAIR*) thd->alloc(sizeof(KEY_PAIR) *
+          alter_info->alter_index_visibility_list.elements)))
     DBUG_RETURN(true);
 
   /* First we setup ha_alter_flags based on what was detected by parser. */
@@ -6053,6 +6135,27 @@ static bool fill_alter_inplace_info(THD *thd,
 
   DBUG_PRINT("info", ("index count old: %d  new: %d",
                       table->s->keys, ha_alter_info->key_count));
+
+  const Alter_index_visibility *alter_index_visibility;
+  List_iterator<Alter_index_visibility>
+    alter_index_visibility_it(alter_info->alter_index_visibility_list);
+
+  while ((alter_index_visibility= alter_index_visibility_it++))
+  {
+    const char *name= alter_index_visibility->name();
+    table_key= find_key_ci(name, table->key_info, table_key_end);
+    new_key= find_key_ci(name, ha_alter_info->key_info_buffer, new_key_end);
+
+    if (new_key == NULL)
+    {
+      my_error(ER_KEY_DOES_NOT_EXITS, MYF(0), name, table->s->table_name.str);
+      DBUG_RETURN(true);
+    }
+
+    new_key->is_visible= alter_index_visibility->is_visible();
+    ha_alter_info->handler_flags|= Alter_inplace_info::ALTER_INDEX_VISIBILITY;
+    ha_alter_info->add_altered_index_visibility(table_key, new_key);
+  }
 
   /*
     Step through all keys of the old table and search matching new keys.
@@ -7143,6 +7246,19 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List_iterator<Create_field> find_it(new_create_list);
   List_iterator<Create_field> field_it(new_create_list);
   List<Key_part_spec> key_parts;
+
+  /*
+    This is how we check that all indexes to be altered are name-resolved: We
+    make a copy of the list from the alter_info, and remove all the indexes
+    that are found in the table. Later we check that there is nothing left in
+    the list.
+  */
+  List<Alter_index_visibility>
+    index_visibility_list(alter_info->alter_index_visibility_list, thd->mem_root);
+  List_iterator<Alter_index_visibility> visibility_it(index_visibility_list);
+  List_iterator<Alter_index_visibility>
+    visibility_it2(alter_info->alter_index_visibility_list);
+
   uint db_create_options= (table->s->db_create_options
                            & ~(HA_OPTION_PACK_RECORD));
   uint used_fields= create_info->used_fields;
@@ -7462,10 +7578,22 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     }
     if (key_parts.elements)
     {
-      KEY_CREATE_INFO key_create_info;
+      KEY_CREATE_INFO key_create_info=
+        { HA_KEY_ALG_UNDEF, 0, {NullS, 0}, {NullS, 0}, false,
+          key_info->is_visible };
+
       Key *key;
       enum Key::Keytype key_type;
-      memset(&key_create_info, 0, sizeof(key_create_info));
+
+      // Erase all alter operations that operate on this index.
+      const Alter_index_visibility *alter_index_visibility;
+      visibility_it.rewind();
+      while ((alter_index_visibility= visibility_it++))
+      {
+        if (my_strcasecmp(system_charset_info, key_name,
+                          alter_index_visibility->name()) == 0)
+          visibility_it.remove();
+      }
 
       key_create_info.algorithm= key_info->algorithm;
       if (key_info->flags & HA_USES_BLOCK_SIZE)
@@ -7474,6 +7602,22 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         key_create_info.parser_name= *plugin_name(key_info->parser);
       if (key_info->flags & HA_USES_COMMENT)
         key_create_info.comment= key_info->comment;
+
+      visibility_it2.rewind();
+      while ((alter_index_visibility= visibility_it2++))
+      {
+        const char *name= alter_index_visibility->name();
+        if (my_strcasecmp(system_charset_info, key_name, name) == 0)
+        {
+          if (table->s->primary_key <= MAX_KEY &&
+              table->key_info + table->s->primary_key == key_info)
+          {
+            my_error(ER_PK_INDEX_CANT_BE_INVISIBLE, MYF(0));
+            goto err;
+          }
+          key_create_info.is_visible= alter_index_visibility->is_visible();
+        }
+      }
 
       if (key_info->flags & HA_SPATIAL)
         key_type= Key::SPATIAL;
@@ -7542,6 +7686,14 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   {
     my_error(ER_CANT_DROP_FIELD_OR_KEY, MYF(0),
              alter_info->alter_list.head()->name);
+    goto err;
+  }
+
+  if (index_visibility_list.elements)
+  {
+    my_error(ER_KEY_DOES_NOT_EXITS, MYF(0),
+             index_visibility_list.head()->name(),
+             table->s->table_name.str);
     goto err;
   }
 

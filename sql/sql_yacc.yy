@@ -1692,6 +1692,8 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  YEAR_MONTH_SYM
 %token  YEAR_SYM                      /* SQL-2003-R */
 %token  ZEROFILL
+%token  INVISIBLE_SYM
+%token  VISIBLE_SYM
 
 %left   JOIN_SYM INNER_SYM STRAIGHT_JOIN CROSS LEFT RIGHT
 /* A dummy token to force the priority of table_ref production in a join. */
@@ -1744,7 +1746,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
         opt_natural_language_mode opt_query_expansion
         opt_ev_status opt_ev_on_completion ev_on_completion opt_ev_comment
         ev_alter_on_schedule_completion opt_ev_rename_to opt_ev_sql_stmt
-        trg_action_time trg_event force_drop
+        trg_action_time trg_event force_drop visibility
 
 /*
   Bit field of MYSQL_START_TRANS_OPT_* flags.
@@ -7400,10 +7402,16 @@ key_using_alg:
         | TYPE_SYM btree_or_rtree  { Lex->key_create_info.algorithm= $2; }
         ;
 
+visibility:
+          VISIBLE_SYM { $$= true; }
+        | INVISIBLE_SYM { $$= false; }
+        ;
+
 all_key_opt:
           KEY_BLOCK_SIZE opt_equal ulong_num
           { Lex->key_create_info.block_size= $3; }
 	| COMMENT_SYM TEXT_STRING_sys { Lex->key_create_info.comment= $2; }
+        | visibility { Lex->key_create_info.is_visible = $1; }
         ;
 
 normal_key_opt:
@@ -8086,6 +8094,15 @@ alter_list_item:
               MYSQL_YYABORT;
             lex->alter_info.alter_list.push_back(ac);
             lex->alter_info.flags|= Alter_info::ALTER_CHANGE_COLUMN_DEFAULT;
+          }
+        | ALTER INDEX_SYM ident visibility
+          {
+            LEX *lex= Lex;
+            Alter_index_visibility *ac= new Alter_index_visibility($3.str, $4);
+            if (ac == NULL)
+              MYSQL_YYABORT;
+            lex->alter_info.alter_index_visibility_list.push_back(ac);
+            lex->alter_info.flags|= Alter_info::ALTER_INDEX_VISIBILITY;
           }
         | ALTER opt_column field_ident DROP DEFAULT
           {
@@ -14450,6 +14467,7 @@ keyword:
         | HELP_SYM              {}
         | HOST_SYM              {}
         | INSTALL_SYM           {}
+        | INVISIBLE_SYM         {}
         | LANGUAGE_SYM          {}
         | NO_SYM                {}
         | OPEN_SYM              {}
@@ -14473,6 +14491,7 @@ keyword:
         | START_SYM             {}
         | STOP_SYM              {}
         | TRUNCATE_SYM          {}
+        | VISIBLE_SYM           {}
         | UNICODE_SYM           {}
         | UNINSTALL_SYM         {}
         | WRAPPER_SYM           {}

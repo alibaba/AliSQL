@@ -269,6 +269,34 @@ public:
     { return new (mem_root) Alter_column(*this); }
 };
 
+/**
+   An ALTER INDEX operation that changes the visibility of an index.
+*/
+class Alter_index_visibility :public Sql_alloc {
+public:
+  Alter_index_visibility(const char* name, bool is_visible)
+    :m_name(name), m_is_visible(is_visible)
+  {
+    DBUG_ASSERT(name != NULL);
+  }
+
+  const char *name() const { return m_name; }
+
+  /* The visibility after the operation is performed. */
+  bool is_visible() const { return m_is_visible; }
+
+  /**
+    Used to make a clone of this object for ALTER/CREATE TABLE
+    @sa comment for Key_part_spec::clone
+  */
+  Alter_index_visibility *clone(MEM_ROOT *mem_root) const
+  { return new (mem_root) Alter_index_visibility(*this); }
+
+private:
+  const char *m_name;
+  bool m_is_visible;
+};
+
 
 class Key :public Sql_alloc {
 public:

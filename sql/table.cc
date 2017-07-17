@@ -1222,6 +1222,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
   }
   share->keys_for_keyread.init(0);
   share->keys_in_use.init(keys);
+  share->visible_indexes.init(0);
 
   strpos=disk_buff+6;  
 
@@ -1270,6 +1271,22 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share, uchar *head,
          keyinfo->flags&= ~HA_SPATIAL;
          keyinfo->flags&= ~HA_FULLTEXT;
        }
+
+      /*
+         Replace HA_SORT_ALLOWS_SAME with HA_INVISIBLE_KEY. This way we can support
+         invisible index without changing the FRM format.
+      */
+      if (keyinfo->flags & HA_SORT_ALLOWS_SAME)
+      {
+        keyinfo->flags|= HA_INVISIBLE_KEY;
+        keyinfo->flags&= ~HA_SORT_ALLOWS_SAME;
+        keyinfo->is_visible= FALSE;
+      }
+      else
+      {
+        share->visible_indexes.set_bit(i);
+        keyinfo->is_visible= TRUE;
+      }
 
       keyinfo->key_length= (uint) uint2korr(strpos+2);
       keyinfo->user_defined_key_parts= (uint) strpos[4];
@@ -6011,7 +6028,7 @@ bool TABLE_LIST::process_index_hints(TABLE *tbl)
 {
   /* initialize the result variables */
   tbl->keys_in_use_for_query= tbl->keys_in_use_for_group_by= 
-    tbl->keys_in_use_for_order_by= tbl->s->keys_in_use;
+    tbl->keys_in_use_for_order_by= tbl->s->usable_indexes();
 
   /* index hint list processing */
   if (index_hints)
@@ -6057,7 +6074,8 @@ bool TABLE_LIST::process_index_hints(TABLE *tbl)
       */
       if (tbl->s->keynames.type_names == 0 ||
           (pos= find_type(&tbl->s->keynames, hint->key_name.str,
-                          hint->key_name.length, 1)) <= 0)
+                          hint->key_name.length, 1)) <= 0 ||
+          !tbl->s->key_info[pos - 1].is_visible)
       {
         my_error(ER_KEY_DOES_NOT_EXITS, MYF(0), hint->key_name.str, alias);
         return 1;

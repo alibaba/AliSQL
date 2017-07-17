@@ -20,6 +20,7 @@
 class Alter_drop;
 class Alter_column;
 class Key;
+class Alter_index_visibility;
 
 
 /**
@@ -122,6 +123,9 @@ public:
   // Set for ADD [COLUMN] FIRST | AFTER
   static const uint ALTER_COLUMN_ORDER          = 1L << 25;
 
+  // Means that the visibility of and index is changed.
+  static const uint ALTER_INDEX_VISIBILITY      = 1L << 26;
+
 
   enum enum_enable_or_disable { LEAVE_AS_IS, ENABLE, DISABLE };
 
@@ -170,6 +174,8 @@ public:
   List<Key>                     key_list;
   // List of columns, used by both CREATE and ALTER TABLE.
   List<Create_field>            create_list;
+  // Indexes whose visibilities are to be changed.
+  List<Alter_index_visibility>  alter_index_visibility_list;
   // Type of ALTER TABLE operation.
   uint                          flags;
   // Enable or disable keys.
@@ -198,6 +204,7 @@ public:
     alter_list.empty();
     key_list.empty();
     create_list.empty();
+    alter_index_visibility_list.empty();
     flags= 0;
     keys_onoff= LEAVE_AS_IS;
     num_parts= 0;

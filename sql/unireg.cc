@@ -644,6 +644,16 @@ static uint pack_keys(uchar *keybuff, uint key_count, KEY *keyinfo,
       key_flags|= HA_SPATIAL;
       key_flags|= HA_FULLTEXT;
     }
+
+    /*
+      Replace HA_INVISIBLE_KEY with HA_SORT_ALLOWS_SAME which is not used in FRM.
+      This way allow us to store invisible index without changing the FRM format.
+    */
+    if (key->flags & HA_INVISIBLE_KEY)
+    {
+      key_flags|= HA_SORT_ALLOWS_SAME;
+    }
+
     int2store(pos, (key_flags ^ HA_NOSAME));
     int2store(pos+2,key->key_length);
     pos[4]= (uchar) key->user_defined_key_parts;
