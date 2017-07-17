@@ -21,6 +21,19 @@
 #include "my_pthread.h"
 #include "sql_class.h"
 #include "semisync.h"
+
+struct Slave
+{
+  THD *thd;
+  Vio vio;
+
+  my_socket sock_fd() const { return vio.mysql_socket.fd; }
+  uint server_id() const { return thd->server_id; }
+};
+
+typedef std::vector<Slave> Slave_vector;
+typedef Slave_vector::iterator Slave_vector_it;
+
 /**
   Ack_receiver is responsible to control ack receive thread and maintain
   slave information used by ack receive thread.
@@ -93,17 +106,6 @@ private:
   /* If slave list is updated(add or remove). */
   bool m_slaves_changed;
 
-  struct Slave
-  {
-    THD *thd;
-    Vio vio;
-
-    my_socket sock_fd() { return vio.mysql_socket.fd; }
-    uint server_id() { return thd->server_id; }
-  };
-
-  typedef std::vector<Slave> Slave_vector;
-  typedef Slave_vector::iterator Slave_vector_it;
   Slave_vector m_slaves;
 
   pthread_t m_pid;
@@ -114,7 +116,6 @@ private:
 
   void set_stage_info(const PSI_stage_info &stage);
   void wait_for_slave_connection();
-  my_socket get_slave_sockets(fd_set *fds);
 };
 
 extern Ack_receiver ack_receiver;
