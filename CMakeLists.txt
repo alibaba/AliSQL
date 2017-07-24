@@ -504,8 +504,9 @@ IF(NOT WITHOUT_SERVER)
   ADD_SUBDIRECTORY(sql)
   OPTION (WITH_EMBEDDED_SERVER "Compile MySQL with embedded server" OFF)
   IF(WITH_EMBEDDED_SERVER) 
-   ADD_SUBDIRECTORY(libmysqld)
-   ADD_SUBDIRECTORY(libmysqld/examples)
+   # Forbid embedded server since of the statical compiled semisync
+   #ADD_SUBDIRECTORY(libmysqld)
+   #ADD_SUBDIRECTORY(libmysqld/examples)
   ENDIF(WITH_EMBEDDED_SERVER)
 ENDIF()
 
