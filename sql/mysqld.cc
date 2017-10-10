@@ -4103,12 +4103,6 @@ int init_common_variables()
   if (thread_running_high_watermark == 0)
     thread_running_high_watermark= max_connections;
 
-#ifdef HAVE_REPLICATION
-  if (repl_semisync_master.initObject() ||
-      repl_semisync_slave.initObject())
-    return 1;
-#endif
-
   unireg_init(opt_specialflag); /* Set up extern variabels */
   if (!(my_default_lc_messages=
         my_locale_by_name(lc_messages)))
@@ -5536,6 +5530,12 @@ int mysqld_main(int argc, char **argv)
     unireg_abort(1);        // Will do exit
 
   my_init_signals();
+
+#ifdef HAVE_REPLICATION
+  if (repl_semisync_master.initObject() ||
+      repl_semisync_slave.initObject())
+    unireg_abort(1);        // Will do exit
+#endif
 
   size_t guardize= 0;
   int retval= pthread_attr_getguardsize(&connection_attrib, &guardize);
