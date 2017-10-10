@@ -1154,6 +1154,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  CURDATE                       /* MYSQL-FUNC */
 %token  CURRENT_SYM                   /* SQL-2003-R */
 %token  CURRENT_USER                  /* SQL-2003-R */
+%token  CURRVAL_SYM
 %token  CURSOR_SYM                    /* SQL-2003-R */
 %token  CURSOR_NAME_SYM               /* SQL-2003-N */
 %token  CURTIME                       /* MYSQL-FUNC */
@@ -1407,6 +1408,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  NEG
 %token  NEW_SYM                       /* SQL-2003-R */
 %token  NEXT_SYM                      /* SQL-2003-N */
+%token  NEXTVAL_SYM
 %token  NOCACHE_SYM
 %token  NOCYCLE_SYM
 %token  NODEGROUP_SYM
@@ -9724,6 +9726,30 @@ simple_expr:
             if ($$ == NULL)
               MYSQL_YYABORT;
           }
+        | NEXTVAL_SYM '(' table_ident ')'
+          {
+            TABLE_LIST *table;
+            if (!(table= Lex->current_select->add_table_to_list(YYTHD, $3, NULL,
+                                                                TL_OPTION_SEQUENCE,
+                                                                TL_READ,
+                                                                MDL_SHARED_READ,
+                                                                NULL, NULL, NULL, true)))
+              MYSQL_YYABORT;
+            if (!($$= new (YYTHD->mem_root) Item_func_nextval(YYTHD, table)))
+              MYSQL_YYABORT;
+          }
+        | CURRVAL_SYM '(' table_ident ')'
+          {
+            TABLE_LIST *table;
+            if (!(table= Lex->current_select->add_table_to_list(YYTHD, $3, NULL,
+                                                                TL_OPTION_SEQUENCE,
+                                                                TL_READ,
+                                                                MDL_SHARED_READ,
+                                                                NULL, NULL, NULL, true)))
+              MYSQL_YYABORT;
+            if (!($$= new (YYTHD->mem_root) Item_func_currval(YYTHD, table)))
+              MYSQL_YYABORT;
+          }
         | DEFAULT '(' simple_ident ')'
           {
             if ($3->is_splocal())
@@ -14557,6 +14583,7 @@ keyword_sp:
           not reserved in MySQL per WL#2111 specification.
         */
         | CURRENT_SYM              {}
+        | CURRVAL_SYM              {}
         | CURSOR_NAME_SYM          {}
         | CYCLE_SYM                {}
         | DATA_SYM                 {}
@@ -14683,6 +14710,7 @@ keyword_sp:
         | NDBCLUSTER_SYM           {}
         | NEXT_SYM                 {}
         | NEW_SYM                  {}
+        | NEXTVAL_SYM              {}
         | NOCACHE_SYM              {}
         | NOCYCLE_SYM              {}
         | NO_WAIT_SYM              {}

@@ -7125,3 +7125,69 @@ longlong Item_func_uuid_short::val_int()
   mysql_mutex_unlock(&LOCK_uuid_generator);
   return (longlong) val;
 }
+/*
+   Sequence function.
+*/
+
+longlong Item_func_nextval::val_int()
+{
+  ulonglong value;
+  int error;
+  TABLE *table= table_list->table;
+  DBUG_ENTER("Item_func_nextval::val_int");
+  DBUG_ASSERT(table->file);
+
+  bitmap_set_bit(table->read_set, FIELD_NUM_NEXTVAL);
+
+  if (table->file->ha_rnd_init(1))
+    goto err;
+  else
+  {
+   if ((error= table->file->ha_rnd_next(table->record[0])))
+   {
+      table->file->print_error(error, MYF(0));
+      table->file->ha_rnd_end();
+      goto err;
+    }
+    table->file->ha_rnd_end();
+
+    value= table->field[FIELD_NUM_NEXTVAL]->val_int();
+    null_value= 0;
+    DBUG_RETURN(value);
+  }
+err:
+  null_value= 1;
+  DBUG_RETURN(0);
+}
+
+longlong Item_func_currval::val_int()
+{
+  ulonglong value;
+  int error;
+  TABLE *table= table_list->table;
+  DBUG_ENTER("Item_func_currval::val_int");
+  DBUG_ASSERT(table->file);
+
+  bitmap_set_bit(table->read_set, FIELD_NUM_CURRVAL);
+
+  if (table->file->ha_rnd_init(1))
+    goto err;
+  else
+  {
+   if ((error= table->file->ha_rnd_next(table->record[0])))
+   {
+      table->file->print_error(error, MYF(0));
+      table->file->ha_rnd_end();
+      goto err;
+    }
+    table->file->ha_rnd_end();
+
+    value= table->field[FIELD_NUM_CURRVAL]->val_int();
+    null_value= 0;
+    DBUG_RETURN(value);
+  }
+err:
+  null_value= 1;
+  DBUG_RETURN(0);
+}
+

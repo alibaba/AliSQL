@@ -1720,8 +1720,11 @@ public:
   /* pointer to element after last one in translation table above */
   Field_translator *field_translation_end;
 
-  /*If true, it the SELECT FOR SEQUENCE syntax. */
+  /* If true, it's the SELECT FOR SEQUENCE syntax. */
   bool sequence_read;
+
+  /* If true, it's the sequence table query */
+  bool sequence;
   /*
     List (based on next_local) of underlying tables of this view. I.e. it
     does not include the tables of subqueries used in the view. Is set only
