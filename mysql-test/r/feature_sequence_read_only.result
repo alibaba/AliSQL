@@ -32,7 +32,7 @@ create sequence s1 cache 2;
 ERROR HY000: Sequence '(null).(null)' access error.
 select * for s;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
-0	1	1	9223372036854775807	1	1	2	0	0
+1	1	1	9223372036854775807	1	1	2	0	0
 flush tables;
 select * for s;
 ERROR HY000: Sequence '(null).(null)' access error.

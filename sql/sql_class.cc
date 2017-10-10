@@ -94,6 +94,19 @@ extern "C" void free_user_var(user_var_entry *entry)
   entry->destroy();
 }
 
+extern "C" uchar *get_sequence_last_key(Sequence_last_value *entry,
+                                        size_t *length,
+                                        my_bool not_used MY_ATTRIBUTE((unused)))
+{
+  *length= entry->length;
+  return (uchar*) entry->key;
+}
+
+extern "C" void free_sequence_last(Sequence_last_value *entry)
+{
+  delete entry;
+}
+
 bool Key_part_spec::operator==(const Key_part_spec& other) const
 {
   return length == other.length &&
@@ -1110,6 +1123,10 @@ THD::THD(bool enable_plugins)
                (my_hash_get_key) get_var_key,
                (my_hash_free_key) free_user_var, 0);
 
+  my_hash_init(&sequences, system_charset_info, SEQUENCES_HASH_SIZE, 0, 0,
+                (my_hash_get_key) get_sequence_last_key,
+                (my_hash_free_key) free_sequence_last, 0);
+
   sp_proc_cache= NULL;
   sp_func_cache= NULL;
 
@@ -1568,6 +1585,9 @@ void THD::change_user(void)
   my_hash_init(&user_vars, system_charset_info, USER_VARS_HASH_SIZE, 0, 0,
                (my_hash_get_key) get_var_key,
                (my_hash_free_key) free_user_var, 0);
+  my_hash_init(&sequences, system_charset_info, SEQUENCES_HASH_SIZE, 0, 0,
+                (my_hash_get_key) get_sequence_last_key,
+                (my_hash_free_key) free_sequence_last, 0);
   sp_cache_clear(&sp_proc_cache);
   sp_cache_clear(&sp_func_cache);
 }
@@ -1617,6 +1637,7 @@ void THD::cleanup(void)
 
   delete_dynamic(&user_var_events);
   my_hash_free(&user_vars);
+  my_hash_free(&sequences);
   close_temporary_tables(this);
   sp_cache_clear(&sp_proc_cache);
   sp_cache_clear(&sp_func_cache);

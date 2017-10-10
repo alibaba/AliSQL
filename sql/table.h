@@ -1238,8 +1238,8 @@ public:
 #endif
   MDL_ticket *mdl_ticket;
 
-  /* If true, will iterator the sequence nextval. */
-  bool iter_sequence;
+  /* If true, it's the sequence query syntax. */
+  bool sequence_query;
 
   void init(THD *thd, TABLE_LIST *tl);
   bool fill_item_list(List<Item> *item_list) const;

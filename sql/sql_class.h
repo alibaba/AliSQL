@@ -2246,6 +2246,9 @@ public:
   */
   char	  *thread_stack;
 
+  /* Hash of used sequences (for current values) */
+  HASH sequences;
+
   /**
     Currently selected catalog.
   */

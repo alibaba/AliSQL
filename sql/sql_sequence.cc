@@ -376,3 +376,16 @@ end:
    thd->set_current_stmt_binlog_format_row();
  DBUG_RETURN(error);
 }
+
+/*
+   Judge the sequence query type: select nextval or not.
+*/
+enum enum_seq_iteration sequence_iteration_type(TABLE *table)
+{
+  DBUG_ENTER("sequence_iteration_type");
+
+  if (bitmap_is_set(table->read_set, FIELD_NUM_NEXTVAL))
+    DBUG_RETURN(IT_NEXTVAL);
+
+  DBUG_RETURN(IT_NON_NEXTVAL);
+}

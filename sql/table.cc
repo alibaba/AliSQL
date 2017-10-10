@@ -3859,7 +3859,7 @@ void TABLE::init(THD *thd, TABLE_LIST *tl)
 
   clear_column_bitmaps();
 
-  iter_sequence= tl->sequence_read;
+  sequence_query= tl->sequence_read;
 
   DBUG_ASSERT(key_read == 0);
 

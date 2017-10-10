@@ -38,6 +38,8 @@ class Sequence_share
   ulonglong cache_end;
 public:
   bool seq_initialized;
+  /* In order to invalid the THD sequence when sequence is dropped or altered */
+  ulonglong sequence_version;
   mysql_mutex_t seq_mutex;
 
   bool cache_valid;
@@ -45,10 +47,6 @@ public:
 
   /* db_name + table_name */
   const char *table_name;
-
-  /* All setted read/write set. */
-  MY_BITMAP read_set;
-  MY_BITMAP write_set;
 
 public:
   Sequence_share() {};
@@ -62,19 +60,15 @@ public:
       my_free((char *) table_name);
       table_name= NULL;
     }
-    bitmap_free(&read_set);
-    bitmap_free(&write_set);
-
     seq_initialized= false;
     DBUG_VOID_RETURN;
   };
 
   void init(const char *table_name);
-  enum enum_cache_state quick_read(TABLE *table);
+  enum enum_cache_state quick_read(TABLE *table, ulonglong *local_values);
   int reload_cache(TABLE *table,
                    enum enum_cache_state state,
                    bool *changed);
-  ulonglong *get_field_ptr(enum enum_sequence_field field_num);
   void set_valid(bool valid);
 };
 
@@ -105,8 +99,12 @@ private:
   /* Control that only first record is valid within sequence table. */
   ulong start_of_scan;
 
-  /* Whether iterator the sequence nextval */
-  bool iter_sequence;
+  /* Sequence iteration type */
+  enum enum_seq_iteration m_it_type;
+
+  /* All setted read/write set. */
+  MY_BITMAP m_read_set;
+  MY_BITMAP m_write_set;
 
 public:
   ha_sequence(handlerton *hton, TABLE_SHARE *share);
@@ -161,6 +159,9 @@ public:
   int end_autonomous();
   int commit_autonomous();
 
+  bool fill_sequence_fields(THD *thd, TABLE *table,
+                            ulonglong *local_values);
+  bool fill_sequence_fields_from_thd(THD *thd, TABLE *table);
   /*
     Bind the table/handler thread to track table i/o.
   */

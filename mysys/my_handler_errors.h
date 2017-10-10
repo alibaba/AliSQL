@@ -95,8 +95,9 @@ static const char *handler_error_messages[]=
   "Temporary file write failure",
   "Operation not allowed when innodb_forced_recovery > 0",
   "Too many words in a FTS phrase or proximity search",
-  "Sequence has been run out",
+  "Sequence has run out",
   "Sequence structure or number is invalid",
+  "Sequence is not yet defined in this session",
   "Sequence access error"
 };
 

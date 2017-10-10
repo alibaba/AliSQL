@@ -150,13 +150,13 @@ nextval
 set session sequence_read_skip_cache=false;
 select * for s1;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
-0	1	1	9223372036854775807	1	1	10000	0	0
+1	1	1	9223372036854775807	1	1	10000	0	0
 select nextval for s1;
 nextval
 2
 select * for s1;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
-0	3	1	9223372036854775807	1	1	10000	0	0
+3	3	1	9223372036854775807	1	1	10000	0	0
 select nextval for s1;
 nextval
 4
@@ -180,7 +180,7 @@ priv test
 create sequence s_db.s1;
 select * for s_db.s1;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
-0	1	1	9223372036854775807	1	1	10000	0	0
+1	1	1	9223372036854775807	1	1	10000	0	0
 create sequence s_db.s2;
 drop sequence s_db.s2;
 select * for s_db.s1;
@@ -201,9 +201,9 @@ insert into t select nextval for s_t;
 insert into t select nextval for s_t;
 insert into t select nextval for s_t;
 insert into t select nextval for s_t;
-ERROR HY000: Sequence 's_db.s_t' has been run out.
+ERROR HY000: Sequence 's_db.s_t' has run out.
 insert into t select nextval for s_t;
-ERROR HY000: Sequence 's_db.s_t' has been run out.
+ERROR HY000: Sequence 's_db.s_t' has run out.
 commit;
 select * from t;
 id
@@ -234,7 +234,7 @@ Variable_name	Value
 read_only	OFF
 select * for s_db.s1;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
-0	1	1	9223372036854775807	1	1	10000	0	0
+1	1	1	9223372036854775807	1	1	10000	0	0
 show global variables like 'read_only';
 Variable_name	Value
 read_only	ON
@@ -276,7 +276,7 @@ currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
 set session sequence_read_skip_cache=off;
 select * for s_t;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
-0	11	1	20	1	1	5	1	0
+11	11	1	20	1	1	5	1	0
 select * from s_t;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
 0	17	1	20	1	1	5	1	0
@@ -555,7 +555,7 @@ ERROR HY000: Sequence requires binlog_format= row
 set session binlog_format=row;
 select * for s1;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
-0	1	1	9223372036854775807	1	1	2	0	0
+1	1	1	9223372036854775807	1	1	2	0	0
 use s_db;
 select * from s1;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round

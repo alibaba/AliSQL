@@ -55,6 +55,15 @@ typedef struct st_seq_cache
   ulonglong round;
 }ST_SEQ_CACHE;
 
+enum enum_seq_iteration
+{
+  IT_NON,               /* Query the sequence base table */
+  IT_NEXTVAL,           /* Query nextval */
+  IT_NON_NEXTVAL,       /* Query non nextval, maybe currval or others */
+};
+
+enum enum_seq_iteration sequence_iteration_type(TABLE *table);
+
 /* Sequence table fields definition. */
 typedef struct st_sequence_field_info
 {
@@ -92,12 +101,27 @@ public:
   bool check_valid();
 };
 
+class Sequence_last_value
+{
+public:
+  Sequence_last_value(uchar *key_arg, uint length_arg)
+    :key(key_arg), length(length_arg)
+  {}
+  ~Sequence_last_value()
+  {
+    my_free(key);
+  }
+  uchar *key;
+  uint length;
+  ulonglong values[FIELD_NUM_END];
+  ulonglong sequence_version;
+};
+
 handler *get_ha_sequence(Sequence_create_info *info);
 
 /* Public method called when create sequence */
 bool prepare_create_sequence(THD *thd, LEX *lex, TABLE_LIST *create_table);
 bool sequence_insert(THD *thd, LEX *lex, TABLE_LIST *table_list);
 bool check_sequence_values_valid(ulonglong *items);
-
 
 #endif

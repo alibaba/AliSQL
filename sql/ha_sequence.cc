@@ -41,6 +41,8 @@ static PSI_mutex_key key_sequence_share_mutex;
 static mysql_mutex_t sequence_share_mutex;
 /* Sequence open shares */
 static HASH sequence_open_shares;
+/* Increment the sequence version */
+static ulonglong sequence_global_version= 0;
 
 static bool sequence_inited= false;
 
@@ -68,6 +70,8 @@ static Sequence_share *get_share(const char *name)
   {
     share= new Sequence_share();
     share->init(name);
+    share->sequence_version= sequence_global_version++;
+
     if (my_hash_insert(&sequence_open_shares, (uchar*) share))
     {
       delete share;
@@ -174,62 +178,7 @@ void Sequence_share::init(const char *name)
 
   cache_valid= false;
 
-  bitmap_init(&read_set, NULL, FIELD_NUM_END, false);
-  bitmap_init(&write_set, NULL, FIELD_NUM_END, false);
-  bitmap_set_all(&read_set);
-  bitmap_set_all(&write_set);
-
   seq_initialized= true;
-  DBUG_VOID_RETURN;
-}
-/*
-  Get sequence share cache field value pointer
-
-  SYNOPSIS
-    field_num           sequence field number
-
-  RETURN VALUES
-    field value pointer
-*/
-ulonglong *Sequence_share::get_field_ptr(enum enum_sequence_field field_num)
-{
-  DBUG_ENTER("Sequence_share::get_field_ptr");
-  DBUG_ASSERT(field_num < FIELD_NUM_END);
-  DBUG_RETURN(&caches[field_num]);
-}
-/*
-  Store the values into table->record from
-  sequence share caches directly if caches has not been run out.
-
-  SYNOPSIS
-    table       TABLE object
-    share       sequence share object
-*/
-static void sequence_prepare_field_value(TABLE *table,
-                                         Sequence_share *share)
-{
-  ST_SEQ_FIELD_INFO *field_info;
-  Field **field;
-  ulonglong *value;
-  MY_BITMAP *save_set;
-  DBUG_ENTER("sequence_prepare_field_value");
-
-  /* Save table write bitmap */
-  save_set= table->write_set;
-  table->write_set= &(share->write_set);
-
-  for (field= table->field, field_info= seq_fields;
-       *field;
-       field++, field_info++)
-  {
-    DBUG_ASSERT(!memcmp(field_info->field_name,
-                        (*field)->field_name,
-                        strlen(field_info->field_name)));
-    value= share->get_field_ptr(field_info->field_num);
-    (*field)->set_notnull();
-    (*field)->store(*value, true);
-  }
-  table->write_set= save_set;
   DBUG_VOID_RETURN;
 }
 /*
@@ -253,15 +202,17 @@ void Sequence_share::set_valid(bool valid)
     CACHE_ROUND_OUT     cache run out, need reload next batch.
     CACHE_HIT           cache hit
 */
-enum enum_cache_state Sequence_share::quick_read(TABLE *table)
+enum enum_cache_state Sequence_share::quick_read(TABLE *table, ulonglong *local_values)
 {
   ulonglong *nextval_ptr;
+  ulonglong *currval_ptr;
   ulonglong *increment_ptr;
   bool last_round;
   DBUG_ENTER("Sequence_share::quick_read");
 
   mysql_mutex_assert_owner(&seq_mutex);
   nextval_ptr= &caches[FIELD_NUM_NEXTVAL];
+  currval_ptr= &caches[FIELD_NUM_CURRVAL];
   increment_ptr= &caches[FIELD_NUM_INCREMENT];
 
   if (!cache_valid)
@@ -283,7 +234,9 @@ enum enum_cache_state Sequence_share::quick_read(TABLE *table)
   /* Retrieve values from cache directly */
   {
     DBUG_ASSERT(*nextval_ptr <= cache_end);
-    sequence_prepare_field_value(table, this);
+    *currval_ptr= *nextval_ptr;
+    memcpy(local_values, caches, sizeof(caches));
+
     if ((cache_end - *nextval_ptr) >= *increment_ptr)
       *nextval_ptr+= *increment_ptr;
     else
@@ -468,6 +421,11 @@ void ha_sequence::init_variables()
   m_engine= NULL;
   m_seq_create_info= NULL;
 
+  bitmap_init(&m_read_set, NULL, FIELD_NUM_END, false);
+  bitmap_init(&m_write_set, NULL, FIELD_NUM_END, false);
+  bitmap_set_all(&m_read_set);
+  bitmap_set_all(&m_write_set);
+
   start_of_scan= 0;
   DBUG_VOID_RETURN;
 }
@@ -559,6 +517,10 @@ ha_sequence::~ha_sequence()
     delete m_file;
     m_file= NULL;
   }
+
+  bitmap_free(&m_read_set);
+  bitmap_free(&m_write_set);
+
   clear_handler_file();
 }
 /* virtual function */
@@ -728,11 +690,11 @@ int ha_sequence::rnd_init(bool scan)
   DBUG_ASSERT(table_share && table);
 
   start_of_scan= 1;
-  iter_sequence= false;
+  m_it_type= IT_NON;
 
-  /* Inherit the iter_sequence option. */
-  if (table->iter_sequence)
-    iter_sequence= true;
+  /* Redefine the sequence_query option. */
+  if (table->sequence_query)
+    m_it_type= sequence_iteration_type(table);
 
   DBUG_RETURN(m_file->ha_rnd_init(scan));
 }
@@ -762,6 +724,7 @@ int ha_sequence::rnd_next(uchar *buf)
   int error= 0;
   enum enum_cache_state state;
   THD *thd;
+  ulonglong local_values[FIELD_NUM_END];
   DBUG_ENTER("ha_sequence::rnd_next");
   error= 0;
   thd= ha_thd();
@@ -776,7 +739,7 @@ int ha_sequence::rnd_next(uchar *buf)
            3. Select_from clause
   */
   if (get_lock_type() == F_WRLCK
-      || !iter_sequence
+      || m_it_type == IT_NON
       || thd->variables.sequence_read_skip_cache)
   {
     DBUG_RETURN(m_file->ha_rnd_next(buf));
@@ -790,10 +753,24 @@ int ha_sequence::rnd_next(uchar *buf)
       DBUG_RETURN(HA_ERR_SEQUENCE_ACCESS_ERROR);
 
     start_of_scan= 0;
+
+    /* Step 0.1: Read from current session context.
+                 It's not necessary to hold mutex here.
+    */
+    if (m_it_type == IT_NON_NEXTVAL)
+    {
+      if (fill_sequence_fields_from_thd(thd, table))
+        DBUG_RETURN(HA_ERR_SEQUENCE_NOT_DEFINED);
+      else
+        DBUG_RETURN(0);
+    }
+
+    DBUG_ASSERT(m_it_type == IT_NEXTVAL);
+
     lock_share();
 
     /* Step 1: quick read from cache */
-    state= share->quick_read(table);
+    state= share->quick_read(table, local_values);
     switch (state)
     {
       /* If hit, query back quickly */
@@ -814,7 +791,7 @@ int ha_sequence::rnd_next(uchar *buf)
 
           /* Step 3: Read from cache data again */
           share->set_valid(true);
-          state= share->quick_read(table);
+          state= share->quick_read(table, local_values);
           switch (state)
           {
             case CACHE_HIT:
@@ -838,9 +815,136 @@ int ha_sequence::rnd_next(uchar *buf)
 
 err:
   share->set_valid(false);
-end:
   unlock_share();
   DBUG_RETURN(error);
+
+end:
+  unlock_share();
+  /* Fill the sequence data into table->fields and session context */
+  if (fill_sequence_fields(thd, table,
+                           local_values))
+    error= HA_ERR_SEQUENCE_ACCESS_ERROR;
+
+  DBUG_RETURN(error);
+}
+
+/*
+  Store the values into table->record and session context.
+
+  SYNOPSIS
+    thd                 Thread
+    table               TABLE object
+    local_values        Sequence iterated values
+    sequence_version    Sequence share version
+*/
+bool ha_sequence::fill_sequence_fields(THD *thd, TABLE *table,
+                                       ulonglong *local_values)
+{
+  const char *key;
+  uint length;
+  Sequence_last_value *entry;
+  MY_BITMAP *save_read_set;
+  MY_BITMAP *save_write_set;
+  ST_SEQ_FIELD_INFO *field_info;
+  Field **field;
+  DBUG_ENTER("fill_sequence_fields");
+
+  key= table->s->table_cache_key.str;
+  length= table->s->table_cache_key.length;
+
+  if (!(entry= ((Sequence_last_value *)
+                my_hash_search(&thd->sequences, (uchar *)key, length))))
+  {
+    if (!(key= (char *)my_memdup(key, length, MYF(MY_WME))) ||
+        !(entry= new Sequence_last_value((uchar *)key, length)))
+    {
+      my_free((char *) key);
+      delete entry;
+      DBUG_RETURN(true);
+    }
+
+    if (my_hash_insert(&thd->sequences, (uchar*)entry))
+    {
+      delete entry;
+      DBUG_RETURN(true);
+    }
+  }
+
+  save_read_set= table->read_set;
+  save_write_set= table->write_set;
+  table->read_set= &m_read_set;
+  table->write_set= &m_write_set;
+
+  for (field= table->field, field_info= seq_fields;
+       *field;
+       field++, field_info++)
+  {
+    DBUG_ASSERT(!memcmp(field_info->field_name,
+                        (*field)->field_name,
+                        strlen(field_info->field_name)));
+
+    ulonglong value= local_values[field_info->field_num];
+    (*field)->set_notnull();
+    (*field)->store(value, true);
+    entry->values[field_info->field_num]= value;
+  }
+  entry->sequence_version= share->sequence_version;
+
+  table->read_set= save_read_set;
+  table->write_set= save_write_set;
+  DBUG_RETURN(false);
+}
+
+/*
+  Query the values from current session context.
+
+  SYNOPSIS
+    thd                 Thread
+    table               TABLE object
+    sequence_version    Sequence share version
+*/
+bool ha_sequence::fill_sequence_fields_from_thd(THD *thd, TABLE *table)
+{
+  const char *key;
+  uint length;
+  Sequence_last_value *entry;
+  MY_BITMAP *save_set;
+  ST_SEQ_FIELD_INFO *field_info;
+  Field **field;
+  DBUG_ENTER("fill_sequence_fields_from_thd");
+
+  key= table->s->table_cache_key.str;
+  length= table->s->table_cache_key.length;
+
+  if (!(entry= ((Sequence_last_value *)
+                my_hash_search(&thd->sequences, (uchar *)key, length))))
+  {
+    DBUG_RETURN(TRUE);
+  }
+
+  if (entry->sequence_version != share->sequence_version)
+  {
+    my_hash_delete(&thd->sequences, (uchar*) entry);
+    DBUG_RETURN(TRUE);
+  }
+
+  save_set= table->write_set;
+  table->write_set= &m_write_set;
+
+  for (field= table->field, field_info= seq_fields;
+       *field;
+       field++, field_info++)
+  {
+    DBUG_ASSERT(!memcmp(field_info->field_name,
+                        (*field)->field_name,
+                        strlen(field_info->field_name)));
+    ulonglong value= entry->values[field_info->field_num];
+    (*field)->set_notnull();
+    (*field)->store(value, true);
+  }
+  table->write_set= save_set;
+
+  DBUG_RETURN(false);
 }
 
 /*
@@ -873,8 +977,8 @@ int ha_sequence::update_and_reload(uchar *buf,
   /* Save read/write bitmap set */
   save_read_set= table->read_set;
   save_write_set= table->write_set;
-  table->read_set= &(share->read_set);
-  table->write_set= &(share->write_set);
+  table->read_set= &m_read_set;
+  table->write_set= &m_write_set;
 
   /* Step 1 begin the autonomous transaction */
   if ((error= begin_autonomous()))
@@ -1157,6 +1261,11 @@ void ha_sequence::print_error(int error, myf errflag)
     case HA_ERR_SEQUENCE_RUN_OUT:
     {
       my_error(ER_SEQUENCE_RUN_OUT, MYF(0), sequence_db, sequence_name);
+      DBUG_VOID_RETURN;
+    }
+    case HA_ERR_SEQUENCE_NOT_DEFINED:
+    {
+      my_error(ER_SEQUENCE_NOT_DEFINED, MYF(0), sequence_db, sequence_name);
       DBUG_VOID_RETURN;
     }
     /*
