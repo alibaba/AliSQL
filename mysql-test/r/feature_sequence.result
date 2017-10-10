@@ -186,7 +186,7 @@ select * for s2;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
 2	2	1	9223372036854775807	1	1	10000	0	0
 select * for t2;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR HY000: 's_db.t2' is not a SEQUENCE
 select * from s2, t2;
 currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round	id
 0	10002	1	9223372036854775807	1	1	10000	0	0	1

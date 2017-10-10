@@ -179,7 +179,7 @@ commit;
 
 select * for s2;
 
---error ER_SYNTAX_ERROR
+--error ER_NOT_SEQUENCE
 select * for t2;
 
 select * from s2, t2;

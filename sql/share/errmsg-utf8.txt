@@ -7140,4 +7140,6 @@ ER_PK_INDEX_CANT_BE_INVISIBLE
   eng "A primary key index cannot be invisible"
 ER_SEQUENCE_NOT_DEFINED
   eng "Sequence '%-.192s.%-.192s' is not yet defined in this session"
+ER_NOT_SEQUENCE
+  eng "'%-.192s.%-.192s' is not a SEQUENCE"
 

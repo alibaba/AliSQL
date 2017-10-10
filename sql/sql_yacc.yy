@@ -14116,6 +14116,32 @@ simple_ident_q:
 
               $$= trg_fld;
             }
+            else if (!my_strcasecmp(system_charset_info, $3.str, "nextval"))
+            {
+              TABLE_LIST *table;
+              SELECT_LEX *sel= lex->current_select;
+              if (!(table= sel->add_table_to_list(thd, new Table_ident($1), NULL,
+                                                  TL_OPTION_SEQUENCE,
+                                                  TL_READ,
+                                                  MDL_SHARED_READ,
+                                                  NULL, NULL, NULL, true)))
+                MYSQL_YYABORT;
+              if (!($$= new (thd->mem_root) Item_func_nextval(thd, table)))
+                MYSQL_YYABORT;
+            }
+            else if (!my_strcasecmp(system_charset_info, $3.str, "currval"))
+            {
+              TABLE_LIST *table;
+              SELECT_LEX *sel= lex->current_select;
+              if (!(table= sel->add_table_to_list(thd, new Table_ident($1), NULL,
+                                                  TL_OPTION_SEQUENCE,
+                                                  TL_READ,
+                                                  MDL_SHARED_READ,
+                                                  NULL, NULL, NULL, true)))
+                MYSQL_YYABORT;
+              if (!($$= new (thd->mem_root) Item_func_currval(thd, table)))
+                MYSQL_YYABORT;
+            }
             else
             {
               SELECT_LEX *sel= lex->current_select;

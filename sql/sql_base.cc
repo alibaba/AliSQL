@@ -3265,7 +3265,7 @@ table_found:
 #endif
   if (table_list->sequence_read && !table->s->is_sequence)
   {
-    my_error(ER_SYNTAX_ERROR, MYF(0));
+    my_error(ER_NOT_SEQUENCE, MYF(0), table->s->db.str, table->s->table_name.str);
     DBUG_RETURN(true);
   }
 
