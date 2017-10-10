@@ -1095,6 +1095,8 @@ The following options may be given as the first argument:
  --time-format=name  The TIME format (ignored)
  --timed-mutexes     Specify whether to time mutexes. Deprecated, has no
  effect.
+ --tls-version=name  TLS version, permitted values are TLSv1, TLSv1.1, and
+ TLSv1.2, depending on SSL library support
  --tmp-table-size=#  If an internal in-memory temporary table exceeds this
  size, MySQL will automatically convert it to an on-disk
  MyISAM table
@@ -1571,6 +1573,7 @@ thread-stack 262144
 threadpool-workaround-epoll-bug FALSE
 time-format %H:%i:%s
 timed-mutexes FALSE
+tls-version TLSv1,TLSv1.1,TLSv1.2
 tmp-table-size 16777216
 tokudb-alter-print-error FALSE
 tokudb-analyze-delete-fraction 1

@@ -781,7 +781,7 @@ extern my_atomic_rwlock_t thread_running_lock;
 extern my_atomic_rwlock_t slave_open_temp_tables_lock;
 
 extern char *opt_ssl_ca, *opt_ssl_capath, *opt_ssl_cert, *opt_ssl_cipher,
-            *opt_ssl_key, *opt_ssl_crl, *opt_ssl_crlpath;
+            *opt_ssl_key, *opt_ssl_crl, *opt_ssl_crlpath, *opt_tls_version;
 
 extern MYSQL_PLUGIN_IMPORT pthread_key(THD*, THR_THD);
 
@@ -835,6 +835,7 @@ enum options_mysqld
   OPT_SSL_CERT,
   OPT_SSL_CIPHER,
   OPT_SSL_KEY,
+  OPT_TLS_VERSION,
   OPT_THREAD_CONCURRENCY,
   OPT_UPDATE_LOG,
   OPT_WANT_CORE,

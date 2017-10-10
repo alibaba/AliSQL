@@ -41,6 +41,18 @@ SET(WITH_SSL_DOC
   "${WITH_SSL_DOC}, system (use os library)")
 SET(WITH_SSL_DOC
   "${WITH_SSL_DOC}, </path/to/custom/installation>")
+SET(WITH_SSL_DOC
+   "${WITH_SSL_DOC}, openssl (use bundled openssl)")
+
+IF(CMAKE_VERSION VERSION_LESS "2.8.6")
+  MACRO (MYSQL_CHECK_SSL)
+  ENDMACRO()
+  MESSAGE(SEND_ERROR
+      "The cmake version require at least 2.8.6")
+  RETURN()
+ENDIF()
+
+INCLUDE(ExternalProject)
 
 MACRO (CHANGE_SSL_SETTINGS string)
   SET(WITH_SSL ${string} CACHE STRING ${WITH_SSL_DOC} FORCE)
@@ -72,10 +84,60 @@ MACRO (MYSQL_USE_BUNDLED_SSL)
   ENDFOREACH()
 ENDMACRO()
 
+#
+#Compile openssl statically.
+#
+MACRO (MYSQL_USE_BUNDLED_OPENSSL)
+  SET(SOURCE_DIR "${CMAKE_SOURCE_DIR}/extra/openssl")
+  SET(BINARY_DIR "${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/extra/openssl")
+  SET(SSL_INCLUDE_DIRS ${SOURCE_DIR}/include)
+  SET(SSL_DEFINES "-DHAVE_OPENSSL")
+  SET(OPENSSL_CONFIGURE_OPTS "-fPIC no-shared")
+  IF (CMAKE_BUILD_TYPE MATCHES "Debug" AND NOT APPLE)
+    LIST(APPEND LIBARAFT_CONFIGURE_OPTS --enable-debug)
+  ENDIF()
+
+  IF(CMAKE_GENERATOR MATCHES "Makefiles")
+    SET(MAKE_COMMAND ${CMAKE_MAKE_PROGRAM})
+  ELSE() # Xcode/Ninja generators
+    SET(MAKE_COMMAND make)
+  ENDIF()
+
+  ExternalProject_Add(openssl
+    PREFIX extra/openssl
+    SOURCE_DIR ${SOURCE_DIR}
+    BINARY_DIR ${BINARY_DIR}
+    STAMP_DIR  ${BINARY_DIR}
+    CONFIGURE_COMMAND "${SOURCE_DIR}/config" ${OPENSSL_CONFIGURE_OPTS}
+    BUILD_COMMAND  ${MAKE_COMMAND} 
+    INSTALL_COMMAND ""
+  )
+
+  SET(MY_OPENSSL_LIBSSL "${BINARY_DIR}/libssl.a")
+  SET(MY_OPENSSL_LIBCRYPTO "${BINARY_DIR}/libcrypto.a")
+  SET(SSL_LIBRARIES ${MY_OPENSSL_LIBSSL} ${MY_OPENSSL_LIBCRYPTO})
+  IF(CMAKE_SYSTEM_NAME MATCHES "SunOS")
+    SET(SSL_LIBRARIES ${SSL_LIBRARIES} ${LIBSOCKET})
+  ENDIF()
+  IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
+    SET(SSL_LIBRARIES ${SSL_LIBRARIES} ${LIBDL})
+  ENDIF()
+
+  ADD_LIBRARY(libssl STATIC IMPORTED)
+  SET_TARGET_PROPERTIES(libssl PROPERTIES IMPORTED_LOCATION "${MY_OPENSSL_LIBSSL}")
+  ADD_DEPENDENCIES(libssl openssl)
+  ADD_LIBRARY(libcrypto STATIC IMPORTED)
+  SET_TARGET_PROPERTIES(libcrypto PROPERTIES IMPORTED_LOCATION "${MY_OPENSSL_LIBCRYPTO}")
+  ADD_DEPENDENCIES(libcrypto openssl)
+
+ENDMACRO()
+
+
+
 # MYSQL_CHECK_SSL
 #
 # Provides the following configure options:
-# WITH_SSL=[yes|bundled|system|<path/to/custom/installation>]
+# WITH_SSL=[yes|bundled|system|openssl|<path/to/custom/installation>]
 MACRO (MYSQL_CHECK_SSL)
   IF(NOT WITH_SSL)
    IF(WIN32)
@@ -89,7 +151,9 @@ MACRO (MYSQL_CHECK_SSL)
     SET(WITH_SSL_PATH ${WITH_SSL} CACHE PATH "path to custom SSL installation")
   ENDIF()
 
-  IF(WITH_SSL STREQUAL "bundled")
+  IF(WITH_SSL STREQUAL "openssl")
+    MYSQL_USE_BUNDLED_OPENSSL()
+  ELSEIF(WITH_SSL STREQUAL "bundled")
     MYSQL_USE_BUNDLED_SSL()
     # Reset some variables, in case we switch from /path/to/ssl to "bundled".
     IF (WITH_SSL_PATH)

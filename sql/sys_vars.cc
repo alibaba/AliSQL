@@ -2986,6 +2986,23 @@ static Sys_var_charptr Sys_ssl_crlpath(
        READ_ONLY GLOBAL_VAR(opt_ssl_crlpath), SSL_OPT(OPT_SSL_CRLPATH),
        IN_FS_CHARSET, DEFAULT(0));
 
+static Sys_var_charptr Sys_tls_version(
+       "tls_version",
+       "TLS version, permitted values are TLSv1, TLSv1.1, and TLSv1.2, "
+       "depending on SSL library support",
+       READ_ONLY GLOBAL_VAR(opt_tls_version), SSL_OPT(OPT_TLS_VERSION),
+       IN_FS_CHARSET,
+#ifdef SSL_OP_NO_TLSv1_2
+       "TLSv1,TLSv1.1,TLSv1.2");
+#elif defined(SSL_OP_NO_TLSv1_1)
+       "TLSv1,TLSv1.1");
+#else
+       "TLSv1");
+#endif
+
+static Sys_var_have Sys_have_tlsv1_2(
+       "have_tlsv1_2", "have_tlsv1_2",
+       READ_ONLY GLOBAL_VAR(have_tlsv1_2), NO_CMD_LINE);
 
 // why ENUM and not BOOL ?
 static const char *updatable_views_with_limit_names[]= {"NO", "YES", 0};

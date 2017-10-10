@@ -13,11 +13,14 @@ drop table if exists t1;
 create table t1(f1 int);
 insert into t1 values (5);
 
-grant select on test.* to ssl_user1@localhost require SSL;
-grant select on test.* to ssl_user2@localhost require cipher "DHE-RSA-AES256-SHA";
-grant select on test.* to ssl_user3@localhost require cipher "DHE-RSA-AES256-SHA" AND SUBJECT "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=Client";
-grant select on test.* to ssl_user4@localhost require cipher "DHE-RSA-AES256-SHA" AND SUBJECT "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=Client" ISSUER "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=CA";
-grant select on test.* to ssl_user5@localhost require cipher "DHE-RSA-AES256-SHA" AND SUBJECT "xxx";
+let $cipher_val= "DHE-RSA-AES128-GCM-SHA256";
+
+#--replace_result DHE-RSA-AES128-GCM-SHA256 SSL_CIPHER DHE-RSA-AES256-SHA SSL_CIPHER
+--eval grant select on test.* to ssl_user1@localhost require SSL;
+--eval grant select on test.* to ssl_user2@localhost require cipher $cipher_val;
+--eval grant select on test.* to ssl_user3@localhost require cipher $cipher_val AND SUBJECT "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=Client";
+--eval grant select on test.* to ssl_user4@localhost require cipher $cipher_val AND SUBJECT "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=Client" ISSUER "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=CA";
+-- eval grant select on test.* to ssl_user5@localhost require cipher $cipher_val AND SUBJECT "xxx";
 flush privileges;
 
 connect (con1,localhost,ssl_user1,,,,,SSL);
@@ -212,10 +215,10 @@ DROP TABLE t1;
 #
 
 # Common ciphers to openssl and yassl
---exec $MYSQL --host=localhost -e "SHOW STATUS LIKE 'Ssl_cipher';" --ssl-cipher=DHE-RSA-AES256-SHA
---exec $MYSQL --host=localhost -e "SHOW STATUS LIKE 'Ssl_cipher';" --ssl-cipher=EDH-RSA-DES-CBC3-SHA
---exec $MYSQL --host=localhost -e "SHOW STATUS LIKE 'Ssl_cipher';" --ssl-cipher=AES256-SHA
---exec $MYSQL --host=localhost -e "SHOW STATUS LIKE 'Ssl_cipher';" --ssl-cipher=RC4-SHA
+--exec $MYSQL --host=localhost -e "SHOW STATUS LIKE 'Ssl_cipher'; SHOW STATUS LIKE 'Ssl_version';" --ssl-cipher=DHE-RSA-AES256-SHA
+--exec $MYSQL --host=localhost -e "SHOW STATUS LIKE 'Ssl_cipher'; SHOW STATUS LIKE 'Ssl_version';" --ssl-cipher=DHE-RSA-AES128-SHA
+--exec $MYSQL --host=localhost -e "SHOW STATUS LIKE 'Ssl_cipher'; SHOW STATUS LIKE 'Ssl_version';" --ssl-cipher=AES256-SHA
+--exec $MYSQL --host=localhost -e "SHOW STATUS LIKE 'Ssl_cipher'; SHOW STATUS LIKE 'Ssl_version';" --ssl-cipher=DHE-RSA-AES128-SHA
 --disable_query_log
 --disable_result_log
 

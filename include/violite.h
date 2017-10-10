@@ -151,7 +151,8 @@ enum enum_ssl_init_error
 {
   SSL_INITERR_NOERROR= 0, SSL_INITERR_CERT, SSL_INITERR_KEY, 
   SSL_INITERR_NOMATCH, SSL_INITERR_BAD_PATHS, SSL_INITERR_CIPHERS, 
-  SSL_INITERR_MEMFAIL, SSL_INITERR_DHFAIL, SSL_INITERR_LASTERR
+  SSL_INITERR_MEMFAIL, SSL_INITERR_DHFAIL, SSL_TLS_VERSION_INVALID,
+  SSL_INITERR_LASTERR
 };
 const char* sslGetErrString(enum enum_ssl_init_error err);
 
@@ -167,12 +168,17 @@ struct st_VioSSLFd
 *new_VioSSLConnectorFd(const char *key_file, const char *cert_file,
                        const char *ca_file,  const char *ca_path,
                        const char *cipher, enum enum_ssl_init_error *error,
-                       const char *crl_file, const char *crl_path);
+                       const char *crl_file, const char *crl_path,
+                       const long ssl_ctx_flags);
+
+long process_tls_version(const char *tls_version);
+
 struct st_VioSSLFd
 *new_VioSSLAcceptorFd(const char *key_file, const char *cert_file,
                       const char *ca_file,const char *ca_path,
                       const char *cipher, enum enum_ssl_init_error *error,
-                      const char *crl_file, const char *crl_path);
+                      const char *crl_file, const char *crl_path,
+                      const long ssl_ctx_flags);
 void free_vio_ssl_acceptor_fd(struct st_VioSSLFd *fd);
 #endif /* ! EMBEDDED_LIBRARY */
 #endif /* HAVE_OPENSSL */

@@ -2725,7 +2725,7 @@ static int send_client_reply_packet(MCPVIO_EXT *mpvio,
                                         options->extension ? 
                                         options->extension->ssl_crl : NULL,
                                         options->extension ? 
-                                        options->extension->ssl_crlpath : NULL)))
+                                        options->extension->ssl_crlpath : NULL, 0)))
     {
       set_mysql_extended_error(mysql, CR_SSL_CONNECTION_ERROR, unknown_sqlstate,
                                ER(CR_SSL_CONNECTION_ERROR), sslGetErrString(ssl_init_error));

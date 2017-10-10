@@ -725,6 +725,7 @@ SHOW_COMP_OPTION have_ssl, have_symlink, have_dlopen, have_query_cache;
 SHOW_COMP_OPTION have_geometry, have_rtree_keys;
 SHOW_COMP_OPTION have_crypt, have_compress;
 SHOW_COMP_OPTION have_profiling;
+SHOW_COMP_OPTION have_tlsv1_2;
 
 /* Thread specific variables */
 
@@ -1259,7 +1260,7 @@ HANDLE smem_event_connect_request= 0;
 my_bool opt_use_ssl  = 0;
 char *opt_ssl_ca= NULL, *opt_ssl_capath= NULL, *opt_ssl_cert= NULL,
      *opt_ssl_cipher= NULL, *opt_ssl_key= NULL, *opt_ssl_crl= NULL,
-     *opt_ssl_crlpath= NULL;
+     *opt_ssl_crlpath= NULL, *opt_tls_version= NULL;
 
 static scheduler_functions thread_scheduler_struct, extra_thread_scheduler_struct;
 scheduler_functions *thread_scheduler= &thread_scheduler_struct;
@@ -4491,11 +4492,14 @@ static int init_ssl()
   {
     enum enum_ssl_init_error error= SSL_INITERR_NOERROR;
 
+    long ssl_ctx_flags= process_tls_version(opt_tls_version);
+
     /* having ssl_acceptor_fd != 0 signals the use of SSL */
     ssl_acceptor_fd= new_VioSSLAcceptorFd(opt_ssl_key, opt_ssl_cert,
 					  opt_ssl_ca, opt_ssl_capath,
 					  opt_ssl_cipher, &error,
-                                          opt_ssl_crl, opt_ssl_crlpath);
+                                          opt_ssl_crl, opt_ssl_crlpath,
+                                          ssl_ctx_flags);
     DBUG_PRINT("info",("ssl_acceptor_fd: 0x%lx", (long) ssl_acceptor_fd));
     ERR_remove_state(0);
     if (!ssl_acceptor_fd)
@@ -8628,6 +8632,13 @@ static int mysql_init_variables(void)
 #else
   have_ssl=SHOW_OPTION_NO;
 #endif
+
+#ifdef SSL_OP_NO_TLSv1_2
+  have_tlsv1_2= SHOW_OPTION_YES;
+#else
+  have_tlsv1_2= SHOW_OPTION_NO;
+#endif
+
 #ifdef HAVE_BROKEN_REALPATH
   have_symlink=SHOW_OPTION_NO;
 #else

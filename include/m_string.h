@@ -104,6 +104,16 @@ extern	char *strcont(const char *src, const char *set);
 extern	char *strxmov(char *dst, const char *src, ...);
 extern	char *strxnmov(char *dst, size_t len, const char *src, ...);
 
+static inline char *my_strtok_r(char *str, const char *delim, char **saveptr)
+{
+#if defined _WIN32
+  return strtok_s(str, delim, saveptr);
+#else
+  return strtok_r(str, delim, saveptr);
+#endif
+}
+
+
 /* Prototypes of normal stringfunctions (with may ours) */
 #ifndef HAVE_STRNLEN
 extern size_t strnlen(const char *s, size_t n);
