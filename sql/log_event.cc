@@ -9922,6 +9922,20 @@ search_key_in_table(TABLE *table, MY_BITMAP *bi_cols, uint key_type)
   if (key_type & MULTIPLE_KEY_FLAG && table->s->keys)
   {
     DBUG_PRINT("debug", ("Searching for K."));
+
+    /* auot_increment index has higher priority over other secondary indexes */
+    if (table->found_next_number_field)
+    {
+      keyinfo= table->key_info + table->s->next_number_index;
+
+      res= are_all_columns_signaled_for_key(keyinfo, bi_cols) ?
+            table->s->next_number_index : MAX_KEY;
+
+      if (res < MAX_KEY &&
+          table->s->usable_indexes().is_set(res))
+        DBUG_RETURN(res);
+    }
+
     for (key=0,keyinfo= table->key_info ;
          (key < table->s->keys) && (res == MAX_KEY);
          key++,keyinfo++)
