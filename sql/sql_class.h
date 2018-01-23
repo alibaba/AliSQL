@@ -676,6 +676,7 @@ typedef struct system_status_var
   ulonglong physical_sync_read;
   ulonglong physical_async_read;
   ulonglong io_limit_count;
+  ulonglong cpu_time;
   /*
     Number of statements sent from the client
   */
@@ -2341,6 +2342,9 @@ public:
   // track down slow pthread_create
   ulonglong  prior_thr_create_utime, thr_create_utime;
   ulonglong  start_utime, utime_after_lock;
+  struct timespec  start_cpu_time;
+  my_pthread_clock_id clock_id;
+  bool clock_err;
 
   thr_lock_type update_lock_default;
   Delayed_insert *di;
@@ -3620,6 +3624,34 @@ public:
   inline ulonglong found_rows(void)
   {
     return limit_found_rows;
+  }
+
+  void set_cpu_time()
+  {
+    clock_err= false;
+#ifdef HAVE_CPU_TIME
+    if (my_pthread_getcpuclockid(&clock_id)
+        || my_clock_gettime(clock_id, &start_cpu_time) == -1)
+    {
+      clock_err= true;
+      return;
+    }
+#endif
+  }
+
+  void inc_cpu_time()
+  {
+#ifdef HAVE_CPU_TIME
+    if (!clock_err)
+    {
+      struct timespec end_cpu_time;
+      if (my_clock_gettime(clock_id, &end_cpu_time) != -1)
+      {
+        ulonglong diff= diff_timespec(end_cpu_time, start_cpu_time);
+        status_var_add(status_var.cpu_time, diff);
+      }
+    }
+#endif
   }
   /**
     Returns TRUE if session is in a multi-statement transaction mode.

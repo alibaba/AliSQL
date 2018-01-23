@@ -10,8 +10,8 @@ checksum table test_1.t1;
 Table	Checksum
 test_1.t1	3791299187
 show full processlist;
-Id	User	Host	db	Command	Time	State	Info	Memory_used	Memory_used_by_query	Logical_read	Physical_sync_read	Physical_async_read
-#	root	localhost	test	Query	xxx	#	#	#	#	#	#	#
+Id	User	Host	db	Command	Time	State	Info	Memory_used	Memory_used_by_query	Logical_read	Physical_sync_read	Physical_async_read	CPU_time
+#	root	localhost	test	Query	xxx	#	#	#	#	#	#	#	#
 show status like '%IO_limit_count%';
 Variable_name	Value
 IO_limit_count	#

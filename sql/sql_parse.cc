@@ -1243,6 +1243,7 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
   thd->enable_slow_log= TRUE;
   thd->lex->sql_command= SQLCOM_END; /* to avoid confusing VIEW detectors */
   thd->set_time();
+  thd->set_cpu_time();
   if (!thd->is_valid_time())
   {
     /*
@@ -1873,6 +1874,7 @@ done:
   thd->packet.shrink(thd->variables.net_buffer_length);	// Reclaim some memory
   free_root(thd->mem_root,MYF(MY_KEEP_PREALLOC));
 
+  thd->inc_cpu_time();
   /* DTRACE instrumentation, end */
   if (MYSQL_QUERY_DONE_ENABLED() || MYSQL_COMMAND_DONE_ENABLED())
   {

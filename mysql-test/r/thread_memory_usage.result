@@ -4,7 +4,7 @@ select * from test.t1;
 id
 1
 show full processlist;
-Id	User	Host	db	Command	Time	State	Info	Memory_used	Memory_used_by_query	Logical_read	Physical_sync_read	Physical_async_read
-#	root	localhost	test	#	xxx	#	#	#	#	#	#	#
-#	root	localhost	test	#	xxx	#	#	#	#	#	#	#
+Id	User	Host	db	Command	Time	State	Info	Memory_used	Memory_used_by_query	Logical_read	Physical_sync_read	Physical_async_read	CPU_time
+#	root	localhost	test	#	xxx	#	#	#	#	#	#	#	#
+#	root	localhost	test	#	xxx	#	#	#	#	#	#	#	#
 drop table test.t1;

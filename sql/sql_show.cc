@@ -2063,6 +2063,7 @@ public:
   CSET_STRING query_string;
   long long memory_used, query_memory_used;
   ulonglong logical_read, physical_sync_read, physical_async_read;
+  ulonglong cpu_time;
 };
 
 // For sorting by thread_id.
@@ -2241,6 +2242,10 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
     field_list.push_back(field= new Item_return_int("Physical_async_read",
                                                     MY_INT64_NUM_DECIMAL_DIGITS,
                                                     MYSQL_TYPE_LONGLONG));
+
+    field_list.push_back(field= new Item_return_int("CPU_time",
+                                                    MY_INT64_NUM_DECIMAL_DIGITS,
+                                                    MYSQL_TYPE_LONGLONG));
   }
   if (protocol->send_result_set_metadata(&field_list,
                             Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
@@ -2297,6 +2302,7 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
         thd_info->logical_read= tmp->status_var.logical_read;
         thd_info->physical_sync_read= tmp->status_var.physical_sync_read;
         thd_info->physical_async_read= tmp->status_var.physical_async_read;
+        thd_info->cpu_time= tmp->status_var.cpu_time;
 
         DBUG_EXECUTE_IF("processlist_acquiring_dump_threads_LOCK_thd_data",
                         {
@@ -2363,6 +2369,7 @@ void mysqld_list_processes(THD *thd,const char *user, bool verbose)
       protocol->store(thd_info->logical_read);
       protocol->store(thd_info->physical_sync_read);
       protocol->store(thd_info->physical_async_read);
+      protocol->store(thd_info->cpu_time);
     }
     if (protocol->write())
       break; /* purecov: inspected */

@@ -318,6 +318,23 @@ extern int my_pthread_cond_timedwait(pthread_cond_t *cond,
 void *my_pthread_getspecific_imp(pthread_key_t key);
 #endif
 
+/* CPU time */
+#if defined(HAVE_PTHREAD_GETCPUCLOCKID) && defined(HAVE_CLOCK_GETTIME)
+
+#define HAVE_CPU_TIME
+#define my_pthread_getcpuclockid(A) pthread_getcpuclockid(pthread_self(), A)
+#define my_clock_gettime(A, B)  clock_gettime(A, B)
+typedef clockid_t my_pthread_clock_id;
+
+#else  /* Not support on other platform */
+
+#define my_pthread_getcpuclockid(A) (-1)
+#define my_clock_gettime(A, B) (-1)
+typedef ulonglong my_pthread_clock_id;
+
+#endif /* CPU time */
+
+
 #ifndef HAVE_LOCALTIME_R
 struct tm *localtime_r(const time_t *clock, struct tm *res);
 #endif

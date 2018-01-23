@@ -7,7 +7,7 @@ key(col2)
 )engine= innodb;
 Table	Checksum
 test_1.t1	1724218332
-Id	User	Host	db	Command	Time	State	Info	Memory_used	Memory_used_by_query	Logical_read	Physical_sync_read	Physical_async_read
-#	root	localhost	test	Sleep	xxx	#	#	#	#	#	#	#
-#	root	localhost	test	Query	xxx	#	#	#	#	#	#	#
-#	root	localhost	test	Sleep	xxx	#	#	#	#	#	#	#
+Id	User	Host	db	Command	Time	State	Info	Memory_used	Memory_used_by_query	Logical_read	Physical_sync_read	Physical_async_read	CPU_time
+#	root	localhost	test	Sleep	xxx	#	#	#	#	#	#	#	#
+#	root	localhost	test	Query	xxx	#	#	#	#	#	#	#	#
+#	root	localhost	test	Sleep	xxx	#	#	#	#	#	#	#	#
