@@ -4192,6 +4192,13 @@ public:
   */
   void raise_note_printf(uint code, ...);
 
+  /**
+    Raise an exception condition with specified msg
+  */
+  void raise_error(uint sql_errno,
+                   const char* sqlstate,
+                   const char* msg);
+
 private:
   /*
     Only the implementation of the SIGNAL and RESIGNAL statements

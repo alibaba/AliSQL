@@ -904,6 +904,22 @@ public:
   void fix_length_and_dec();
 };
 
+/**
+  This class is used for implementing the new raise_error function and the functions related to them.
+*/
+class Item_func_raise_error :public Item_int_func
+{
+
+  String value;
+public:
+  Item_func_raise_error( Item *a) :Item_int_func(a) {}
+  Item_func_raise_error( Item *a, Item *b)
+    :Item_int_func(a, b)
+  {}
+
+  longlong val_int();
+  const char *func_name() const {return "raise_error";}
+};
 
 class Item_func_rand :public Item_real_func
 {

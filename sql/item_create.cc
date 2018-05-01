@@ -2090,7 +2090,6 @@ protected:
   virtual ~Create_func_quote() {}
 };
 
-
 class Create_func_radians : public Create_func_arg1
 {
 public:
@@ -2103,6 +2102,17 @@ protected:
   virtual ~Create_func_radians() {}
 };
 
+class Create_func_raise_error : public Create_native_func
+{
+public:
+  virtual Item *create_native(THD *thd, LEX_STRING name,
+            List<Item> *item_list);
+
+  static Create_func_raise_error s_singleton;
+protected:
+  Create_func_raise_error() {}
+  virtual ~Create_func_raise_error() {}
+};
 
 class Create_func_rand : public Create_native_func
 {
@@ -4853,6 +4863,42 @@ Create_func_radians::create(THD *thd, Item *arg1)
                                              M_PI/180, 0.0);
 }
 
+Create_func_raise_error Create_func_raise_error::s_singleton;
+
+Item*
+Create_func_raise_error::create_native(THD *thd, LEX_STRING name,
+                                       List<Item> *item_list)
+{
+  Item *func= NULL;
+  int arg_count= 0;
+
+  if (item_list != NULL)
+    arg_count= item_list->elements;
+
+  switch (arg_count) {
+  case 1:
+  {
+    Item *param_1= item_list->pop();
+    func= new (thd->mem_root) Item_func_raise_error(param_1);
+    break;
+  }
+  case 2:
+  {
+    Item *param_1= item_list->pop();
+    Item *param_2= item_list->pop();
+    func= new (thd->mem_root) Item_func_raise_error(param_1, param_2);
+    break;
+  }
+  default:
+  {
+    my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), name.str);
+    break;
+  }
+  }
+
+  return func;
+}
+
 
 Create_func_rand Create_func_rand::s_singleton;
 
@@ -5627,6 +5673,7 @@ static Native_func_registry func_array[] =
   { { C_STRING_WITH_LEN("POWER") }, BUILDER(Create_func_pow)},
   { { C_STRING_WITH_LEN("QUOTE") }, BUILDER(Create_func_quote)},
   { { C_STRING_WITH_LEN("RADIANS") }, BUILDER(Create_func_radians)},
+  { { C_STRING_WITH_LEN("RAISE_ERROR") }, BUILDER(Create_func_raise_error)},
   { { C_STRING_WITH_LEN("RAND") }, BUILDER(Create_func_rand)},
   { { C_STRING_WITH_LEN("RANDOM_BYTES") }, BUILDER(Create_func_random_bytes) },
   { { C_STRING_WITH_LEN("RELEASE_LOCK") }, BUILDER(Create_func_release_lock) },

@@ -7142,4 +7142,7 @@ ER_SEQUENCE_NOT_DEFINED
   eng "Sequence '%-.192s.%-.192s' is not yet defined in this session"
 ER_NOT_SEQUENCE
   eng "'%-.192s.%-.192s' is not a SEQUENCE"
-
+ER_MALFORMED_MESSAGE
+  eng "Malformed message specification '%.200s'."
+ER_INTENTIONAL_ERROR
+  eng "user issue an error intentionally."

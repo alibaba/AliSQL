@@ -552,6 +552,70 @@ my_decimal *Item_func::val_decimal(my_decimal *decimal_value)
   return decimal_value;
 }
 
+/*
+  Raise an error with specified error message and optional sql state,
+  sql error code is ER_INTENTIONAL_ERROR.
+*/
+longlong Item_func_raise_error::val_int()
+{
+  DBUG_ENTER("Item_raise_error::val_int");
+  DBUG_ASSERT(fixed == 1);
+
+  THD* thd= current_thd;
+
+  String *sql_state= NULL;
+  String *msg= NULL;
+
+  if (arg_count == 2)
+  // both sql state and error message are specified
+  {
+    sql_state= args[0]->val_str(&value);
+    // validate sql_state input
+    if (sql_state == NULL)
+    {
+      my_error(ER_SP_BAD_SQLSTATE, MYF(0), "NULL");
+      DBUG_RETURN(0);
+    }
+
+    LEX_STRING lex_sql_state= sql_state->lex_string();
+
+    if (!is_sqlstate_valid(&lex_sql_state) || is_sqlstate_completion(sql_state->ptr()))
+    {
+      my_error(ER_SP_BAD_SQLSTATE, MYF(0), sql_state->ptr());
+      DBUG_RETURN(0);
+    }
+    msg= args[1]->val_str(&value);
+    // validate message input
+    if (msg == NULL)
+    {
+      my_error(ER_MALFORMED_MESSAGE, MYF(0), "NULL");
+      DBUG_RETURN(0);
+    }
+
+    // raise the manual error now
+    (void) thd->raise_error(ER_INTENTIONAL_ERROR,
+                            sql_state->ptr(),
+                            msg->ptr());
+
+    DBUG_RETURN(0);
+  }
+  else
+  // only error message is specified
+  {
+    msg= args[0]->val_str(&value);
+    // validate message input
+    if (msg == NULL)
+    {
+      my_error(ER_MALFORMED_MESSAGE, MYF(0), "NULL");
+      DBUG_RETURN(0);
+    }
+    // raise the manual error now
+    (void) thd->raise_error(ER_INTENTIONAL_ERROR,
+                            NULL,
+                            msg->ptr());
+    DBUG_RETURN(0);
+  }
+}
 
 String *Item_real_func::val_str(String *str)
 {

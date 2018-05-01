@@ -1234,6 +1234,16 @@ void THD::raise_error(uint sql_errno)
                          msg);
 }
 
+void THD::raise_error(uint sql_errno,
+                      const char* sql_state,
+                      const char* msg)
+{
+  (void) raise_condition(sql_errno,
+                         sql_state,
+                         Sql_condition::WARN_LEVEL_ERROR,
+                         msg);
+}
+
 void THD::raise_error_printf(uint sql_errno, ...)
 {
   va_list args;
