@@ -1710,6 +1710,8 @@ static ST_FIELD_INFO tokudb_fractal_tree_info_field_info[] = {
     {"table_schema", 256, MYSQL_TYPE_STRING, 0, 0, NULL, SKIP_OPEN_TABLE },
     {"table_name", 256, MYSQL_TYPE_STRING, 0, 0, NULL, SKIP_OPEN_TABLE },
     {"table_dictionary_name", 256, MYSQL_TYPE_STRING, 0, 0, NULL, SKIP_OPEN_TABLE },
+    {"leaf_compress_ratio", MAX_FLOAT_STR_LENGTH, MYSQL_TYPE_FLOAT, 0, 0, NULL, SKIP_OPEN_TABLE },
+    {"internal_compress_ratio", MAX_FLOAT_STR_LENGTH, MYSQL_TYPE_FLOAT, 0, 0, NULL, SKIP_OPEN_TABLE },
     {NULL, 0, MYSQL_TYPE_NULL, 0, 0, NULL, SKIP_OPEN_TABLE}
 };
 
@@ -1719,6 +1721,8 @@ static int tokudb_report_fractal_tree_info_for_db(const DBT *dname, const DBT *i
     uint64_t bt_num_blocks_in_use;
     uint64_t bt_size_allocated;
     uint64_t bt_size_in_use;
+    double leaf_compress_ratio;
+    double internal_compress_ratio;
 
     DB *db = NULL;
     error = db_create(&db, db_env, 0);
@@ -1731,7 +1735,8 @@ static int tokudb_report_fractal_tree_info_for_db(const DBT *dname, const DBT *i
     }
     error = db->get_fractal_tree_info64(db,
                                         &bt_num_blocks_allocated, &bt_num_blocks_in_use,
-                                        &bt_size_allocated, &bt_size_in_use);
+                                        &bt_size_allocated, &bt_size_in_use,
+                                        &leaf_compress_ratio, &internal_compress_ratio);
     if (error) {
         goto exit;
     }
@@ -1760,6 +1765,10 @@ static int tokudb_report_fractal_tree_info_for_db(const DBT *dname, const DBT *i
         table->field[7]->store(table_name.c_ptr(), table_name.length(), system_charset_info);
         table->field[8]->store(dictionary_name.c_ptr(), dictionary_name.length(), system_charset_info);
     }
+
+    table->field[9]->store(leaf_compress_ratio);
+    table->field[10]->store(internal_compress_ratio);
+
     error = schema_table_store_record(thd, table);
 
 exit:

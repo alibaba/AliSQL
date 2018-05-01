@@ -409,6 +409,11 @@ static void ft_init(FT ft, FT_OPTIONS options, CACHEFILE cf) {
                                 ft_note_unpin_by_checkpoint);
 
     ft->blocktable.verify_no_free_blocknums();
+
+    ft->leaf_uncompressed_bytes = 0;
+    ft->leaf_compressed_bytes = 0;
+    ft->internal_uncompressed_bytes = 0;
+    ft->internal_compressed_bytes = 0;
 }
 
 
@@ -492,6 +497,10 @@ int toku_read_ft_and_store_in_cachefile (FT_HANDLE ft_handle, CACHEFILE cf, LSN 
     ft->cmp.create(ft_handle->options.compare_fun, &ft->cmp_descriptor, ft_handle->options.memcmp_magic);
     ft->update_fun = ft_handle->options.update_fun;
     ft->cf = cf;
+    ft->leaf_uncompressed_bytes = 0;
+    ft->leaf_compressed_bytes = 0;
+    ft->internal_uncompressed_bytes = 0;
+    ft->internal_compressed_bytes = 0;
     toku_cachefile_set_userdata(cf,
                                 reinterpret_cast<void *>(ft),
                                 ft_log_fassociate_during_checkpoint,
@@ -878,6 +887,10 @@ toku_ft_stat64 (FT ft, struct ftstat64_s *s) {
 
 void toku_ft_get_fractal_tree_info64(FT ft, struct ftinfo64 *info) {
     ft->blocktable.get_info64(info);
+    info->leaf_ratio = ft->leaf_compressed_bytes > 0 ?
+                           (double)ft->leaf_uncompressed_bytes / (double)ft->leaf_compressed_bytes : 0;
+    info->internal_ratio = ft->internal_compressed_bytes > 0 ?
+                           (double)ft->internal_uncompressed_bytes / (double)ft->internal_compressed_bytes : 0;
 }
 
 int toku_ft_iterate_fractal_tree_block_map(FT ft, int (*iter)(uint64_t,int64_t,int64_t,int64_t,int64_t,void*), void *iter_extra) {

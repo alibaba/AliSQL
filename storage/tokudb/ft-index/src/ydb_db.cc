@@ -733,7 +733,7 @@ toku_db_set_memcmp_magic(DB *db, uint8_t magic) {
 }
 
 static int
-toku_db_get_fractal_tree_info64(DB *db, uint64_t *num_blocks_allocated, uint64_t *num_blocks_in_use, uint64_t *size_allocated, uint64_t *size_in_use) {
+toku_db_get_fractal_tree_info64(DB *db, uint64_t *num_blocks_allocated, uint64_t *num_blocks_in_use, uint64_t *size_allocated, uint64_t *size_in_use, double *leaf_compress_ratio, double *internal_compress_ratio) {
     HANDLE_PANICKED_DB(db);
     struct ftinfo64 ftinfo;
     toku_ft_handle_get_fractal_tree_info64(db->i->ft_handle, &ftinfo);
@@ -741,6 +741,8 @@ toku_db_get_fractal_tree_info64(DB *db, uint64_t *num_blocks_allocated, uint64_t
     *num_blocks_in_use = ftinfo.num_blocks_in_use;
     *size_allocated = ftinfo.size_allocated;
     *size_in_use = ftinfo.size_in_use;
+    *leaf_compress_ratio = ftinfo.leaf_ratio;
+    *internal_compress_ratio = ftinfo.internal_ratio;
     return 0;
 }
 

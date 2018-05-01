@@ -350,7 +350,9 @@ def	information_schema	TokuDB_fractal_tree_info	bt_num_blocks_in_use	4	0	NO	bigi
 def	information_schema	TokuDB_fractal_tree_info	bt_size_allocated	5	0	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint(0)			select	
 def	information_schema	TokuDB_fractal_tree_info	bt_size_in_use	6	0	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint(0)			select	
 def	information_schema	TokuDB_fractal_tree_info	dictionary_name	1		NO	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select	
+def	information_schema	TokuDB_fractal_tree_info	internal_compress_ratio	11	0	NO	double	NULL	NULL	12	NULL	NULL	NULL	NULL	double			select
 def	information_schema	TokuDB_fractal_tree_info	internal_file_name	2		NO	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select	
+def	information_schema	TokuDB_fractal_tree_info	leaf_compress_ratio	10	0	NO	double	NULL	NULL	12	NULL	NULL	NULL	NULL	double			select
 def	information_schema	TokuDB_fractal_tree_info	table_dictionary_name	9		NO	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select	
 def	information_schema	TokuDB_fractal_tree_info	table_name	8		NO	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select	
 def	information_schema	TokuDB_fractal_tree_info	table_schema	7		NO	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select	
@@ -449,6 +451,7 @@ ORDER BY CHARACTER_SET_NAME, COLLATION_NAME, COL_CML;
 COL_CML	DATA_TYPE	CHARACTER_SET_NAME	COLLATION_NAME
 NULL	bigint	NULL	NULL
 NULL	datetime	NULL	NULL
+NULL	double	NULL	NULL
 NULL	int	NULL	NULL
 NULL	tinyint	NULL	NULL
 --> CHAR(0) is allowed (see manual), and here both CHARACHTER_* values
@@ -819,6 +822,8 @@ NULL	information_schema	TokuDB_fractal_tree_info	bt_size_in_use	bigint	NULL	NULL
 3.0000	information_schema	TokuDB_fractal_tree_info	table_schema	varchar	256	768	utf8	utf8_general_ci	varchar(256)
 3.0000	information_schema	TokuDB_fractal_tree_info	table_name	varchar	256	768	utf8	utf8_general_ci	varchar(256)
 3.0000	information_schema	TokuDB_fractal_tree_info	table_dictionary_name	varchar	256	768	utf8	utf8_general_ci	varchar(256)
+NULL	information_schema	TokuDB_fractal_tree_info	leaf_compress_ratio	double	NULL	NULL	NULL	NULL	double
+NULL	information_schema	TokuDB_fractal_tree_info	internal_compress_ratio	double	NULL	NULL	NULL	NULL	double
 NULL	information_schema	TokuDB_locks	locks_trx_id	bigint	NULL	NULL	NULL	NULL	bigint(0)
 NULL	information_schema	TokuDB_locks	locks_mysql_thread_id	bigint	NULL	NULL	NULL	NULL	bigint(0)
 3.0000	information_schema	TokuDB_locks	locks_dname	varchar	256	768	utf8	utf8_general_ci	varchar(256)

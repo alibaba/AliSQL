@@ -799,6 +799,17 @@ void toku_ft_status_update_flush_reason(FTNODE node,
     }
 }
 
+void toku_ft_status_update_flush_for_ft(FTNODE node, FT ft, uint64_t uncompressed_bytes_flushed, uint64_t bytes_written)
+{
+    if (node->height == 0) {
+        ft->leaf_uncompressed_bytes += uncompressed_bytes_flushed;
+        ft->leaf_compressed_bytes += bytes_written;
+    } else {
+        ft->internal_uncompressed_bytes += uncompressed_bytes_flushed;
+        ft->internal_compressed_bytes += bytes_written;
+    }
+}
+
 void toku_ftnode_checkpoint_complete_callback(void *value_data) {
     FTNODE node = static_cast<FTNODE>(value_data);
     if (node->height > 0) {

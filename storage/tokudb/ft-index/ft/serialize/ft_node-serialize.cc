@@ -878,6 +878,7 @@ toku_serialize_ftnode_to (int fd, BLOCKNUM blocknum, FTNODE node, FTNODE_DISK_DA
 
     tokutime_t io_time = t1 - t0;
     toku_ft_status_update_flush_reason(node, n_uncompressed_bytes, n_to_write, io_time, for_checkpoint);
+    toku_ft_status_update_flush_for_ft(node, ft, n_uncompressed_bytes, n_to_write);
 
     toku_free(compressed_buf);
     node->dirty = 0;  // See #1957.   Must set the node to be clean after serializing it so that it doesn't get written again on the next checkpoint or eviction.

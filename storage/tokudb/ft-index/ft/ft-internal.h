@@ -264,6 +264,12 @@ struct ft {
     // - if the score is high enough, we optimistically attempt to insert directly into the rightmost leaf
     // - if our attempt fails because the key was not in range of the rightmost leaf, we reset the score back to 0
     uint32_t seqinsert_score;
+
+    // counters for uncompressed/compressed size of leaf/internal nodes
+    unsigned long long leaf_uncompressed_bytes;
+    unsigned long long leaf_compressed_bytes;
+    unsigned long long internal_uncompressed_bytes;
+    unsigned long long internal_compressed_bytes;
 };
 
 // Allocate a DB struct off the stack and only set its comparison
@@ -627,6 +633,7 @@ typedef struct {
 
 void toku_ft_status_update_pivot_fetch_reason(ftnode_fetch_extra *bfe);
 void toku_ft_status_update_flush_reason(FTNODE node, uint64_t uncompressed_bytes_flushed, uint64_t bytes_written, tokutime_t write_time, bool for_checkpoint);
+void toku_ft_status_update_flush_for_ft(FTNODE node, FT ft, uint64_t uncompressed_bytes_flushed, uint64_t bytes_written);
 void toku_ft_status_update_serialize_times(FTNODE node, tokutime_t serialize_time, tokutime_t compress_time);
 void toku_ft_status_update_deserialize_times(FTNODE node, tokutime_t deserialize_time, tokutime_t decompress_time);
 void toku_ft_status_note_msn_discard(void);
