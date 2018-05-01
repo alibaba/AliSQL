@@ -272,6 +272,40 @@ static bool only_flags(ulong bits, ulong mask) {
     return (bits & mask) != 0 && (bits & ~mask) == 0;
 }
 
+// Table create options that should be ignored by TokuDB
+// There are totally 25 create options defined by mysql server(see handler.h),
+// and only 4 options will touch engine data, either rebuild engine data or
+// just update meta info:
+//   1. HA_CREATE_USED_AUTO        update auto_inc info
+//   2. HA_CREATE_USED_CHARSET     rebuild table if contains character columns
+//   3. HA_CREATE_USED_ENGINE      rebuild table
+//   4. HA_CREATE_USED_ROW_FORMAT  update compression method info
+//
+// All the others are either not supported by TokuDB or no need to
+// touch engine data.
+static const uint32_t TOKUDB_IGNORED_ALTER_CREATE_OPTION_FIELDS =
+    HA_CREATE_USED_RAID |              // deprecated field
+    HA_CREATE_USED_UNION |             // for MERGE table
+    HA_CREATE_USED_INSERT_METHOD |     // for MERGE table
+    HA_CREATE_USED_MIN_ROWS |          // for MEMORY table
+    HA_CREATE_USED_MAX_ROWS |          // for NDB table
+    HA_CREATE_USED_AVG_ROW_LENGTH |    // for MyISAM table
+    HA_CREATE_USED_PACK_KEYS |         // for MyISAM table
+    HA_CREATE_USED_DEFAULT_CHARSET |   // no need to rebuild
+    HA_CREATE_USED_DATADIR |           // ignored by alter
+    HA_CREATE_USED_INDEXDIR |          // ignored by alter
+    HA_CREATE_USED_CHECKSUM |          // for MyISAM table
+    HA_CREATE_USED_DELAY_KEY_WRITE |   // for MyISAM table
+    HA_CREATE_USED_COMMENT |           // no need to rebuild
+    HA_CREATE_USED_PASSWORD |          // not supported by community version
+    HA_CREATE_USED_CONNECTION |        // for FEDERATED table
+    HA_CREATE_USED_KEY_BLOCK_SIZE |    // not supported by TokuDB
+    HA_CREATE_USED_TRANSACTIONAL |     // unused
+    HA_CREATE_USED_PAGE_CHECKSUM |     // unsued
+    HA_CREATE_USED_STATS_PERSISTENT |  // not supported by TokuDB
+    HA_CREATE_USED_STATS_AUTO_RECALC | // not supported by TokuDB
+    HA_CREATE_USED_STATS_SAMPLE_PAGES; // not supported by TokuDB
+
 // Check if an alter table operation on this table and described by the alter table parameters is supported inplace
 // and if so, what type of locking is needed to execute it.
 // return values:
@@ -441,7 +475,10 @@ enum_alter_inplace_result ha_tokudb::check_if_supported_inplace_alter(TABLE *alt
                 result = HA_ALTER_INPLACE_EXCLUSIVE_LOCK;
             }
         }
-    } 
+        else if (only_flags(create_info->used_fields, TOKUDB_IGNORED_ALTER_CREATE_OPTION_FIELDS)) {
+            result = HA_ALTER_INPLACE_NO_LOCK_AFTER_PREPARE;
+        }
+    }
 #if TOKU_OPTIMIZE_WITH_RECREATE
     else if (only_flags(ctx->handler_flags, Alter_inplace_info::RECREATE_TABLE + Alter_inplace_info::ALTER_COLUMN_DEFAULT)) {
         ctx->optimize_needed = true;

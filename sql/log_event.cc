@@ -9908,7 +9908,7 @@ search_key_in_table(TABLE *table, MY_BITMAP *bi_cols, uint key_type)
         - Skip primary keys
       */
       if (!((keyinfo->flags & (HA_NOSAME | HA_NULL_PART_KEY)) == HA_NOSAME) ||
-          (key == table->s->primary_key))
+          (key == table->s->primary_key) || !(table->s->usable_indexes().is_set(key)))
         continue;
       res= are_all_columns_signaled_for_key(keyinfo, bi_cols) ?
            key : MAX_KEY;
@@ -9924,7 +9924,8 @@ search_key_in_table(TABLE *table, MY_BITMAP *bi_cols, uint key_type)
     DBUG_PRINT("debug", ("Searching for K."));
 
     /* auot_increment index has higher priority over other secondary indexes */
-    if (table->found_next_number_field)
+    if (table->found_next_number_field &&
+        table->s->usable_indexes().is_set(table->s->next_number_index))
     {
       keyinfo= table->key_info + table->s->next_number_index;
 
