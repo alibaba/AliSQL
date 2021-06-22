@@ -133,6 +133,9 @@ memory heap. For debugging purposes, takes also the file name and line as
 arguments.
 @return own: memory heap, NULL if did not succeed (only possible for
 MEM_HEAP_BTR_SEARCH type heaps) */
+/*
+ * wangyang @@ mem_heap_create 函数 ， 用于创建相应的 mem_heap 具体在 mem0mem.ic当中
+ */
 UNIV_INLINE
 mem_heap_t*
 mem_heap_create_func(
@@ -172,6 +175,10 @@ mem_heap_zalloc(
 Allocates n bytes of memory from a memory heap.
 @return allocated storage, NULL if did not succeed (only possible for
 MEM_HEAP_BTR_SEARCH type heaps) */
+/**
+ wangyang @@ 这里是从 heap 中分配 相应的内存大小
+ 参数包括 一个 mem_heap_t 以及一个 请求大小数量
+ */
 UNIV_INLINE
 void*
 mem_heap_alloc(
@@ -237,6 +244,10 @@ Macro for memory buffer allocation */
 
 #define mem_zalloc(N)	memset(mem_alloc(N), 0, (N))
 
+/*
+ __LINE__：在源代码中插入当前源代码行号；
+ __FILE__：在源文件中插入当前源文件名；
+ */
 #ifdef UNIV_DEBUG
 #define mem_alloc(N)	mem_alloc_func((N), __FILE__, __LINE__, NULL)
 #define mem_alloc2(N,S) mem_alloc_func((N), __FILE__, __LINE__, (S))
@@ -251,6 +262,9 @@ Allocates a single buffer of memory from the dynamic memory of
 the C compiler. Is like malloc of C. The buffer must be freed
 with mem_free.
 @return	own: free storage */
+/*
+ * wangyang 从动态内存中分配内存
+ */
 UNIV_INLINE
 void*
 mem_alloc_func(
@@ -368,6 +382,16 @@ mem_validate_all_blocks(void);
 /*#######################################################################*/
 
 /** The info structure stored at the beginning of a heap block */
+/**
+ * wangyang @@ 下面的 mem_block_info_t 就是 mem_heap_t结构体
+ * 里面会有 mem_block_t 形成链表 , mem_block_t 就是 mem_block_info_t
+ * block 的内存 来源于 mem_pool (mem_pool 形成类似 buddy的分配方式)
+ *
+ * 1、
+ *
+ *
+ *
+ */
 struct mem_block_info_t {
 	ulint	magic_n;/* magic number for debugging */
 #ifdef UNIV_DEBUG
@@ -387,6 +411,9 @@ struct mem_block_info_t {
 			node and is set to ULINT_UNDEFINED in others. */
 	ulint	type;	/*!< type of heap: MEM_HEAP_DYNAMIC, or
 			MEM_HEAP_BUF possibly ORed to MEM_HEAP_BTR_SEARCH */
+	/**
+	 * wangyang @@ 这里是 空闲内存的地址
+	 */
 	ulint	free;	/*!< offset in bytes of the first free position for
 			user data in the block */
 	ulint	start;	/*!< the value of the struct field 'free' at the

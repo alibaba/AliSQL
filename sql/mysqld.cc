@@ -4765,6 +4765,9 @@ initialize_storage_engine(char *se_name, const char *se_kind,
 }
 
 
+/*
+ * 在 mysql
+ */
 static int init_server_components()
 {
   DBUG_ENTER("init_server_components");
@@ -4773,6 +4776,9 @@ static int init_server_components()
     all things are initialized so that unireg_abort() doesn't fail
   */
   mdl_init();
+  /**
+   * wangyang ** 这里初始化 table_def_cache
+   */
   if (table_def_init() | hostname_cache_init(host_cache_size))
     unireg_abort(1);
 
@@ -5364,6 +5370,10 @@ static void hash_item_free_entry(ic_hash_item_t *record)
 #ifdef __WIN__
 int win_main(int argc, char **argv)
 #else
+/**
+ *
+ wangyang @@ 启动入口 main 函数  这里 初始化 调用mysqld_main
+ */
 int mysqld_main(int argc, char **argv)
 #endif
 {
@@ -5377,7 +5387,10 @@ int mysqld_main(int argc, char **argv)
 
 #ifndef _WIN32
   // For windows, my_init() is called from the win specific mysqld_main
-  if (my_init())                 // init my_sys library & pthreads
+  /**
+   * wangyang  ** 用于进行初始化
+   */
+  if (my_init()) // 注释说的很清楚 ，用于初始化 系统变量 和 pthread                   // init my_sys library & pthreads
   {
     fprintf(stderr, "my_init() failed.");
     return 1;
@@ -5387,6 +5400,9 @@ int mysqld_main(int argc, char **argv)
   orig_argc= argc;
   orig_argv= argv;
   my_getopt_use_args_separator= TRUE;
+  /**
+   * wangyang @@ 这里会加载 配置文件 ，初始化 配置文件  my.cnf
+   */
   if (load_defaults(MYSQL_CONFIG_NAME, load_default_groups, &argc, &argv))
     return 1;
   my_getopt_use_args_separator= FALSE;
@@ -5399,7 +5415,7 @@ int mysqld_main(int argc, char **argv)
   system_charset_info= &my_charset_utf8_general_ci;
 
   init_sql_statement_names();
-  sys_var_init();
+  sys_var_init(); //wangyang 初始化系统变量 跟上面的 load_default有先后顺序，先使用上面 进行 load_defaults
 
   int ho_error;
 
@@ -5626,6 +5642,9 @@ int mysqld_main(int argc, char **argv)
   Service.SetSlowStarting(slow_start_timeout);
 #endif
 
+  /**
+   * 在mysqld.cc 的 init 函数中调用该方法，用于初始化 服务组件
+   */
   if (init_server_components())
     unireg_abort(1);
 

@@ -6089,6 +6089,9 @@ static MY_COLLATION_HANDLER my_collation_utf8_general_ci_handler =
 };
 
 
+/**
+ * wangyang *** 这里会设置 hash_sort 函数
+ */
 static MY_COLLATION_HANDLER my_collation_utf8_bin_handler =
 {
     NULL,		/* init */
@@ -6100,7 +6103,7 @@ static MY_COLLATION_HANDLER my_collation_utf8_bin_handler =
     my_wildcmp_mb_bin,
     my_strcasecmp_mb_bin,
     my_instr_mb,
-    my_hash_sort_mb_bin,
+    my_hash_sort_mb_bin, //wangyang *** 这里设置 hash_sort函数
     my_propagate_simple
 };
 

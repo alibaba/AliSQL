@@ -311,17 +311,24 @@ ib_ut_allocator_free(
 	ib_alloc_t*	ib_ut_alloc);	/* in: alloc instace to free */
 
 /* Allocator used by ib_vector_t. */
+/**
+ * wangyang @@
+ */
 struct ib_alloc_t {
-	ib_mem_alloc_t	mem_malloc;	/* For allocating memory */
-	ib_mem_free_t	mem_release;	/* For freeing memory */
-	ib_mem_resize_t	mem_resize;	/* For resizing memory */
-	void*		arg;		/* Currently if not NULL then it
+    //对应的 函数指针 是在声明的时候 在进行一个声明
+	ib_mem_alloc_t	mem_malloc;	/* For allocating memory */ ////分配器的malloc函数指针
+	ib_mem_free_t	mem_release;	/* For freeing memory */ //分配器的free函数指针
+	ib_mem_resize_t	mem_resize;	/* For resizing memory */ //分配器的重新定义堆大小指针
+	void*		arg;		/* Currently if not NULL then it //堆句柄，如果是系统的malloc方式，这个值为NULL
 					points to the heap instance */
 };
 
 /* See comment at beginning of file. */
+/**
+ * wangyang 这里是 mysql 自定义 verctor
+ */
 struct ib_vector_t {
-	ib_alloc_t*	allocator;	/* Allocator, because one size
+	ib_alloc_t*	allocator;	/* Allocator, because one size 使用 上面定义的 ib_alloc_t进行分配一块内存
 					doesn't fit all */
 	void*		data;		/* data elements */
 	ulint		used;		/* number of elements currently used */

@@ -1849,6 +1849,9 @@ innobase_start_or_create_for_mysql(void)
 		srv_buf_pool_instances = 1;
 	}
 
+	/**
+	 * wangyang @@ innobase 启动
+	 */
 	srv_boot();
 
 	ib_logf(IB_LOG_LEVEL_INFO,
@@ -1975,6 +1978,10 @@ innobase_start_or_create_for_mysql(void)
 	ib_logf(IB_LOG_LEVEL_INFO,
 		"Initializing buffer pool, size = %.1f%c", size, unit);
 
+	//wangyang @@ 这里会创建 buf pool 以及 buf pool instances
+	/**
+	 * 这里的初始化 是初始化 buf_pool 这里面使用的都是 使用 mmap
+	 */
 	err = buf_pool_init(srv_buf_pool_size, srv_buf_pool_instances);
 
 	if (err != DB_SUCCESS) {

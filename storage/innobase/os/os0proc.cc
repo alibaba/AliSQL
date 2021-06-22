@@ -154,6 +154,7 @@ skip:
 	/* Align block size to system page size */
 	ut_ad(ut_is_2pow(size));
 	size = *n = ut_2pow_round(*n + (size - 1), size);
+	//wangyang @@@ 这里会使用 mmap 进行分配
 	ptr = mmap(NULL, size, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | OS_MAP_ANON, -1, 0);
 	if (UNIV_UNLIKELY(ptr == (void*) -1)) {

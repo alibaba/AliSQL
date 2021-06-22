@@ -458,7 +458,7 @@ buf_block_alloc(
 	if (buf_pool == NULL) {
 		/* We are allocating memory from any buffer pool, ensure
 		we spread the grace on all buffer pool instances. */
-		index = buf_pool_index++ % srv_buf_pool_instances;
+		index = buf_pool_index++ % srv_buf_pool_instances; // 寻找某个 instance
 		buf_pool = buf_pool_from_array(index);
 	}
 
@@ -1027,11 +1027,14 @@ buf_block_init(
 	buf_block_t*	block,		/*!< in: pointer to control block */
 	byte*		frame)		/*!< in: pointer to buffer frame */
 {
+    /**
+     * wangyang @@@@ 这里的作用是 初始化 block 中每个 Page
+     */
 	UNIV_MEM_DESC(frame, UNIV_PAGE_SIZE);
 
-	block->frame = frame;
+	block->frame = frame; // 这里是指向 相应的 Page内存的地址
 
-	block->page.buf_pool_index = buf_pool_index(buf_pool);
+	block->page.buf_pool_index = buf_pool_index(buf_pool); // 设置所属的 buf pool
 	block->page.state = BUF_BLOCK_NOT_USED;
 	block->page.buf_fix_count = 0;
 	block->page.io_fix = BUF_IO_NONE;
@@ -1089,6 +1092,9 @@ buf_block_init(
 /********************************************************************//**
 Allocates a chunk of buffer frames.
 @return	chunk, or NULL on failure */
+/**
+ * wangyang @@@  这里是初始化 buf chunk
+ */
 static
 buf_chunk_t*
 buf_chunk_init(
@@ -1096,6 +1102,7 @@ buf_chunk_init(
 	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
 	buf_chunk_t*	chunk,		/*!< out: chunk of buffers */
 	ulint		mem_size)	/*!< in: requested size in bytes */
+	//wangyang @@  这里的mem_size 就是 每个 buf instance 的大小
 {
 	buf_block_t*	block;
 	byte*		frame;
@@ -1103,13 +1110,18 @@ buf_chunk_init(
 
 	/* Round down to a multiple of page size,
 	although it already should be. */
+	//((n) & ~((m) - 1))
+	//wangyang @@ 这会通过位运算 获取相应的 对数位，  这里的目的是将 mem_size 对齐到 Page(16k) 的2次幂 也就是16k的倍数
+	//  比如这里 申请的 mem_size 大小是 16k + 3 那么对齐之后，就是16k
 	mem_size = ut_2pow_round(mem_size, UNIV_PAGE_SIZE);
 	/* Reserve space for the block descriptors. */
+	//wangyang @@ 这里的目的是 需要在添加相应的 block空间 , 比如 申请空间大小是 16k * 10 ,那么就是 10 * 4 这样，
+	// 这里是 sizeof  (*block) block是一个指针，所以实际申请的是 整个 buf_block_t 的数据块的大小
 	mem_size += ut_2pow_round((mem_size / UNIV_PAGE_SIZE) * (sizeof *block)
 				  + (UNIV_PAGE_SIZE - 1), UNIV_PAGE_SIZE);
 
 	chunk->mem_size = mem_size;
-	chunk->mem = os_mem_alloc_large(&chunk->mem_size);
+	chunk->mem = os_mem_alloc_large(&chunk->mem_size); //wangyang 这里是分配具体的内存
 
 	if (UNIV_UNLIKELY(chunk->mem == NULL)) {
 
@@ -1132,16 +1144,40 @@ buf_chunk_init(
 	}
 #endif // HAVE_LIBNUMA
 
+	/*
+
+	 struct buf_chunk_t{
+	ulint		mem_size;	!< allocated size of the chunk
+    ulint		size;		!< size of frames[] and blocks[]
+    void*		mem;		!< pointer to the memory area which
+					was allocated for the frames
+    buf_block_t*	blocks;		!< array of buffer control blocks  wangyang @@   这里就是提到的 chunk 块 ，每个chunk块包含多个block对象
+};
+	 */
+
 	/* Allocate the block descriptors from
 	the start of the memory block. */
-	chunk->blocks = (buf_block_t*) chunk->mem;
+	/**
+	 * wangyang @@  这里将 mem 分配成为 buf_block_t * 指针
+	 */
+	chunk->blocks = (buf_block_t*) chunk->mem; //wangyang mem 对应着分配的内存
 
 	/* Align a pointer to the first frame.  Note that when
 	os_large_page_size is smaller than UNIV_PAGE_SIZE,
 	we may allocate one fewer block than requested.  When
 	it is bigger, we may allocate more blocks than requested. */
 
+	/**
+	 * wangyang @@@ 这里会 将 mem 按照8k 进行对齐, 主要是将首地址 按照固定格式对齐
+	 */
 	frame = (byte*) ut_align(chunk->mem, UNIV_PAGE_SIZE);
+	//wangyang 这里用于 获取 Page 的数量
+	/**
+	 * wangyang @@@ 这里的mem_size 是 合并 初始的 size  以及后面 添加的 *block_t 的混合
+	 *
+	 *
+	 *
+	 */
 	chunk->size = chunk->mem_size / UNIV_PAGE_SIZE
 		- (frame != chunk->mem);
 
@@ -1149,23 +1185,41 @@ buf_chunk_init(
 	{
 		ulint	size = chunk->size;
 
+		/**
+		 * wangyang @@@ 这里很精妙，主要的作用是将整个mem内存分成
+		 * 2部分，一部分是头，一部分是 每个Page，相当于每个Page
+		 * 会有一个对应的指针
+		 *
+		 * 这里的目的是找到 block_t 与frame 的分界点，frame 按照 Page 前进，
+		 *
+		 *
+		 */
 		while (frame < (byte*) (chunk->blocks + size)) {
-			frame += UNIV_PAGE_SIZE;
-			size--;
+			frame += UNIV_PAGE_SIZE; // wangyang @@ 这里会让 frame 按照Page 进行前进
+			size--; //wangyang @@ 因为上面 前进了Page , 所以这里 需要减掉，否则 会超出相应的 内存使用界限
 		}
 
-		chunk->size = size;
+		chunk->size = size;    // wangyang @@@ 这里会修改 真正 的size 数量
 	}
 
 	/* Init block structs and assign frames for them. Then we
 	assign the frames to the first blocks (we already mapped the
 	memory above). */
 
+	/**
+	 * wangyang @@@ 所以可以看到 具体的 block 块的指针在 chunk 结构体中 blocks 字段
+	 */
 	block = chunk->blocks;
 
+	/**
+	 * wangyang @@ 这里会对 block 进行 初始化
+	 */
 	for (i = chunk->size; i--; ) {
 
-		buf_block_init(buf_pool, block, frame);
+	    /**
+	     * wangyang @@@  这里会初始化
+	     */
+		buf_block_init(buf_pool, block, frame); //wangyang 这里初始化每个Page
 		UNIV_MEM_INVALID(block->frame, UNIV_PAGE_SIZE);
 
 		/* Add the block to the free list */
@@ -1175,7 +1229,7 @@ buf_chunk_init(
 		ut_ad(buf_pool_from_block(block) == buf_pool);
 
 		block++;
-		frame += UNIV_PAGE_SIZE;
+		frame += UNIV_PAGE_SIZE; //wangyang  这里不断遍历每个Page
 	}
 
 #ifdef PFS_GROUP_BUFFER_SYNC
@@ -1317,6 +1371,10 @@ buf_pool_set_sizes(void)
 /********************************************************************//**
 Initialize a buffer pool instance.
 @return DB_SUCCESS if all goes well. */
+/*
+ * wangyang @@@ 这里   buf pool instance 实例初始化
+ * 使用的时候 会分配相应的chunk 进行初始化
+ */
 UNIV_INTERN
 ulint
 buf_pool_init_instance(
@@ -1338,13 +1396,26 @@ buf_pool_init_instance(
 	buf_pool_mutex_enter(buf_pool);
 
 	if (buf_pool_size > 0) {
+
+	    /**
+	     *
+	     */
 		buf_pool->n_chunks = 1;
 
+		/**
+		 * wangyang @@ 初始的时候 只有一个 chunk
+		 */
 		buf_pool->chunks = chunk =
 			(buf_chunk_t*) mem_zalloc(sizeof *chunk);
 
 		UT_LIST_INIT(buf_pool->free);
 
+		/**
+		 * wangyang @@ 这里会初始化 chunk ,这里的初始化 会将所有的内存都初始化为 chunk (一次性初始化)
+		 *
+		 * 并没有 进行 分隔
+		 *
+		 */
 		if (!buf_chunk_init(buf_pool, chunk, buf_pool_size)) {
 			mem_free(chunk);
 			mem_free(buf_pool);
@@ -1469,7 +1540,7 @@ buf_pool_init(
 	ulint	n_instances)	/*!< in: number of instances */
 {
 	ulint		i;
-	const ulint	size	= total_size / n_instances;
+	const ulint	size	= total_size / n_instances; //wangyang @@ 这里会使用 total size / count 获取相应实例数量
 
 	ut_ad(n_instances > 0);
 	ut_ad(n_instances <= MAX_BUFFER_POOLS);
@@ -1490,12 +1561,21 @@ buf_pool_init(
 	}
 #endif // HAVE_LIBNUMA
 
+/**
+ * wangyang @@ 这里进行计算，
+ */
+    /**
+     * wangyang @@@ 这里分配的是 当前这个 pool 数组的大小
+     */
 	buf_pool_ptr = (buf_pool_t*) mem_zalloc(
 		n_instances * sizeof *buf_pool_ptr);
 
 	for (i = 0; i < n_instances; i++) {
 		buf_pool_t*	ptr	= &buf_pool_ptr[i];
 
+		/**
+		 * wangyang @@ 这里会 一个一个的 初始化 每个 instance
+		 */
 		if (buf_pool_init_instance(ptr, size, i) != DB_SUCCESS) {
 
 			/* Free all the instances created so far. */

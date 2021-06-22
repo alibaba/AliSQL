@@ -5597,7 +5597,10 @@ void add_diff_to_status(STATUS_VAR *to_var, STATUS_VAR *from_var,
                         STATUS_VAR *dec_var);
 
 /* Inline functions */
-
+/**
+ *
+ wangyang ** 这里会将 item 加入到thd里面
+ */
 inline bool add_item_to_list(THD *thd, Item *item)
 {
   return thd->lex->current_select->add_item_to_list(thd, item);

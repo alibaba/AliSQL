@@ -329,10 +329,13 @@ uint get_table_def_key(const TABLE_LIST *table_list, const char **key)
   Functions to handle table definition cach (TABLE_SHARE)
 *****************************************************************************/
 
+/**
+ * wangyang ** table_def key对象
+ */
 extern "C" uchar *table_def_key(const uchar *record, size_t *length,
                                my_bool not_used MY_ATTRIBUTE((unused)))
 {
-  TABLE_SHARE *entry=(TABLE_SHARE*) record;
+  TABLE_SHARE *entry=(TABLE_SHARE*) record; //wangyang * 直接将数据进行类型转换
   *length= entry->table_cache_key.length;
   return (uchar*) entry->table_cache_key.str;
 }
@@ -355,7 +358,10 @@ static void table_def_free_entry(TABLE_SHARE *share)
   DBUG_VOID_RETURN;
 }
 
-
+/**
+ * wangyang 用于初始化 表对象
+ * @return
+ */
 bool table_def_init(void)
 {
 #ifdef HAVE_PSI_INTERFACE
@@ -377,6 +383,9 @@ bool table_def_init(void)
   */
   table_def_inited= true;
 
+  /**
+   * wangyang ****  这里是 会初始化相应的 table_def_cache 这个数据结构
+   */
   return my_hash_init(&table_def_cache, &my_charset_bin, table_def_size,
                       0, 0, table_def_key,
                       (my_hash_free_key) table_def_free_entry, 0) != 0;
@@ -454,6 +463,11 @@ uint cached_table_definitions(void)
    #  Share for table
 */
 
+/*
+ * wangyang ** 这里用于从 table_def_cache 中获取 共享表数据
+ *
+ * key 是  表名称的意思
+ */
 TABLE_SHARE *get_table_share(THD *thd, TABLE_LIST *table_list,
                              const char *key, uint key_length,
                              uint db_flags, int *error,

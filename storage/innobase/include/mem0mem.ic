@@ -186,7 +186,7 @@ mem_heap_alloc(
 
 	ut_ad(mem_heap_check(heap));
 
-	block = UT_LIST_GET_LAST(heap->base);
+	block = UT_LIST_GET_LAST(heap->base); //wangyang @@ 这里用于获取 相应的 heap的 base 地址
 
 	ut_ad(!(block->type & MEM_HEAP_BUFFER) || (n <= MEM_MAX_ALLOC_IN_BUF));
 
@@ -204,6 +204,10 @@ mem_heap_alloc(
 		}
 	}
 
+    /*
+        wangyang @@从 heap 中寻找出 符合条件的内存块
+        这里从 当前 heap 寻找符合条件内存 然后添加 block 首地址
+    */
 	free = mem_block_get_free(block);
 
 	buf = (byte*) block + free;
@@ -446,6 +450,7 @@ mem_heap_create_func(
 		n = MEM_BLOCK_START_SIZE;
 	}
 
+    // wangyang mem_heap_t 同时也是 mem_block_t 是同一个对象，内存数据来源于 mem_pool
 	block = mem_heap_create_block(NULL, n, type, file_name, line);
 
 	if (block == NULL) {
@@ -460,6 +465,9 @@ mem_heap_create_func(
 
 #ifdef UNIV_MEM_DEBUG
 
+    /*
+        wangyang 这里是插入到相应的hash 当中，会按照文件名称 以及 line 进行hash
+    */
 	mem_hash_insert(block, file_name, line);
 
 #endif

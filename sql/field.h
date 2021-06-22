@@ -449,7 +449,9 @@ void copy_integer(uchar *to, int to_length,
   }
 }
 
-
+/**
+ * wangyang ** Field 表示字段类，用 Item 进行初始化
+ */
 class Field
 {
   Field(const Item &);				/* Prevent use of these */

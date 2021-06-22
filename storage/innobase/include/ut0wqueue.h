@@ -96,9 +96,14 @@ ib_wqueue_timedwait(
 	ib_time_t	wait_in_usecs); /* in: wait time in micro seconds */
 
 /* Work queue. */
+/**
+ * wangyang @@ mysql 实现的 fifo队列 (阻塞队列)
+ *
+ * os_event_t 用于进行 通知，比如放入之后 通知消费者
+ */
 struct ib_wqueue_t {
-	ib_mutex_t		mutex;	/*!< mutex protecting everything */
-	ib_list_t*	items;	/*!< work item list */
+	ib_mutex_t		mutex;	/*!< mutex protecting everything */ // 互斥信号量
+	ib_list_t*	items;	/*!< work item list */ //使用list 作为队列载体
 	os_event_t	event;	/*!< event we use to signal additions to list */
 };
 

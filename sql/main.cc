@@ -20,6 +20,10 @@
 */
 extern int mysqld_main(int argc, char **argv);
 
+/**
+ *
+   wangyang *** mysql启动入口函数
+ */
 int main(int argc, char **argv)
 {
   return mysqld_main(argc, argv);

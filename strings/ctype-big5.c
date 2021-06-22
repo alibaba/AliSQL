@@ -6832,6 +6832,9 @@ size_t my_well_formed_len_big5(const CHARSET_INFO *cs MY_ATTRIBUTE((unused)),
 }
 
 
+/**
+ * wangyang
+ */
 static MY_COLLATION_HANDLER my_collation_big5_chinese_ci_handler =
 {
   NULL,			/* init */

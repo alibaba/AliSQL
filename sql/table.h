@@ -578,8 +578,11 @@ typedef I_P_List <Wait_for_flush,
   instance of table share per one table in the database.
 */
 
-struct TABLE_SHARE
-{
+/*
+ * wangyang 这里说的也很清楚，下面的结构体 是 共享的，也就是 表结构对象
+ *
+ */
+struct TABLE_SHARE{
   TABLE_SHARE() {}                    /* Remove gcc warning */
 
   /** Category of this table. */
@@ -624,9 +627,15 @@ struct TABLE_SHARE
     should correspond to each other.
     To ensure this one can use set_table_cache() methods.
   */
-  LEX_STRING table_cache_key;
-  LEX_STRING db;                        /* Pointer to db */
-  LEX_STRING table_name;                /* Table name (for open) */
+
+  /**
+   * wangyang lex_string 也是2个字段 类似redis sds length 以及 char*
+   *
+   * cache_key 用于进行寻找 ， 在st_hash中 寻找 三个字段都不能为空
+   */
+  LEX_STRING table_cache_key; //wangyang 这里用于 表名table 的key
+  LEX_STRING db;                        /* Pointer to db */ //db
+  LEX_STRING table_name;                /* Table name (for open) */ //table_name
   LEX_STRING path;                	/* Path to .frm file (from datadir) */
   LEX_STRING normalized_path;		/* unpack_filename(path) */
   LEX_STRING connect_string;

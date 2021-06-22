@@ -1038,7 +1038,11 @@ srv_general_init(void)
 	recv_sys_var_init();
 	os_sync_init();
 	sync_init();
-	mem_init(srv_mem_pool_size);
+	/**
+	 * wangyang @@ 这里初始化的是 mem_pool 跟 buf_pool 是不一样的，初始化 用的是 malloc
+	 * srv_mem_pool_size = innobase_additional_mem_pool_size
+	 */
+	mem_init(srv_mem_pool_size); //wangyang @@ 内存池初始化 innodb内存 系统的初始化
 	que_init();
 	row_mysql_init();
 }
@@ -1085,6 +1089,9 @@ srv_boot(void)
 	/* Initialize synchronization primitives, memory management, and thread
 	local storage */
 
+	/**
+	 * wangyang @@ 该方法里面 会进行整体初始化 包括 内存系统的初始化
+	 */
 	srv_general_init();
 
 	/* Initialize this module */

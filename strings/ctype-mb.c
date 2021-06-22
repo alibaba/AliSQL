@@ -677,6 +677,10 @@ my_strcasecmp_mb_bin(const CHARSET_INFO *cs MY_ATTRIBUTE((unused)),
 }
 
 
+/**
+ *
+ wangyang ** 这里设置 hash_sort 函数
+ */
 void
 my_hash_sort_mb_bin(const CHARSET_INFO *cs MY_ATTRIBUTE((unused)),
                     const uchar *key, size_t len,ulong *nr1, ulong *nr2)

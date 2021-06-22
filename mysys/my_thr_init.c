@@ -113,6 +113,10 @@ void my_thread_global_reinit(void)
     1  error (Couldn't create THR_KEY_mysys)
 */
 
+/**
+ *
+ wangyang 初始化 线程全局 变量
+ */
 my_bool my_thread_global_init(void)
 {
   int pth_ret;
@@ -146,21 +150,29 @@ my_bool my_thread_global_init(void)
 #endif
 
   DBUG_ASSERT(! THR_KEY_mysys_initialized);
+  /**
+   * wangyang @@@ 这里会 初始化 THR_KEY_mysys(是  通过宏定义定义的变量 ，表示 系统线程  )
+   */
   if ((pth_ret= pthread_key_create(&THR_KEY_mysys, NULL)) != 0)
   {
     fprintf(stderr, "Can't initialize threads: error %d\n", pth_ret);
     return 1;
   }
 
-  THR_KEY_mysys_initialized= TRUE;
+  THR_KEY_mysys_initialized= TRUE; //wangyang 这里将  初始化 字段设置为true
   mysql_mutex_init(key_THR_LOCK_malloc, &THR_LOCK_malloc, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_THR_LOCK_open, &THR_LOCK_open, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_THR_LOCK_charset, &THR_LOCK_charset, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_THR_LOCK_threads, &THR_LOCK_threads, MY_MUTEX_INIT_FAST);
 
-  if (my_thread_init())
+  if (my_thread_init()) //wangyang 这里进行线程初始化
     return 1;
 
+  /**
+   * wangyang ** mysql_mutex_init 会调用 pthread_mutex_init 用于初始化一个结构体
+   *
+   * pthread_cond_init 用于 创建cond 结构体
+   */
   mysql_mutex_init(key_THR_LOCK_lock, &THR_LOCK_lock, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_THR_LOCK_myisam, &THR_LOCK_myisam, MY_MUTEX_INIT_SLOW);
   mysql_mutex_init(key_THR_LOCK_myisam_mmap, &THR_LOCK_myisam_mmap, MY_MUTEX_INIT_FAST);
@@ -292,8 +304,8 @@ my_bool my_thread_init(void)
     error= 1;
     goto end;
   }
-  set_mysys_var(tmp);
-  tmp->pthread_self= pthread_self();
+  set_mysys_var(tmp); //wangyang  ***  这里用于将初始化的线程设置到 局部变量中
+  tmp->pthread_self= pthread_self(); // 线程可以通过调用pthread_self函数获得自身线程标识   返回对象是 pthread_t
   mysql_mutex_init(key_my_thread_var_mutex, &tmp->mutex, MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_my_thread_var_suspend, &tmp->suspend, NULL);
 
@@ -301,8 +313,8 @@ my_bool my_thread_init(void)
                          STACK_DIRECTION * (long)my_thread_stack_size;
 
   mysql_mutex_lock(&THR_LOCK_threads);
-  tmp->id= ++thread_id;
-  ++THR_thread_count;
+  tmp->id= ++thread_id; //wangyang 线程id 增长
+  ++THR_thread_count; //wangyang 线程数量 增长
   mysql_mutex_unlock(&THR_LOCK_threads);
   tmp->init= 1;
 #ifndef DBUG_OFF
@@ -381,13 +393,24 @@ void my_thread_end(void)
 
 struct st_my_thread_var *_my_thread_var(void)
 {
-  if (THR_KEY_mysys_initialized)
+  if (THR_KEY_mysys_initialized) //wangyang 如果已经初始化，则从线程局部取出相应的线程局部变量
     return  my_pthread_getspecific(struct st_my_thread_var*,THR_KEY_mysys);
   return NULL;
 }
 
+/**
+ * wangyang ***
+ */
 int set_mysys_var(struct st_my_thread_var *mysys_var)
 {
+    /**
+     * wangyang  *** 用于设置 线程局部变量  这里的作用是将 my_thr_init.c 文件中  my_thread_init 函数中
+     * 创建的 st_my_thread_var 变量设置过来
+     *
+     * pthread_getspecific 用于从线程局部变量中 获取相应的 局部变量内容
+     * pthread_key_t  表示线程局部变量类型的key
+     *
+     */
   if (THR_KEY_mysys_initialized)
     return my_pthread_setspecific_ptr(THR_KEY_mysys, mysys_var);
   return 0;

@@ -100,12 +100,31 @@ pool, and after that its locks will grow into the buffer pool. */
 
 /** Data structure for a memory pool. The space is allocated using the buddy
 algorithm, where free list i contains areas of size 2 to power i. */
+/**
+ * wangyang @@  创建一个内存池 作为 mem_pool_t 去使用
+ */
 struct mem_pool_t{
 	byte*		buf;		/*!< memory pool */
 	ulint		size;		/*!< memory common pool size */
 	ulint		reserved;	/*!< amount of currently allocated
 					memory */
 	ib_mutex_t		mutex;		/*!< mutex protecting this struct */
+	/**
+	 * mem_pool_t 的free_list是 基础节点,  也可以看做是
+	 * ut_list_node的控制节点，用于表明比如 list有多少 节点
+	 * start 起始节点
+	 * end   尾部节点
+	 */
+	 /*
+	  struct ut_list_base {
+	typedef TYPE elem_type;
+	ulint	count;	!< count of nodes in list
+     TYPE*	start;	!< pointer to list start, NULL if empty
+    TYPE*	end;	!< pointer to list end, NULL if empty
+};
+
+
+*/
 	UT_LIST_BASE_NODE_T(mem_area_t)
 			free_list[64];	/*!< lists of free memory areas: an
 					area is put to the list whose number
@@ -226,11 +245,19 @@ mem_pool_create(
 	ulint		i;
 	ulint		used;
 
+	/**
+	 * wangyang 这里 malloc 分配了一个  mem_pool_t 对象
+	 */
 	pool = static_cast<mem_pool_t*>(ut_malloc(sizeof(mem_pool_t)));
 
+	/**
+	 * 这里的分配 是
+	 */
 	pool->buf = static_cast<byte*>(ut_malloc_low(size, TRUE));
 	pool->size = size;
 
+	//wangyang @ 用于创建 一个 mutex 对象
+	// mem_pool_mutex_key 对应的 对应的值 mem_pool_mutex ，用于对应 mutex 的名称
 	mutex_create(mem_pool_mutex_key, &pool->mutex, SYNC_MEM_POOL);
 
 	/* Initialize the free lists */

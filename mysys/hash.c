@@ -55,6 +55,10 @@ static my_hash_value_type cset_hash_sort_adapter(const HASH *hash,
                                                  const uchar *key,
                                                  size_t length)
 {
+    /**
+     * wangyang  ** hash_sort 函数 ，会对 key 值进行 sort 排序 ，这里的排序会在
+     * ctype-utf8.c 这种文件里面 跟选定的字符集有关系
+     */
   ulong nr1=1, nr2=4;
   hash->charset->coll->hash_sort(hash->charset,(uchar*) key,length,&nr1,&nr2);
   return (my_hash_value_type)nr1;
@@ -107,6 +111,7 @@ _my_hash_init(HASH *hash, uint growth_size, CHARSET_INFO *charset,
   hash->free=free_element;
   hash->flags=flags;
   hash->charset=charset;
+  //wangyang *** 这里在 进行初始化设置的 时候 如果 hash_function 为NULL ，那么使用 cset_hash_sort_adapter 函数
   hash->hash_function= hash_function ? hash_function : cset_hash_sort_adapter;
   DBUG_RETURN(my_init_dynamic_array_ci(&hash->array, 
                                        sizeof(HASH_LINK), size, growth_size));
@@ -192,20 +197,45 @@ my_hash_key(const HASH *hash, const uchar *record, size_t *length,
             my_bool first)
 {
   if (hash->get_key)
-    return (char*) (*hash->get_key)(record,length,first);
+    return (char*) (*hash->get_key)(record,length,first); //--> 这里会使用 get_key 函数获取相应的key
   *length=hash->key_length;
   return (char*) record+hash->key_offset;
 }
 
 	/* Calculate pos according to keys */
 
+	/*
+	 * wangyang 这里的 buffmax 就会是 hash结构体的 blength 是2的n次幂
+	 * 动态hash 生成方式
+	 *
+	 * 通过 取模的方式 动态生成 hash 值
+	 */
 static uint my_hash_mask(my_hash_value_type hashnr, size_t buffmax,
                          size_t maxlength)
 {
+    /**
+     * wangyang  这里比如 buffmax = 8 max length = 3 那么执行if中语句
+     * 如果 buffmax = 9 max length = 3 那么 ，只使用低位
+     *
+     *
+     * 所以可以看到 动态 hash 每次返回的是不一样的，开始的时候 会尽量在低位，然后逐渐
+     * 扩展到 高位
+     *
+     * 一开始的时候 假设 buffmax = 16 maxlength = 0
+     * 2、假设 hashnr = 13 & 15 = 13 , 13 > 0，那么 位置么 13 & (16 >> 1) - 1 = 13 & 7 = 7
+     *
+     * 3、假设 hashnr = 13 然后max length = 14
+     * 那么 13 & 15 = 13， 13 < 14 ，那么 13 & (16 - 1) = 13 的位置
+     *
+     *
+     */
   if ((hashnr & (buffmax-1)) < maxlength) return (hashnr & (buffmax-1));
   return (hashnr & ((buffmax >> 1) -1));
 }
 
+/*
+ * wangyang
+ */
 static uint my_hash_rec_mask(const HASH *hash, HASH_LINK *pos,
                              size_t buffmax, size_t maxlength)
 {
@@ -339,6 +369,19 @@ uchar* my_hash_next(const HASH *hash, const uchar *key, size_t length,
 
 	/* Change link from pos to new_link */
 
+	/**
+
+        这个函数的目的 是用于 将 HashLink 移动到正确的位置
+
+        old_link = array + next_link;--> 之前 这个位置的元素
+
+	    比如一个数组 有10个元素，find 的位置是 8，之前这个位置有一个元素，但是这两个元素
+	    不在同一个bucket,因此需要为 将之前这个位置的元素移动到新的位置也就是11(11是新分配的位置)
+
+	    然后 这个元素所在的新桶为 6 ，那么下面这个过程就是从6开始寻找 比如 6的下一个是 4 4的下一个是3
+	    3是最后一个 然后赋值 3的 下一个为 11 整个就是这么一个过程
+
+	 */
 static void movelink(HASH_LINK *array,uint find,uint next_link,uint newlink)
 {
   HASH_LINK *old_link;
@@ -383,6 +426,10 @@ static int hashcmp(const HASH *hash, HASH_LINK *pos, const uchar *key,
 
 	/* Write a hash-key to the hash-index */
 
+	/*
+	 * wangyang *** hash 插入 这里的作用是 往这个 hash 对象中插入一条记录
+	 *
+	 */
 my_bool my_hash_insert(HASH *info, const uchar *record)
 {
   int flag;
@@ -391,33 +438,84 @@ my_bool my_hash_insert(HASH *info, const uchar *record)
   uchar *UNINIT_VAR(ptr_to_rec),*UNINIT_VAR(ptr_to_rec2);
   HASH_LINK *data,*empty,*UNINIT_VAR(gpos),*UNINIT_VAR(gpos2),*pos;
 
-  if (HASH_UNIQUE & info->flags)
+  if (HASH_UNIQUE & info->flags) //wangyang 这里是否是 唯一性
   {
-    uchar *key= (uchar*) my_hash_key(info, record, &idx, 1);
+    uchar *key= (uchar*) my_hash_key(info, record, &idx, 1); //wangyang * 这里用于生成hahs_key ，可以参考 table_shared
     if (my_hash_search(info, key, idx))
       return(TRUE);				/* Duplicate entry */
   }
 
   flag=0;
+  /**
+   * wangyang 这里会对 empty 进行一个 赋值，用于获取数组中一个 空的位置o
+   *
+   * empty 这里用于获取一个新的空的位置 这里 empty 地址已经是确定了
+   *
+   *
+   */
   if (!(empty=(HASH_LINK*) alloc_dynamic(&info->array)))
     return(TRUE);				/* No more memory */
 
-  data=dynamic_element(&info->array,0,HASH_LINK*);
-  halfbuff= info->blength >> 1;
+    /*
+     * wangyang 这里宏定义展开 相当于 array->buffer + array_index
+     */
+    //dynamic_element(array,array_index,type) ((type)((array)->buffer) +(array_index))
+    /**
+     * wangyang ** 这里的意思是 获取这个 动态数组的 的头位置的指针，也就是array_index为0
+     */
+  data=dynamic_element(&info->array,0,HASH_LINK*); //wangyang 这里会动态分配一个 element 是 HASH_LINK* 类型的
+  halfbuff= info->blength >> 1; //wangyang 是一半的位置 比如 blength 是 8 一半就是4
 
+  /*
+   * wangyang ** 主要适用于索引位置,从一半 位置 开始索引
+   * 比如blength 是 16 则hashbuff 是 8
+   * records 可能是10
+   *
+   *
+   * idx 用于表示 在数组中的索引位置
+   *
+   * 这里的 first_index 是用 records - 一半
+   *
+   * records 数量 一定是 大于 halfbuff的 因为 是达到blength 的时候 才会放大 一倍
+   *
+   *
+   *
+   */
   idx=first_index=info->records-halfbuff;
+  /**
+   * idx 表示索引位置
+   */
   if (idx != info->records)				/* If some records */
   {
     do
     {
-      pos=data+idx;
-      hash_nr=rec_hashnr(info,pos->data);
+      pos=data+idx; //wangyang data 是一个指针 + idx
+      hash_nr=rec_hashnr(info,pos->data); // 用于获取 hash value 值
       if (flag == 0)				/* First loop; Check if ok */
+      /**
+       * wangyang ** 这里使用了 动态hash 用于生成 动态hash码
+       *
+       * 这几句上下文的 意思是  将会从 records - blength/2 的 pos的位置 进行 重新hash
+       *
+       * 如果 下面 重新 hash 之后的结果 不等于 之前的结果 那么 直接 break 就可以了
+       *
+       * 因为上面alloc_dynamic 重新分配了一个元素 ，所以下面的 会使用hash 方法进行重新分配
+       *
+       */
+       /**
+        *
+        *
+        *
+        *
+        */
 	if (my_hash_mask(hash_nr, info->blength, info->records) != first_index)
 	  break;
-      if (!(hash_nr & halfbuff))
+	/**
+	 * wangyang *** 这里计算得到的 hash 值是
+	 */
+      if (!(hash_nr & halfbuff)) //
       {						/* Key will not move */
-	if (!(flag & LOWFIND))
+	if (!(flag & LOWFIND)) // 寻找低位的
 	{
 	  if (flag & HIGHFIND)
 	  {
@@ -449,7 +547,7 @@ my_bool my_hash_insert(HASH *info, const uchar *record)
       }
       else
       {						/* key will be moved */
-	if (!(flag & HIGHFIND))
+	if (!(flag & HIGHFIND)) //-->  wangyang *** 这里的意思 是 在高位找到 需要移动的桶了, 然后将
 	{
 	  flag= (flag & LOWFIND) | HIGHFIND;
 	  /* key shall be moved to the last (empty) position */
@@ -458,10 +556,10 @@ my_bool my_hash_insert(HASH *info, const uchar *record)
 	}
 	else
 	{
-	  if (!(flag & HIGHUSED))
+	  if (!(flag & HIGHUSED)) //--> wangyang *** 这里会 进行数据的一个 移动 将 rec2 移动到 gpos2 的位置，然后 empty 的位置就会空出来
 	  {
 	    /* Change link of previous hash-key and save */
-	    gpos2->data=ptr_to_rec2;
+	    gpos2->data=ptr_to_rec2; // wangyang *** 这里 会进行一个移动赋值
 	    gpos2->next=(uint) (pos-data);
 	    flag= (flag & LOWFIND) | (HIGHFIND | HIGHUSED);
 	  }
@@ -470,7 +568,7 @@ my_bool my_hash_insert(HASH *info, const uchar *record)
 	}
       }
     }
-    while ((idx=pos->next) != NO_RECORD);
+    while ((idx=pos->next) != NO_RECORD); // wangyang 这里会 不断的进行遍历，直到 next = no_record
 
     if ((flag & (LOWFIND | LOWUSED)) == LOWFIND)
     {
@@ -485,27 +583,48 @@ my_bool my_hash_insert(HASH *info, const uchar *record)
   }
   /* Check if we are at the empty position */
 
+  /*
+   * wangyang 下面是正常流程下 来指定 某个位置
+   *
+   * rec_hashnr 函数用于获取 hash_value
+   *
+   * 假定 一开始 不走上面逻辑 ，那么这里获取一个 idx
+   *
+   */
+    /*
+     * wangyang 下面计算 idx 是获取到的 bucket 的位置
+     */
   idx= my_hash_mask(rec_hashnr(info, record), info->blength, info->records + 1);
-  pos=data+idx;
+  pos=data+idx; //--> pos 是一个 指针位置 ， 这里赋值了 一个地址，所以可以取出对应数据
+  /**
+   * wangyang  ** 这里意思是 如果 分配的 位置pos 等于empty 相当于最新的位置
+   */
   if (pos == empty)
   {
     pos->data=(uchar*) record;
-    pos->next=NO_RECORD;
+    pos->next=NO_RECORD; //--> 用于声明 next 元素
   }
   else
   {
     /* Check if more records in same hash-nr family */
+    /**
+     * 这里会将 pos[0] 的元素 复制到 empty[0] 的位置  这里并不涉及 指针的复制
+     * 如果是指针复制 应该是 empty = pos ,所以下面只是一个 元素的复制
+     */
     empty[0]=pos[0];
+    //这里用于获取 pos 位置原先 元素的 bucket
+    // pos 相同的元素可以认为是 同一个 bucket
     gpos= data + my_hash_rec_mask(info, pos, info->blength, info->records + 1);
-    if (pos == gpos)
+    if (pos == gpos) // 如果在一个 位置 都是同一个bucket 那么 就是 记录 在这个动态数组中的位置
     {
-      pos->data=(uchar*) record;
-      pos->next=(uint) (empty - data);
+      pos->data=(uchar*) record; // wangyang 这里存放 当前插入元素
+      pos->next=(uint) (empty - data); // 这里是用于
     }
     else
     {
       pos->data=(uchar*) record;
       pos->next=NO_RECORD;
+      //pos-data 是新元素位置 gpos-data 是 之前 元素的的索引位置
       movelink(data,(uint) (pos-data),(uint) (gpos-data),(uint) (empty-data));
     }
   }

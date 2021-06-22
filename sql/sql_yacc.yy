@@ -8807,6 +8807,16 @@ opt_ignore_leaves:
   Select : retrieve data from table
 */
 
+/*
+
+ 这里使用 bison bison中使用了大量 c++代码，将解析结果 嵌入到 对应的c++对象中
+ 比如LEX
+
+第一步 1、 wangyang  ***  select语句入口
+
+这里是 入口部分 select 起始语句 ，select_init 也是一个表达式 会继续寻找
+
+*/
 
 select:
           select_init
@@ -8819,13 +8829,17 @@ select:
 
             /* SELECT...UPDATE is regarded as a DML.*/
             if (lex->sql_command != SQLCOM_UPDATE)
-              lex->sql_command= SQLCOM_SELECT;
+              lex->sql_command= SQLCOM_SELECT; //wangyang 这里用于初始化 命令
           }
         ;
 
 /* Need select_init2 for subselects. */
+/*
+第二步 2、 SELECT_SYM 为select 关键字
+wangyang 这里的目的是嵌套子循环
+*/
 select_init:
-          SELECT_SYM select_init2
+          SELECT_SYM select_init2 /* wangyang 这里会 初始化城 终结符 select select_init2 select_init2继续寻找 */
         | '(' select_paren ')' union_opt
         ;
 
@@ -8848,8 +8862,11 @@ select_paren_derived:
         | '(' select_paren_derived ')'
         ;
 
+/*
+第三步 3 wangyang
+*/
 select_init2:
-          select_part2
+          select_part2  /* wangyang 用于设置  */
           {
             LEX *lex= Lex;
             SELECT_LEX * sel= lex->current_select;
@@ -8868,6 +8885,10 @@ select_init2:
           union_clause
         ;
 
+/*
+第四步 wangyang **
+这里解析为 select_part2
+*/
 select_part2:
           {
             LEX *lex= Lex;
@@ -8883,7 +8904,7 @@ select_part2:
               MYSQL_YYABORT;
             }
           }
-          select_options select_item_list
+          select_options select_item_list /*wangyang ** 这里的目的是 用来解析列名 , 这里会展开 select_item_list子句    */
           {
             Select->parsing_place= NO_MATTER;
           }
@@ -9080,6 +9101,10 @@ select_lock_type:
           }
         ;
 
+/*
+ 这里会继续展开  这里创建一个 item_field 并且调用add_item_to_list
+ 会标记 current_select 当前子句，因为 有可能存在嵌套，所以 需要使用 current_select 进行标记
+*/
 select_item_list:
           select_item_list ',' select_item
         | select_item
@@ -9097,6 +9122,9 @@ select_item_list:
           }
         ;
 
+/**
+wangyang 这里将每个 字段解析成item
+*/
 select_item:
           remember_name table_wild remember_end
           {
@@ -9155,6 +9183,9 @@ optional_braces:
         ;
 
 /* all possible expressions */
+/*
+wangyang 这里用于解释表达式
+*/
 expr:
           expr or expr %prec OR_SYM
           {
@@ -11536,7 +11567,7 @@ where_clause:
           {
             Select->parsing_place= IN_WHERE;
           }
-          expr
+          expr /*wangyang 表达式*/
           {
             SELECT_LEX *select= Select;
             select->where= $3;

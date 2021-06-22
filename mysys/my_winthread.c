@@ -54,15 +54,18 @@ win_pthread_mutex_trylock(pthread_mutex_t *mutex)
 
 static unsigned int __stdcall pthread_start(void *p)
 {
-  struct thread_start_parameter *par= (struct thread_start_parameter *)p;
+  struct thread_start_parameter *par= (struct thread_start_parameter *)p; //转为 thread_start_parameter
   pthread_handler func= par->func;
   void *arg= par->arg;
   free(p);
-  (*func)(arg);
+  (*func)(arg); //wangyang 调用传入进来的相应的函数
   return 0;
 }
 
 
+/**
+ * wangyang 这里是 mysql 用于创建 pthread_create
+ */
 int pthread_create(pthread_t *thread_id, const pthread_attr_t *attr,
                    pthread_handler func, void *param)
 {
@@ -80,6 +83,9 @@ int pthread_create(pthread_t *thread_id, const pthread_attr_t *attr,
   par->arg= param;
   stack_size= attr?attr->dwStackSize:0;
 
+  /**
+   * wangyang 调用系统调用
+   */
   handle= _beginthreadex(NULL, stack_size , pthread_start, par, 0, thread_id);
   if (!handle)
     goto error_return;

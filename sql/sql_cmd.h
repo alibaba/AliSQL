@@ -30,6 +30,12 @@
   added SQLCOM_.
 */
 
+/*
+ *
+ * wangyang ** Ïà¹ØµÄsql ÃüÁî
+ *
+ *
+ */
 enum enum_sql_command {
   SQLCOM_SELECT, SQLCOM_CREATE_TABLE, SQLCOM_CREATE_INDEX, SQLCOM_ALTER_TABLE,
   SQLCOM_UPDATE, SQLCOM_INSERT, SQLCOM_INSERT_SELECT,

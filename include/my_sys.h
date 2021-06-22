@@ -354,9 +354,12 @@ struct st_my_file_info
 
 extern struct st_my_file_info *my_file_info;
 
+/**
+ * wangyang ** st_hash 中使用的动态数组
+ */
 typedef struct st_dynamic_array
 {
-  uchar *buffer;
+  uchar *buffer; //--> wangyang buffer 字符数组
   uint elements,max_element;
   uint alloc_increment;
   uint size_of_element;
@@ -825,6 +828,8 @@ extern void delete_dynamic(DYNAMIC_ARRAY *array);
 extern void delete_dynamic_element(DYNAMIC_ARRAY *array, uint array_index);
 extern void freeze_size(DYNAMIC_ARRAY *array);
 #define dynamic_array_ptr(array,array_index) ((array)->buffer+(array_index)*(array)->size_of_element)
+//wangyang *** 这里初始的时候 只是一个 普通的指针，比如 char* 但是会转换为 type 类型，这样宽度就增长了
+//这里只是 获取这个动态数组的 某个位置
 #define dynamic_element(array,array_index,type) ((type)((array)->buffer) +(array_index))
 #define push_dynamic(A,B) insert_dynamic((A),(B))
 #define reset_dynamic(array) ((array)->elements= 0)

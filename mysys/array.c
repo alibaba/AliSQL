@@ -40,6 +40,9 @@
     FALSE	Ok
 */
 
+/**
+ *  wangyang @@ 初始化 动态 数组
+ */
 my_bool init_dynamic_array2(DYNAMIC_ARRAY *array, uint element_size,
                             void *init_buffer, uint init_alloc, 
                             uint alloc_increment)
@@ -129,7 +132,7 @@ my_bool insert_dynamic(DYNAMIC_ARRAY *array, const void *element)
 
 void *alloc_dynamic(DYNAMIC_ARRAY *array)
 {
-  if (array->elements == array->max_element)
+  if (array->elements == array->max_element) //wangyang 如果 elements已经达到最大数量 那么 需要扩容
   {
     char *new_ptr;
     if (array->buffer == (uchar *)(array + 1))
@@ -155,6 +158,9 @@ void *alloc_dynamic(DYNAMIC_ARRAY *array)
     array->buffer= (uchar*) new_ptr;
     array->max_element+=array->alloc_increment;
   }
+  /**
+   * wangyang  这里就是动态数组中 返回一个 新的元素位置 ，使用 elements
+   */
   return array->buffer+(array->elements++ * array->size_of_element);
 }
 

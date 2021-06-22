@@ -103,6 +103,7 @@ get_page_size(
   flags = mach_read_from_4(buf + FIL_PAGE_DATA + FSP_SPACE_FLAGS);
 
   /* srv_page_size is used by InnoDB code as UNIV_PAGE_SIZE */
+  //wangyang @@ 这里用于声明 pageSize
   srv_page_size = *logical_page_size = fsp_flags_get_page_size(flags);
 
   /* fsp_flags_get_zip_size() will return zero if not compressed. */

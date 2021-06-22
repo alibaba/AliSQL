@@ -84,12 +84,18 @@ ut_align(
 	const void*	ptr,		/*!< in: pointer */
 	ulint		align_no)	/*!< in: align by this number */
 {
-	ut_ad(align_no > 0);
+	ut_ad(align_no > 0); //wangyang @@ 这里的 ut_ad 是 assert 是断言 进行判断是否
 	ut_ad(((align_no - 1) & align_no) == 0);
 	ut_ad(ptr);
 
 	ut_ad(sizeof(void*) == sizeof(ulint));
 
+    /**
+        wangyang @@@ 这里会通过对齐的方式 获取 相应的对齐地址
+        比如这里 会进行一个对齐，比如pageNo = 16 ，那么下面
+        的对齐就是 ~(16 - 1) ，也就是 1111xxx0000, 这样就可以进行相应的对齐
+        +(加上)一个 (pageNo -1)的原因是 可以让首地址在 前面的范畴内
+    */
 	return((void*)((((ulint) ptr) + align_no - 1) & ~(align_no - 1)));
 }
 

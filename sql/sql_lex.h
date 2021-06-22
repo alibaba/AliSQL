@@ -694,6 +694,9 @@ public:
   LEX *parent_lex;
   enum olap_type olap;
   /* FROM clause - points to the beginning of the TABLE_LIST::next_local list. */
+  /**
+   *
+   */
   SQL_I_List<TABLE_LIST>  table_list;
 
   /*
@@ -711,6 +714,9 @@ public:
     SELECT: Fields and expressions in the SELECT list.
     UPDATE: Fields in the SET clause.
   */
+  /*
+   * wangyang 用于表示 存储过程中的 各种 field
+   */
   List<Item>          item_list;
   List<String>        interval_list;
   bool	              is_item_list_lookup;
@@ -732,6 +738,11 @@ public:
     inlcude all base tables including view tables. The tables are connected
     by TABLE_LIST::next_leaf, so leaf_tables points to the left-most leaf.
   */
+
+  /**
+   * wangyang ** 用于表示 相应的叶子节点
+   *
+   */
   TABLE_LIST *leaf_tables;
   /**
     SELECT_LEX type enum
@@ -1135,6 +1146,9 @@ public:
   */
   enum_sql_command sql_command;
   /* Global list of all tables used by this statement */
+  /**
+   * wangyang ** statement 对应的 table list (statement 对应一条sql)
+   */
   TABLE_LIST *query_tables;
   /* Pointer to next_global member of last element in the previous list. */
   TABLE_LIST **query_tables_last;
@@ -2253,12 +2267,20 @@ struct Proc_analyse_params: public Sql_alloc
 
 
 /* The state of the lex parsing. This is saved in the THD struct */
-
+/*
+ * wangyang ** 语法 解析对象
+ */
 struct LEX: public Query_tables_list
 {
   SELECT_LEX_UNIT unit;                         /* most upper unit */
+  /**
+   * wangyang ** select_lex 里面 用于存储 相应的 解析出的 sql 语法语句
+   */
   SELECT_LEX select_lex;                        /* first SELECT_LEX */
   /* current SELECT_LEX in parsing */
+  /*
+   * 用于解析 过程中的 current select 语句
+   */
   SELECT_LEX *current_select;
   /* list of all SELECT_LEX */
   SELECT_LEX *all_selects_list;

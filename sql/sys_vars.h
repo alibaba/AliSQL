@@ -102,6 +102,15 @@ struct CMD_LINE
   Backing store: uint, ulong, ha_rows, ulonglong, long, depending on the
   Sys_var_*
 */
+
+/**
+ *
+ wangyang 这里使用了  模板模式 并且继承了 sys_var 对象
+
+ 只要 创建相应的对象就会使用 all_sys_vars 将变量注册到全局变量中
+
+
+ */
 template
   <typename T, ulong ARGT, enum enum_mysql_show_type SHOWT, bool SIGNED>
 class Sys_var_integer: public sys_var
