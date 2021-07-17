@@ -88,6 +88,10 @@ ut_mem_init(void)
 /**********************************************************************//**
 Allocates memory.
 @return	own: allocated memory */
+
+/*
+ * wangyang  ut_malloc_low      分配一个n长度的内存块，并将分配的块记录到ut_mem_block_list当中.
+ */
 UNIV_INTERN
 void*
 ut_malloc_low(

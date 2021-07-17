@@ -488,6 +488,7 @@ TABLE_SHARE *get_table_share(THD *thd, TABLE_LIST *table_list,
                                              MDL_SHARED));
 
   /* Read table definition from cache */
+  //wangyang @@ 如果这里面已经存在了，那么就可以直接返回
   if ((share= (TABLE_SHARE*) my_hash_search_using_hash_value(&table_def_cache,
                                                              hash_value, (uchar*) key, key_length)))
     goto found;
@@ -512,6 +513,10 @@ TABLE_SHARE *get_table_share(THD *thd, TABLE_LIST *table_list,
    */
   assign_new_table_id(share);
 
+  /**
+   * wangyang @@ 这里主要是向table_def_cache 中插入相应的 表信息
+   *
+   */
   if (my_hash_insert(&table_def_cache, (uchar*) share))
   {
     free_table_share(share);

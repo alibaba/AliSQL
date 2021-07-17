@@ -2453,7 +2453,8 @@ files_checked:
 		to access space 0, and the insert buffer at this stage already
 		works for space 0. */
 
-		err = dict_boot();
+
+		err = dict_boot(); //wangyang @@ ≥ı ºªØ dict_table
 
 		if (err != DB_SUCCESS) {
 			return(err);

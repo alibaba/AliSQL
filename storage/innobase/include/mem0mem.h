@@ -387,8 +387,8 @@ mem_validate_all_blocks(void);
  * 里面会有 mem_block_t 形成链表 , mem_block_t 就是 mem_block_info_t
  * block 的内存 来源于 mem_pool (mem_pool 形成类似 buddy的分配方式)
  *
- * 1、
  *
+ * mem_block 是 链表的方式进行管理，但是 大小并不确定
  *
  *
  */
@@ -416,6 +416,9 @@ struct mem_block_info_t {
 	 */
 	ulint	free;	/*!< offset in bytes of the first free position for
 			user data in the block */
+	/**
+	 * 内存block的起始地址
+	 */
 	ulint	start;	/*!< the value of the struct field 'free' at the
 			creation of the block */
 #ifndef UNIV_HOTBACKUP

@@ -119,6 +119,14 @@ Assert that the mutex for the table is held */
 /*******************************************************************//**
 Inserts a struct to a hash table. */
 
+/**
+ * wangyang Type 表示类型 Table 表示 hash 结构
+ * fold 表示相应的hash 值 data 是要插入的数据
+ * name 是相应的名称，代表相应节点的指针变量
+ *
+ *
+ *
+ */
 #define HASH_INSERT(TYPE, NAME, TABLE, FOLD, DATA)\
 do {\
 	hash_cell_t*	cell3333;\
@@ -143,6 +151,8 @@ do {\
 		struct3333->NAME = DATA;\
 	}\
 } while (0)
+//wangyang 这里struct3333 代表相应的 hash 表中的节点， 获取 node
+// 表示相应的 节点信息，然后设置相应的 data 信息
 
 #ifdef UNIV_HASH_DEBUG
 # define HASH_ASSERT_VALID(DATA) ut_a((void*) (DATA) != (void*) -1)

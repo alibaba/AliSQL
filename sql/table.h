@@ -586,6 +586,9 @@ struct TABLE_SHARE{
   TABLE_SHARE() {}                    /* Remove gcc warning */
 
   /** Category of this table. */
+  /*
+   * 枚举 类型 用于声明 表的种类
+   */
   TABLE_CATEGORY table_category;
 
   /* hash of field names (contains pointers to elements of field array) */

@@ -28,6 +28,9 @@ using std::max;
 
 extern "C" void sql_alloc_error_handler(void);
 
+/*
+ * wangyang @@@ 初始化 这里的作用 初始化 mem_root 结构体，并不一定会 分配内存
+ */
 void init_sql_alloc(MEM_ROOT *mem_root, uint block_size, uint pre_alloc)
 {
   init_alloc_root(mem_root, block_size, pre_alloc);

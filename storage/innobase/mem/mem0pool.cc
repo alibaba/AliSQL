@@ -231,6 +231,14 @@ mem_area_set_free(
 		| free;
 }
 
+/*
+ *
+ 基础内存管理的方法如下：
+      ut_malloc_low                    分配一个n长度的内存块，并将分配的块记录到ut_mem_block_list当中.
+      ut_malloc                            与ut_malloc_low功能相同，但是会用0初始化所分配的内存。
+      ut_free                                释放一个分配的内存块，并将其从ut_mem_block_list当中删除。
+      ut_free_all_mem                 释放ut_mem_block_list所有的内存块并清空ut_mem_block_list
+ */
 /********************************************************************//**
 Creates a memory pool.
 @return	memory pool */
@@ -251,7 +259,11 @@ mem_pool_create(
 	pool = static_cast<mem_pool_t*>(ut_malloc(sizeof(mem_pool_t)));
 
 	/**
-	 * 这里的分配 是
+	 *
+	 * wangyang 这里 使用的是 os malloc 分配的一整块内存，
+	 * 并没有使用 相应的内存管理技术 ，就是一整块单独的内存
+	 * 然后加入到 链表当中
+	 *
 	 */
 	pool->buf = static_cast<byte*>(ut_malloc_low(size, TRUE));
 	pool->size = size;
@@ -386,6 +398,12 @@ mem_pool_fill_free_list(
 Allocates memory from a pool. NOTE: This low-level function should only be
 used in mem0mem.*!
 @return	own: allocated memory buffer */
+/**
+ *
+ wangyang @@@ 从 common_pool当中 分配内存 ， mem_heap_t 也是从这里面分配的内存
+ mem_heap_t 是 block 链表的内存管理方式
+ mem_pool_t 是 buddy 的分配方式，分配block
+ */
 UNIV_INTERN
 void*
 mem_area_alloc(

@@ -35,6 +35,21 @@
   This significantly increases scalability in some scenarios.
 */
 
+/*
+
+  MySQL 5.6后，引入了“table_cache_instances”参数来控制 table cache instance的个数。目前最大值是64，默认值是1。建议值是16，当系统CPU核数高于16时。引入此参数的目的是，提高并发。相当于把table cache 拆成了多个分区，每个分区的打开table句柄数为：table_open_cache / table_open_cache_instances。跟innodb_buffer_pool_instances参数有异曲同工的作用。
+     table_cache_instances的最大值为64，每个thread会使用哪个table cache instance，根据thread id取模得到：m_table_cache [thread_id % table_cache_instances]。其中m_table_cache是table cache的instance 分区数组。源码定义如下：
+
+          Table cache instance统一由Table_cache_manager类来管理。Table_cache_manager负责初始化和销毁table cache instance。
+     另外，取代LOCK_open锁的是64个m_lock mutex。因此大大降低了table cache 锁的争用，将其分摊到了64个instance上的m_lock mutex上。
+     但是涉及到多个table cache中的对象的DDL语句，仍然需要整个table cache级别的锁，即Lock_open。另外，对所有table cache instances以及table definition cache上锁时，也需持有Lock_open锁。
+
+
+     table_cache 的目的是 在使用的时候用于提高并发，比如 某个线程中 在使用的时候， 可以从 table_cache_manager 中
+     获取对应的 table_cache 信息，然后在找到 对应的 table_share，用于提高并发
+
+ */
+
 class Table_cache
 {
 private:
@@ -70,6 +85,11 @@ private:
     of used TABLE objects in this table cache is stored.
     We use Table_cache_element::share::table_cache_key as key for this hash.
   */
+
+  /*
+   * 这里说的也很清楚，里面存储的是 table_cache_element 对象， table_share 用于表示一个表对象
+   * 其他
+   */
   HASH m_cache;
 
   /**

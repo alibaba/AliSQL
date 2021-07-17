@@ -920,6 +920,9 @@ the table, DML from memcached will be blocked. */
 
 /** Data structure for a database table.  Most fields will be
 initialized to 0, NULL or FALSE in dict_mem_table_create(). */
+/**
+ * wangyang @@ 数据库表的 数据结构，用于存储相应的
+ */
 struct dict_table_t{
 
 

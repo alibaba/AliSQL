@@ -83,9 +83,22 @@ struct os_fast_mutex_t {
 };
 
 /** Operating system event handle */
+/**
+ * wangyang   用于声明 信号量
+ */
 typedef struct os_event*	os_event_t;
 
 /** An asynchronous signal sent between threads */
+/*
+ * wangyang 这里说的很清楚， 是用于两个线程之前的 进行 信号量 发送的线程
+ *
+ * 这里的信号量 主要是 用于两个线程之间的通知 并不是常见的多个线程
+ *
+ * 主要方法 os_event_create os_event_set os_event_reset
+ * 每次reset 之后 都会让 signal_count 数量增加，
+ * 所以signal_count 表示的是 重置次数，而不是 等待通知的数量
+ *
+ */
 struct os_event {
 #ifdef __WIN__
 	HANDLE		handle;		/*!< kernel event object, slow,
@@ -97,10 +110,18 @@ struct os_event {
 					in the signaled state, i.e., a thread
 					does not stop if it tries to wait for
 					this event */
+	/**
+	 * wangyang
+	 */
 	ib_int64_t	signal_count;	/*!< this is incremented each time
 					the event becomes signaled */
 	os_cond_t	cond_var;	/*!< condition variable is used in
 					waiting for the event */
+
+	/**
+	 * wangyang  ut_list_node_t 是一个 节点列表 , 使用相应的宏定义
+	 * 每个节点 表示一个链表中的节点, 有prev  和  next
+	 */
 	UT_LIST_NODE_T(os_event_t) os_event_list;
 					/*!< list of all created events */
 };
