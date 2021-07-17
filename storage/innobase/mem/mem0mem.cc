@@ -328,16 +328,23 @@ mem_heap_create_block_func(
 	len = MEM_BLOCK_HEADER_SIZE + MEM_SPACE_NEEDED(n);
 
 #ifndef UNIV_HOTBACKUP
+	/**
+	 * wangyang @@ 下面要根据 type 的方式 进行判断 使用何种方式 进行切分内存
+	 * 类型是 dynamic 或者 长度 小于 1/2 Page
+	 */
 	if (type == MEM_HEAP_DYNAMIC || len < UNIV_PAGE_SIZE / 2) {
 
 		ut_ad(type == MEM_HEAP_DYNAMIC || n <= MEM_MAX_ALLOC_IN_BUF);
 
+		/**
+		 * wangyang @@@ 这里可以看到 mem_block_t 是从 mem_area 进行分离出来的
+		 */
 		block = static_cast<mem_block_t*>(
 			mem_area_alloc(&len, mem_comm_pool));
 	} else {
 		len = UNIV_PAGE_SIZE;
 
-		if ((type & MEM_HEAP_BTR_SEARCH) && heap) {
+		if ((type & MEM_HEAP_BTR_SEARCH) && heap) { //wangyang @@ 这种情况下  首先是 符合这种type 然后是 heap 必须存在
 			/* We cannot allocate the block from the
 			buffer pool, but must get the free block from
 			the heap header free block field */
@@ -350,7 +357,7 @@ mem_heap_create_block_func(
 				return(NULL);
 			}
 		} else {
-			buf_block = buf_block_alloc(NULL);
+			buf_block = buf_block_alloc(NULL); // wangyang @@  这种情况下  会从 buf_pool 中进行分配
 		}
 
 		block = (mem_block_t*) buf_block->frame;

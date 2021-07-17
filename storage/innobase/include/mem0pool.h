@@ -37,11 +37,24 @@ struct mem_pool_t;
 extern mem_pool_t*	mem_comm_pool;
 
 /** Memory area header */
+/**
+ * wangyang @@ 声明内存头
+ */
 struct mem_area_t{
 	ulint		size_and_free;	/*!< memory area size is obtained by
 					anding with ~MEM_AREA_FREE; area in
 					a free list if ANDing with
 					MEM_AREA_FREE results in nonzero */
+	/**
+	 * wangyang 这里会以 mem_area_t 作为一个 节点
+	 */
+	 /*
+	  每个 free_list 类似于 一个 Node节点，有 前驱和后继 prev 和 next
+	  struct ut_list_node {
+	TYPE* 	prev;
+     TYPE* 	next;
+    };
+	  */
 	UT_LIST_NODE_T(mem_area_t)
 			free_list;	/*!< free list node */
 };

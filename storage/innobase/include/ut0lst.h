@@ -92,6 +92,9 @@ ut_elem_get_node(Type&	elem, size_t offset)
 {
 	ut_a(offset < sizeof(elem));
 
+	/**
+	 * wangyang reinterpret_cast用于 无关类型转换
+	 */
 	return(*reinterpret_cast<ut_list_node<Type>*>(
 		reinterpret_cast<byte*>(&elem) + offset));
 }
@@ -119,11 +122,19 @@ ut_list_prepend(
 	Type&		elem,
 	size_t		offset)
 {
+    /**
+     * wangyang 这里的目的是 获取这个 elem 中的节点部分
+     * 比如一个 ut_mem_block_list 中获取 相应的 这个 offset
+     * 找到相应的位置
+     */
 	ut_list_node<Type>&	elem_node = ut_elem_get_node(elem, offset);
 
  	elem_node.prev = 0;
  	elem_node.next = list.start;
 
+ 	/**
+ 	 * 让之前的 start 节点的prev 指向 上面新加入过来的节点
+ 	 */
 	if (list.start != 0) {
 		ut_list_node<Type>&	base_node =
 			ut_elem_get_node(*list.start, offset);

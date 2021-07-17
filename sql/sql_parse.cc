@@ -2488,7 +2488,7 @@ mysql_execute_command(THD *thd)
   */
   lex->first_lists_tables_same();
   /* should be assigned after making first tables same */
-  all_tables= lex->query_tables;
+  all_tables= lex->query_tables; //wangyang 列举所有的 tables
   /* set context for commands which do not use setup_tables */
   select_lex->
     context.resolve_in_table_list_only(select_lex->
@@ -2521,7 +2521,7 @@ mysql_execute_command(THD *thd)
         !rpl_filter->db_ok(thd->db))
       DBUG_RETURN(0);
 
-    if (lex->sql_command == SQLCOM_DROP_TRIGGER)
+    if (lex->sql_command == SQLCOM_DROP_TRIGGER) // wangyang 删除触发器
     {
       /*
         When dropping a trigger, we need to load its table name
@@ -3608,7 +3608,7 @@ end_with_restore_list:
       DBUG_PRINT("debug", ("Just after generate_incident()"));
     }
 #endif
-  case SQLCOM_INSERT:
+  case SQLCOM_INSERT: //wangyang ** 这里执行 插入语句
   {
     DBUG_ASSERT(first_table == all_tables && first_table != 0);
 
@@ -3628,6 +3628,13 @@ end_with_restore_list:
 
     MYSQL_INSERT_START(thd->query());
     check_queue_on_pk(thd, all_tables, lex);
+    /**
+     * wangyang ** 这里用于 执行 sql 插入
+     *
+     * field_list 表示 字段
+     * all_tables 表示 所有的表
+     *
+     */
     res= mysql_insert(thd, all_tables, lex->field_list, lex->many_values,
 		      lex->update_list, lex->value_list,
                       lex->duplicates, lex->ignore);
@@ -6487,6 +6494,9 @@ void mysql_init_multi_delete(LEX *lex)
                                the next query in the query text.
 */
 
+/*
+ * wangyang *** sql查询解析
+ */
 void mysql_parse(THD *thd, char *rawbuf, uint length,
                  Parser_state *parser_state)
 {
@@ -6518,6 +6528,9 @@ void mysql_parse(THD *thd, char *rawbuf, uint length,
   {
     LEX *lex= thd->lex;
 
+    /**
+     * wangyang ** 这里将sql 进行词法转换分析
+     */
     bool err= parse_sql(thd, parser_state, NULL);
 
     const char *found_semicolon= parser_state->m_lip.found_semicolon;
@@ -6613,7 +6626,7 @@ void mysql_parse(THD *thd, char *rawbuf, uint length,
           }
           else
           {
-            error= mysql_execute_command(thd);
+            error= mysql_execute_command(thd); //wangyang ** 这里执行 command
             if (!thd->trx_end_by_hint)
             {
               if (!error && lex->ci_on_success)

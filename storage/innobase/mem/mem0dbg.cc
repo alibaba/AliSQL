@@ -142,6 +142,21 @@ mem_field_trailer_get_check(byte* field)
 #ifndef UNIV_HOTBACKUP
 /******************************************************************//**
 Initializes the memory system. */
+/**
+ * wangyang 这个函数说的 很清楚，用于初始 innodb 内存系统
+ */
+ /*
+  innodb_additional_mem_pool_size 是 InnoDB 用来保存数据字典信息和其他内部数据结构的内存池的大小，单位是 byte，参数默认值为8M。数据库中的表数量越多，参数值应该越大，如果 InnoDB 用完了内存池中的内存，就会从操作系统中分配内存，同时在 error log 中打入报警信息。
+
+innodb_use_sys_malloc 配置为 ON 时，innodb_additional_mem_pool_size 失效（直接从操作系统分配内存）。
+
+innodb_additional_mem_pool_size 和 innodb_use_sys_malloc 在 MySQL 5.7.4 中移除。
+
+
+  早期操作系统的内存分配器性能和可伸缩性较差，并且当时没有适合多核心CPU的内存分配器。所以，InnoDB 实现了一套自己的内存分配系统，做为内存系统的参数之一，引入了innodb_additional_mem_pool_size。
+随着多核心CPU的广泛应用和操作系统的成熟，操作系统能够提供性能更高、可伸缩性更好的内存分配器，包括 Hoard、libumem、mtmalloc、ptmalloc、tbbmalloc 和 TCMalloc 等。InnoDB 实现的内存分配器相比操作系统的内存分配器并没有明显优势，所以在之后的版本，会移除 innodb_additional_mem_pool_size 和 innodb_use_sys_malloc 两个参数，统一使用操作系统的内存分配器。
+
+  */
 UNIV_INTERN
 void
 mem_init(
@@ -174,7 +189,10 @@ mem_init(
 		size = 1;
 	}
 
-	mem_comm_pool = mem_pool_create(size);
+	/**
+	 * wangyang @@@ 这里用于创建 内存池
+	 */
+	mem_comm_pool = mem_pool_create(size); //这里创建 公共内存池
 }
 
 /******************************************************************//**

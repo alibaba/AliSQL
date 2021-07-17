@@ -7611,10 +7611,14 @@ int handler::ha_reset()
   DBUG_RETURN(retval);
 }
 
-
+/**
+ *
+ wangyang ** handler是存储引擎的基类
+ */
 int handler::ha_write_row(uchar *buf)
 {
   int error;
+  //wangyang ** 指定 log event 类型
   Log_func *log_func= Write_rows_log_event::binlog_row_logging_function;
   DBUG_ASSERT(table_share->tmp_table != NO_TMP_TABLE ||
               m_lock_type == F_WRLCK);
@@ -7627,7 +7631,7 @@ int handler::ha_write_row(uchar *buf)
   mark_trx_read_write();
 
   MYSQL_TABLE_IO_WAIT(m_psi, PSI_TABLE_WRITE_ROW, MAX_KEY, 0,
-    { error= write_row(buf); limit_io(ha_thd()); })
+    { error= write_row(buf); limit_io(ha_thd()); }) //wangyang ** 具体写入
 
   MYSQL_INSERT_ROW_DONE(error);
   if (unlikely(error))

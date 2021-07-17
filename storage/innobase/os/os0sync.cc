@@ -125,6 +125,9 @@ os_cond_init(
 	ut_a(initialize_condition_variable != NULL);
 	initialize_condition_variable(cond);
 #else
+	/**
+	 * wangyang 这里用于初始化  cond 结构体
+	 */
 	ut_a(pthread_cond_init(cond, NULL) == 0);
 #endif
 }
@@ -369,6 +372,8 @@ os_event_create(void)
 	{
 		event = static_cast<os_event_t>(ut_malloc(sizeof *event));
 
+//        os_event_wait_low(event,)
+
 #ifndef PFS_SKIP_EVENT_MUTEX
 		os_fast_mutex_init(event_os_mutex_key, &event->os_mutex);
 #else
@@ -446,6 +451,10 @@ that this thread should not wait in case of an intervening call to
 os_event_set() between this os_event_reset() and the
 os_event_wait_low() call. See comments for os_event_wait_low().
 @return	current signal_count. */
+/**
+
+ wangyang reset
+ */
 UNIV_INTERN
 ib_int64_t
 os_event_reset(
@@ -584,10 +593,18 @@ os_event_wait_low(
 
 	os_fast_mutex_lock(&event->os_mutex);
 
+    /**
+     * wangyang 如果这里 reset_sig_count 是0的话么，那么就会重新赋值为 相应的信号数量
+     */
 	if (!reset_sig_count) {
 		reset_sig_count = event->signal_count;
 	}
 
+
+
+	/**
+	 * wangyang  下面这里就是 信号量的等待，这里可以用于等待 相应的条件完成
+	 */
 	while (!event->is_set && event->signal_count == reset_sig_count) {
 		os_cond_wait(&(event->cond_var), &(event->os_mutex));
 
@@ -825,6 +842,12 @@ os_fast_mutex_init_func(
 
 	InitializeCriticalSection((LPCRITICAL_SECTION) fast_mutex);
 #else
+	/**
+	 * wangyang 这里使用 pthread_mutex ， 对 fast_mutex 进行初始化
+	 */
+
+//	pthread_mutex_lock(fast_mutex)
+
 	ut_a(0 == pthread_mutex_init(fast_mutex, MY_MUTEX_INIT_FAST));
 #endif
 	if (UNIV_LIKELY(os_sync_mutex_inited)) {

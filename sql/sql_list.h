@@ -109,6 +109,9 @@ public:
   @note We never call a destructor for instances of this class.
 */
 
+/*
+ * wangyang list_node 代表一个 node , info 表示 当前指向的节点
+ */
 struct list_node :public Sql_alloc
 {
   list_node *next;
@@ -398,8 +401,8 @@ public:
 
   inline void init(base_list &list_par)
   {
-    list= &list_par;
-    el= &list_par.first;
+    list= &list_par; //wangyang 表示整个list
+    el= &list_par.first; //wangyang el用于记录 第一个
     prev= 0;
     current= 0;
   }
@@ -411,6 +414,9 @@ public:
     el= &current->next;
     return current->info;
   }
+  /*
+   * wangyang el 代表当前项
+   */
   inline void *next_fast(void)
   {
     list_node *tmp;
@@ -532,7 +538,7 @@ public:
   inline List_iterator_fast(List<T> &a) : base_list_iterator(a) {}
   inline List_iterator_fast() : base_list_iterator() {}
   inline void init(List<T> &a) { base_list_iterator::init(a); }
-  inline T* operator++(int) { return (T*) base_list_iterator::next_fast(); }
+  inline T* operator++(int) { return (T*) base_list_iterator::next_fast(); } //wangyang ** 重写了 ++ 运算符
   inline void rewind(void)  { base_list_iterator::rewind(); }
   void sublist(List<T> &list_arg, uint el_arg)
   {

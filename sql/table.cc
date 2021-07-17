@@ -320,8 +320,8 @@ TABLE_CATEGORY get_table_category(const LEX_STRING *db, const LEX_STRING *name)
 TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, const char *key,
                                uint key_length)
 {
-  MEM_ROOT mem_root;
-  TABLE_SHARE *share;
+  MEM_ROOT mem_root; //wangyang 结构体 初始化 是一个空的对象, 而不是 NULL
+  TABLE_SHARE *share;  //这里初始分配的 地址不能使用
   char *key_buff, *path_buff;
   char path[FN_REFLEN];
   uint path_length;
@@ -333,15 +333,31 @@ TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, const char *key,
   path_length= build_table_filename(path, sizeof(path) - 1,
                                     table_list->db,
                                     table_list->table_name, "", 0);
+  /**
+   * wangyang @@@ table_share 函数这里会初始化 mem_root
+   * 初始化 mem_root
+   */
   init_sql_alloc(&mem_root, TABLE_ALLOC_BLOCK_SIZE, 0);
+  /**
+   * wangyang 在这里进行 变量初始化，就是调用下面的方法
+   * 下面方法的作用是 相应的指针进行初始化， 可以看到方法名字子 多重初始化 ，第一个参数是指针，
+   * 第二个参数是 对应的内存的大小
+   */
   if (multi_alloc_root(&mem_root,
-                       &share, sizeof(*share),
-                       &key_buff, key_length,
-                       &path_buff, path_length + 1,
+                       &share, sizeof(*share), //share 是表示   table_share 对象
+                       &key_buff, key_length, // key_buf 是表示 key(表示一张表的key) 的长度
+                       &path_buff, path_length + 1, // 表示 表的路径信息
                        &cache_element_array,
                        table_cache_instances * sizeof(*cache_element_array),
                        NULL))
   {
+
+      /*
+       # include <string.h>
+void *memset(void *s, int c, unsigned long n);
+函数的功能是：将指针变量 s 所指向的前 n 字节的内存单元用一个“整数” c 替换，注意 c 是 int 型。s 是 void* 型的指针变量，所以它可以为任何类型的数据进行初始化。
+       */
+    //这里的作用是 将 share 指针指向的 内存全部初始化为0
     memset(share, 0, sizeof(*share));
 
     share->set_table_cache_key(key_buff, key, key_length);
@@ -366,10 +382,20 @@ TABLE_SHARE *alloc_table_share(TABLE_LIST *table_list, const char *key,
 
     share->m_flush_tickets.empty();
 
+    /**
+     * 这里用于初始化 cache_element_array 地址对应的内存，长度为 len
+     * 全部初始化为0
+     */
     memset(cache_element_array, 0,
            table_cache_instances * sizeof(*cache_element_array));
     share->cache_element= cache_element_array;
 
+    /**
+     * wangyang 从 第二个参数指向的内存 指向 第一个参数指向的内存
+     *
+     * 内存拷贝 将 局部变量 &mem_root 对应的内存 复制到 share 中对应的 mem_root中
+     * 对应的地址 share 中 mem_root 是结构体，零值不是null ， 而是 空结构体
+     */
     memcpy((char*) &share->mem_root, (char*) &mem_root, sizeof(mem_root));
     mysql_mutex_init(key_TABLE_SHARE_LOCK_ha_data,
                      &share->LOCK_ha_data, MY_MUTEX_INIT_FAST);
@@ -851,7 +877,7 @@ int open_table_def(THD *thd, TABLE_SHARE *share, uint db_flags)
     root_ptr= my_pthread_getspecific_ptr(MEM_ROOT**, THR_MALLOC);
     old_root= *root_ptr;
     *root_ptr= &share->mem_root;
-    error= open_binary_frm(thd, share, head, file);
+    error= open_binary_frm(thd, share, head, file); //wangyang @@@ 这里会打开二进制文件 ，并初始化 table_share 对象
     *root_ptr= old_root;
     error_given= 1;
   }

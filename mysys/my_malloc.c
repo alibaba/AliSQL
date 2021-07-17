@@ -77,6 +77,9 @@ void *my_malloc(size_t size, myf my_flags)
   }
   else
   {
+      /**
+       * 用于更新 全局 malloc 内存
+       */
     update_malloc_size(_msize(point));
     DBUG_EXECUTE_IF("simulate_out_of_memory",
                     {

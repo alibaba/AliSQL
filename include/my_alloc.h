@@ -37,12 +37,17 @@ typedef struct st_used_mem
 
 typedef struct st_mem_root
 {
+    // 空闲内存
   USED_MEM *free;                  /* blocks with free memory in it */
+  //已使用内存
   USED_MEM *used;                  /* blocks almost without free memory */
+  //预分配内存
   USED_MEM *pre_alloc;             /* preallocated block */
   /* if block have less memory it will be put in 'used' list */
   size_t min_malloc;
+  //初始化 block_size 默认 1024
   size_t block_size;               /* initial block size */
+  // 已分配的 block 数量
   unsigned int block_num;          /* allocated blocks counter */
   /* 
      first free block in queue test counter (if it exceed 

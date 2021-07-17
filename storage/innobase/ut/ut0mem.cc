@@ -88,6 +88,10 @@ ut_mem_init(void)
 /**********************************************************************//**
 Allocates memory.
 @return	own: allocated memory */
+
+/*
+ * wangyang  ut_malloc_low      分配一个n长度的内存块，并将分配的块记录到ut_mem_block_list当中.
+ */
 UNIV_INTERN
 void*
 ut_malloc_low(
@@ -114,6 +118,9 @@ ut_malloc_low(
 retry:
 	os_fast_mutex_lock(&ut_list_mutex);
 
+	/**
+	 * wangyang 这里通过 malloc 分配内存
+	 */
 	ret = malloc(n + sizeof(ut_mem_block_t));
 
 	if (ret == NULL && retry_count < 60) {
@@ -192,6 +199,10 @@ retry:
 
 	ut_total_allocated_memory += n + sizeof(ut_mem_block_t);
 
+	/**
+	 * wangyang 这里的目的是  将新创建出的 ret 节点添加到 ut_mem_block_list 这个链表中，是一个全局 静态链表
+	 * 第一个参数是 name 第二个参数是 实际对应的 list 第三个参数是一个指针
+	 */
 	UT_LIST_ADD_FIRST(mem_block_list, ut_mem_block_list,
 			  ((ut_mem_block_t*) ret));
 	os_fast_mutex_unlock(&ut_list_mutex);

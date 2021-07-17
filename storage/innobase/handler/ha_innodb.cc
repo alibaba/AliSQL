@@ -2978,6 +2978,9 @@ ha_innobase::init_table_handle_for_HANDLER(void)
 /*********************************************************************//**
 Opens an InnoDB database.
 @return	0 on success, error code on failure */
+/**
+ * wangyang  @@ 这里初始化 innobase
+ */
 static
 int
 innobase_init(
@@ -3484,6 +3487,9 @@ innobase_change_buffering_inited_ok:
 	modules, we check at run time that the size is the same in
 	these compilation modules. */
 
+	/**
+	 * wangyang @@@ 这里初始化 启动 innobase
+	 */
 	err = innobase_start_or_create_for_mysql();
 
 	if (err != DB_SUCCESS) {
@@ -6710,6 +6716,10 @@ ha_innobase::innobase_set_max_autoinc(
 Stores a row in an InnoDB database, to the table specified in this
 handle.
 @return	error code */
+
+/**
+ * wangyang *** 这里用于 写入行信息
+ */
 UNIV_INTERN
 int
 ha_innobase::write_row(
@@ -6859,6 +6869,9 @@ no_commit:
 
 	innobase_srv_conc_enter_innodb(prebuilt->trx);
 
+	/**
+	 * wangyang ** 具体的 行信息插入
+	 */
 	error = row_insert_for_mysql((byte*) record, prebuilt);
 	DEBUG_SYNC(user_thd, "ib_after_row_insert");
 
@@ -17237,6 +17250,9 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   NULL
 };
 
+/**
+ * wangyang @@ 这里会声明 mysql 的初始插件
+ */
 mysql_declare_plugin(innobase)
 {
   MYSQL_STORAGE_ENGINE_PLUGIN,
@@ -17245,7 +17261,7 @@ mysql_declare_plugin(innobase)
   plugin_author,
   "Supports transactions, row-level locking, and foreign keys",
   PLUGIN_LICENSE_GPL,
-  innobase_init, /* Plugin Init */
+  innobase_init, /* Plugin Init */ //wangyang innobase 初始化 插件
   NULL, /* Plugin Deinit */
   INNODB_VERSION_SHORT,
   innodb_status_variables_export,/* status variables             */

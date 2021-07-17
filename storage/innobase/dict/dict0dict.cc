@@ -1086,6 +1086,7 @@ void
 dict_init(void)
 /*===========*/
 {
+    //wangyang @@@ dict_sys 初始化
 	dict_sys = static_cast<dict_sys_t*>(mem_zalloc(sizeof(*dict_sys)));
 
 	mutex_create(dict_sys_mutex_key, &dict_sys->mutex, SYNC_DICT);
@@ -1340,6 +1341,13 @@ dict_table_add_to_cache(
 	}
 
 	/* Add table to hash table of tables */
+	/**
+	 * wangyang 第三个参数 table_hash 是hash 表 , 这里会插入到
+	 * hash_table 当中
+	 *
+	 * 这里的功能是 将 table 信息 插入到 table_hash 里面去
+	 *
+	 */
 	HASH_INSERT(dict_table_t, name_hash, dict_sys->table_hash, fold,
 		    table);
 

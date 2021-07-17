@@ -243,6 +243,10 @@ dict_hdr_create(
 Initializes the data dictionary memory structures when the database is
 started. This function is also called when the data dictionary is created.
 @return DB_SUCCESS or error code. */
+/**
+ * wangyang 初始化数据 字典内存结构
+
+ */
 UNIV_INTERN
 dberr_t
 dict_boot(void)
@@ -276,6 +280,9 @@ dict_boot(void)
 	mtr_start(&mtr);
 
 	/* Create the hash tables etc. */
+	/**
+	 * wangyang @@@ 这里是创建相应的 目录表
+	 */
 	dict_init();
 
 	heap = mem_heap_create(450);
@@ -302,6 +309,9 @@ dict_boot(void)
 	/* Insert into the dictionary cache the descriptions of the basic
 	system tables */
 	/*-------------------------*/
+	/**
+	 * wangyang 创建相应的系统表
+	 */
 	table = dict_mem_table_create("SYS_TABLES", DICT_HDR_SPACE, 8, 0, 0);
 
 	dict_mem_table_add_col(table, heap, "NAME", DATA_BINARY, 0, 0);

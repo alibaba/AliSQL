@@ -1620,6 +1620,12 @@ struct buf_page_t{
 
 /** The buffer control block structure */
 
+/*
+ * wangyang @@@ 这里的使用在 buf chunk 当中 buf0buf.ic 里面
+ * 也就是我们之前 看到的 buf pool 里面会分成很多 的 block
+ * 然后 每个 block 又会进行划分
+ *
+ */
 struct buf_block_t{
 
 	/** @name General fields */

@@ -55,6 +55,12 @@ static void update_query_size(MEM_ROOT *root, size_t length, int flag)
     reported as error in first alloc_root() on this memory root.
 */
 
+/**
+ *
+   wangyang 这里的目的是初始化 mem_root 对象 ， 前面传递过来的是一个空结构体，
+   下面会对内存部分 进行相应的初始化
+
+ */
 void init_alloc_root(MEM_ROOT *mem_root, size_t block_size,
 		     size_t pre_alloc_size MY_ATTRIBUTE((unused)))
 {
@@ -69,6 +75,9 @@ void init_alloc_root(MEM_ROOT *mem_root, size_t block_size,
   mem_root->first_block_usage= 0;
 
 #if !(defined(HAVE_purify) && defined(EXTRA_DEBUG))
+  /**
+   * wangyang 下面这一块 表示一定的预分配
+   */
   if (pre_alloc_size)
   {
     if ((mem_root->free= mem_root->pre_alloc=
@@ -220,20 +229,28 @@ void *alloc_root(MEM_ROOT *mem_root, size_t length)
 	mem_root->first_block_usage++ >= ALLOC_MAX_BLOCK_USAGE_BEFORE_DROP &&
 	(*prev)->left < ALLOC_MAX_BLOCK_TO_DROP)
     {
+        /**
+         * wangyang 如果 剩余 已经少于length 那么移除 free list 中
+         * 移入到 used 列表当中
+         */
       next= *prev;
       *prev= next->next;			/* Remove block from list */
       next->next= mem_root->used;
       mem_root->used= next;
       mem_root->first_block_usage= 0;
     }
+    /**
+     * wangyang 这里会按照 free 指针进行寻找，直到找到 left > length 的内存块
+     */
     for (next= *prev ; next && next->left < length ; next= next->next)
       prev= &next->next;
   }
   if (! next)
   {						/* Time to alloc new block */
+      // block_nun = 4 >> 2 ==> 1
     block_size= mem_root->block_size * (mem_root->block_num >> 2);
     get_size= length+ALIGN_SIZE(sizeof(USED_MEM));
-    get_size= MY_MAX(get_size, block_size);
+    get_size= MY_MAX(get_size, block_size); // wangyang @@ 这里会 比较 获取 最大的值
 
     if (!(next = (USED_MEM*) my_malloc(get_size,MYF(MY_WME | ME_FATALERROR))))
     {
@@ -241,16 +258,26 @@ void *alloc_root(MEM_ROOT *mem_root, size_t length)
 	(*mem_root->error_handler)();
       DBUG_RETURN((void*) 0);                      /* purecov: inspected */
     }
+    /**
+     * wangyang prev 指针 表示的是 free 指针
+     * 这里主要是将 新增加的 内存块 放置在 最前面
+     */
     update_query_size(mem_root, length, 1);
-    mem_root->block_num++;
+    mem_root->block_num++; // 分配的块的数量 增加
     next->next= *prev;
-    next->size= get_size;
+    next->size= get_size; //
     next->left= get_size-ALIGN_SIZE(sizeof(USED_MEM));
     *prev=next;
   }
 
+  /**
+   * wangyang 这里会 确保
+   */
   point= (uchar*) ((char*) next+ (next->size-next->left));
   /*TODO: next part may be unneded due to mem_root->first_block_usage counter*/
+  /**
+   * wangyang 这里会判断 ，如果 剩余 内存大小, 小于 最小分配大小，那么放入 used 链表当中
+   */
   if ((next->left-= length) < mem_root->min_malloc)
   {						/* Full block */
     *prev= next->next;				/* Remove block from list */
@@ -290,12 +317,20 @@ void *multi_alloc_root(MEM_ROOT *root, ...)
   size_t tot_length, length;
   DBUG_ENTER("multi_alloc_root");
 
+  /**
+   * va_start 在使用的时候 第一个参数是 va_list , 用于承载所有的 变长参数
+   * 第二个参数是 变长参数前最后一个 参数，用于确认分界
+   */
   va_start(args, root);
   tot_length= 0;
-  while ((ptr= va_arg(args, char **)))
+  /**
+   * wangyang 使用 va_arg 的作用是 用于从 va_list 中获取 某个参数
+   *
+   */
+  while ((ptr= va_arg(args, char **))) //这里的目的是从va_list中获取一个参数，类型是 char** 类型
   {
-    length= va_arg(args, uint);
-    tot_length+= ALIGN_SIZE(length);
+    length= va_arg(args, uint); // 这里是从va_list中获取参数，类型是uint 目的是用于确认相应的大小(内存大小)
+    tot_length+= ALIGN_SIZE(length);// 这里对总的内存大小进行累加
   }
   va_end(args);
 
@@ -304,11 +339,15 @@ void *multi_alloc_root(MEM_ROOT *root, ...)
 
   va_start(args, root);
   res= start;
+  /*
+   * 这里的目的是用来 给相应的指针分配地址 ，ptr是二级指针
+   * 然后使用 *ptr 来确认 分配的 地址
+   */
   while ((ptr= va_arg(args, char **)))
   {
     *ptr= res;
     length= va_arg(args, uint);
-    res+= ALIGN_SIZE(length);
+    res+= ALIGN_SIZE(length); // 这里用于对齐内存
   }
   va_end(args);
   DBUG_RETURN((void*) start);

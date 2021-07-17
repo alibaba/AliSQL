@@ -80,6 +80,10 @@ dict_mem_table_create(
 	ut_a(dict_tf_is_valid(flags));
 	ut_a(!(flags2 & ~DICT_TF2_BIT_MASK));
 
+	/**
+	 * wangyang @@ 从这里可以看出 mem_heap_create就是 用于普通情况下的内存分配，普通时候
+	 * 使用的内存用的都是 mem_heap_create函数
+	 */
 	heap = mem_heap_create(DICT_HEAP_SIZE);
 
 	table = static_cast<dict_table_t*>(
