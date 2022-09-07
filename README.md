@@ -4,6 +4,8 @@ AliSQL is a MySQL branch originated from Alibaba Group. It is based on the MySQL
 AliSQL has been an open source project since August 2016. It is being actively developed by engineers from Alibaba Group. Moreover, it includes patches from Percona, WebScaleSQL, and MariaDB. AliSQL is a fruit of community effort. Everyone is welcomed to get involved.
 # AliSQL Release Notes
 
+[Repository AliSQL 8.0 ] (https://github.com/ApsaraDB/galaxyengine)
+
 [Changes in AliSQL 5.6.32 (2018-05-01) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2018-05-01))  
 [Changes in AliSQL 5.6.32 (2018-01-24) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2018-01-24))  
 [Changes in AliSQL 5.6.32 (2017-10-10) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2017-10-10))  
