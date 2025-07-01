@@ -1,0 +1,188 @@
+# 1. KEYWORDs
+# Word vector is not able to be the name, while words m, distance,
+# euclidean, cosine is still able.
+CREATE TABLE t1 (
+vector int
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'int
+)' at line 2
+CREATE TABLE t1 (
+m int,
+distance int,
+euclidean int,
+cosine int
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `m` int DEFAULT NULL,
+  `distance` int DEFAULT NULL,
+  `euclidean` int DEFAULT NULL,
+  `cosine` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+
+# 2. NONSUPPORT about VECTOR COLUMN
+# The variable vidx_disabled will forbid to create VECTOR column
+SET GLOBAL vidx_disabled = ON;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(16382)
+);
+ERROR HY000: Creating vector columns or indexes is disabled.
+SET GLOBAL vidx_disabled = OFF;
+# The range of the dimension of VECTOR columns is limited by row size
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(16383)
+);
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+# The dimension of VECTOR column must be set explicitly
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ')' at line 4
+# The dimension of VECTOR column must be set by number not string
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR("kkk")
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '"kkk")
+)' at line 3
+
+# 3. SUPPORT about VECTOR COLUMN
+# The range of the dimension of VECTOR columns is limited by row size
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(16382)
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(16382) */ varbinary(65528) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# The dimension of VECTOR column can be 0
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(0)
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(0) */ varbinary(0) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# Set Decimal as the VECTOR dimension will be corrected as the integer
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(10.1)
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(10) */ varbinary(40) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# The VECTOR field can be used in routines.
+CREATE PROCEDURE vector_distance(v1 VECTOR(5), v2 VECTOR(5))
+BEGIN
+SELECT VEC_DISTANCE_EUCLIDEAN(v1, v2);
+END$$
+CREATE FUNCTION str2vector(in_str TEXT) RETURNS VECTOR(5)
+BEGIN
+RETURN VEC_FROMTEXT(in_str);
+END$$
+CALL vector_distance(VEC_FROMTEXT('[1,2,3,4,5]'), VEC_FROMTEXT('[1,2,3,4,5]'));
+VEC_DISTANCE_EUCLIDEAN(v1, v2)
+0
+SELECT VEC_TOTEXT(str2vector('[1,2,3,4,5]'));
+VEC_TOTEXT(str2vector('[1,2,3,4,5]'))
+[1,2,3,4,5]
+DROP PROCEDURE vector_distance;
+DROP FUNCTION str2vector;
+
+# 4. DML about VECTOR COLUMN
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5)
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET transaction_isolation = 'READ-COMMITTED';
+# NULL is allowed if column is nullable
+INSERT INTO t1(v) VALUES (NULL);
+# other types except string is not allowed
+INSERT INTO t1(v) VALUES (1);
+ERROR HY000: Value of type 'longlong, size: 8' cannot be converted to 'vector(5)' type.
+INSERT INTO t1(v) VALUES (1.1);
+# Vector with different dimension is not allowed, including empty vector
+INSERT INTO t1(v) VALUES ("");
+ERROR HY000: Incorrect vector value: '' for column 'v' at row 1
+INSERT INTO t1(v) VALUES (x'e360d63ebe554f3fcdbc523f4522193f523608');
+ERROR HY000: Value of type 'string, size: 19' cannot be converted to 'vector(5)' type.
+INSERT INTO t1(v) VALUES (x'e360d63ebe554f3fcdbc523f4522193f5236083d3d3d');
+ERROR HY000: Value of type 'string, size: 22' cannot be converted to 'vector(5)' type.
+# string is allowed, but warning if charset is not binary and sql_mode=strict
+SET sql_mode="STRICT_TRANS_TABLES";
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+INSERT INTO t1(v) VALUES ("====================");
+ERROR HY000: Incorrect vector value: '====================' for column 'v' at row 1
+SET sql_mode="";
+INSERT INTO t1(v) VALUES ("====================");
+Warnings:
+Warning	1366	Incorrect vector value: '====================' for column 'v' at row 1
+# HEX string is allowed
+INSERT INTO t1(v) VALUES (x'e360d63ebe554f3fcdbc523f4522193f5236083d');
+SELECT VEC_TOTEXT(v) FROM t1;
+VEC_TOTEXT(v)
+NULL
+[0.046201,0.046201,0.046201,0.046201,0.046201]
+[0.418708,0.809902,0.823193,0.598179,0.0332549]
+# Vector column can be the part of normal index
+CREATE INDEX i1 ON t1(v, id);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i1` (`v`,`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT VEC_TOTEXT(v) FROM t1 FORCE INDEX(i1);
+VEC_TOTEXT(v)
+NULL
+[0.046201,0.046201,0.046201,0.046201,0.046201]
+[0.418708,0.809902,0.823193,0.598179,0.0332549]
+# Vector column can build a prefix index. Number means the prefix
+# dimension rather than the prefix length.
+CREATE INDEX i2 ON t1(v(2));
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i1` (`v`,`id`),
+  KEY `i2` (`v`(2))
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT VEC_TOTEXT(v) FROM t1 FORCE INDEX(i2);
+VEC_TOTEXT(v)
+NULL
+[0.046201,0.046201,0.046201,0.046201,0.046201]
+[0.418708,0.809902,0.823193,0.598179,0.0332549]
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

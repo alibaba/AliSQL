@@ -671,6 +671,7 @@ enum legacy_db_type {
   DB_TYPE_TEMPTABLE,
   DB_TYPE_FIRST_DYNAMIC = 42,
   DB_TYPE_DUCKDB,
+  DB_TYPE_HLINDEX_HELPER,
   DB_TYPE_DEFAULT = 127  // Must be last
 };
 
@@ -7205,6 +7206,7 @@ int ha_init(void);
 void ha_end();
 int ha_initialize_handlerton(st_plugin_int *plugin);
 int ha_finalize_handlerton(st_plugin_int *plugin);
+int setup_transaction_participant(st_plugin_int *plugin);
 
 TYPELIB *ha_known_exts();
 int ha_panic(enum ha_panic_function flag);
@@ -7227,7 +7229,8 @@ void ha_create_database(char *db);
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     bool update_create_info, bool is_temp_table,
-                    dd::Table *table_def);
+                    dd::Table *table_def, KEY *last_key = nullptr,
+                    bool recycled = false);
 
 int ha_delete_table(THD *thd, handlerton *db_type, const char *path,
                     const char *db, const char *alias,

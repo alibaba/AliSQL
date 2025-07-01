@@ -79,7 +79,8 @@
 #include "sql/dd/types/view.h"   // dd::View
 #include "sql/debug_sync.h"      // DEBUG_SYNC
 #include "sql/derror.h"          // ER_THD
-#include "sql/error_handler.h"   // Strict_error_handler
+#include "sql/duckdb/duckdb_config.h"
+#include "sql/error_handler.h"  // Strict_error_handler
 #include "sql/field.h"
 #include "sql/filesort.h"  // filesort_free_buffers
 #include "sql/gis/srid.h"
@@ -124,7 +125,7 @@
 #include "sql_string.h"
 #include "template_utils.h"  // down_cast
 #include "thr_mutex.h"
-#include "sql/duckdb/duckdb_config.h"
+#include "vidx/vidx_hnsw.h"
 
 /* INFORMATION_SCHEMA name */
 LEX_CSTRING INFORMATION_SCHEMA_NAME = {STRING_WITH_LEN("information_schema")};
@@ -432,6 +433,8 @@ TABLE_SHARE *alloc_table_share(const char *db, const char *table_name,
     share->mem_root = std::move(mem_root);
     mysql_mutex_init(key_TABLE_SHARE_LOCK_ha_data, &share->LOCK_ha_data,
                      MY_MUTEX_INIT_FAST);
+    mysql_mutex_init(key_TABLE_SHARE_LOCK_share, &share->LOCK_share,
+                     MY_MUTEX_INIT_FAST);
   }
   return share;
 }
@@ -547,8 +550,16 @@ void TABLE_SHARE::destroy() {
     ::destroy(m_part_info);
     m_part_info = nullptr;
   }
+  if (hlindex) {
+    vidx::hnsw::mhnsw_free(this);
+    hlindex->destroy();
+    hlindex = nullptr;
+  }
   /* The mutex is initialized only for shares that are part of the TDC */
-  if (tmp_table == NO_TMP_TABLE) mysql_mutex_destroy(&LOCK_ha_data);
+  if (tmp_table == NO_TMP_TABLE) {
+    mysql_mutex_destroy(&LOCK_ha_data);
+    mysql_mutex_destroy(&LOCK_share);
+  }
 
   delete m_histograms;
   m_histograms = nullptr;
@@ -738,8 +749,9 @@ void setup_key_part_field(TABLE_SHARE *share, handler *handler_file,
   if (key_part_n == 0) field->key_start.set_bit(key_n);
   field->m_indexed = true;
 
-  const bool full_length_key_part =
-      field->key_length() == key_part->length && !field->is_flag_set(BLOB_FLAG);
+  const bool full_length_key_part = field->key_length() == key_part->length &&
+                                    !field->is_flag_set(BLOB_FLAG) &&
+                                    key_n < share->keys;
   const bool is_spatial_key = Overlaps(keyinfo->flags, HA_SPATIAL);
   /*
     part_of_key contains all non-prefix keys, part_of_prefixkey
@@ -758,7 +770,7 @@ void setup_key_part_field(TABLE_SHARE *share, handler *handler_file,
   // R-tree indexes do not allow index scans and therefore cannot be
   // marked as keys for index only access.
   if ((handler_file->index_flags(key_n, key_part_n, false) & HA_KEYREAD_ONLY) &&
-      !is_spatial_key) {
+      !is_spatial_key && key_n < share->keys) {
     // Set the key as 'keys_for_keyread' even if it is prefix key.
     share->keys_for_keyread.set_bit(key_n);
   }
@@ -1353,7 +1365,8 @@ static int make_field_from_frm(THD *thd, TABLE_SHARE *share,
       f_is_zerofill(pack_flag) != 0, f_is_dec(pack_flag) == 0,
       f_decimals(pack_flag), f_bit_as_char(pack_flag), 0, {},
       // Array fields aren't supported in .frm-based tables
-      false);
+      // Vector fields aren't supported in .frm-based tables
+      false, false);
   if (!reg_field) {
     // Not supported field type
     return 4;
@@ -1475,6 +1488,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
   DBUG_PRINT("info", ("default_part_db_type = %u", head[61]));
   legacy_db_type = (enum legacy_db_type)(uint) * (head + 3);
   assert(share->db_plugin == nullptr);
+  assert(share->keys == share->total_keys);
   /*
     if the storage engine is dynamic, no point in resolving it by its
     dynamically allocated legacy_db_type. We will resolve it later by name.
@@ -1518,10 +1532,11 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
   if (read_string(file, &disk_buff, key_info_length))
     goto err; /* purecov: inspected */
   if (disk_buff[0] & 0x80) {
-    share->keys = keys = (disk_buff[1] << 7) | (disk_buff[0] & 0x7f);
+    share->total_keys = share->keys = keys =
+        (disk_buff[1] << 7) | (disk_buff[0] & 0x7f);
     share->key_parts = key_parts = uint2korr(disk_buff + 2);
   } else {
-    share->keys = keys = disk_buff[0];
+    share->total_keys = share->keys = keys = disk_buff[0];
     share->key_parts = key_parts = disk_buff[1];
   }
   share->visible_indexes.init(0);
@@ -1896,13 +1911,13 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
 
   DBUG_PRINT("info", ("i_count: %d  i_parts: %d  index: %d  n_length: %d  "
                       "int_length: %d  com_length: %d  gcol_screen_length: %d",
-                      interval_count, interval_parts, share->keys, n_length,
-                      int_length, com_length, gcol_screen_length));
-  if (!(field_ptr = (Field **)share->mem_root.Alloc((
-            uint)((share->fields + 1) * sizeof(Field *) +
-                  interval_count * sizeof(TYPELIB) +
-                  (share->fields + interval_parts + keys + 3) * sizeof(char *) +
-                  (n_length + int_length + com_length + gcol_screen_length)))))
+                      interval_count, interval_parts, share->total_keys,
+                      n_length, int_length, com_length, gcol_screen_length));
+  if (!(field_ptr = (Field **)share->mem_root.Alloc((uint)(
+            (share->fields + 1) * sizeof(Field *) +
+            interval_count * sizeof(TYPELIB) +
+            (share->fields + interval_parts + keys + 3) * sizeof(char *) +
+            (n_length + int_length + com_length + gcol_screen_length)))))
     goto err; /* purecov: inspected */
 
   share->field = field_ptr;
@@ -2051,7 +2066,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
     keyinfo = share->key_info;
     key_part = keyinfo->key_part;
 
-    for (uint key = 0; key < share->keys; key++, keyinfo++) {
+    for (uint key = 0; key < share->total_keys; key++, keyinfo++) {
       uint usable_parts = 0;
       keyinfo->name = share->keynames.type_names[key];
       /* Fix fulltext keys for old .frm files */
@@ -2227,7 +2242,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
   if (share->found_next_number_field) {
     Field *reg_field = *share->found_next_number_field;
     if ((int)(share->next_number_index = (uint)find_ref_key(
-                  share->key_info, share->keys, share->default_values,
+                  share->key_info, share->total_keys, share->default_values,
                   reg_field, &share->next_number_key_offset,
                   &share->next_number_keypart)) < 0) {
       /* Wrong field definition */
@@ -2801,22 +2816,22 @@ bool create_key_part_field_with_prefix_length(TABLE *table, MEM_ROOT *root) {
 
   assert(share->key_parts);
 
-  n_length =
-      share->keys * sizeof(KEY) + share->key_parts * sizeof(KEY_PART_INFO);
+  n_length = share->total_keys * sizeof(KEY) +
+             share->key_parts * sizeof(KEY_PART_INFO);
 
   // Allocate new memory for table.key_info
   if (!(key_info = static_cast<KEY *>(root->Alloc(n_length)))) return true;
 
   table->key_info = key_info;
-  key_part = (reinterpret_cast<KEY_PART_INFO *>(key_info + share->keys));
+  key_part = (reinterpret_cast<KEY_PART_INFO *>(key_info + share->total_keys));
 
   // Copy over the key_info from share to table.
-  memcpy(key_info, share->key_info, sizeof(*key_info) * share->keys);
+  memcpy(key_info, share->key_info, sizeof(*key_info) * share->total_keys);
   memcpy(key_part, share->key_info[0].key_part,
          (sizeof(*key_part) * share->key_parts));
 
-  for (KEY *key_info_end = key_info + share->keys; key_info < key_info_end;
-       key_info++) {
+  for (KEY *key_info_end = key_info + share->total_keys;
+       key_info < key_info_end; key_info++) {
     key_info->table = table;
     key_info->key_part = key_part;
 
@@ -3009,8 +3024,8 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
   if (share->key_parts) {
     if (create_key_part_field_with_prefix_length(outparam, root)) goto err;
     KEY *key_info = outparam->key_info;
-    for (KEY *key_info_end = key_info + share->keys; key_info < key_info_end;
-         key_info++) {
+    for (KEY *key_info_end = key_info + share->total_keys;
+         key_info < key_info_end; key_info++) {
       /* Set TABLE::fts_doc_id_field for tables with FT KEY */
       if ((key_info->flags & HA_FULLTEXT))
         outparam->fts_doc_id_field = fts_doc_id_field;
@@ -3365,7 +3380,9 @@ int closefrm(TABLE *table, bool free_share) {
     table->part_info = nullptr;
   }
   if (free_share) {
-    if (table->s->tmp_table == NO_TMP_TABLE)
+    if (table->s->is_hlindex) {
+      table->s->decrement_ref_count();
+    } else if (table->s->tmp_table == NO_TMP_TABLE)
       release_table_share(table->s);
     else
       free_table_share(table->s);
@@ -4280,7 +4297,7 @@ bool TABLE::init_tmp_table(THD *thd, TABLE_SHARE *share, MEM_ROOT *m_root,
   share->visible_indexes.init();
   share->keys_for_keyread.init();
   share->keys_in_use.init();
-  share->keys = 0;
+  share->total_keys = share->keys = 0;
   share->field = field = fld;
   share->table_charset = charset;
   set_not_started();
@@ -5998,6 +6015,7 @@ bool TABLE::add_tmp_key(Field_map *key_parts, bool invisible,
     assert(s->keys < s->max_tmp_keys);
     sprintf(s->key_names[s->keys].name, "<auto_key%d>", s->keys);
     s->keys++;
+    s->total_keys++;
   }
 
   const uint keyno = s->keys - 1;
@@ -6151,7 +6169,7 @@ void TABLE::move_tmp_key(int old_idx, bool modify_share) {
 void TABLE::drop_unused_tmp_keys(bool modify_share) {
   if (modify_share) {
     assert(s->first_unused_tmp_key <= s->keys);
-    s->keys = s->first_unused_tmp_key;
+    s->total_keys = s->keys = s->first_unused_tmp_key;
     s->key_parts = 0;
     for (uint i = 0; i < s->keys; i++)
       s->key_parts += s->key_info[i].user_defined_key_parts;
@@ -7973,6 +7991,8 @@ int create_table_share_for_upgrade(THD *thd, const char *path,
   share->tmp_table = NO_TMP_TABLE;
   mysql_mutex_init(key_TABLE_SHARE_LOCK_ha_data, &share->LOCK_ha_data,
                    MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_TABLE_SHARE_LOCK_share, &share->LOCK_share,
+                   MY_MUTEX_INIT_FAST);
 
   int r = read_frm_file(thd, share, frm_context, table_name,
                         is_fix_view_cols_and_deps);
@@ -8016,7 +8036,7 @@ bool TABLE::empty_result_table() {
 
 void TABLE::update_covering_prefix_keys(Field *field, uint16 key_read_length,
                                         Key_map *covering_prefix_keys) {
-  for (uint keyno = 0; keyno < s->keys; keyno++)
+  for (uint keyno = 0; keyno < s->total_keys; keyno++)
     if (covering_prefix_keys->is_set(keyno)) {
       KEY *key_info = &this->key_info[keyno];
       for (KEY_PART_INFO *part = key_info->key_part,

@@ -462,6 +462,7 @@ extern PSI_mutex_key key_mutex_slave_parallel_worker;
 extern PSI_mutex_key key_mutex_slave_parallel_worker_count;
 extern PSI_mutex_key key_structure_guard_mutex;
 extern PSI_mutex_key key_TABLE_SHARE_LOCK_ha_data;
+extern PSI_mutex_key key_TABLE_SHARE_LOCK_share;
 extern PSI_mutex_key key_LOCK_query_plan;
 extern PSI_mutex_key key_LOCK_thd_query;
 extern PSI_mutex_key key_LOCK_cost_const;

@@ -10,11 +10,9 @@ ERROR 42000: Query was empty
 select 1 /*!32301 +1 */;
 1  +1
 2
-select 1 /*!999999 +1 */;
+select 1 /*!99998 +1 */;
 1
 1
-Warnings:
-Warning	4164	Immediately starting the version comment after the version number is deprecated and may change behavior in a future release. Please insert a white-space character after the version number.
 select 1--1;
 1--1
 2
@@ -32,12 +30,12 @@ select 1/*!2*/;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '2*/' at line 1
 select 1/*!000002*/;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '2*/' at line 1
-select 1/*!999992*/;
+select 1/*!99992*/;
 1
 1
 Warnings:
 Warning	4164	Immediately starting the version comment after the version number is deprecated and may change behavior in a future release. Please insert a white-space character after the version number.
-select 1 + /*!00000 2 */ + 3 /*!99999 noise*/ + 4;
+select 1 + /*!00000 2 */ + 3 /*!99998 noise*/ + 4;
 1 +  2  + 3  + 4
 10
 drop table if exists table_28779;
@@ -58,7 +56,7 @@ drop table table_28779;
 #
 # WL#12099: Deprecate nested comments in 8.0
 #
-SELECT 1 /*!99999 /* */ */;
+SELECT 1 /*!99998 /* */ */;
 1
 1
 Warnings:
@@ -91,6 +89,7 @@ DO 1 /*!80034+1*/;
 # Form feed (0x0c). Should pass without warning.
 DO 1 /*!80034+1*/;
 # Carriage return (0x0d). Should pass without warning.
-DO 1 /*!80034+1*/;
+DO 1 /*!80034
++1*/;
 # Space (0x20). Should pass without warning.
 DO 1 /*!80034 +1*/;

@@ -1025,7 +1025,7 @@ int impl_index_init(Table_access /* api_ta */, TA_table api_table,
 
   *api_key = nullptr;
 
-  for (index = 0; index < share->keys; index++) {
+  for (index = 0; index < share->total_keys; index++) {
     key_info = &table->key_info[index];
 
     /* FIXME: KEY::name has no associated length member */

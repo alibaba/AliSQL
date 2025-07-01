@@ -1,0 +1,157 @@
+###########################################
+# The syntax and rules for VECTOR COLUMN  #
+###########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+--echo # 1. KEYWORDs
+--echo # Word vector is not able to be the name, while words m, distance,
+--echo # euclidean, cosine is still able.
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+  vector int
+  );
+
+CREATE TABLE t1 (
+  m int,
+  distance int,
+  euclidean int,
+  cosine int
+  );
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo
+--echo # 2. NONSUPPORT about VECTOR COLUMN
+--echo # The variable vidx_disabled will forbid to create VECTOR column
+SET GLOBAL vidx_disabled = ON;
+
+--error ER_VECTOR_DISABLED
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(16382)
+  );
+
+SET GLOBAL vidx_disabled = OFF;
+
+--echo # The range of the dimension of VECTOR columns is limited by row size
+--error ER_TOO_BIG_ROWSIZE
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(16383)
+  );
+
+--echo # The dimension of VECTOR column must be set explicitly
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR
+  );
+
+--echo # The dimension of VECTOR column must be set by number not string
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR("kkk")
+  );
+
+--echo
+--echo # 3. SUPPORT about VECTOR COLUMN
+--echo # The range of the dimension of VECTOR columns is limited by row size
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(16382)
+  );
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # The dimension of VECTOR column can be 0
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(0)
+  );
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # Set Decimal as the VECTOR dimension will be corrected as the integer
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(10.1)
+  );
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # The VECTOR field can be used in routines.
+DELIMITER $$;
+CREATE PROCEDURE vector_distance(v1 VECTOR(5), v2 VECTOR(5))
+BEGIN
+  SELECT VEC_DISTANCE_EUCLIDEAN(v1, v2);
+END$$
+CREATE FUNCTION str2vector(in_str TEXT) RETURNS VECTOR(5)
+BEGIN
+  RETURN VEC_FROMTEXT(in_str);
+END$$
+DELIMITER ;$$
+
+CALL vector_distance(VEC_FROMTEXT('[1,2,3,4,5]'), VEC_FROMTEXT('[1,2,3,4,5]'));
+SELECT VEC_TOTEXT(str2vector('[1,2,3,4,5]'));
+
+DROP PROCEDURE vector_distance;
+DROP FUNCTION str2vector;
+
+--echo
+--echo # 4. DML about VECTOR COLUMN
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5)
+  );
+SHOW CREATE TABLE t1;
+
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # NULL is allowed if column is nullable
+INSERT INTO t1(v) VALUES (NULL);
+
+--echo # other types except string is not allowed
+--error ER_DATA_INCOMPATIBLE_WITH_VECTOR
+INSERT INTO t1(v) VALUES (1);
+# the field size is different between the debug mode and the release mode.
+--disable_result_log
+--error ER_DATA_INCOMPATIBLE_WITH_VECTOR
+INSERT INTO t1(v) VALUES (1.1);
+--enable_result_log
+
+--echo # Vector with different dimension is not allowed, including empty vector
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1(v) VALUES ("");
+--error ER_DATA_INCOMPATIBLE_WITH_VECTOR
+INSERT INTO t1(v) VALUES (x'e360d63ebe554f3fcdbc523f4522193f523608');
+--error ER_DATA_INCOMPATIBLE_WITH_VECTOR
+INSERT INTO t1(v) VALUES (x'e360d63ebe554f3fcdbc523f4522193f5236083d3d3d');
+
+--echo # string is allowed, but warning if charset is not binary and sql_mode=strict
+SET sql_mode="STRICT_TRANS_TABLES";
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1(v) VALUES ("====================");
+
+SET sql_mode="";
+INSERT INTO t1(v) VALUES ("====================");
+
+--echo # HEX string is allowed
+INSERT INTO t1(v) VALUES (x'e360d63ebe554f3fcdbc523f4522193f5236083d');
+
+SELECT VEC_TOTEXT(v) FROM t1;
+
+--echo # Vector column can be the part of normal index
+CREATE INDEX i1 ON t1(v, id);
+SHOW CREATE TABLE t1;
+SELECT VEC_TOTEXT(v) FROM t1 FORCE INDEX(i1);
+
+--echo # Vector column can build a prefix index. Number means the prefix
+--echo # dimension rather than the prefix length.
+CREATE INDEX i2 ON t1(v(2));
+SHOW CREATE TABLE t1;
+SELECT VEC_TOTEXT(v) FROM t1 FORCE INDEX(i2);
+
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

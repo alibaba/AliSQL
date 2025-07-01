@@ -10455,6 +10455,9 @@ int ha_innobase::change_active_index(
 
   active_index = keynr;
 
+  ut_ad(active_index == MAX_KEY || table_share->keys == 0 ||
+        active_index < table_share->keys);
+
   m_prebuilt->index = innobase_get_index(keynr);
 
   if (m_prebuilt->index == nullptr) {

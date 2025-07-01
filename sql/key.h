@@ -159,6 +159,10 @@ class KEY {
   */
   ulong *rec_per_key{nullptr};
 
+  /** Options of vector index */
+  uint vector_distance{0};
+  uint vector_m{0};
+
   /**
     @retval true if this is a functional index (at least one of the key parts
                  is a functional key part).

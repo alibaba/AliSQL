@@ -1,0 +1,310 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+# 1. NONSUPPORT about VECTOR INDEX
+# The variable vidx_disabled will forbid to create VECTOR index
+SET GLOBAL vidx_disabled = ON;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+ERROR HY000: Creating vector columns or indexes is disabled.
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5)
+);
+SET GLOBAL vidx_disabled = ON;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+ERROR HY000: Creating vector columns or indexes is disabled.
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = OFF;
+# Vector index is not supported for partitioned or temp tables.
+CREATE TEMPORARY TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+c1 INT,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+)PARTITION BY HASH (c1) PARTITIONS 3;
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+# Vector index can only be created on one VECTOR column not null
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+t VECTOR(5),
+VECTOR INDEX vi(v,t)
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ',t)
+)' at line 5
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v INT NOT NULL,
+VECTOR INDEX vi(v)
+);
+ERROR HY000: Incorrect usage of vector index: Only support one visible VECTOR column
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+ALTER TABLE t1 MODIFY COLUMN v VECTOR(5) INVISIBLE;
+ERROR HY000: Incorrect usage of vector index: Only support one visible VECTOR column
+DROP TABLE t1;
+# VECTOR INDEX can't be created on generate column
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v BLOB NOT NULL,
+VECTOR INDEX vi(VEC_FROMTEXT(v))
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '(v))
+)' at line 4
+# VECTOR INDEX‘s options should be set in their range. m should be
+# in [3,200]. distance should be in {euclidean, cosine}
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=2
+);
+ERROR HY000: Incorrect usage of vector index: Invalid options.
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=201
+);
+ERROR HY000: Incorrect usage of vector index: Invalid options.
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) distance=wrong
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'wrong
+)' at line 4
+# VECTOR keys can not be prefix
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(768),
+VECTOR INDEX vi(v(1))
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '(1))
+)' at line 4
+# VECTOR key's dimension must be greater than 0
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(0),
+VECTOR INDEX vi(v)
+);
+ERROR 42000: The used storage engine can't index column 'v'
+# The range of the dimension of VECTOR keys is not limited by key size
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VARCHAR(3076),
+INDEX vi(v)
+);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(769),
+VECTOR INDEX vi(v)
+);
+DROP TABLE t1;
+# Can't be invisible
+CREATE TABLE t10 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) INVISIBLE
+);
+ERROR HY000: Incorrect usage of vector index: Must be visible.
+# Don't support multi VECTOR indexes yet
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v),
+VECTOR INDEX vi2(v)
+);
+ERROR 42000: This version of MySQL doesn't yet support 'multiple VECTOR indexes'
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+CREATE VECTOR INDEX vi2 ON t1(v);
+ERROR 42000: This version of MySQL doesn't yet support 'multiple VECTOR indexes'
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v);
+ERROR 42000: This version of MySQL doesn't yet support 'multiple VECTOR indexes'
+DROP TABLE t1;
+
+# 2. Don't support inplace ddl yet
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5)
+);
+ALTER TABLE t1 ADD VECTOR INDEX vi(v), algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 ADD VECTOR INDEX vi(v), algorithm=inplace;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+ALTER TABLE t1 DROP INDEX vi, algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 DROP INDEX vi, algorithm=inplace;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+ALTER TABLE t1 DROP INDEX vi;
+DROP TABLE t1;
+
+# 3. DDL about VECTOR INDEX
+# CREATE TABLE
+CREATE DATABASE IF NOT EXISTS test2;
+USE test2;
+# VECTOR INDEX should be at the end of key list
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+text LONGTEXT NOT NULL,
+meta JSON NOT NULL,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=3 distance=euclidean
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `text` longtext NOT NULL,
+  `meta` json NOT NULL,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=3 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 ADD INDEX i2(v);
+CREATE INDEX idx_meta ON `t1` ((CAST(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.document_id')) AS CHAR(36))));
+CREATE FULLTEXT INDEX idx_full_text ON `t1` (text);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `text` longtext NOT NULL,
+  `meta` json NOT NULL,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i2` (`v`),
+  KEY `idx_meta` ((cast(json_unquote(json_extract(`meta`,_utf8mb4'$.document_id')) as char(36) charset utf8mb4))),
+  FULLTEXT KEY `idx_full_text` (`text`)/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=3 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# DROP VECTOR INDEX
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=3 distance=euclidean
+);
+INSERT INTO t1(v) SELECT VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']'));
+DROP INDEX vi ON t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# CREATE VECTOR INDEX
+CREATE VECTOR INDEX vi ON t1(v) m=200 distance=cosine;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=200 DISTANCE=COSINE */
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# ALTER TABLE DROP VECTOR INDEX
+ALTER TABLE t1 DROP INDEX `vi`;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# ALTER TABLE ADD VECTOR INDEX
+ALTER TABLE t1 ADD VECTOR INDEX vi(v) m=200 distance=cosine;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=200 DISTANCE=COSINE */
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# ALTER TABLE RENAME VECTOR INDEX
+ALTER TABLE t1 RENAME INDEX `vi` TO `vi2`;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi2` (`v`) M=200 DISTANCE=COSINE */
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# OPTIMIZE TABLE
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test2.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test2.t1	optimize	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi2` (`v`) M=200 DISTANCE=COSINE */
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# TRUNCATE TABLE
+TRUNCATE TABLE t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi2` (`v`) M=200 DISTANCE=COSINE */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# RENAME TABLE
+RENAME TABLE t1 TO t2;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi2` (`v`) M=200 DISTANCE=COSINE */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE TABLE t1 LIKE t2;
+# DROP TABLE
+DROP TABLE t2;
+# DROP DATABASE
+DROP DATABASE test2;
+USE test;
+
+# 4. Vars about VECTOR INDEX
+SET SESSION vidx_default_distance = 'cosine';
+SET SESSION vidx_hnsw_default_m = 155;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=155 DISTANCE=COSINE */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

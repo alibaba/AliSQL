@@ -52,9 +52,10 @@ Columns::Columns() {
                          "col.default_value_utf8");
   m_target_def.add_field(FIELD_IS_NULLABLE, "IS_NULLABLE",
                          "IF (col.is_nullable = 1, 'YES','NO')");
-  m_target_def.add_field(
-      FIELD_DATA_TYPE, "DATA_TYPE",
-      "SUBSTRING_INDEX(SUBSTRING_INDEX(col.column_type_utf8, '(', 1),' ', 1)");
+  /* Ignore the comment especially for vector columns. */
+  m_target_def.add_field(FIELD_DATA_TYPE, "DATA_TYPE",
+                         "SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX(col."
+                         "column_type_utf8, '*/ ', -1), '(', 1),' ', 1)");
   m_target_def.add_field(
       FIELD_CHARACTER_MAXIMUM_LENGTH, "CHARACTER_MAXIMUM_LENGTH",
       "INTERNAL_DD_CHAR_LENGTH(col.type, col.char_length, coll.name, 0)");

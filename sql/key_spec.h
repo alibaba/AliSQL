@@ -43,7 +43,8 @@ enum keytype {
   KEYTYPE_MULTIPLE,
   KEYTYPE_FULLTEXT,
   KEYTYPE_SPATIAL,
-  KEYTYPE_FOREIGN
+  KEYTYPE_FOREIGN,
+  KEYTYPE_VECTOR
 };
 
 enum fk_option {
@@ -76,6 +77,8 @@ class KEY_CREATE_INFO {
   LEX_CSTRING parser_name = {NullS, 0};
   LEX_CSTRING comment = {NullS, 0};
   bool is_visible = true;
+  uint vector_m = UINT_MAX;
+  uint vector_distance = UINT_MAX;
 
   KEY_CREATE_INFO() = default;
 

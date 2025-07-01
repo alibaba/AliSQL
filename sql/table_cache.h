@@ -459,6 +459,7 @@ TABLE *Table_cache::get_table(THD *thd, const char *key, size_t key_length,
 
   if ((table = el->free_tables.front())) {
     assert(!table->in_use);
+    assert(table->hlindex == nullptr);
 
     /*
       Unlink table from list of unused TABLE objects for this
@@ -494,6 +495,14 @@ TABLE *Table_cache::get_table(THD *thd, const char *key, size_t key_length,
 */
 
 void Table_cache::release_table(THD *thd, TABLE *table) {
+  if (table->hlindex != nullptr) {
+    mysql_mutex_lock(&LOCK_open);
+    intern_close_table(table->hlindex);
+    mysql_mutex_unlock(&LOCK_open);
+
+    table->hlindex = nullptr;
+  }
+
   Table_cache_element *el =
       table->s->cache_element[table_cache_manager.cache_index(this)];
 

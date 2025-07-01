@@ -782,4 +782,14 @@ static inline bool is_supported_parser_charset(const CHARSET_INFO *cs) {
   return (cs->mbminlen == 1);
 }
 
+static inline void my_ci_hash_sort(CHARSET_INFO *ci, const uchar *key,
+                                   size_t len, ulong *nr1, ulong *nr2) {
+  (ci->coll->hash_sort)(ci, key, len, nr1, nr2);
+}
+
+extern "C" {
+void my_hash_sort_bin(const CHARSET_INFO *cs [[maybe_unused]], const uchar *key,
+                      size_t len, uint64 *nr1, uint64 *nr2);
+}  // extern "C"
+
 #endif  // M_CTYPE_INCLUDED

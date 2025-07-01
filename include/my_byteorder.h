@@ -322,6 +322,11 @@ inline uchar *store32be(uchar *ptr, uint32 val) {
   return pointer_cast<uchar *>(store32be(pointer_cast<char *>(ptr), val));
 }
 
+/* convenience helpers */
+static inline float get_float(const void *from) {
+  return float4get(((const uchar *)from));
+}
+
 #endif /* __cplusplus */
 
 #endif /* MY_BYTEORDER_INCLUDED */

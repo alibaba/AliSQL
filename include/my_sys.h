@@ -789,11 +789,13 @@ extern bool my_init_dynamic_array(DYNAMIC_ARRAY *array, PSI_memory_key key,
 
 #define dynamic_element(array, array_index, type) \
   ((type)((array)->buffer) + (array_index))
+#define reset_dynamic(array) ((array)->elements = 0)
 
 /* Some functions are still in use in C++, because HASH uses DYNAMIC_ARRAY */
 extern bool insert_dynamic(DYNAMIC_ARRAY *array, const void *element);
 extern void *alloc_dynamic(DYNAMIC_ARRAY *array);
 extern void delete_dynamic(DYNAMIC_ARRAY *array);
+extern void *pop_dynamic(DYNAMIC_ARRAY *);
 
 extern bool init_dynamic_string(DYNAMIC_STRING *str, const char *init_str,
                                 size_t init_alloc);

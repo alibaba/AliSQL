@@ -520,7 +520,8 @@ enum ha_base_keytype {
 /* The combination of the above can be used for key type comparison. */
 #define HA_KEYFLAG_MASK                                                       \
   (HA_NOSAME | HA_PACK_KEY | HA_AUTO_KEY | HA_BINARY_PACK_KEY | HA_FULLTEXT | \
-   HA_UNIQUE_CHECK | HA_SPATIAL | HA_NULL_ARE_EQUAL | HA_GENERATED_KEY)
+   HA_UNIQUE_CHECK | HA_SPATIAL | HA_NULL_ARE_EQUAL | HA_GENERATED_KEY |      \
+   HA_VECTOR)
 
 /** Fulltext index uses [pre]parser */
 #define HA_USES_PARSER (1 << 14)
@@ -555,6 +556,7 @@ enum ha_base_keytype {
 
 constexpr const ulong HA_INDEX_USES_ENGINE_ATTRIBUTE{1UL << 20};
 constexpr const ulong HA_INDEX_USES_SECONDARY_ENGINE_ATTRIBUTE{1UL << 21};
+constexpr const ulong HA_VECTOR{1UL << 22};
 
 /* These flags can be added to key-seg-flag */
 

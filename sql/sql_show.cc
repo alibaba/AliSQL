@@ -140,6 +140,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "vidx/vidx_index.h"
 
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
@@ -2225,9 +2226,13 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
   file->update_create_info(&create_info);
   primary_key = share->primary_key;
 
-  for (uint i = skip_gipk ? 1 : 0; i < share->keys; i++, key_info++) {
+  for (uint i = skip_gipk ? 1 : 0; i < share->total_keys; i++, key_info++) {
     KEY_PART_INFO *key_part = key_info->key_part;
     bool found_primary = false;
+
+    if (key_info->flags & HA_VECTOR)
+      packet->append(STRING_WITH_LEN(RDS_COMMENT_VIDX_START));
+
     packet->append(STRING_WITH_LEN(",\n  "));
 
     if (i == primary_key && !strcmp(key_info->name, primary_key_name)) {
@@ -2241,6 +2246,8 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
       packet->append(STRING_WITH_LEN("UNIQUE KEY "));
     else if (key_info->flags & HA_FULLTEXT)
       packet->append(STRING_WITH_LEN("FULLTEXT KEY "));
+    else if (key_info->flags & HA_VECTOR)
+      packet->append(STRING_WITH_LEN("VECTOR KEY "));
     else if (key_info->flags & HA_SPATIAL)
       packet->append(STRING_WITH_LEN("SPATIAL KEY "));
     else
@@ -2275,7 +2282,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
       if (key_part->field &&
           (key_part->length !=
                table->field[key_part->fieldnr - 1]->key_length() &&
-           !(key_info->flags & (HA_FULLTEXT | HA_SPATIAL)))) {
+           !(key_info->flags & (HA_FULLTEXT | HA_SPATIAL | HA_VECTOR)))) {
         packet->append_parenthesized((long)key_part->length /
                                      key_part->field->charset()->mbmaxlen);
       }
@@ -2619,7 +2626,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
 static void store_key_options(THD *thd, String *packet, TABLE *table,
                               KEY *key_info) {
   bool foreign_db_mode = (thd->variables.sql_mode & MODE_ANSI) != 0;
-  char *end, buff[32];
+  char *end, buff[40];
 
   if (!foreign_db_mode) {
     /*
@@ -2638,6 +2645,13 @@ static void store_key_options(THD *thd, String *packet, TABLE *table,
         assert(!(key_info->flags & HA_SPATIAL));
         packet->append(STRING_WITH_LEN(" USING RTREE"));
       }
+    }
+
+    if (key_info->flags & HA_VECTOR) {
+      uint len = vidx::hnsw::index_options_print(
+          key_info->vector_distance, key_info->vector_m, buff, sizeof(buff));
+
+      packet->append(buff, len);
     }
 
     if ((key_info->flags & HA_USES_BLOCK_SIZE) &&
@@ -4287,7 +4301,7 @@ static int get_schema_tmp_table_keys_record(THD *thd, Table_ref *tables,
     key_info++;
   }
 
-  for (; i < show_table->s->keys; i++, key_info++) {
+  for (; i < show_table->s->total_keys; i++, key_info++) {
     KEY_PART_INFO *key_part = key_info->key_part;
     const char *str;
     for (uint j = 0; j < key_info->user_defined_key_parts; j++, key_part++) {
@@ -4367,7 +4381,7 @@ static int get_schema_tmp_table_keys_record(THD *thd, Table_ref *tables,
       table->field[TMP_TABLE_KEYS_INDEX_TYPE]->store(str, strlen(str), cs);
 
       // SUB_PART
-      if (!(key_info->flags & HA_FULLTEXT) &&
+      if (!(key_info->flags & (HA_FULLTEXT | HA_VECTOR)) &&
           (key_part->field &&
            key_part->length !=
                show_table->s->field[key_part->fieldnr - 1]->key_length())) {

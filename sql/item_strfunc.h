@@ -1785,4 +1785,6 @@ class Item_func_internal_get_dd_column_extra final : public Item_str_func {
   String *val_str(String *) override;
 };
 
+#include "vidx/vidx_func.h"
+
 #endif /* ITEM_STRFUNC_INCLUDED */

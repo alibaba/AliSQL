@@ -1,0 +1,15 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+#
+# MDEV-37068 Can't find record in 't1' on INSERT to Vector table
+#
+SET sql_mode='';
+create table t1 (v vector (1) not null,vector vec (v),unique vu (v)) engine=innodb;
+start transaction;
+insert t1 values (VEC_FROMTEXT("[1]")), (VEC_FROMTEXT("[1]"));
+ERROR 23000: Duplicate entry '\x00\x00\x80?' for key 't1.vu'
+insert t1 values (VEC_FROMTEXT("[1]"));
+drop table t1;
+set sql_mode=default;
+SET GLOBAL vidx_disabled = ON;

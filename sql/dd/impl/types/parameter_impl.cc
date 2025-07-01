@@ -49,7 +49,8 @@ using dd::tables::Parameters;
 
 namespace dd {
 
-static const std::set<String_type> default_valid_option_keys = {"geom_type"};
+static const std::set<String_type> default_valid_option_keys = {"geom_type",
+                                                                "vector_type"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Parameter_impl implementation.

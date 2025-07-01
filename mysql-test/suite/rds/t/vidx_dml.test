@@ -1,0 +1,122 @@
+##########################################
+# The DML for VECTOR INDEX               #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Prepare
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL,
+  v VECTOR(5),
+  INDEX (a),
+  VECTOR INDEX vi(v)
+  ) ENGINE = InnoDB;
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # 2. Insert 100 rows
+--disable_warnings
+INSERT INTO t1(a, v) SELECT 1, VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']'));
+
+--disable_query_log
+let $i=99;
+while ($i)
+{
+  INSERT INTO t1(a, v) SELECT 1, VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']'));
+  dec $i;
+}
+--enable_query_log
+
+--echo
+--echo # 3. Delete
+DELETE FROM t1 WHERE id % 3 = 0;
+
+--echo
+--echo # 4. Update
+UPDATE t1 SET v = (SELECT VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']'))) WHERE id % 3 = 1;
+
+--echo
+--echo # 5. Select
+SELECT COUNT(*) FROM t1;
+
+--echo # expect to use vector index scan
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 16;
+EXPLAIN SELECT * FROM t1 WHERE id>1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 16;
+EXPLAIN SELECT * FROM t1 WHERE a=1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 16;
+EXPLAIN SELECT VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) AS distance FROM t1 ORDER BY distance limit 16;
+
+--echo # expect to use JT_ALL
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 17;
+EXPLAIN SELECT * FROM t1 WHERE id>1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 17;
+EXPLAIN SELECT * FROM t1 WHERE a=1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 17;
+EXPLAIN SELECT VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) AS distance FROM t1 ORDER BY distance limit 17;
+
+--echo # expect to use SK range
+EXPLAIN SELECT * FROM t1 WHERE a>1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 1;
+
+--echo # FORCE INDEX
+EXPLAIN SELECT * FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 16;
+EXPLAIN SELECT * FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"));
+EXPLAIN SELECT * FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 100;
+--enable_warnings
+
+--echo # select using VIEW
+# MDEV-35922
+CREATE VIEW `view1` AS SELECT * FROM t1;
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM `view1` ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) limit 1;
+SELECT id, VEC_TOTEXT(v) FROM `view1` ORDER BY VEC_DISTANCE_EUCLIDEAN(VEC_FROMTEXT("[1,2,3,4,5]"), v) limit 1;
+--enable_result_log
+DROP VIEW `view1`;
+
+--echo
+--echo # 6. Select using prepare stmt
+PREPARE stmt FROM 'SELECT id FROM t1 ORDER BY vec_distance_euclidean(v, ?) LIMIT ?';
+SET @vec = VEC_FROMTEXT("[1,2,3,4,5]");
+SET @limit = 10;
+--disable_result_log
+EXECUTE stmt USING @vec, @limit;
+--enable_result_log
+
+SET @vec = VEC_FROMTEXT("[1,2,3,4]");
+--error ER_WRONG_ARGUMENTS
+EXECUTE stmt USING @vec, @limit;
+
+--echo
+--echo # 7. Select using distance with different objects
+--echo # numeric
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, 1) limit 1;
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, 1) limit 1;
+
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, 1.1) limit 1;
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, 1.1) limit 1;
+
+--echo # string with different length
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, "1.1") limit 1;
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, "1.1") limit 1;
+
+--echo # string with same length
+--disable_result_log
+SELECT * FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0") limit 1;
+SELECT * FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0") limit 1;
+--enable_result_log
+
+--echo
+--echo # 8. Delete all
+DELETE FROM t1;
+
+--echo
+--echo # 9. Clear
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

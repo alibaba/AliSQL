@@ -5516,6 +5516,7 @@ bool mysql_test_parse_for_slave(THD *thd) {
   @param col_check_const_spec_list List of column check constraints.
   @param hidden                    Column hidden type.
   @param is_array                  Whether it's a typed array field
+  @param is_vector                 Whether it's a typed vector field
 
   @return
     Return 0 if ok
@@ -5529,7 +5530,7 @@ bool Alter_info::add_field(
     Value_generator *gcol_info, Value_generator *default_val_expr,
     const char *opt_after, std::optional<gis::srid_t> srid,
     Sql_check_constraint_spec_list *col_check_const_spec_list,
-    dd::Column::enum_hidden_type hidden, bool is_array) {
+    dd::Column::enum_hidden_type hidden, bool is_vector, bool is_array) {
   uint8 datetime_precision = decimals ? atoi(decimals) : 0;
   DBUG_TRACE;
   assert(!is_array || hidden == dd::Column::enum_hidden_type::HT_HIDDEN_SQL);
@@ -5630,7 +5631,7 @@ bool Alter_info::add_field(
                       type_modifier, default_value, on_update_value, comment,
                       change, interval_list, cs, has_explicit_collation,
                       uint_geom_type, gcol_info, default_val_expr, srid, hidden,
-                      is_array))
+                      is_array, is_vector))
     return true;
 
   for (const auto &a : cf_appliers) {

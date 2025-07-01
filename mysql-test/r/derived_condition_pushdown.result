@@ -249,7 +249,7 @@ FROM (SELECT f1 as i, f2 as j FROM t1 ) as dt1 ,
 (SELECT f1 as l, f2 as m, f3 as n FROM t1) as dt2
 WHERE i > 1 and i+j > 40 and m < 20 and m+i > 20;
 EXPLAIN
--> Filter: ((dt2.m + dt1.i) > 20)  (rows=24)
+-> Filter: ((dt2.`m` + dt1.i) > 20)  (rows=24)
     -> Inner hash join (no condition)  (rows=24)
         -> Table scan on dt1  (rows=6)
             -> Materialize  (rows=6)

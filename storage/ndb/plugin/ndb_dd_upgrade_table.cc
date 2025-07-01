@@ -42,6 +42,9 @@
 #include "storage/ndb/plugin/ndb_table_guard.h"
 #include "storage/ndb/plugin/ndb_thd.h"      // get_thd_ndb
 #include "storage/ndb/plugin/ndb_thd_ndb.h"  // Thd_ndb
+#ifndef NDEBUG
+#include "vidx/vidx_index.h"
+#endif /* !NDEBUG */
 
 namespace dd {
 class Schema;
@@ -465,7 +468,7 @@ bool migrate_table_to_dd(THD *thd, Ndb_dd_client *dd_client,
           thd, schema_name.c_str(), table_name.c_str(), &create_info,
           &alter_info, file, true,  // NDB tables are auto-partitoned.
           &key_info_buffer, &key_count, &dummy_fk_key_info, &dummy_fk_key_count,
-          nullptr, 0, nullptr, 0, 0, false /* No FKs here. */)) {
+          nullptr, 0, nullptr, 0, 0, false /* No FKs or vector keys here. */)) {
     return false;
   }
 
@@ -576,6 +579,9 @@ bool migrate_table_to_dd(THD *thd, Ndb_dd_client *dd_client,
       thd, *schema_def, to_table_name, &create_info, alter_info.create_list,
       key_info_buffer, key_count, Alter_info::ENABLE, nullptr, 0, nullptr,
       table.file);
+
+  assert(!vidx::dd_table_has_hlindexes(table_def.get()));
+
   if (!table_def) {
     thd_ndb->push_warning(ER_DD_ERROR_CREATING_ENTRY,
                           "Error in Creating DD entry for %s.%s",

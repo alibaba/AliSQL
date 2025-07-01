@@ -191,6 +191,7 @@
 
 #include "sql/duckdb/duckdb_table.h"
 #include "sql/sql_table_ext.h"
+#include "vidx/vidx_index.h"
 
 namespace dd {
 class View;
@@ -511,7 +512,7 @@ class Disable_slave_info_update_guard {
   }
 };
 
-static bool trans_intermediate_ddl_commit(THD *thd, bool error) {
+bool trans_intermediate_ddl_commit(THD *thd, bool error) {
   // Must be used for intermediate (but not final) DDL commits.
   Implicit_substatement_state_guard substatement_guard(thd);
   if (error) {
@@ -998,9 +999,12 @@ static bool rea_create_tmp_table(
     return false;
   }
 
+  assert(!vidx::dd_table_has_hlindexes(tmp_table_ptr.get()));
+
   // Create the table in the storage engine.
   if (ha_create_table(thd, path, db, table_name, create_info, false, false,
-                      tmp_table_ptr.get())) {
+                      tmp_table_ptr.get(),
+                      keys == 0 ? nullptr : key_info + keys - 1)) {
     return true;
   }
 
@@ -1178,7 +1182,7 @@ static bool rea_create_base_table(
     *post_ddl_ht = create_info->db_type;
 
   if (ha_create_table(thd, path, db, table_name, create_info, false, false,
-                      table_def)) {
+                      table_def, keys == 0 ? nullptr : key_info + keys - 1)) {
     /*
       Remove table from data-dictionary if it was added and rollback
       won't do this automatically.
@@ -3922,8 +3926,12 @@ namespace {
 
 struct sort_keys {
   bool operator()(const KEY &a, const KEY &b) const {
+    // Sort VECTOR after not VECTOR.
+    if ((a.flags ^ b.flags) & HA_VECTOR) return b.flags & HA_VECTOR;
+
     // std::sort may compare an element to itself:
     if (&a == &b) return false;
+
     // Sort UNIQUE before not UNIQUE.
     if ((a.flags ^ b.flags) & HA_NOSAME) return a.flags & HA_NOSAME;
 
@@ -4828,7 +4836,7 @@ static bool count_keys(const Mem_root_array<Key_spec *> &key_list,
       */
       if ((key2->type != KEYTYPE_FOREIGN && key->type != KEYTYPE_FOREIGN &&
            key2->type != KEYTYPE_SPATIAL && key2->type != KEYTYPE_FULLTEXT &&
-           !redundant_keys->at(key2_counter) &&
+           key2->type != KEYTYPE_VECTOR && !redundant_keys->at(key2_counter) &&
            !foreign_key_prefix(key, key2))) {
         /* TODO: issue warning message */
         /* mark that the generated key should be ignored */
@@ -4951,6 +4959,14 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
   // JSON columns cannot be used as keys.
   if (sql_field->sql_type == MYSQL_TYPE_JSON) {
     my_error(ER_JSON_USED_AS_KEY, MYF(0), column->get_field_name());
+    return true;
+  }
+
+  if (key->type == KEYTYPE_VECTOR &&
+      (!sql_field->is_vector || (sql_field->flags & FIELD_IS_INVISIBLE) ||
+       sql_field->is_virtual_gcol())) {
+    my_error(ER_VECTOR_INDEX_USAGE, MYF(0),
+             "Only support one visible VECTOR column");
     return true;
   }
 
@@ -5233,7 +5249,7 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
   }
 
   if (key_part_length > file->max_key_part_length(create_info) &&
-      key->type != KEYTYPE_FULLTEXT) {
+      key->type != KEYTYPE_FULLTEXT && key->type != KEYTYPE_VECTOR) {
     key_part_length = file->max_key_part_length(create_info);
     if (key->type == KEYTYPE_MULTIPLE) {
       /* not a critical problem */
@@ -5531,7 +5547,7 @@ static bool prepare_self_ref_fk_parent_key(
   for (const KEY *key = key_info_buffer; key < key_info_buffer + key_count;
        key++) {
     // We can't use FULLTEXT or SPATIAL indexes.
-    if (key->flags & (HA_FULLTEXT | HA_SPATIAL)) continue;
+    if (key->flags & (HA_FULLTEXT | HA_SPATIAL | HA_VECTOR)) continue;
 
     if (hton->foreign_keys_flags &
         HTON_FKS_NEED_DIFFERENT_PARENT_AND_SUPPORTING_KEYS) {
@@ -5723,7 +5739,7 @@ static const KEY *find_fk_supporting_key(handlerton *hton,
   for (const KEY *key = key_info_buffer; key < key_info_buffer + key_count;
        key++) {
     // We can't use FULLTEXT or SPATIAL indexes.
-    if (key->flags & (HA_FULLTEXT | HA_SPATIAL)) continue;
+    if (key->flags & (HA_FULLTEXT | HA_SPATIAL | HA_VECTOR)) continue;
 
     if (key->algorithm == HA_KEY_ALG_HASH) {
       if (hton->foreign_keys_flags & HTON_FKS_WITH_SUPPORTING_HASH_KEYS) {
@@ -7324,6 +7340,26 @@ static bool prepare_key(
       }
       key_info->flags |= HA_SPATIAL;
       break;
+    case KEYTYPE_VECTOR:
+      if (vidx::feature_disabled) {
+        my_error(ER_VECTOR_DISABLED, MYF(0));
+        return true;
+      }
+
+      if (vidx::copy_index_option_distance(
+              thd, &(key_info->vector_distance),
+              key->key_create_info.vector_distance) ||
+          vidx::hnsw::copy_index_option_m(thd, &(key_info->vector_m),
+                                          key->key_create_info.vector_m)) {
+        my_error(ER_VECTOR_INDEX_USAGE, MYF(0), "Invalid options.");
+        return true;
+      }
+      if (!key->key_create_info.is_visible) {
+        my_error(ER_VECTOR_INDEX_USAGE, MYF(0), "Must be visible.");
+        return true;
+      }
+      key_info->flags |= HA_VECTOR;
+      break;
     case KEYTYPE_PRIMARY:
     case KEYTYPE_UNIQUE:
       key_info->flags |= HA_NOSAME;
@@ -7359,6 +7395,9 @@ static bool prepare_key(
     assert(!key->key_create_info.is_algorithm_explicit);
     key_info->algorithm = HA_KEY_ALG_FULLTEXT;
   } else {
+    assert(!(key_info->flags & HA_VECTOR) ||
+           !key->key_create_info.is_algorithm_explicit);
+
     if (key->key_create_info.is_algorithm_explicit) {
       if (key->key_create_info.algorithm != HA_KEY_ALG_RTREE) {
         /*
@@ -7421,7 +7460,7 @@ static bool prepare_key(
   key_info->actual_flags = key_info->flags;
 
   if (key_info->key_length > file->max_key_length() &&
-      key->type != KEYTYPE_FULLTEXT) {
+      key->type != KEYTYPE_FULLTEXT && key->type != KEYTYPE_VECTOR) {
     my_error(ER_TOO_LONG_KEY, MYF(0), file->max_key_length());
     if (thd->is_error())  // May be silenced - see Bug#20629014
       return true;
@@ -8076,6 +8115,28 @@ bool mysql_prepare_create_table(
   for (Key_spec *key : alter_info->key_list) {
     if (key->type == KEYTYPE_FOREIGN) continue;
 
+    if (key->type == KEYTYPE_VECTOR) {
+#ifndef NDEBUG
+      assert(key->columns.size() == 1);
+      assert(!key->columns[0]->has_expression());
+      assert(key->columns[0]->get_field_name() != nullptr);
+#endif /* !NDEBUG */
+
+      if (is_partitioned || create_info->options & HA_LEX_CREATE_TMP_TABLE) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "the VECTOR index in partitioned or temp tables");
+        return true;
+      }
+
+      if (!(create_info->db_type->flags & HTON_SUPPORTS_ATOMIC_DDL)) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "the VECTOR index in engine not supporting atomic DDL");
+        return true;
+      }
+
+      continue;
+    }
+
     for (size_t j = 0; j < key->columns.size(); ++j) {
       Key_part_spec *key_part_spec = key->columns[j];
       // In the case of procedures, the Key_part_spec may both have an
@@ -8247,6 +8308,12 @@ bool mysql_prepare_create_table(
 
   /* Sort keys in optimized order */
   std::sort(*key_info_buffer, *key_info_buffer + *key_count, sort_keys());
+
+  /* Check if there are multiple VECTOR indexes. */
+  if (*key_count >= 2 && (*key_info_buffer)[*key_count - 2].flags & HA_VECTOR) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "multiple VECTOR indexes");
+    return true;
+  }
 
   /*
     Normal keys are done, now prepare foreign keys.
@@ -10232,7 +10299,9 @@ bool mysql_create_table(THD *thd, Table_ref *create_table,
         variable, but rely on logging what really has been done instead.
       */
       if ((create_table->table == nullptr && !create_table->is_view()) &&
-          is_pk_generated) {
+          (is_pk_generated || thd->m_query_has_vector_column)) {
+        thd->m_query_has_vector_column = false;
+
         /*
           Open table to generate CREATE TABLE statement. For non-temporary
           table we already have exclusive lock here.
@@ -10709,7 +10778,9 @@ bool mysql_rename_table(THD *thd, handlerton *base, const char *old_db,
   to_table_def->set_name(new_name);
   to_table_def->set_hidden((flags & FN_TO_IS_TMP)
                                ? dd::Abstract_table::HT_HIDDEN_DDL
-                               : dd::Abstract_table::HT_VISIBLE);
+                               : ((flags & VIDX_RENAME)
+                                      ? dd::Abstract_table::HT_HIDDEN_HLINDEX
+                                      : dd::Abstract_table::HT_VISIBLE));
 
   /* Adjust parent table for self-referencing foreign keys. */
   for (dd::Foreign_key *fk : *(to_table_def->foreign_keys())) {
@@ -10798,6 +10869,15 @@ bool mysql_rename_table(THD *thd, handlerton *base, const char *old_db,
                my_strerror(errbuf, sizeof(errbuf), error));
     }
     destroy(file);
+    return true;
+  }
+
+  /* Rename vidx table if db is changed. the vidx table name is not changed
+  because the base table id is not changed. */
+  if (vidx::dd_table_has_hlindexes(to_table_def) &&
+      my_strcasecmp(table_alias_charset, old_db, new_db) != 0 &&
+      vidx::rename_table(thd, to_table_def, base, new_schema, old_db, new_db,
+                         flags)) {
     return true;
   }
 
@@ -11979,7 +12059,7 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table,
 
   /* Allocate result buffers. */
   if (!(ha_alter_info->index_drop_buffer =
-            (KEY **)thd->alloc(sizeof(KEY *) * table->s->keys)) ||
+            (KEY **)thd->alloc(sizeof(KEY *) * table->s->total_keys)) ||
       !(ha_alter_info->index_add_buffer =
             (uint *)thd->alloc(sizeof(uint) * alter_info->key_list.size())) ||
       !(ha_alter_info->index_rename_buffer = (KEY_PAIR *)thd->alloc(
@@ -12338,11 +12418,11 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table,
     with new table.
   */
   KEY *table_key;
-  KEY *table_key_end = table->key_info + table->s->keys;
+  KEY *table_key_end = table->key_info + table->s->total_keys;
   KEY *new_key;
   KEY *new_key_end = ha_alter_info->key_info_buffer + ha_alter_info->key_count;
 
-  DBUG_PRINT("info", ("index count old: %d  new: %d", table->s->keys,
+  DBUG_PRINT("info", ("index count old: %d  new: %d", table->s->total_keys,
                       ha_alter_info->key_count));
 
   /*
@@ -12682,7 +12762,7 @@ bool mysql_compare_tables(THD *thd, TABLE *table, Alter_info *alter_info,
 
   /* Go through keys and check if they are compatible. */
   KEY *table_key;
-  KEY *table_key_end = table->key_info + table->s->keys;
+  KEY *table_key_end = table->key_info + table->s->total_keys;
   KEY *new_key;
   KEY *new_key_end = key_info_buffer + key_count;
 
@@ -15011,7 +15091,7 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
     for which some fields exists.
   */
 
-  for (uint i = 0; i < table->s->keys; i++, key_info++) {
+  for (uint i = 0; i < table->s->total_keys; i++, key_info++) {
     const char *key_name = key_info->name;
     bool index_column_dropped = false;
     size_t drop_idx = 0;
@@ -15202,7 +15282,11 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
           key_type = KEYTYPE_UNIQUE;
       } else if (key_info->flags & HA_FULLTEXT)
         key_type = KEYTYPE_FULLTEXT;
-      else
+      else if (key_info->flags & HA_VECTOR) {
+        key_type = KEYTYPE_VECTOR;
+        key_create_info.vector_m = key_info->vector_m;
+        key_create_info.vector_distance = key_info->vector_distance;
+      } else
         key_type = KEYTYPE_MULTIPLE;
 
       /*
@@ -16117,7 +16201,7 @@ static bool is_alter_geometry_column_valid(Alter_info *alter_info) {
           Check if there is a spatial index on this column. If that is the
           case, reject the change.
         */
-        for (uint i = 0; i < share->keys; ++i) {
+        for (uint i = 0; i < share->total_keys; ++i) {
           if (geom_field->key_start.is_set(i) &&
               share->key_info[i].flags & HA_SPATIAL) {
             my_error(ER_CANNOT_ALTER_SRID_DUE_TO_INDEX, MYF(0),
@@ -16197,7 +16281,7 @@ static bool handle_drop_functional_index(THD *thd, Alter_info *alter_info,
   // the source column as well.
   for (const Alter_drop *drop : alter_info->drop_list) {
     if (drop->type == Alter_drop::KEY) {
-      for (uint j = 0; j < table_list->table->s->keys; j++) {
+      for (uint j = 0; j < table_list->table->s->total_keys; j++) {
         const KEY &key_info = table_list->table->s->key_info[j];
         if (my_strcasecmp(system_charset_info, key_info.name, drop->name) ==
             0) {
@@ -16251,7 +16335,7 @@ static bool handle_rename_functional_index(THD *thd, Alter_info *alter_info,
   for (const Alter_rename_key *alter_rename_key :
        alter_info->alter_rename_key_list) {
     // Find the matching existing index
-    for (uint j = 0; j < table_list->table->s->keys; ++j) {
+    for (uint j = 0; j < table_list->table->s->total_keys; ++j) {
       const KEY &key = table_list->table->s->key_info[j];
       if (my_strcasecmp(system_charset_info, key.name,
                         alter_rename_key->old_name) == 0) {
@@ -17434,6 +17518,11 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
   }
 
+  if (vidx::check_vector_ddl_and_rewrite_sql(thd, alter_info, key_info,
+                                             key_count, table)) {
+    goto err_new_table_cleanup;
+  }
+
   if (alter_info->requested_algorithm !=
       Alter_info::ALTER_TABLE_ALGORITHM_COPY) {
     Alter_inplace_info ha_alter_info(create_info, alter_info,
@@ -17511,8 +17600,11 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
 
     // Ask storage engine whether to use copy or in-place
     enum_alter_inplace_result inplace_supported =
-        table->file->check_if_supported_inplace_alter(altered_table,
-                                                      &ha_alter_info);
+        ((key_count > 0 && vidx::key_is_vector(key_info + key_count - 1)) ||
+         table->s->hlindexes() > 0)
+            ? HA_ALTER_INPLACE_NOT_SUPPORTED
+            : table->file->check_if_supported_inplace_alter(altered_table,
+                                                            &ha_alter_info);
 
     // If INSTANT was requested but it is not supported, report error.
     if (alter_info->requested_algorithm ==
@@ -17759,8 +17851,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     }
 
     if (ha_create_table(thd, alter_ctx.get_tmp_path(), alter_ctx.new_db,
-                        alter_ctx.tmp_name, create_info, false, true,
-                        table_def))
+                        alter_ctx.tmp_name, create_info, false, true, table_def,
+                        key_count == 0 ? nullptr : key_info + key_count - 1))
       goto err_new_table_cleanup;
 
     /* Mark that we have created table in storage engine. */

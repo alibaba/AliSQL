@@ -58,13 +58,15 @@ template <bool Reverse>
 IndexScanIterator<Reverse>::IndexScanIterator(THD *thd, TABLE *table, int idx,
                                               bool use_order,
                                               double expected_rows,
-                                              ha_rows *examined_rows)
+                                              ha_rows *examined_rows,
+                                              void *vec_func)
     : TableRowIterator(thd, table),
       m_record(table->record[0]),
       m_idx(idx),
       m_use_order(use_order),
       m_expected_rows(expected_rows),
-      m_examined_rows(examined_rows) {}
+      m_examined_rows(examined_rows),
+      m_vec_func(vec_func) {}
 
 template <bool Reverse>
 IndexScanIterator<Reverse>::~IndexScanIterator() {
@@ -75,12 +77,19 @@ IndexScanIterator<Reverse>::~IndexScanIterator() {
 
 template <bool Reverse>
 bool IndexScanIterator<Reverse>::Init() {
+  assert((m_idx < (int)table()->s->keys) == (m_vec_func == nullptr));
+
   if (!table()->file->inited) {
     if (table()->covering_keys.is_set(m_idx) && !table()->no_keyread) {
       table()->set_keyread(true);
     }
 
-    int error = table()->file->ha_index_init(m_idx, m_use_order);
+    /* m_vec_func means the vector index is used which using the auxiliary
+    table and later re-scanning the main table */
+    int error = m_vec_func != nullptr
+                    ? table()->file->ha_rnd_init(false)
+                    : table()->file->ha_index_init(m_idx, m_use_order);
+
     if (error) {
       PrintError(error);
       return true;
@@ -99,12 +108,18 @@ bool IndexScanIterator<Reverse>::Init() {
 //! @cond
 template <>
 int IndexScanIterator<false>::Read() {  // Forward read.
+  assert((m_vec_func == nullptr) == (m_idx < (int)table()->s->keys));
+  assert((m_vec_func == nullptr) == (table()->file->inited == handler::INDEX));
+
   int error;
   if (m_first) {
-    error = table()->file->ha_index_first(m_record);
+    error = (m_vec_func != nullptr)
+                ? table()->hlindex_read_first(m_idx, m_vec_func)
+                : table()->file->ha_index_first(m_record);
     m_first = false;
   } else {
-    error = table()->file->ha_index_next(m_record);
+    error = (m_vec_func != nullptr) ? table()->hlindex_read_next()
+                                    : table()->file->ha_index_next(m_record);
   }
   if (error) return HandleError(error);
   if (m_examined_rows != nullptr) {
@@ -115,6 +130,9 @@ int IndexScanIterator<false>::Read() {  // Forward read.
 
 template <>
 int IndexScanIterator<true>::Read() {  // Backward read.
+  assert(m_idx < (int)table()->s->keys);
+  assert(m_vec_func == nullptr);
+
   int error;
   if (m_first) {
     error = table()->file->ha_index_last(m_record);

@@ -194,6 +194,13 @@ static void fill_parameter_info_from_field(THD *thd, Create_field *field,
     param_options->set("geom_type", field->geom_type);
   }
 
+  // Store vector type
+  if (field->is_vector) {
+    assert(field->sql_type == MYSQL_TYPE_VARCHAR);
+    Properties *param_options = &param->options();
+    param_options->set("vector_type", true);
+  }
+
   // Set elements of enum or set data type.
   if (field->interval) {
     assert(field->sql_type == MYSQL_TYPE_ENUM ||

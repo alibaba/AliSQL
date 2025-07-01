@@ -4742,8 +4742,12 @@ class THD : public MDL_context_owner,
   std::unordered_map<unsigned int, void *> external_store_;
 
   THD_rds_context m_rds_context;
+
  public:
   THD_rds_context &get_rds_context() { return m_rds_context; }
+
+  /* Indicates if query has vector column. */
+  bool m_query_has_vector_column{false};
 };  // End of class THD
 
 /**

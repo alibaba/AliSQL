@@ -34,6 +34,7 @@
 #include "my_thread_local.h"     // my_thread_id
 #include "sql/rpl_gtid.h"        // Gitd_specification
 #include "sql/sql_plugin_ref.h"  // plugin_ref
+#include "vidx/vidx_common.h"
 
 class MY_LOCALE;
 class Time_zone;

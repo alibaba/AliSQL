@@ -192,6 +192,7 @@ class Item_func : public Item_result_field {
     GE_FUNC,
     GT_FUNC,
     FT_FUNC,
+    VECTOR_DISTANCE_FUNC,
     MATCH_FUNC,
     LIKE_FUNC,
     ISNULL_FUNC,

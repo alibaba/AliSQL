@@ -21,8 +21,9 @@ AliSQL is Alibaba's MySQL branch, forked from official MySQL and used extensivel
 
 - **[DuckDB Storage Engine](./wiki/duckdb/duckdb.md)**:AliSQL integrates DuckDB as a native storage engine, allowing users to operate DuckDB with the same experience as MySQL. By leveraging AliSQL for rapid deployment of DuckDB service nodes, users can easily achieve lightweight analytical capabilities.
 
+- **[Vector Storage](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/vector-storage-1?spm=a2c63.p38356.help-menu-26090.d_3_3_0.6bb8d111D06xOW)**:AliSQL natively supports enterprise-grade vector processing for up to 16,383 dimensions. By integrating a highly optimized HNSW algorithm for high-performance Approximate Nearest Neighbor (ANN) search, AliSQL empowers users to build AI-driven applications—such as semantic search and recommendation systems—seamlessly using standard SQL interfaces.
+
 ## Roadmap
-- **[Vector Storage](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/vector-storage-1?spm=a2c63.p38356.help-menu-26090.d_3_3_0.6bb8d111D06xOW)** *(planned)*:AliSQL natively supports enterprise-grade vector processing for up to 16,383 dimensions. By integrating a highly optimized HNSW algorithm for high-performance Approximate Nearest Neighbor (ANN) search, AliSQL empowers users to build AI-driven applications—such as semantic search and recommendation systems—seamlessly using standard SQL interfaces.
 
 - **[DDL Optimization](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/alisql-ddl-best-practices?spm=a2c63.p38356.help-menu-26090.d_2_8_0.1f7a28a5F1ZVeK)** *(planned)*:AliSQL delivers a faster, safer, and lighter DDL experience through innovations such as enhanced Instant DDL, parallel B+tree construction, a non-blocking lock mechanism, and real-time DDL apply—significantly improving schema change efficiency and virtually eliminating replication lag.
 
@@ -88,6 +89,7 @@ AliSQL is based on MySQL, which is licensed under GPL-2.0. The DuckDB integratio
 ## See Also
 - [AliSQL Release Notes](./wiki/changes-in-alisql-8.0.44.md)
 - [DuckDB Storage Engine in AliSQL](./wiki/duckdb/duckdb.md)
+- [Vector Index in AliSQL](./wiki/vidx/vidx_readme.md)
 - [MySQL 8.0 Documentation](https://dev.mysql.com/doc/refman/8.0/en/)
 - [MySQL 8.0 Github Repository](https://github.com/mysql/mysql-server)
 - [DuckDB Official Documentation](https://duckdb.org/docs/stable/)

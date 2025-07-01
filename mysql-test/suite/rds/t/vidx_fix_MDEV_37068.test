@@ -1,0 +1,19 @@
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo #
+--echo # MDEV-37068 Can't find record in 't1' on INSERT to Vector table
+--echo #
+SET sql_mode='';
+create table t1 (v vector (1) not null,vector vec (v),unique vu (v)) engine=innodb;
+start transaction;
+--error ER_DUP_ENTRY
+insert t1 values (VEC_FROMTEXT("[1]")), (VEC_FROMTEXT("[1]"));
+insert t1 values (VEC_FROMTEXT("[1]"));
+drop table t1;
+set sql_mode=default;
+
+SET GLOBAL vidx_disabled = ON;

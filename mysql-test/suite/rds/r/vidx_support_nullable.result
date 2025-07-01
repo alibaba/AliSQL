@@ -1,0 +1,43 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `a` int DEFAULT NULL,
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 VALUES(1, 1, NULL);
+INSERT INTO t1 VALUES(2, 2, VEC_FROMTEXT("[1,2,3,4,5]"));
+INSERT INTO t1 VALUES(3, 3, NULL);
+INSERT INTO t1 VALUES(4, 4, NULL);
+DELETE FROM t1 WHERE id = 1;
+UPDATE t1 SET v = NULL WHERE id = 2;
+UPDATE t1 SET v = VEC_FROMTEXT("[1,2,3,4,5]") WHERE id = 3;
+UPDATE t1 SET a=5 WHERE id = 4;
+SELECT id, a, VEC_TOTEXT(v) FROM t1;
+id	a	VEC_TOTEXT(v)
+2	2	NULL
+3	3	[1,2,3,4,5]
+4	5	NULL
+# Rows with NULL vector columns cannot be found using the vector index.
+SELECT id, a, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) as dis FROM t1 FORCE INDEX(`vi`) ORDER BY dis;
+id	a	VEC_TOTEXT(v)	dis
+3	3	[1,2,3,4,5]	0
+# Rows with NULL distances to target will be placed at the end of the result set.
+SELECT id, a, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) as dis FROM t1 FORCE INDEX(PRIMARY) ORDER BY dis;
+id	a	VEC_TOTEXT(v)	dis
+3	3	[1,2,3,4,5]	0
+2	2	NULL	NULL
+4	5	NULL	NULL
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

@@ -11919,6 +11919,7 @@ PSI_mutex_key key_mutex_slave_parallel_worker_count;
 PSI_mutex_key key_mutex_slave_parallel_worker;
 PSI_mutex_key key_structure_guard_mutex;
 PSI_mutex_key key_TABLE_SHARE_LOCK_ha_data;
+PSI_mutex_key key_TABLE_SHARE_LOCK_share;
 PSI_mutex_key key_LOCK_query_plan;
 PSI_mutex_key key_LOCK_thd_query;
 PSI_mutex_key key_LOCK_cost_const;
@@ -12008,6 +12009,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_mutex_slave_parallel_worker_count, "Relay_log_info::exit_count_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_mutex_slave_parallel_worker, "Worker_info::jobs_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_TABLE_SHARE_LOCK_ha_data, "TABLE_SHARE::LOCK_ha_data", 0, 0, PSI_DOCUMENT_ME},
+  { &key_TABLE_SHARE_LOCK_share, "TABLE_SHARE::LOCK_share", 0, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_error_messages, "LOCK_error_messages", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_log_throttle_qni, "LOCK_log_throttle_qni", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_gtid_ensure_index_mutex, "Gtid_state", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},

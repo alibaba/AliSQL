@@ -80,6 +80,9 @@ Data dictionary interface */
 #include "univ.i"  // Using OS_PATH_SEPARATOR
 #endif             /* !UNIV_HOTBACKUP */
 
+#include "vidx/vidx_index.h"
+static_assert(DATA_ROW_ID_LEN == vidx::DATA_ROW_ID_LEN);
+
 const char *DD_instant_col_val_coder::encode(const byte *stream, size_t in_len,
                                              size_t *out_len) {
   cleanup();
@@ -337,25 +340,26 @@ int acquire_uncached_table(THD *thd, dd::cache::Dictionary_client *client,
                            TABLE_SHARE *ts, TABLE *td) {
   int error = 0;
   dd::Schema *schema;
-  const char *table_cache_key;
-  size_t table_cache_key_len;
+  const char *db_name_ptr;
+  char db_name[NAME_LEN + 1];
 
   if (name != nullptr) {
     schema = nullptr;
-    table_cache_key = name;
-    table_cache_key_len = dict_get_db_name_len(name);
+    size_t db_name_len = dict_get_db_name_len(name);
+    strncpy(db_name, name, db_name_len);
+    db_name[db_name_len] = '\0';
+    db_name_ptr = db_name;
   } else {
     error =
         client->acquire_uncached<dd::Schema>(dd_table->schema_id(), &schema);
     if (error != 0) {
       return (error);
     }
-    table_cache_key = schema->name().c_str();
-    table_cache_key_len = schema->name().size();
+    db_name_ptr = schema->name().c_str();
   }
 
-  init_tmp_table_share(thd, ts, table_cache_key, table_cache_key_len,
-                       dd_table->name().c_str(), "" /* file name */, nullptr);
+  init_tmp_table_share(thd, ts, db_name_ptr, 0, dd_table->name().c_str(),
+                       "" /* file name */, nullptr);
 
   error = open_table_def_suppress_invalid_meta_data(thd, ts, dd_table->table());
 

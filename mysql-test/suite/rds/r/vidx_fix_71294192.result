@@ -1,0 +1,16 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# Prepare a vector table in other database.
+CREATE DATABASE test2;
+CREATE TABLE test2.t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+INSERT INTO test2.t1(id, v) SELECT 1, VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']'));
+# Restart mysqld to ensure the auxiliary table is not opened before dropped.
+# Before this patch, the DROP will cause a crash.
+DROP TABLE test2.t1;
+DROP DATABASE test2;
+SET GLOBAL vidx_disabled = ON;

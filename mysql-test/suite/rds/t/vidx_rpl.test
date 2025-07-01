@@ -1,0 +1,133 @@
+##########################################
+# The transaction for VECTOR INDEX       #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+--source include/master-slave.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = OFF;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = OFF;
+
+--echo
+--echo # 1. Test ddl log event
+--echo # a. Show query binlog records vector column as /*!99999 vector(X) */ varbinary(4*X)
+--echo #                              vector index as index not existing
+--echo # b. Check operation of vector index can't be in one query with other operations
+let $binlog_start = query_get_value("SHOW MASTER STATUS", Position, 1);
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  ) ENGINE = InnoDB;
+--source include/show_binlog_events.inc
+
+let $binlog_start = query_get_value("SHOW MASTER STATUS", Position, 1);
+ALTER TABLE t1 ADD COLUMN `v2` vector(10);
+--source include/show_binlog_events.inc
+
+let $binlog_start = query_get_value("SHOW MASTER STATUS", Position, 1);
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 RENAME INDEX `vi` TO `vi2`, DROP COLUMN `v2`;
+ALTER TABLE t1 RENAME INDEX `vi` TO `vi2`;
+--source include/show_binlog_events.inc
+
+let $binlog_start = query_get_value("SHOW MASTER STATUS", Position, 1);
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 DROP INDEX `vi2`, DROP COLUMN `v2`;
+ALTER TABLE t1 DROP INDEX `vi2`;
+--source include/show_binlog_events.inc
+
+let $binlog_start = query_get_value("SHOW MASTER STATUS", Position, 1);
+CREATE VECTOR INDEX `vi` ON t1(v);
+--source include/show_binlog_events.inc
+
+let $binlog_start = query_get_value("SHOW MASTER STATUS", Position, 1);
+DROP INDEX `vi` ON t1;
+--source include/show_binlog_events.inc
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # 2. Test dml in transactions
+--echo # Prepare
+--source include/rpl_connection_master.inc
+SET transaction_isolation = 'READ-COMMITTED';
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  ) ENGINE = InnoDB;
+--disable_warnings
+
+--echo # Insert data using transactions
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,10]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,9]"));
+
+BEGIN;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,8]"));
+
+SAVEPOINT sp1;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,7]"));
+
+SAVEPOINT sp2;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,6]"));
+
+ROLLBACK TO SAVEPOINT sp2;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+
+COMMIT;
+
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,4]"));
+ROLLBACK;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,3]"));
+--source include/rpl_sync.inc
+
+--echo
+--echo # Validate data in mater
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+
+--echo
+--echo # Validate data in slave
+--source include/rpl_connection_slave.inc
+SET transaction_isolation = 'READ-COMMITTED';
+
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+
+--echo
+--echo # 3. Clear
+--enable_warnings
+SET GLOBAL vidx_disabled = ON;
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

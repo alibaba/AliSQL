@@ -124,6 +124,7 @@ class Create_field {
   List<String> interval_list;
   const CHARSET_INFO *charset;
   bool is_explicit_collation;  // User exeplicitly provided charset ?
+  bool is_vector = false;
   Field::geometry_type geom_type;
   Field *field;  // For alter table
 
@@ -224,7 +225,8 @@ class Create_field {
             bool has_explicit_collation, uint uint_geom_type,
             Value_generator *gcol_info, Value_generator *default_val_expr,
             std::optional<gis::srid_t> srid,
-            dd::Column::enum_hidden_type hidden, bool is_array = false);
+            dd::Column::enum_hidden_type hidden, bool is_array = false,
+            bool is_vector_type = false);
 
   ha_storage_media field_storage_type() const {
     return (ha_storage_media)((flags >> FIELD_FLAGS_STORAGE_MEDIA) & 3);

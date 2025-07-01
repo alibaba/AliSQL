@@ -989,6 +989,8 @@ void release_table_share(TABLE_SHARE *share) {
 
   assert(share->ref_count() != 0);
   if (share->decrement_ref_count() == 0) {
+    assert(share->hlindex == nullptr || share->hlindex->ref_count() == 0);
+
     if (share->has_old_version() || table_def_shutdown_in_progress)
       table_def_cache->erase(to_string(share->table_cache_key));
     else {
@@ -1117,6 +1119,12 @@ OPEN_TABLE_LIST *list_open_tables(THD *thd, const char *db, const char *wild) {
 
 void intern_close_table(TABLE *table) {  // Free all structures
   DBUG_TRACE;
+
+  if (table->hlindex != nullptr) {
+    intern_close_table(table->hlindex);
+    table->hlindex = nullptr;
+  }
+
   DBUG_PRINT("tcache",
              ("table: '%s'.'%s' %p", table->s ? table->s->db.str : "?",
               table->s ? table->s->table_name.str : "?", table));
@@ -2398,6 +2406,13 @@ void close_temporary_table(THD *thd, TABLE *table, bool free_share,
 
 void close_temporary(THD *thd, TABLE *table, bool free_share,
                      bool delete_table) {
+  if (table->hlindex != nullptr) {
+    /* The temp table during DDL may have hlindexes. */
+    close_temporary(thd, table->hlindex, free_share, delete_table);
+    table->hlindex = nullptr;
+    table->s->hlindex = nullptr;
+  }
+
   handlerton *table_type = table->s->db_type();
   DBUG_TRACE;
   DBUG_PRINT("tmptable", ("closing table: '%s'.'%s'", table->s->db.str,

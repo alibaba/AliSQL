@@ -107,6 +107,9 @@
 #include "sql/thd_raii.h"
 #include "sql_string.h"
 #include "typelib.h"
+#ifndef NDEBUG
+#include "vidx/vidx_index.h"
+#endif /* !NDEBUG */
 
 namespace dd {
 
@@ -694,6 +697,12 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
       col_options->set("geom_type", field.geom_type);
     }
 
+    // Store vector type
+    if (field.is_vector) {
+      assert(field.sql_type == MYSQL_TYPE_VARCHAR);
+      col_options->set("vector_type", true);
+    }
+
     // Field storage media and column format options
     if (field.field_storage_type() != HA_SM_DEFAULT)
       col_options->set("storage",
@@ -1040,6 +1049,9 @@ static void fill_dd_indexes_from_keyinfo(
 
   const KEY *primary_key_info = nullptr;
   for (int key_nr = 1; key != end; ++key, ++key_nr) {
+    if (key->flags & HA_VECTOR) {
+      continue;
+    }
     //
     // Add new DD index
     //
@@ -2436,6 +2448,7 @@ std::unique_ptr<dd::Table> create_tmp_table(
                                      check_cons_spec, file))
     return nullptr;
 
+  assert(!vidx::dd_table_has_hlindexes(tab_obj.get()));
   return tab_obj;
 }
 
@@ -2647,6 +2660,9 @@ bool recreate_table(THD *thd, const char *schema_name, const char *table_name) {
   // Create a path to the table, but without a extension
   char path[FN_REFLEN + 1];
   build_table_filename(path, sizeof(path) - 1, schema_name, table_name, "", 0);
+
+  /* vector index is only supported for InnoDB tables. */
+  assert(!vidx::dd_table_has_hlindexes(table_def));
 
   // Attempt to reconstruct the table
   return ha_create_table(thd, path, schema_name, table_name, &create_info, true,

@@ -73,6 +73,7 @@
 #include "sql/item_cmpfunc.h"
 #include "sql/item_func.h"
 #include "sql/item_row.h"
+#include "sql/item_strfunc.h"  // vidx::Item_func_vec_distance
 #include "sql/item_subselect.h"
 #include "sql/item_sum.h"  // Item_sum
 #include "sql/iterators/basic_row_iterators.h"
@@ -113,6 +114,7 @@
 #include "sql/window.h"
 #include "sql_string.h"
 #include "template_utils.h"
+#include "vidx/vidx_index.h"  // vidx::test_if_cheaper_vector_ordering
 
 using std::ceil;
 using std::max;
@@ -1194,7 +1196,7 @@ bool substitute_gc(THD *thd, Query_block *query_block, Item *where_cond,
 
   // Collect all GCs that are a part of a key
   for (Table_ref *tl = query_block->leaf_tables; tl; tl = tl->next_leaf) {
-    if (tl->table->s->keys == 0) continue;
+    if (tl->table->s->total_keys == 0) continue;
     for (uint i = 0; i < tl->table->s->fields; i++) {
       Field *fld = tl->table->field[i];
       if (fld->is_gcol() &&
@@ -1759,7 +1761,7 @@ bool is_prefix_index(TABLE *table, uint idx) {
     if (key_part->field &&
         !(table->field[key_part->fieldnr - 1]
               ->part_of_prefixkey.is_clear_all()) &&
-        !(key_info->flags & (HA_FULLTEXT | HA_SPATIAL))) {
+        !(key_info->flags & (HA_FULLTEXT | HA_SPATIAL | HA_VECTOR))) {
       return true;
     }
   }
@@ -1967,7 +1969,7 @@ uint find_shortest_key(TABLE *table, const Key_map *usable_keys) {
                                  : MAX_KEY;
   if (!usable_keys->is_clear_all()) {
     uint min_length = (uint)~0;
-    for (uint nr = 0; nr < table->s->keys; nr++) {
+    for (uint nr = 0; nr < table->s->total_keys; nr++) {
       if (nr == usable_clustered_pk) continue;
       if (usable_keys->is_set(nr)) {
         /*
@@ -2078,7 +2080,7 @@ static uint test_if_subkey(ORDER_with_src *order, JOIN_TAB *tab, uint ref,
   KEY_PART_INFO *ref_key_part = table->key_info[ref].key_part;
   KEY_PART_INFO *ref_key_part_end = ref_key_part + ref_key_parts;
 
-  for (nr = 0; nr < table->s->keys; nr++) {
+  for (nr = 0; nr < table->s->total_keys; nr++) {
     bool skip_quick;
     if (usable_keys->is_set(nr) &&
         table->key_info[nr].key_length < min_length &&
@@ -2274,6 +2276,11 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
         table->file->ft_handler = ft_func->ft_handler;
         return true;
       }
+    }
+
+    if (!ft_func && vidx::test_if_cheaper_vector_ordering(
+                        tab, order.order, select_limit, order_idx)) {
+      return true;
     }
   }
 
@@ -7060,7 +7067,7 @@ static void warn_index_not_applicable(THD *thd, const Field *field,
 
   if (thd->lex->is_explain() ||
       thd->variables.option_bits & OPTION_SAFE_UPDATES)
-    for (uint j = 0; j < field->table->s->keys; j++)
+    for (uint j = 0; j < field->table->s->total_keys; j++)
       if (cant_use_index.is_set(j))
         push_warning_printf(thd, Sql_condition::SL_WARNING,
                             ER_WARN_INDEX_NOT_APPLICABLE,
@@ -7779,9 +7786,9 @@ static bool add_key_part(Key_use_array *keyuse_array, Key_field *key_field) {
     Table_ref *const tl = key_field->item_field->table_ref;
     TABLE *const table = tl->table;
 
-    for (uint key = 0; key < table->s->keys; key++) {
+    for (uint key = 0; key < table->s->total_keys; key++) {
       if (!(table->keys_in_use_for_query.is_set(key))) continue;
-      if (table->key_info[key].flags & (HA_FULLTEXT | HA_SPATIAL))
+      if (table->key_info[key].flags & (HA_FULLTEXT | HA_SPATIAL | HA_VECTOR))
         continue;  // ToDo: ft-keys in non-ft queries.   SerG
 
       uint key_parts = actual_key_parts(&table->key_info[key]);
@@ -8125,7 +8132,7 @@ static void trace_indexes_added_group_distinct(Opt_trace_context *trace,
 
   KEY *key_info = join_tab->table()->key_info;
   Key_map existing_keys = join_tab->const_keys;
-  uint nbrkeys = join_tab->table()->s->keys;
+  uint nbrkeys = join_tab->table()->s->total_keys;
 
   Opt_trace_object trace_summary(trace, "const_keys_added");
   {
@@ -9306,7 +9313,7 @@ void JOIN::finalize_derived_keys() {
     */
     if (table == nullptr || !tr->uses_materialization() ||  // (1)
         table->is_created() ||                              // (2)
-        table->s->keys == 0 ||                              // (3)
+        table->s->total_keys == 0 ||                        // (3)
         (processed_tables & tr->map())) {                   // (4)
       continue;
     }
@@ -9314,9 +9321,9 @@ void JOIN::finalize_derived_keys() {
       Collect all used keys before starting to shuffle them:
       First create a map from key number to the table using the key:
     */
-    assert(table->s->keys <= MAX_INDEXES);
+    assert(table->s->total_keys <= MAX_INDEXES);
     TABLE *table_map[MAX_INDEXES];
-    for (uint j = 0; j < table->s->keys; j++) {
+    for (uint j = 0; j < table->s->total_keys; j++) {
       table_map[j] = nullptr;
     }
 
@@ -9326,7 +9333,7 @@ void JOIN::finalize_derived_keys() {
     // (deduplication) whether any expression refers to them or not.
     // In particular, they are used if we want to materialize a UNION DISTINCT
     // directly into the derived table.
-    for (uint key_idx = 0; key_idx < table->s->keys; ++key_idx) {
+    for (uint key_idx = 0; key_idx < table->s->total_keys; ++key_idx) {
       if (table->key_info[key_idx].flags & HA_NOSAME) {
         used_keys.set_bit(key_idx);
       }
@@ -9361,7 +9368,7 @@ void JOIN::finalize_derived_keys() {
     (void)table->s->find_first_unused_tmp_key(used_keys);
 
     // Process keys in increasing key order
-    for (uint j = 0; j < table->s->keys; j++) {
+    for (uint j = 0; j < table->s->total_keys; j++) {
       TABLE *const t = table_map[j];
       if (t == nullptr) continue;
 
@@ -10632,7 +10639,7 @@ static bool list_contains_unique_index(JOIN_TAB *tab,
   TABLE *table = tab->table();
 
   if (tab->is_inner_table_of_outer_join()) return false;
-  for (uint keynr = 0; keynr < table->s->keys; keynr++) {
+  for (uint keynr = 0; keynr < table->s->total_keys; keynr++) {
     if (keynr == table->s->primary_key ||
         (table->key_info[keynr].flags & HA_NOSAME)) {
       KEY *keyinfo = table->key_info + keynr;

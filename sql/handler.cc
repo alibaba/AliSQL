@@ -133,6 +133,7 @@
 
 #include "sql/duckdb/duckdb_config.h"
 #include "sql/duckdb/duckdb_context.h"
+#include "vidx/vidx_index.h"
 
 /**
   @def MYSQL_TABLE_IO_WAIT
@@ -901,6 +902,36 @@ err:
 err_no_hton_memory:
   plugin->data = nullptr;
   return 1;
+}
+
+int setup_transaction_participant(st_plugin_int *plugin) {
+  /* mysql has no type transaction_participant, but it's a part of
+  handlerton. So using handlerton is ok. */
+  handlerton *tp = (handlerton *)plugin->data;
+  ulong fslot;
+  /* Use the same way to iterate as in ha_initialize_handlerton(). */
+  for (fslot = 0; fslot < se_plugin_array.size(); fslot++) {
+    if (!se_plugin_array[fslot]) break;
+  }
+  if (fslot < se_plugin_array.size())
+    tp->slot = fslot;
+  else {
+    tp->slot = se_plugin_array.size();
+  }
+
+  if (se_plugin_array.assign_at(tp->slot, plugin) ||
+      builtin_htons.assign_at(tp->slot, (plugin->plugin_dl == nullptr)))
+    return 1;
+
+  uint tmp = tp->savepoint_offset;
+  tp->savepoint_offset = savepoint_alloc_size;
+  savepoint_alloc_size += tmp;
+
+  if (tp->prepare) {
+    total_ha_2pc++;
+  }
+
+  return 0;
 }
 
 int ha_init() {
@@ -2553,6 +2584,9 @@ int ha_delete_table(THD *thd, handlerton *table_type, const char *path,
   TABLE_SHARE dummy_share;
   DBUG_TRACE;
 
+  error = vidx::dd_table_has_hlindexes(table_def) &&
+          vidx::delete_table(thd, table_def, db);
+
   dummy_table.s = &dummy_share;
 
   /* DB_TYPE_UNKNOWN is used in ALTER TABLE when renaming only .frm files */
@@ -2566,7 +2600,8 @@ int ha_delete_table(THD *thd, handlerton *table_type, const char *path,
 
   path = get_canonical_filename(file, path, tmp_path);
 
-  if ((error = file->ha_delete_table(path, table_def)) && generate_warning) {
+  if ((error || (error = file->ha_delete_table(path, table_def))) &&
+      generate_warning) {
     /*
       Because file->print_error() use my_error() to generate the error message
       we use an internal error handler to intercept it and store the text
@@ -3445,6 +3480,8 @@ int handler::ha_index_first(uchar *buf) {
 
   // Set status for the need to update generated fields
   m_update_generated_read_fields = table->has_gcol();
+
+  assert(active_index < table_share->keys);
 
   MYSQL_TABLE_IO_WAIT(PSI_TABLE_FETCH_ROW, active_index, result,
                       { result = index_first(buf); })
@@ -4835,8 +4872,10 @@ int handler::ha_bulk_update_row(const uchar *old_data, uchar *new_data,
 int handler::ha_delete_all_rows() {
   assert(table_share->tmp_table != NO_TMP_TABLE || m_lock_type == F_WRLCK);
   mark_trx_read_write();
+  int err = delete_all_rows();
+  if (unlikely(!err)) err = table->hlindexes_on_delete_all();
 
-  return delete_all_rows();
+  return err;
 }
 
 /**
@@ -5204,6 +5243,10 @@ int handler::index_next_same(uchar *buf, const uchar *key, uint keylen) {
                              by storage engine if it supports atomic DDL.
                              For non-temporary tables these changes will
                              be saved to the data-dictionary by this call.
+  @param last_key            key info of last index if table_def is created
+                             instead of loaded from dd. Otherwise nullptr
+  @param recycled            Whether create table came from recycling the
+                             truncated operation
 
   @retval
    0  ok
@@ -5213,7 +5256,7 @@ int handler::index_next_same(uchar *buf, const uchar *key, uint keylen) {
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     bool update_create_info, bool is_temp_table,
-                    dd::Table *table_def) {
+                    dd::Table *table_def, KEY *last_key, bool recycled) {
   int error = 1;
   TABLE table;
   char name_buff[FN_REFLEN];
@@ -5224,6 +5267,7 @@ int ha_create_table(THD *thd, const char *path, const char *db,
                     (create_info->options & HA_LEX_CREATE_TMP_TABLE) ||
                     (strstr(path, tmp_file_prefix) != nullptr);
 #endif
+  const uint64_t old_table_id = table_def->se_private_id();
   DBUG_TRACE;
 
   init_tmp_table_share(thd, &share, db, 0, table_name, path, nullptr);
@@ -5233,6 +5277,10 @@ int ha_create_table(THD *thd, const char *path, const char *db,
 #ifdef HAVE_PSI_TABLE_INTERFACE
   share.m_psi = PSI_TABLE_CALL(get_table_share)(temp_table, &share);
 #endif
+
+  if (last_key == nullptr) {
+    last_key = share.get_vec_key();
+  }
 
   // When db_stat is 0, we can pass nullptr as dd::Table since it won't be used.
   destroy(&table);
@@ -5257,6 +5305,10 @@ int ha_create_table(THD *thd, const char *path, const char *db,
     PSI_TABLE_CALL(drop_table_share)
     (temp_table, db, strlen(db), table_name, strlen(table_name));
 #endif
+  } else if (vidx::key_is_vector(last_key) &&
+             vidx::create_table(thd, last_key, table_def, &table, db,
+                                old_table_id)) {
+    error = 1;
   } else {
     /*
       We do post-create update only for engines supporting atomic DDL
@@ -7894,6 +7946,11 @@ class Binlog_log_row_cleanup {
 
 int binlog_log_row(TABLE *table, const uchar *before_record,
                    const uchar *after_record, Log_func *log_func) {
+  if (table->s->is_hlindex) {
+    /* Don't write binlog for HLINDEX. */
+    return 0;
+  }
+
   bool error = false;
   THD *const thd = table->in_use;
 
@@ -7966,6 +8023,11 @@ int binlog_log_row(TABLE *table, const uchar *before_record,
 int handler::ha_external_lock(THD *thd, int lock_type) {
   int error;
   DBUG_TRACE;
+  if (table->hlindex != nullptr && lock_type == F_UNLCK &&
+      table->hlindex->file->get_lock_type() != F_UNLCK &&
+      (error = table->hlindex->file->ha_external_lock(thd, F_UNLCK)) != 0) {
+    return error;
+  }
   /*
     Whether this is lock or unlock, this should be true, and is to verify that
     if get_auto_increment() was called (thus may have reserved intervals or
@@ -8031,6 +8093,9 @@ int handler::ha_reset() {
   m_unique = nullptr;
 
   const int retval = reset();
+
+  table->reset_hlindexes();
+
   return retval;
 }
 
@@ -8054,6 +8119,8 @@ int handler::ha_write_row(uchar *buf) {
                       { error = write_row(buf); })
 
   if (unlikely(error)) return error;
+
+  if (unlikely((error = table->hlindexes_on_insert()))) return error;
 
   if (unlikely((error = binlog_log_row(table, nullptr, buf, log_func))))
     return error; /* purecov: inspected */
@@ -8083,6 +8150,7 @@ int handler::ha_update_row(const uchar *old_data, uchar *new_data) {
 
   MYSQL_TABLE_IO_WAIT(PSI_TABLE_UPDATE_ROW, active_index, error,
                       { error = update_row(old_data, new_data); })
+  if (unlikely(!error && (error = table->hlindexes_on_update()))) return error;
 
   if (unlikely(error)) return error;
   if (unlikely((error = binlog_log_row(table, old_data, new_data, log_func))))
@@ -8115,6 +8183,7 @@ int handler::ha_delete_row(const uchar *buf) {
                       { error = delete_row(buf); })
 
   if (unlikely(error)) return error;
+  if (unlikely((error = table->hlindexes_on_delete(buf)))) return error;
   if (unlikely((error = binlog_log_row(table, buf, nullptr, log_func))))
     return error;
   return 0;

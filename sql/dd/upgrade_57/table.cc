@@ -101,6 +101,9 @@
 #include "sql/trigger_def.h"
 #include "sql_string.h"
 #include "thr_lock.h"
+#ifndef NDEBUG
+#include "vidx/vidx_index.h"
+#endif /* !NDEBUG */
 
 class Sroutine_hash_entry;
 
@@ -1616,6 +1619,7 @@ static bool migrate_table_to_dd(THD *thd, const String_type &schema_name,
   key_info = share.key_info;
   for (i = 0; i < share.keys; i++, key_info++) {
     key_info->is_visible = true;
+    assert(!(key_info->flags & HA_VECTOR));
     /*
       Fulltext and Spatical indexes will get fixed by
       mysql_prepare_create_table()
@@ -1793,6 +1797,7 @@ static bool migrate_table_to_dd(THD *thd, const String_type &schema_name,
       thd, *sch_obj, to_table_name, &create_info, alter_info.create_list,
       key_info_buffer, key_count, Alter_info::ENABLE, fk_key_info_buffer,
       fk_number, &cc_spec_list_unused, table.file);
+  assert(!vidx::dd_table_has_hlindexes(table_def.get()));
 
   // Check for usage of prefix key index in PARTITION BY KEY() function.
   dd::warn_on_deprecated_prefix_key_partition(

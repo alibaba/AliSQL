@@ -1401,6 +1401,8 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> URL_SYM                    1202   /* MYSQL */
 %token<lexer.keyword> GENERATE_SYM               1203   /* MYSQL */
 
+%token VECTOR_SYM 1215
+
 /*
   Precedence rules used to resolve the ambiguity when using keywords as idents
   in the case e.g.:
@@ -1423,6 +1425,10 @@ void warn_on_deprecated_user_defined_collation(
 
 /* Toekns for RDS begin from 1300 */
 %token<lexer.keyword>  REPLICATE_REWRITE_WILD_TABLE      1300
+%token<lexer.keyword>  M_SYM                1301         /* MYSQL */
+%token<lexer.keyword>  DISTANCE_SYM         1302         /* MYSQL */
+%token<lexer.keyword>  EUCLIDEAN_SYM        1303         /* MYSQL */
+%token<lexer.keyword>  COSINE_SYM           1304         /* MYSQL */
 
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
@@ -1512,6 +1518,7 @@ void warn_on_deprecated_user_defined_collation(
         view_check_option
         signed_num
         opt_ignore_unknown_user
+        vector_distance_name
 
 
 %type <order_direction>
@@ -1994,10 +2001,11 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <alter_instance_cmd> alter_instance_action
 
-%type <index_column_list> key_list key_list_with_expression
+%type <index_column_list> key_list key_list_with_expression key_part_simple
 
 %type <index_options> opt_index_options index_options  opt_fulltext_index_options
           fulltext_index_options opt_spatial_index_options spatial_index_options
+          opt_vector_index_options vector_index_options
 
 %type <opt_index_lock_and_algorithm> opt_index_lock_and_algorithm
 
@@ -2005,6 +2013,7 @@ void warn_on_deprecated_user_defined_collation(
           spatial_index_option
           index_type_clause
           opt_index_type_clause
+          vector_index_option
 
 %type <alter_table_algorithm> alter_algorithm_option_value
         alter_algorithm_option
@@ -3695,6 +3704,14 @@ create_index_stmt:
                                              $11.algo.get_or_default(),
                                              $11.lock.get_or_default());
           }
+        | CREATE VECTOR_SYM INDEX_SYM ident ON_SYM table_ident
+          '(' key_part_simple ')' opt_vector_index_options opt_index_lock_and_algorithm
+          {
+            $$= NEW_PTN PT_create_index_stmt(YYMEM_ROOT, KEYTYPE_VECTOR, $4,
+                                             NULL, $6, $8, $10,
+                                             $11.algo.get_or_default(),
+                                             $11.lock.get_or_default());
+          }
         | CREATE SPATIAL_SYM INDEX_SYM ident ON_SYM table_ident
           '(' key_list_with_expression ')' opt_spatial_index_options opt_index_lock_and_algorithm
           {
@@ -4086,7 +4103,8 @@ sp_fdparam:
                                       cs ? cs : thd->variables.collation_database,
                                       $3 != nullptr, $2->get_uint_geom_type(),
                                       nullptr, nullptr, {},
-                                      dd::Column::enum_hidden_type::HT_VISIBLE))
+                                      dd::Column::enum_hidden_type::HT_VISIBLE,
+                                      false, $2->is_vector()))
             {
               MYSQL_YYABORT;
             }
@@ -4147,7 +4165,8 @@ sp_pdparam:
                                       cs ? cs : thd->variables.collation_database,
                                       $4 != nullptr, $3->get_uint_geom_type(),
                                       nullptr, nullptr, {},
-                                      dd::Column::enum_hidden_type::HT_VISIBLE))
+                                      dd::Column::enum_hidden_type::HT_VISIBLE,
+                                      false, $3->is_vector()))
             {
               MYSQL_YYABORT;
             }
@@ -4277,7 +4296,8 @@ sp_decl:
                                         cs ? cs : thd->variables.collation_database,
                                         $4 != nullptr, $3->get_uint_geom_type(),
                                         nullptr, nullptr, {},
-                                        dd::Column::enum_hidden_type::HT_VISIBLE))
+                                        dd::Column::enum_hidden_type::HT_VISIBLE,
+                                        false, $3->is_vector()))
               {
                 MYSQL_YYABORT;
               }
@@ -7024,6 +7044,11 @@ table_constraint_def:
             $$= NEW_PTN PT_inline_index_definition(KEYTYPE_FULLTEXT, $3, NULL,
                                                    $5, $7);
           }
+        | VECTOR_SYM opt_key_or_index opt_ident '(' key_part_simple ')'
+          opt_vector_index_options
+          {
+            $$= NEW_PTN PT_inline_index_definition(KEYTYPE_VECTOR, $3, NULL, $5, $7);
+          }
         | SPATIAL_SYM opt_key_or_index opt_ident '(' key_list_with_expression ')'
           opt_spatial_index_options
           {
@@ -7196,6 +7221,10 @@ type:
         | VARBINARY_SYM field_length
           {
             $$= NEW_PTN PT_char_type(Char_type::VARCHAR, $2, &my_charset_bin);
+          }
+        | VECTOR_SYM field_length opt_vector_field_options
+          {
+            $$= NEW_PTN PT_vector_type(YYTHD, $2);
           }
         | YEAR_SYM opt_field_length field_options
           {
@@ -7955,6 +7984,40 @@ fulltext_index_option:
               $$= NEW_PTN PT_fulltext_index_parser_name(to_lex_cstring($3));
           }
         ;
+opt_vector_field_options:
+          %empty
+        | VARBINARY_SYM field_length
+        ;
+
+opt_vector_index_options:
+          %empty { $$.init(YYMEM_ROOT); }
+        | vector_index_options
+        ;
+
+vector_index_options:
+          vector_index_option
+          {
+            $$.init(YYMEM_ROOT);
+            if ($$.push_back($1))
+              MYSQL_YYABORT; // OOM
+          }
+        | vector_index_options vector_index_option
+          {
+            if ($1.push_back($2))
+              MYSQL_YYABORT; // OOM
+            $$= $1;
+          }
+        ;
+
+vector_index_option:
+          common_index_option
+        | M_SYM opt_equal ulong_num { $$= NEW_PTN PT_index_vector_m($3); }
+        | DISTANCE_SYM opt_equal vector_distance_name { $$= NEW_PTN PT_index_vector_distance($3); }
+        ;
+
+vector_distance_name:
+          EUCLIDEAN_SYM { $$= 0; }
+        | COSINE_SYM { $$= 1; }
 
 opt_spatial_index_options:
           %empty { $$.init(YYMEM_ROOT); }
@@ -8106,6 +8169,15 @@ key_part:
               MYSQL_YYABORT; /* purecov: deadcode */
           }
         ;
+
+key_part_simple:
+          ident
+          {
+            $$= NEW_PTN List<PT_key_part_specification>;
+            if ($$ == NULL || $$->push_back(NEW_PTN PT_key_part_specification(to_lex_cstring($1), ORDER_NOT_RELEVANT, 0)))
+              MYSQL_YYABORT;
+            }
+          ;
 
 key_list_with_expression:
           key_list_with_expression ',' key_part_with_expression
@@ -15626,6 +15698,10 @@ ident_keywords_unambiguous:
         | SECONDARY_UNLOAD_SYM
         | SECOND_SYM
         | SECURITY_SYM
+        | M_SYM
+        | DISTANCE_SYM
+        | EUCLIDEAN_SYM
+        | COSINE_SYM
         | SERIALIZABLE_SYM
         | SERIAL_SYM
         | SERVER_SYM
@@ -17840,7 +17916,8 @@ sf_tail:
                                             cs ? cs : YYTHD->variables.collation_database,
                                             $11 != nullptr, $10->get_uint_geom_type(),
                                             nullptr, nullptr, {},
-                                            dd::Column::enum_hidden_type::HT_VISIBLE))
+                                            dd::Column::enum_hidden_type::HT_VISIBLE,
+                                            false, $10->is_vector()))
             {
               MYSQL_YYABORT;
             }

@@ -89,6 +89,9 @@ static const uint NO_FK_RENAME = 1 << 4;
 /** Don't change generated check constraint names while renaming table. */
 static const uint NO_CC_RENAME = 1 << 5;
 
+/** rename aux table of vector index. */
+static const uint VIDX_RENAME = 1 << 6;
+
 handlerton *get_viable_handlerton_for_create(THD *thd, const char *table_name,
                                              const HA_CREATE_INFO &ci);
 

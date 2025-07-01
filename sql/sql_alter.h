@@ -497,7 +497,8 @@ class Alter_info {
                  Value_generator *default_val_expr, const char *opt_after,
                  std::optional<gis::srid_t> srid,
                  Sql_check_constraint_spec_list *check_cons_list,
-                 dd::Column::enum_hidden_type hidden, bool is_array = false);
+                 dd::Column::enum_hidden_type hidden, bool is_vector,
+                 bool is_array = false);
 
  private:
   Alter_info &operator=(const Alter_info &rhs);  // not implemented

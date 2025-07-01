@@ -1692,6 +1692,11 @@ run_again:
   with a latch. */
   dict_table_n_rows_inc(table);
 
+  /* vidx: Save row id as gref or tref for hlindex table. */
+  if (prebuilt->clust_index_was_generated) {
+    ut_memcpy(prebuilt->row_id, node->row_id_buf, DATA_ROW_ID_LEN);
+  }
+
   row_update_statistics_if_needed(table);
   trx->op_info = "";
 

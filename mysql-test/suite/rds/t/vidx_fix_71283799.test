@@ -1,0 +1,41 @@
+################################################################################
+# Bug: aone#71283799 srv_purge_thread holds SHARED_READ MDL locks on vector    #
+#      index auxiliary tables, blocking DDL operations.                        #
+# Fix: Release the MDL lock immediately after accessing auxiliary table        #
+#      metadata in build_hlindex_key.                                          #
+################################################################################
+--source include/have_debug.inc
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # Prepare a vector table in other database.
+CREATE DATABASE test2;
+CREATE TABLE test2.t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  ) ENGINE = InnoDB;
+
+INSERT INTO test2.t1 SELECT 1, VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']'));
+
+--echo # Don't do purge before restart.
+SET GLOBAL debug="d,do_not_meta_lock_in_background";
+
+--echo # Delete data.
+DELETE FROM test2.t1 where id = 1;
+
+--echo # Restart and wait until all purged.
+--source include/restart_mysqld_no_echo.inc
+--source include/wait_innodb_all_purged.inc
+
+--echo # Before this patch, purge thread holds MDL SR locks on auxiliary tables.
+SELECT COUNT(1) FROM performance_schema.metadata_locks WHERE OBJECT_SCHEMA='test2';
+
+--echo # Before this patch, DDL about test2.t1 will hang.
+DROP TABLE test2.t1;
+DROP DATABASE test2;
+
+SET GLOBAL vidx_disabled = ON;

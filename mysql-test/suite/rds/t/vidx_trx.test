@@ -1,0 +1,61 @@
+##########################################
+# The transaction for VECTOR INDEX       #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Prepare
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  ) ENGINE = InnoDB;
+--disable_warnings
+
+--echo
+--echo # 2. Insert data using transactions
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,10]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,9]"));
+
+BEGIN;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,8]"));
+
+SAVEPOINT sp1;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,7]"));
+
+SAVEPOINT sp2;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,6]"));
+
+ROLLBACK TO SAVEPOINT sp2;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+
+COMMIT;
+
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,4]"));
+ROLLBACK;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,3]"));
+
+--echo
+--echo # 3. Validate data
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+
+--echo
+--echo # 4. Clear
+--enable_warnings
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

@@ -1,0 +1,2 @@
+--vidx_disabled=OFF
+--transaction_isolation=READ-COMMITTED

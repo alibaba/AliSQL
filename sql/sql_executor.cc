@@ -3791,7 +3791,7 @@ AccessPath *QEP_TAB::access_path() {
     case JT_INDEX_SCAN:
       path = NewIndexScanAccessPath(join()->thd, table(), index(), use_order(),
                                     m_reversed_access,
-                                    /*count_examined_rows=*/true);
+                                    /*count_examined_rows=*/true, vec_func());
       break;
     case JT_ALL:
     case JT_RANGE:

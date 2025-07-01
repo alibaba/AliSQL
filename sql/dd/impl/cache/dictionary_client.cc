@@ -2070,6 +2070,9 @@ bool Dictionary_client::fetch_schema_table_names_by_engine(
 // specific tables.
 bool Dictionary_client::fetch_schema_table_names_not_hidden_by_se(
     const Schema *schema, std::vector<String_type> *names) const {
+  static_assert(dd::Abstract_table::HT_HIDDEN_HLINDEX ==
+                dd::Abstract_table::HT_HIDDEN_SE);
+
   auto fetch_criteria = [&](Raw_record *r) -> bool {
     return static_cast<dd::Abstract_table::enum_hidden_type>(
                r->read_int(dd::tables::Tables::FIELD_HIDDEN)) !=

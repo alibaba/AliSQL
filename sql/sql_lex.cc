@@ -75,6 +75,7 @@
 #include "sql/window.h"
 #include "sql_update.h"  // Sql_cmd_update
 #include "template_utils.h"
+#include "vidx/vidx_common.h"  // RDS_COMMENT_VERSION
 
 class PT_hint_list;
 
@@ -1872,7 +1873,7 @@ static int lex_one_token(Lexer_yystype *yylval, THD *thd) {
             ulong version;
             version = strtol(version_str, nullptr, 10);
 
-            if (version <= MYSQL_VERSION_ID) {
+            if (version <= MYSQL_VERSION_ID || version >= RDS_COMMENT_VERSION) {
               /* Accept 'M' 'm' 'm' 'd' 'd' */
               lip->yySkipn(5);
               /* Expand the content of the special comment as real code */

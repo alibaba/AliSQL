@@ -618,6 +618,7 @@ class PT_type : public Parse_tree_node {
   virtual uint get_uint_geom_type() const { return 0; }
   virtual List<String> *get_interval_list() const { return nullptr; }
   virtual bool is_serial_type() const { return false; }
+  virtual bool is_vector() const { return false; }
 };
 
 /**
@@ -736,6 +737,25 @@ class PT_char_type : public PT_type {
   }
   const char *get_length() const override { return length; }
   const CHARSET_INFO *get_charset() const override { return charset; }
+};
+
+class PT_vector_type : public PT_type {
+  char vector_length_buffer[33]{};
+
+ public:
+  PT_vector_type(THD *thd, const char *length) : PT_type(MYSQL_TYPE_VARCHAR) {
+#ifndef NDEBUG
+    assert(length != nullptr);
+#endif /* NDEBUG */
+    uint vector_length = atoi(length) * sizeof(float);
+    sprintf(vector_length_buffer, "%u", vector_length);
+
+    thd->m_query_has_vector_column = true;
+  }
+
+  const char *get_length() const override { return vector_length_buffer; }
+  const CHARSET_INFO *get_charset() const override { return &my_charset_bin; }
+  bool is_vector() const final { return true; }
 };
 
 enum class Blob_type {
@@ -959,6 +979,7 @@ class PT_field_def_base : public Parse_tree_node {
   const char *dec;
   const CHARSET_INFO *charset;
   bool has_explicit_collation;
+  bool is_vector = false;
   uint uint_geom_type;
   List<String> *interval_list;
   alter_info_flags_t alter_info_flags;
@@ -994,6 +1015,7 @@ class PT_field_def_base : public Parse_tree_node {
     length = type_node->get_length();
     dec = type_node->get_dec();
     charset = type_node->get_charset();
+    is_vector = type_node->is_vector();
     uint_geom_type = type_node->get_uint_geom_type();
     interval_list = type_node->get_interval_list();
     check_const_spec_list = new (pc->thd->mem_root)

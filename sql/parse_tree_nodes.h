@@ -2219,6 +2219,10 @@ typedef PT_index_option<LEX_CSTRING, &KEY_CREATE_INFO::parser_name>
     PT_fulltext_index_parser_name;
 typedef PT_index_option<bool, &KEY_CREATE_INFO::is_visible> PT_index_visibility;
 
+typedef PT_index_option<uint, &KEY_CREATE_INFO::vector_m> PT_index_vector_m;
+typedef PT_index_option<uint, &KEY_CREATE_INFO::vector_distance>
+    PT_index_vector_distance;
+
 /**
   The data structure (B-tree, Hash, etc) used for an index is called
   'index_type' in the manual. Internally, this is stored in

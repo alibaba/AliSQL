@@ -65,9 +65,11 @@ class Sdi_rcontext;
 class Sdi_wcontext;
 
 static const std::set<String_type> default_valid_option_keys = {
-    "column_format", "geom_type", "interval_count",
-    "not_secondary", "storage",   "treat_bit_as_char",
-    "is_array",      "gipk" /* generated implicit primary key column */};
+    "column_format",  "geom_type",
+    "interval_count", "not_secondary",
+    "storage",        "treat_bit_as_char",
+    "is_array",       "gipk" /* generated implicit primary key column */,
+    "vector_type" /* vector column */};
 
 ///////////////////////////////////////////////////////////////////////////
 // Column_impl implementation.

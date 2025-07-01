@@ -276,9 +276,8 @@ static void my_hash_sort_8bit_bin(const CHARSET_INFO *cs [[maybe_unused]],
   *nr2 = tmp2;
 }
 
-static void my_hash_sort_bin(const CHARSET_INFO *cs [[maybe_unused]],
-                             const uchar *key, size_t len, uint64 *nr1,
-                             uint64 *nr2) {
+void my_hash_sort_bin(const CHARSET_INFO *cs [[maybe_unused]], const uchar *key,
+                      size_t len, uint64 *nr1, uint64 *nr2) {
   const uchar *pos = key;
   uint64 tmp1;
   uint64 tmp2;

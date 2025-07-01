@@ -1,0 +1,272 @@
+##########################################
+# The error situation for VECTOR Index   #
+##########################################
+--source include/have_debug.inc
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+CALL mtr.add_suppression("\\[ERROR\\].*Scanned file '.*' for tablespace .* cannot be opened because it is not in a sub-directory named for the schema");
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Tablespace .*, name '.*', file '*.*' is missing!");
+
+--let $MYSQLD_DATADIR= `select @@datadir`
+
+--echo
+--echo # 1. Failed or crash during CREATE
+--echo # 1.1 whole DDL is failed because DDL of vidx table is failed
+SET DEBUG = "d,failed_before_vidx_ddl";
+
+--error ER_VECTOR_INDEX_FAILED
+CREATE TABLE t1 (v VECTOR(5), VECTOR INDEX vi(v));
+
+--echo # expect that both base tablespace and vidx tablespace are not created
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # 1.2 crash before create vidx table
+SET DEBUG = "d,crash_before_vidx_ddl";
+
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+CREATE TABLE t1 (v VECTOR(5), VECTOR INDEX vi(v));
+
+--echo # expect that base tablespace has been created but vidx tablespace is not created
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # expect that creation is rollback after crash recovery
+--source include/start_mysqld_no_echo.inc
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # 1.3 crash before post ddl
+SET DEBUG = "d,ddl_log_before_post_ddl";
+
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+CREATE TABLE t1 (v VECTOR(5), VECTOR INDEX vi(v));
+
+--echo # expect that both base tablespace and vidx tablespace are created
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # expect that creation is committed after crash recovery
+--source include/start_mysqld_no_echo.inc
+
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+SET DEBUG = '+d,skip_dd_table_access_check';
+SELECT count(*) AS `Expected as 0` FROM mysql.innodb_ddl_log;
+
+--echo
+--echo # 2. Failed during DML
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+
+SET DEBUG = "d,failed_before_vidx_dml";
+--error ER_VECTOR_INDEX_USAGE
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,6]"));
+
+SELECT VEC_TOTEXT(v) FROM t1;
+
+--error ER_VECTOR_INDEX_USAGE
+UPDATE t1 SET v = VEC_FROMTEXT("[1,2,3,4,6]");
+
+SELECT VEC_TOTEXT(v) FROM t1;
+
+--error ER_VECTOR_INDEX_USAGE
+DELETE FROM t1;
+
+SELECT VEC_TOTEXT(v) FROM t1;
+
+--echo
+--echo # 3. Failed or crash during RENAME
+--echo # 3.1 whole DDL is failed because DDL of vidx table is failed
+CREATE DATABASE test2;
+SET DEBUG = "d,failed_before_vidx_ddl";
+
+--error ER_VECTOR_INDEX_FAILED
+RENAME TABLE t1 TO test2.t2;
+
+--echo # expect that both base tablespace and vidx tablespace are not renamed
+SHOW CREATE TABLE t1;
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE test2.t2;
+--echo files in test/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+--echo files in test2/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test2/
+
+--echo # 3.2 crash before rename vidx table
+SET DEBUG = "d,crash_before_vidx_ddl";
+
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+RENAME TABLE t1 TO test2.t2;
+
+--echo # expect that base tablespace has been renamed but vidx tablespace is not renamed
+--echo files in test/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+--echo files in test2/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test2/
+
+--echo # expect that renaming is rollback after crash recovery
+--source include/start_mysqld_no_echo.inc
+
+SHOW CREATE TABLE t1;
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE test2.t2;
+--echo files in test/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+--echo files in test2/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test2/
+
+--echo # 3.3 crash before post ddl
+SET DEBUG = "d,ddl_log_before_post_ddl";
+
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+RENAME TABLE t1 TO test2.t2;
+
+--echo # expect that both base tablespace and vidx tablespace are not renamed
+--echo files in test/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+--echo files in test2/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test2/
+
+--echo # expect that rename is committed after crash recovery
+--source include/start_mysqld_no_echo.inc
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE test2.t2;
+--echo files in test/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+--echo files in test2/
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test2/
+
+SET DEBUG = '+d,skip_dd_table_access_check';
+SELECT count(*) AS `Expected as 0` FROM mysql.innodb_ddl_log;
+
+RENAME TABLE test2.t2 TO t1;
+DROP DATABASE test2;
+
+--echo
+--echo # 4. Failed or crash during TRUNCATE
+--echo # 4.1 whole DDL is failed because DDL of vidx table is failed
+SET DEBUG = "d,failed_before_vidx_ddl";
+
+--error ER_VECTOR_INDEX_FAILED
+TRUNCATE TABLE t1;
+
+--echo # expect that both base tablespace and vidx tablespace are not truncated
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # 4.2 crash before rename vidx table
+SET DEBUG = "d,crash_before_vidx_ddl";
+
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+TRUNCATE TABLE t1;
+
+--echo # expect that both base tablespace and vidx tablespace are not truncated
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/ | grep -v '^#'
+
+--echo # expect that truncation is rollback after crash recovery
+--source include/start_mysqld_no_echo.inc
+
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # 4.3 crash before post ddl
+SET DEBUG = "d,ddl_log_before_post_ddl";
+
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+TRUNCATE TABLE t1;
+
+--echo # expect that both base tablespace and vidx tablespace are not truncated
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/ | grep -v '^#'
+
+--echo # expect that truncation is committed after crash recovery
+--source include/start_mysqld_no_echo.inc
+
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+SET DEBUG = '+d,skip_dd_table_access_check';
+SELECT count(*) AS `Expected as 0` FROM mysql.innodb_ddl_log;
+
+--echo
+--echo # 5. Failed or crash during DROP
+--echo # 5.1 whole DDL is failed because DDL of vidx table is failed
+SET DEBUG = "d,failed_before_vidx_ddl";
+
+--error ER_VECTOR_INDEX_FAILED
+DROP TABLE t1;
+
+--echo # expect that both base tablespace and vidx tablespace are not dropped
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # 5.2 crash before rename vidx table
+SET DEBUG = "d,crash_before_vidx_ddl";
+
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+DROP TABLE t1;
+
+--echo # expect that both base tablespace and vidx tablespace are not dropped
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # expect that drop is rollback after crash recovery
+--source include/start_mysqld_no_echo.inc
+
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # 5.3 crash before post ddl
+SET DEBUG = "d,ddl_log_before_post_ddl";
+
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+DROP TABLE t1;
+
+--echo # expect that both base tablespace and vidx tablespace are not dropped
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+--echo # expect that drop is committed after crash recovery
+--source include/start_mysqld_no_echo.inc
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+--replace_regex /vidx_.*_00\.ibd/vidx_#_00\.ibd/
+--exec ls $MYSQLD_DATADIR/test/
+
+SET DEBUG = '+d,skip_dd_table_access_check';
+SELECT count(*) AS `Expected as 0` FROM mysql.innodb_ddl_log;

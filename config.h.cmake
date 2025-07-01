@@ -44,6 +44,7 @@
 #cmakedefine HAVE_EXECINFO_H 1
 #cmakedefine HAVE_FPU_CONTROL_H 1
 #cmakedefine HAVE_GRP_H 1
+#cmakedefine HAVE_IMMINTRIN_H 1
 #cmakedefine HAVE_LANGINFO_H 1
 #cmakedefine HAVE_MALLOC_H 1
 #cmakedefine HAVE_NETINET_IN_H 1

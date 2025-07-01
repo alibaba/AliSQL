@@ -9,7 +9,7 @@ multi line comment */;
 --error 1065
  ;
 select 1 /*!32301 +1 */;
-select 1 /*!999999 +1 */;
+select 1 /*!99998 +1 */;
 select 1--1;
 # Note that the following returns 4 while it should return 2
 # This is because the mysqld server doesn't parse -- comments
@@ -31,9 +31,9 @@ select 1/*!2*/;
 --error ER_PARSE_ERROR
 select 1/*!000002*/;
 
-select 1/*!999992*/;
+select 1/*!99992*/;
 
-select 1 + /*!00000 2 */ + 3 /*!99999 noise*/ + 4;
+select 1 + /*!00000 2 */ + 3 /*!99998 noise*/ + 4;
 
 #
 # Bug#28779 (mysql_query() allows execution of statements with unbalanced
@@ -70,7 +70,7 @@ drop table table_28779;
 --echo # WL#12099: Deprecate nested comments in 8.0
 --echo #
 
-SELECT 1 /*!99999 /* */ */;
+SELECT 1 /*!99998 /* */ */;
 SELECT 2 /*!12345 /* */ */;
 SELECT 3 /*! /* */ */;
 
@@ -97,7 +97,8 @@ DO 1 /*!80034+1*/;
 DO 1 /*!80034+1*/;
 
 --echo # Carriage return (0x0d). Should pass without warning.
-DO 1 /*!80034+1*/;
+DO 1 /*!80034
++1*/;
 
 --echo # Space (0x20). Should pass without warning.
 DO 1 /*!80034 +1*/;

@@ -819,6 +819,10 @@ SET(SQL_SOURCE
   srv_session.cc
   srv_session_info_service.cc
   srv_session_service.cc
+  vidx/vidx_func.cc
+  vidx/vidx_field.cc
+  vidx/vidx_index.cc
+  vidx/vidx_hnsw.cc
   )
 
 IF(NOT HAVE_SETNS)
@@ -951,6 +955,14 @@ IF(HAVE_NO_BUILTIN_MEMCMP)
     filesort_utils.cc
     COMPILE_FLAGS "-fno-builtin-memcmp"
   )
+ENDIF()
+
+# For vidx
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7
+   AND (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64"))
+  IF(NOT HAVE_IMMINTRIN_H)
+    MESSAGE(FATAL_ERROR "HAVE_IMMINTRIN_H is not set to 1. SIMD optimizations may not be available.")
+  ENDIF()
 ENDIF()
 
 ADD_STATIC_LIBRARY(sql_main ${SQL_SOURCE} LINK_LIBRARIES ext::icu ext::xxhash)

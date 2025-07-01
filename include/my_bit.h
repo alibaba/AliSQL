@@ -51,6 +51,45 @@ static inline uint my_bit_log2(ulong value) {
   return bit;
 }
 
+/*
+  my_bit_log2_xxx()
+
+  In the given value, find the highest bit set,
+  which is the smallest X that satisfies the condition: (2^X >= value).
+  Can be used as a reverse operation for (1<<X), to find X.
+
+  Examples:
+  - returns 0 for (1<<0)
+  - returns 1 for (1<<1)
+  - returns 2 for (1<<2)
+  - returns 1 for 3, which has (1<<1) as the highest bit set.
+
+  Note, the behaviour of log2(0) is not defined.
+  Let's return 0 for the input 0, for the code simplicity.
+  See the 000x branch. It covers both (1<<0) and 0.
+*/
+static inline constexpr uint my_bit_log2_hex_digit(uint8 value) {
+  return value & 0x0C ? /*1100*/ (value & 0x08 ? /*1000*/ 3 : /*0100*/ 2) :
+                      /*0010*/ (value & 0x02 ? /*0010*/ 1 : /*000x*/ 0);
+}
+static inline constexpr uint my_bit_log2_uint8(uint8 value) {
+  return value & 0xF0 ? my_bit_log2_hex_digit((uint8)(value >> 4)) + 4
+                      : my_bit_log2_hex_digit(value);
+}
+static inline constexpr uint my_bit_log2_uint16(uint16 value) {
+  return value & 0xFF00 ? my_bit_log2_uint8((uint8)(value >> 8)) + 8
+                        : my_bit_log2_uint8((uint8)value);
+}
+static inline constexpr uint my_bit_log2_uint32(uint32 value) {
+  return value & 0xFFFF0000UL ? my_bit_log2_uint16((uint16)(value >> 16)) + 16
+                              : my_bit_log2_uint16((uint16)value);
+}
+static inline constexpr uint my_bit_log2_uint64(ulonglong value) {
+  return value & 0xFFFFFFFF00000000ULL
+             ? my_bit_log2_uint32((uint32)(value >> 32)) + 32
+             : my_bit_log2_uint32((uint32)value);
+}
+
 static inline uint my_count_bits(ulonglong v) {
 #if SIZEOF_LONG_LONG > 4
   /* The following code is a bit faster on 16 bit machines than if we would

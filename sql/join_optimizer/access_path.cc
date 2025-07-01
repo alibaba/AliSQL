@@ -428,13 +428,15 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
       case AccessPath::INDEX_SCAN: {
         const auto &param = path->index_scan();
         if (param.reverse) {
+          assert(param.vec_func == nullptr);
+
           iterator = NewIterator<IndexScanIterator<true>>(
               thd, mem_root, param.table, param.idx, param.use_order,
-              path->num_output_rows(), examined_rows);
+              path->num_output_rows(), examined_rows, param.vec_func);
         } else {
           iterator = NewIterator<IndexScanIterator<false>>(
               thd, mem_root, param.table, param.idx, param.use_order,
-              path->num_output_rows(), examined_rows);
+              path->num_output_rows(), examined_rows, param.vec_func);
         }
         break;
       }

@@ -1589,6 +1589,16 @@ class Item : public Parse_tree_node {
   }
 
   /**
+    Set the data type of the Item to be VECTOR.
+  */
+  void set_data_type_vector(uint32 max_l) {
+    set_data_type(MYSQL_TYPE_VARCHAR);
+    collation.set(&my_charset_bin, DERIVATION_IMPLICIT);
+    decimals = DECIMAL_NOT_SPECIFIED;
+    max_length = max_l;
+  }
+
+  /**
     Set the data type of the Item to be GEOMETRY.
   */
   void set_data_type_geometry() {

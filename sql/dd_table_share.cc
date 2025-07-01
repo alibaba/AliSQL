@@ -90,6 +90,7 @@
 #include "sql/table.h"
 #include "sql/thd_raii.h"
 #include "typelib.h"
+#include "vidx/vidx_index.h"
 
 namespace histograms {
 class Histogram;
@@ -264,8 +265,8 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
   handler *handler_file = nullptr;
 
   // Mark 'system' tables (tables with one row) to help the Optimizer.
-  share->system =
-      ((share->max_rows == 1) && (share->min_rows == 1) && (share->keys == 0));
+  share->system = ((share->max_rows == 1) && (share->min_rows == 1) &&
+                   (share->total_keys == 0));
 
   bool use_extended_sk = ha_check_storage_engine_flag(
       share->db_type(), HTON_SUPPORTS_EXTENDED_KEYS);
@@ -290,12 +291,11 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
   share->db_low_byte_first = handler_file->low_byte_first();
 
   /* Fix key->name and key_part->field */
-  if (share->keys) {
+  if (share->total_keys) {
     KEY *keyinfo;
     KEY_PART_INFO *key_part;
-    uint primary_key = (uint)(find_type(primary_key_name, &share->keynames,
-                                        FIND_TYPE_NO_PREFIX) -
-                              1);
+    uint primary_key = (uint)(
+        find_type(primary_key_name, &share->keynames, FIND_TYPE_NO_PREFIX) - 1);
     longlong ha_option = handler_file->ha_table_flags();
     keyinfo = share->key_info;
     key_part = keyinfo->key_part;
@@ -303,12 +303,14 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
     dd::Table::Index_collection::const_iterator idx_it(
         table_def->indexes().begin());
 
-    for (uint key = 0; key < share->keys; key++, keyinfo++) {
+    for (uint key = 0; key < share->total_keys; key++, keyinfo++) {
+      assert(((keyinfo->flags & HA_VECTOR) > 0) == (key >= share->keys));
+
       /*
         Skip hidden dd::Index objects so idx_it is in sync with key index
         and keyinfo pointer.
       */
-      while ((*idx_it)->is_hidden()) {
+      while (key < share->keys && (*idx_it)->is_hidden()) {
         ++idx_it;
         continue;
       }
@@ -316,13 +318,15 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
       uint usable_parts = 0;
       keyinfo->name = share->keynames.type_names[key];
 
-      /* Check that fulltext and spatial keys have correct algorithm set. */
+      /* Check that vector, fulltext and spatial keys have correct algorithm
+      set. */
       assert(!(share->key_info[key].flags & HA_FULLTEXT) ||
              share->key_info[key].algorithm == HA_KEY_ALG_FULLTEXT);
       assert(!(share->key_info[key].flags & HA_SPATIAL) ||
              share->key_info[key].algorithm == HA_KEY_ALG_RTREE);
 
-      if (primary_key >= MAX_KEY && (keyinfo->flags & HA_NOSAME)) {
+      if (primary_key >= MAX_KEY && (keyinfo->flags & HA_NOSAME) &&
+          !(keyinfo->flags & HA_VECTOR)) {
         /*
            If the UNIQUE key doesn't have NULL columns and is not a part key
            declare this as a primary key.
@@ -352,7 +356,7 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
           Skip hidden Index_element objects so idx_el_it is in sync with
           i and key_part pointer.
         */
-        while ((*idx_el_it)->is_hidden()) {
+        while (key < share->keys && (*idx_el_it)->is_hidden()) {
           ++idx_el_it;
           continue;
         }
@@ -429,9 +433,11 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
           Check that dd::Index_element::is_prefix() used by SEs works in
           the same way as code which sets HA_PART_KEY_SEG flag.
         */
-        assert((*idx_el_it)->is_prefix() ==
-               static_cast<bool>(key_part->key_part_flag & HA_PART_KEY_SEG));
-        ++idx_el_it;
+        if (key < share->keys) {
+          assert((*idx_el_it)->is_prefix() ==
+                 static_cast<bool>(key_part->key_part_flag & HA_PART_KEY_SEG));
+          ++idx_el_it;
+        }
       }
 
       /*
@@ -463,8 +469,11 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
           (ha_option & HA_ANY_INDEX_MAY_BE_UNIQUE))
         share->max_unique_length =
             std::max(share->max_unique_length, keyinfo->key_length);
-
-      ++idx_it;
+      if (key < share->keys - 1) {
+        /* Iterate idx_it only if next key is not vector, because the vector
+        key has no related idx in dd. */
+        ++idx_it;
+      }
     }
     if (primary_key < MAX_KEY && (share->keys_in_use.is_set(primary_key))) {
       share->primary_key = primary_key;
@@ -490,7 +499,7 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
     Field *reg_field = *share->found_next_number_field;
     /* Check that the auto-increment column is the first column of some key. */
     if ((int)(share->next_number_index = (uint)find_ref_key(
-                  share->key_info, share->keys, share->default_values,
+                  share->key_info, share->total_keys, share->default_values,
                   reg_field, &share->next_number_key_offset,
                   &share->next_number_keypart)) < 0) {
       my_error(ER_INVALID_DD_OBJECT, MYF(0), share->path.str,
@@ -564,6 +573,8 @@ static row_type dd_get_old_row_format(dd::Table::enum_row_format new_format) {
 static bool fill_share_from_dd(THD *thd, TABLE_SHARE *share,
                                const dd::Table *tab_obj) {
   const dd::Properties &table_options = tab_obj->options();
+
+  share->m_se_private_id = tab_obj->se_private_id();
 
   // Secondary storage engine.
   if (table_options.exists("secondary_engine")) {
@@ -877,6 +888,13 @@ static Field *make_field(const dd::Column &col_obj, const CHARSET_INFO *charset,
     geom_type = static_cast<Field::geometry_type>(sub_type);
   }
 
+  // Vector options
+  bool is_vector = false;
+  if (field_type == MYSQL_TYPE_VARCHAR &&
+      column_options.exists("vector_type")) {
+    column_options.get("vector_type", &is_vector);
+  }
+
   bool treat_bit_as_char = false;
   if (field_type == MYSQL_TYPE_BIT) {
     column_options.get("treat_bit_as_char", &treat_bit_as_char);
@@ -886,7 +904,7 @@ static Field *make_field(const dd::Column &col_obj, const CHARSET_INFO *charset,
                     field_type, charset, geom_type, auto_flags, interval, name,
                     col_obj.is_nullable(), col_obj.is_zerofill(),
                     col_obj.is_unsigned(), decimals, treat_bit_as_char, 0,
-                    col_obj.srs_id(), col_obj.is_array());
+                    col_obj.srs_id(), col_obj.is_array(), is_vector);
 }
 
 /**
@@ -1402,6 +1420,15 @@ static bool fill_index_from_dd(THD *thd, TABLE_SHARE *share,
     keyinfo->flags |= HA_USES_PARSER;
   }
 
+  // Vector options
+  if (idx_options.exists("__vector_distance__")) {
+    assert(idx_options.exists("__vector_m__"));
+    idx_options.get("__vector_distance__", &keyinfo->vector_distance);
+    idx_options.get("__vector_m__", &keyinfo->vector_m);
+    assert(vidx::validate_index_option_distance(keyinfo->vector_distance));
+    assert(vidx::hnsw::validate_index_option_m(keyinfo->vector_m));
+  }
+
   // Read comment
   dd::String_type comment = idx_obj->comment();
   keyinfo->comment.length = comment.length();
@@ -1468,13 +1495,14 @@ static bool fill_indexes_from_dd(THD *thd, TABLE_SHARE *share,
   share->visible_indexes.init();
 
   uint32 primary_key_parts = 0;
+  dd::String_type child_name;
 
   bool use_extended_sk = ha_check_storage_engine_flag(
       share->db_type(), HTON_SUPPORTS_EXTENDED_KEYS);
 
   // Count number of keys and total number of key parts in the table.
 
-  assert(share->keys == 0 && share->key_parts == 0);
+  assert(share->keys == 0 && share->total_keys == 0 && share->key_parts == 0);
 
   for (const dd::Index *idx_obj : tab_obj->indexes()) {
     // Skip hidden indexes
@@ -1494,15 +1522,22 @@ static bool fill_indexes_from_dd(THD *thd, TABLE_SHARE *share,
     if (idx_obj->ordinal_position() == 1) primary_key_parts = key_parts;
   }
 
+  share->total_keys = share->keys;
+
+  if (vidx::dd_table_has_hlindexes(tab_obj)) {
+    share->total_keys++;
+    share->key_parts++;
+  }
+
   // Allocate and fill KEY objects.
-  if (share->keys) {
+  if (share->total_keys) {
     KEY_PART_INFO *key_part;
     ulong *rec_per_key;
     rec_per_key_t *rec_per_key_float;
     uint total_key_parts = share->key_parts;
 
     if (use_extended_sk)
-      total_key_parts += (primary_key_parts * (share->keys - 1));
+      total_key_parts += (primary_key_parts * (share->total_keys - 1));
 
     //
     // Alloc rec_per_key buffer
@@ -1522,7 +1557,7 @@ static bool fill_indexes_from_dd(THD *thd, TABLE_SHARE *share,
     // Alloc buffers to hold keys and key_parts
     //
 
-    if (!(share->key_info = share->mem_root.ArrayAlloc<KEY>(share->keys)))
+    if (!(share->key_info = share->mem_root.ArrayAlloc<KEY>(share->total_keys)))
       return true; /* purecov: inspected */
 
     if (!(key_part =
@@ -1534,12 +1569,13 @@ static bool fill_indexes_from_dd(THD *thd, TABLE_SHARE *share,
     //
 
     if (!(share->keynames.type_names = (const char **)share->mem_root.Alloc(
-              (share->keys + 1) * sizeof(char *))))
+              (share->total_keys + 1) * sizeof(char *))))
       return true; /* purecov: inspected */
-    memset(share->keynames.type_names, 0, ((share->keys + 1) * sizeof(char *)));
+    memset(share->keynames.type_names, 0,
+           ((share->total_keys + 1) * sizeof(char *)));
 
-    share->keynames.type_names[share->keys] = nullptr;
-    share->keynames.count = share->keys;
+    share->keynames.type_names[share->total_keys] = nullptr;
+    share->keynames.count = share->total_keys;
 
     // In first iteration get all the index_obj, so that we get all
     // user_defined_key_parts for each key. This is required to properly
@@ -1565,13 +1601,20 @@ static bool fill_indexes_from_dd(THD *thd, TABLE_SHARE *share,
     // Update keyparts now
     key_nr = 0;
     do {
+      assert((key_nr < share->keys) ||
+             (key_nr == share->keys && key_nr == share->total_keys - 1));
+
       // Assign the key_part_info buffer
       KEY *keyinfo = &share->key_info[key_nr];
       keyinfo->key_part = key_part;
       keyinfo->set_rec_per_key_array(rec_per_key, rec_per_key_float);
       keyinfo->set_in_memory_estimate(IN_MEMORY_ESTIMATE_UNKNOWN);
 
-      fill_index_elements_from_dd(share, index_at_pos[key_nr], key_nr);
+      if (key_nr < share->keys) {
+        fill_index_elements_from_dd(share, index_at_pos[key_nr], key_nr);
+      } else if (vidx::build_hlindex_key(thd, share, tab_obj, key_nr)) {
+        return true;
+      }
 
       key_part += keyinfo->user_defined_key_parts;
       rec_per_key += keyinfo->user_defined_key_parts;
@@ -1603,7 +1646,7 @@ static bool fill_indexes_from_dd(THD *thd, TABLE_SHARE *share,
       }
 
       key_nr++;
-    } while (key_nr < share->keys);
+    } while (key_nr < share->total_keys);
   }
 
   return (false);

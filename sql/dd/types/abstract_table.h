@@ -111,6 +111,10 @@ class Abstract_table : virtual public Entity_object {
     */
     HT_HIDDEN_SE,
     /*
+      Set hlindex table invisible.
+    */
+    HT_HIDDEN_HLINDEX = HT_HIDDEN_SE,
+    /*
       Hidden. Temporary table created by ALTER TABLE implementation.
     */
     HT_HIDDEN_DDL

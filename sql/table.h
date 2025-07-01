@@ -45,7 +45,8 @@
 #include "my_table_map.h"
 #include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/psi_table_bits.h"
-#include "sql/auth/auth_acls.h"        // Access_bitmask
+#include "sql/auth/auth_acls.h"  // Access_bitmask
+#include "sql/dd/object_id.h"
 #include "sql/dd/types/foreign_key.h"  // dd::Foreign_key::enum_rule
 #include "sql/enum_query_type.h"       // enum_query_type
 #include "sql/key.h"
@@ -1045,6 +1046,38 @@ struct TABLE_SHARE {
   enum class Schema_read_only { NOT_SET, RO_OFF, RO_ON };
   Schema_read_only schema_read_only{Schema_read_only::NOT_SET};
 
+  bool is_hlindex{false};
+  /* for hlindex tables */
+  void *hlindex_data{nullptr};
+  /* for normal tables */
+  TABLE_SHARE *hlindex{nullptr};
+  /* Number of keys including vector keys. */
+  uint total_keys{0};
+
+  mysql_mutex_t LOCK_share; /* MariaDB use it to protect TABLE_SHARE. RDS only
+                               protect hlindex and hlindex_data */
+
+  dd::Object_id m_se_private_id{dd::INVALID_OBJECT_ID};
+
+  inline void lock_share() {
+    if (!tmp_table) mysql_mutex_lock(&LOCK_share);
+  }
+
+  inline void unlock_share() {
+    if (!tmp_table) mysql_mutex_unlock(&LOCK_share);
+  }
+
+  inline uint hlindexes() {
+    assert(total_keys >= keys);
+    /* The total_keys is not expected as less than keys. This abnormal
+    situation returns 0 for stability。 */
+    return total_keys >= keys ? total_keys - keys : 0;
+  }
+
+  inline KEY *get_vec_key() {
+    return hlindexes() ? (key_info + keys) : nullptr;
+  }
+
   /**
     Set share's table cache key and update its db and table name appropriately.
 
@@ -1954,7 +1987,7 @@ struct TABLE {
     column
   */
   inline bool index_contains_some_virtual_gcol(uint index_no) const {
-    assert(index_no < s->keys);
+    assert(index_no < s->total_keys);
     return key_info[index_no].flags & HA_VIRTUAL_GEN_KEY;
   }
   void update_const_key_parts(Item *conds);
@@ -2414,6 +2447,22 @@ struct TABLE {
             set or not
   */
   bool should_binlog_drop_if_temp(void) const;
+
+  TABLE *hlindex{nullptr}; /* Vector key table */
+  void *context;           /* only for hlindexes */
+
+  int hlindex_open(uint nr);
+  int hlindex_lock(uint nr);
+  int reset_hlindexes();
+
+  int hlindexes_on_insert();
+  int hlindexes_on_update();
+  int hlindexes_on_delete(const uchar *buf);
+  int hlindexes_on_delete_all();
+
+  int hlindex_read_first(uint key, void *item);
+  int hlindex_read_next();
+  int hlindex_read_end();
 };
 
 static inline void empty_record(TABLE *table) {

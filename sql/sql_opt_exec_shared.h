@@ -311,6 +311,8 @@ class QEP_shared {
   table_map added_tables() const { return added_tables_map; }
   Item_func_match *ft_func() const { return m_ft_func; }
   void set_ft_func(Item_func_match *f) { m_ft_func = f; }
+  void *vec_func() const { return m_vec_func; }
+  void set_vec_func(void *f) { m_vec_func = f; }
 
   // More elaborate functions:
 
@@ -467,6 +469,9 @@ class QEP_shared {
   /** FT function */
   Item_func_match *m_ft_func;
 
+  /** Vector distance function */
+  void *m_vec_func = nullptr;
+
   /**
     Set if index dive can be skipped for this query.
     See comments for check_skip_records_in_range_qualification.
@@ -540,6 +545,8 @@ class QEP_shared_owner {
   table_map added_tables() const { return m_qs->added_tables(); }
   Item_func_match *ft_func() const { return m_qs->ft_func(); }
   void set_ft_func(Item_func_match *f) { return m_qs->set_ft_func(f); }
+  void *vec_func() const { return m_qs->vec_func(); }
+  void set_vec_func(void *f) { return m_qs->set_vec_func(f); }
   void set_prefix_tables(table_map prefix_tables, table_map prev_tables) {
     return m_qs->set_prefix_tables(prefix_tables, prev_tables);
   }

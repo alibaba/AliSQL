@@ -83,6 +83,7 @@
 #include "sql/filesort_utils.h"
 #include "sql/handler.h"
 #include "sql/item.h"
+#include "sql/item_strfunc.h"
 #include "sql/item_subselect.h"
 #include "sql/iterators/row_iterator.h"
 #include "sql/iterators/sorting_iterator.h"
@@ -1433,7 +1434,8 @@ uint Sort_param::make_sortkey(Bounds_checked_array<uchar> dst,
     bool is_null = maybe_null && *to == 0;
     if (maybe_null) {
       assert(*to == 0 || *to == 1);
-      if (sort_field->reverse && is_null) {
+      if ((vidx::check_item_func_vec_distance(item) || sort_field->reverse) &&
+          is_null) {
         *to = 0xff;
       }
       ++to;

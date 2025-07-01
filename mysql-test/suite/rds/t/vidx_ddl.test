@@ -1,0 +1,276 @@
+##########################################
+# The DDL for VECTOR Index               #
+##########################################
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+--source include/have_binlog_format_mixed_or_row.inc
+
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+--let $MYSQLD_DATADIR= `select @@datadir`
+
+--echo # 1. NONSUPPORT about VECTOR INDEX
+--echo # The variable vidx_disabled will forbid to create VECTOR index
+SET GLOBAL vidx_disabled = ON;
+
+--error ER_VECTOR_DISABLED
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  );
+
+SET GLOBAL vidx_disabled = OFF;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5)
+  );
+
+SET GLOBAL vidx_disabled = ON;
+
+--error ER_VECTOR_DISABLED
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = OFF;
+
+--echo # Vector index is not supported for partitioned or temp tables.
+--error ER_NOT_SUPPORTED_YET
+CREATE TEMPORARY TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  );
+
+--error ER_NOT_SUPPORTED_YET
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  c1 INT,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  )PARTITION BY HASH (c1) PARTITIONS 3;
+
+--echo # Vector index can only be created on one VECTOR column not null
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  t VECTOR(5),
+  VECTOR INDEX vi(v,t)
+  );
+
+--error ER_VECTOR_INDEX_USAGE
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v INT NOT NULL,
+  VECTOR INDEX vi(v)
+  );
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  );
+
+--error ER_VECTOR_INDEX_USAGE
+ALTER TABLE t1 MODIFY COLUMN v VECTOR(5) INVISIBLE;
+
+DROP TABLE t1;
+
+--echo # VECTOR INDEX can't be created on generate column
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v BLOB NOT NULL,
+  VECTOR INDEX vi(VEC_FROMTEXT(v))
+  );
+
+--echo # VECTOR INDEX‘s options should be set in their range. m should be
+--echo # in [3,200]. distance should be in {euclidean, cosine}
+--error ER_VECTOR_INDEX_USAGE
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) m=2
+  );
+
+--error ER_VECTOR_INDEX_USAGE
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) m=201
+  );
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) distance=wrong
+  );
+
+--echo # VECTOR keys can not be prefix
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(768),
+  VECTOR INDEX vi(v(1))
+  );
+
+--echo # VECTOR key's dimension must be greater than 0
+--error ER_WRONG_KEY_COLUMN
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(0),
+  VECTOR INDEX vi(v)
+  );
+
+--echo # The range of the dimension of VECTOR keys is not limited by key size
+--error ER_TOO_LONG_KEY
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VARCHAR(3076),
+  INDEX vi(v)
+  );
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(769),
+  VECTOR INDEX vi(v)
+  );
+DROP TABLE t1;
+
+--echo # Can't be invisible
+--error ER_VECTOR_INDEX_USAGE
+CREATE TABLE t10 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) INVISIBLE
+  );
+
+--echo # Don't support multi VECTOR indexes yet
+--error ER_NOT_SUPPORTED_YET
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v),
+  VECTOR INDEX vi2(v)
+  );
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  );
+--error ER_NOT_SUPPORTED_YET
+CREATE VECTOR INDEX vi2 ON t1(v);
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v);
+DROP TABLE t1;
+
+--echo
+--echo # 2. Don't support inplace ddl yet
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5)
+  );
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 ADD VECTOR INDEX vi(v), algorithm=instant;
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 ADD VECTOR INDEX vi(v), algorithm=inplace;
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 DROP INDEX vi, algorithm=instant;
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 DROP INDEX vi, algorithm=inplace;
+
+ALTER TABLE t1 DROP INDEX vi;
+DROP TABLE t1;
+
+--echo
+--echo # 3. DDL about VECTOR INDEX
+--echo # CREATE TABLE
+CREATE DATABASE IF NOT EXISTS test2;
+USE test2;
+
+--echo # VECTOR INDEX should be at the end of key list
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  text LONGTEXT NOT NULL,
+  meta JSON NOT NULL,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) m=3 distance=euclidean
+  );
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ADD INDEX i2(v);
+CREATE INDEX idx_meta ON `t1` ((CAST(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.document_id')) AS CHAR(36))));
+CREATE FULLTEXT INDEX idx_full_text ON `t1` (text);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # DROP VECTOR INDEX
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) m=3 distance=euclidean
+  );
+
+--disable_warnings
+INSERT INTO t1(v) SELECT VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']'));
+--enable_warnings
+
+DROP INDEX vi ON t1;
+SHOW CREATE TABLE t1;
+
+--echo # CREATE VECTOR INDEX
+CREATE VECTOR INDEX vi ON t1(v) m=200 distance=cosine;
+SHOW CREATE TABLE t1;
+
+--echo # ALTER TABLE DROP VECTOR INDEX
+ALTER TABLE t1 DROP INDEX `vi`;
+SHOW CREATE TABLE t1;
+
+--echo # ALTER TABLE ADD VECTOR INDEX
+ALTER TABLE t1 ADD VECTOR INDEX vi(v) m=200 distance=cosine;
+SHOW CREATE TABLE t1;
+
+--echo # ALTER TABLE RENAME VECTOR INDEX
+ALTER TABLE t1 RENAME INDEX `vi` TO `vi2`;
+SHOW CREATE TABLE t1;
+
+--echo # OPTIMIZE TABLE
+OPTIMIZE TABLE t1;
+SHOW CREATE TABLE t1;
+
+--echo # TRUNCATE TABLE
+TRUNCATE TABLE t1;
+SHOW CREATE TABLE t1;
+
+--echo # RENAME TABLE
+RENAME TABLE t1 TO t2;
+SHOW CREATE TABLE t2;
+CREATE TABLE t1 LIKE t2;
+
+--echo # DROP TABLE
+DROP TABLE t2;
+
+--echo # DROP DATABASE
+DROP DATABASE test2;
+USE test;
+
+--echo
+--echo # 4. Vars about VECTOR INDEX
+SET SESSION vidx_default_distance = 'cosine';
+SET SESSION vidx_hnsw_default_m = 155;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  );
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

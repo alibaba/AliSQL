@@ -10044,6 +10044,27 @@ ER_ACCESS_DENIED_DURING_DUCKDB_CONVERT
 ER_DUCKDB_DATA_IMPORT_MODE
   eng "[DuckDB] Data import mode: %s."
 
+ER_VECTOR_DISABLED
+  eng "Creating vector columns or indexes is disabled."
+
+ER_DATA_INCOMPATIBLE_WITH_VECTOR
+  eng "Value of type '%.16s, size: %zu' cannot be converted to 'vector(%zu)' type."
+
+ER_TO_VECTOR_CONVERSION
+  eng "Data cannot be converted to a valid vector: '%.*s'"
+
+ER_VEC_DISTANCE_TYPE
+  eng "Cannot determine distance type for VEC_DISTANCE, index is not found"
+
+ER_VECTOR_BINARY_FORMAT_INVALID
+  eng "Invalid binary vector format. Must use IEEE standard float representation in little-endian format. Use VEC_FromText() to generate it."
+
+ER_VECTOR_INDEX_USAGE
+  eng "Incorrect usage of vector index: %s"
+
+ER_VECTOR_INDEX_FAILED
+  eng "%s vector index `%s` in `%s`.`%s` (aux_tab: %s) failed: %s"
+
 #
 #  End of RDS error message.
 #

@@ -3802,6 +3802,10 @@ void JOIN::join_free() {
 }
 
 static void cleanup_table(TABLE *table) {
+  if (table->hlindex && table->hlindex->context) {
+    table->hlindex_read_end();
+  }
+
   if (table->is_created()) {
     table->file->ha_index_or_rnd_end();
   }
@@ -4989,7 +4993,7 @@ bool JOIN::make_tmp_tables_info() {
                                    /*sort_before_group=*/false))
             return true;
         }
-        if (!tab->filesort && !tab->table()->s->keys &&
+        if (!tab->filesort && !tab->table()->s->total_keys &&
             (!(query_block->active_options() & OPTION_BUFFER_RESULT) ||
              need_tmp_before_win || wno >= 1)) {
           /*
@@ -5252,7 +5256,7 @@ bool test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER_with_src *order,
     assert(refkey_rows_estimate >= 1.0);
   }
 
-  for (nr = 0; nr < table->s->keys; nr++) {
+  for (nr = 0; nr < table->s->total_keys; nr++) {
     int direction = 0;
     uint used_key_parts;
     bool skip_quick;

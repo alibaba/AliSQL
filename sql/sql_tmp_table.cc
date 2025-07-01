@@ -1253,7 +1253,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
   if (group) {
     DBUG_PRINT("info", ("Creating group key in temporary table"));
     table->group = group; /* Table is grouped by key */
-    share->keys = 1;
+    share->total_keys = share->keys = 1;
     // Let each group expression know the column which materializes its value
     for (ORDER *cur_group = group; cur_group; cur_group = cur_group->next) {
       Field *field = (*cur_group->item)->get_tmp_table_field();
@@ -1321,7 +1321,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
       in the first 'hidden_null_pack_length' bytes of the row.
     */
     DBUG_PRINT("info", ("hidden_field_count: %d", param->hidden_field_count));
-    share->keys = 1;
+    share->total_keys = share->keys = 1;
     share->is_distinct =
         distinct || param->m_operation == Temp_table_param::TTP_INTERSECT ||
         param->m_operation == Temp_table_param::TTP_EXCEPT;
@@ -1433,7 +1433,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
                               param->schema_table))
     return nullptr; /* purecov: inspected */
 
-  if (table->s->keys == 1 && table->key_info)
+  if (table->s->total_keys == 1 && table->key_info)
     table->key_info->algorithm = table->file->get_default_index_algorithm();
 
   table->hidden_field_count = param->hidden_field_count;
@@ -1816,7 +1816,7 @@ TABLE *create_duplicate_weedout_tmp_table(THD *thd, uint uniq_tuple_length_arg,
     KEY *hash_key = keyinfo;
     KEY_PART_INFO *hash_kpi = key_part_info;
 
-    share->keys = 1;
+    share->total_keys = share->keys = 1;
     table->key_info = share->key_info = hash_key;
     hash_key->table = table;
     hash_key->key_part = hash_kpi;
@@ -1825,7 +1825,7 @@ TABLE *create_duplicate_weedout_tmp_table(THD *thd, uint uniq_tuple_length_arg,
     hash_key->key_length = hash_kpi->store_length;
   } else {
     DBUG_PRINT("info", ("Creating group key in temporary table"));
-    share->keys = 1;
+    share->total_keys = share->keys = 1;
     table->key_info = table->s->key_info = keyinfo;
     keyinfo->key_part = key_part_info;
     keyinfo->actual_flags = keyinfo->flags = HA_NOSAME;
@@ -2326,7 +2326,8 @@ static void trace_tmp_table(Opt_trace_context *trace, const TABLE *table) {
     trace_tmp.add("in_plan_at_position", tab->idx());
   trace_tmp.add("columns", s->fields)
       .add("row_length", s->reclength)
-      .add("key_length", table->s->keys > 0 ? table->key_info->key_length : 0)
+      .add("key_length",
+           table->s->total_keys > 0 ? table->key_info->key_length : 0)
       .add("unique_constraint", table->hash_field ? true : false)
       .add("makes_grouped_rows", table->group != nullptr)
       .add("cannot_insert_duplicates", s->is_distinct);
@@ -2397,7 +2398,7 @@ bool instantiate_tmp_table(THD *thd, TABLE *table) {
     return true;
   }
 
-  if (share->first_unused_tmp_key < share->keys) {
+  if (share->first_unused_tmp_key < share->total_keys) {
     /*
       Some other clone of this materialized temporary table has defined
       "possible" keys; as we are here creating the table in the engine, we must
@@ -2405,7 +2406,7 @@ bool instantiate_tmp_table(THD *thd, TABLE *table) {
       now. As the other clone assumes they will be available if the Optimizer
       chooses them, we make them existing.
     */
-    share->find_first_unused_tmp_key(Key_map(share->keys));
+    share->find_first_unused_tmp_key(Key_map(share->total_keys));
   }
 
   Opt_trace_context *const trace = &thd->opt_trace;

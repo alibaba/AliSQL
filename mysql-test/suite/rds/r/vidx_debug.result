@@ -1,0 +1,218 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+CALL mtr.add_suppression("\\[ERROR\\].*Scanned file '.*' for tablespace .* cannot be opened because it is not in a sub-directory named for the schema");
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Tablespace .*, name '.*', file '*.*' is missing!");
+
+# 1. Failed or crash during CREATE
+# 1.1 whole DDL is failed because DDL of vidx table is failed
+SET DEBUG = "d,failed_before_vidx_ddl";
+CREATE TABLE t1 (v VECTOR(5), VECTOR INDEX vi(v));
+ERROR HY000: Create vector index `vi` in `test`.`t1` (aux_tab: vidx_000000000000042d_00) failed: debug failed before vidx ddl.
+# expect that both base tablespace and vidx tablespace are not created
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+# 1.2 crash before create vidx table
+SET DEBUG = "d,crash_before_vidx_ddl";
+CREATE TABLE t1 (v VECTOR(5), VECTOR INDEX vi(v));
+# expect that base tablespace has been created but vidx tablespace is not created
+t1.ibd
+# expect that creation is rollback after crash recovery
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+# 1.3 crash before post ddl
+SET DEBUG = "d,ddl_log_before_post_ddl";
+CREATE TABLE t1 (v VECTOR(5), VECTOR INDEX vi(v));
+# expect that both base tablespace and vidx tablespace are created
+t1.ibd
+vidx_#_00.ibd
+# expect that creation is committed after crash recovery
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+t1.ibd
+vidx_#_00.ibd
+SET DEBUG = '+d,skip_dd_table_access_check';
+SELECT count(*) AS `Expected as 0` FROM mysql.innodb_ddl_log;
+Expected as 0
+0
+
+# 2. Failed during DML
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+SET DEBUG = "d,failed_before_vidx_dml";
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,6]"));
+ERROR HY000: Incorrect usage of vector index: debug failed before vidx dml.
+SELECT VEC_TOTEXT(v) FROM t1;
+VEC_TOTEXT(v)
+[1,2,3,4,5]
+UPDATE t1 SET v = VEC_FROMTEXT("[1,2,3,4,6]");
+ERROR HY000: Incorrect usage of vector index: debug failed before vidx dml.
+SELECT VEC_TOTEXT(v) FROM t1;
+VEC_TOTEXT(v)
+[1,2,3,4,5]
+DELETE FROM t1;
+ERROR HY000: Incorrect usage of vector index: debug failed before vidx dml.
+SELECT VEC_TOTEXT(v) FROM t1;
+VEC_TOTEXT(v)
+[1,2,3,4,5]
+
+# 3. Failed or crash during RENAME
+# 3.1 whole DDL is failed because DDL of vidx table is failed
+CREATE DATABASE test2;
+SET DEBUG = "d,failed_before_vidx_ddl";
+RENAME TABLE t1 TO test2.t2;
+ERROR HY000: Rename vector index `vi` in `test2`.`t2` (aux_tab: vidx_000000000000042f_00) failed: debug failed before vidx ddl.
+# expect that both base tablespace and vidx tablespace are not renamed
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE test2.t2;
+ERROR 42S02: Table 'test2.t2' doesn't exist
+files in test/
+t1.ibd
+vidx_#_00.ibd
+files in test2/
+# 3.2 crash before rename vidx table
+SET DEBUG = "d,crash_before_vidx_ddl";
+RENAME TABLE t1 TO test2.t2;
+# expect that base tablespace has been renamed but vidx tablespace is not renamed
+files in test/
+vidx_#_00.ibd
+files in test2/
+t2.ibd
+# expect that renaming is rollback after crash recovery
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE test2.t2;
+ERROR 42S02: Table 'test2.t2' doesn't exist
+files in test/
+t1.ibd
+vidx_#_00.ibd
+files in test2/
+# 3.3 crash before post ddl
+SET DEBUG = "d,ddl_log_before_post_ddl";
+RENAME TABLE t1 TO test2.t2;
+# expect that both base tablespace and vidx tablespace are not renamed
+files in test/
+files in test2/
+t2.ibd
+vidx_#_00.ibd
+# expect that rename is committed after crash recovery
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+SHOW CREATE TABLE test2.t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+files in test/
+files in test2/
+t2.ibd
+vidx_#_00.ibd
+SET DEBUG = '+d,skip_dd_table_access_check';
+SELECT count(*) AS `Expected as 0` FROM mysql.innodb_ddl_log;
+Expected as 0
+0
+RENAME TABLE test2.t2 TO t1;
+DROP DATABASE test2;
+
+# 4. Failed or crash during TRUNCATE
+# 4.1 whole DDL is failed because DDL of vidx table is failed
+SET DEBUG = "d,failed_before_vidx_ddl";
+TRUNCATE TABLE t1;
+ERROR HY000: Truncate vector index `vi` in `test`.`t1` (aux_tab: vidx_0000000000000431_00) failed: debug failed before vidx ddl.
+# expect that both base tablespace and vidx tablespace are not truncated
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+t1.ibd
+vidx_#_00.ibd
+# 4.2 crash before rename vidx table
+SET DEBUG = "d,crash_before_vidx_ddl";
+TRUNCATE TABLE t1;
+# expect that both base tablespace and vidx tablespace are not truncated
+t1.ibd
+vidx_#_00.ibd
+# expect that truncation is rollback after crash recovery
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+t1.ibd
+vidx_#_00.ibd
+# 4.3 crash before post ddl
+SET DEBUG = "d,ddl_log_before_post_ddl";
+TRUNCATE TABLE t1;
+# expect that both base tablespace and vidx tablespace are not truncated
+t1.ibd
+vidx_#_00.ibd
+# expect that truncation is committed after crash recovery
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+t1.ibd
+vidx_#_00.ibd
+SET DEBUG = '+d,skip_dd_table_access_check';
+SELECT count(*) AS `Expected as 0` FROM mysql.innodb_ddl_log;
+Expected as 0
+0
+
+# 5. Failed or crash during DROP
+# 5.1 whole DDL is failed because DDL of vidx table is failed
+SET DEBUG = "d,failed_before_vidx_ddl";
+DROP TABLE t1;
+ERROR HY000: Drop vector index `vi` in `test`.`t1` (aux_tab: vidx_0000000000000433_00) failed: debug failed before vidx ddl.
+# expect that both base tablespace and vidx tablespace are not dropped
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+t1.ibd
+vidx_#_00.ibd
+# 5.2 crash before rename vidx table
+SET DEBUG = "d,crash_before_vidx_ddl";
+DROP TABLE t1;
+# expect that both base tablespace and vidx tablespace are not dropped
+t1.ibd
+vidx_#_00.ibd
+# expect that drop is rollback after crash recovery
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `v` /*!99999 vector(5) */ varbinary(20) DEFAULT NULL/*!99999 ,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+t1.ibd
+vidx_#_00.ibd
+# 5.3 crash before post ddl
+SET DEBUG = "d,ddl_log_before_post_ddl";
+DROP TABLE t1;
+# expect that both base tablespace and vidx tablespace are not dropped
+t1.ibd
+vidx_#_00.ibd
+# expect that drop is committed after crash recovery
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+SET DEBUG = '+d,skip_dd_table_access_check';
+SELECT count(*) AS `Expected as 0` FROM mysql.innodb_ddl_log;
+Expected as 0
+0

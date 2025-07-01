@@ -94,7 +94,8 @@ void prepare_sp_chistics_from_dd_routine(const dd::Routine *routine,
 }
 
 static Field *make_field(const dd::Parameter &param, TABLE_SHARE *share,
-                         Field::geometry_type geom_type, TYPELIB *interval) {
+                         Field::geometry_type geom_type, TYPELIB *interval,
+                         bool is_vector = false) {
   // Decimals
   uint numeric_scale = 0;
   if (param.data_type() == dd::enum_column_types::DECIMAL ||
@@ -109,7 +110,8 @@ static Field *make_field(const dd::Parameter &param, TABLE_SHARE *share,
                     0, dd_get_old_field_type(param.data_type()),
                     dd_get_mysql_charset(param.collation_id()), geom_type,
                     Field::NONE, interval, "", false, param.is_zerofill(),
-                    param.is_unsigned(), numeric_scale, false, 0, {}, false);
+                    param.is_unsigned(), numeric_scale, false, 0, {}, false,
+                    is_vector);
 }
 
 /**
@@ -165,6 +167,13 @@ static void prepare_type_string_from_dd_param(THD *thd,
     geom_type = static_cast<Field::geometry_type>(sub_type);
   }
 
+  // Vector options
+  bool is_vector = false;
+  if (param->data_type() == dd::enum_column_types::VARCHAR &&
+      param->options().exists("vector")) {
+    param->options().get("vector", &is_vector);
+  }
+
   // Get type in string format.
   TABLE table;
   TABLE_SHARE share;
@@ -172,7 +181,7 @@ static void prepare_type_string_from_dd_param(THD *thd,
   table.s = &share;
 
   unique_ptr_destroy_only<Field> field(
-      make_field(*param, table.s, geom_type, interval));
+      make_field(*param, table.s, geom_type, interval, is_vector));
 
   field->init(&table);
   field->sql_type(*type_str);

@@ -24,12 +24,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#include "sql/sys_vars.h"
 #include "sql/duckdb/duckdb_config.h"
+#include "sql/duckdb/log.h"
 #include "sql/rpl_applier_reader.h"
 #include "sql/rpl_rli.h"
-#include "sql/duckdb/log.h"
 #include "sql/sql_table_ext.h"
+#include "sql/sys_vars.h"
+#include "vidx/vidx_index.h"
 
 /** DuckDB related variables begin. */
 static Sys_var_bool Sys_duckdb_require_primary_key(

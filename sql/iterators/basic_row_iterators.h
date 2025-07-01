@@ -113,7 +113,8 @@ class IndexScanIterator final : public TableRowIterator {
   //
   // "examined_rows", if not nullptr, is incremented for each successful Read().
   IndexScanIterator(THD *thd, TABLE *table, int idx, bool use_order,
-                    double expected_rows, ha_rows *examined_rows);
+                    double expected_rows, ha_rows *examined_rows,
+                    void *vec_func);
   ~IndexScanIterator() override;
 
   bool Init() override;
@@ -125,6 +126,7 @@ class IndexScanIterator final : public TableRowIterator {
   const bool m_use_order;
   const double m_expected_rows;
   ha_rows *const m_examined_rows;
+  void *m_vec_func;
   bool m_first = true;
 };
 

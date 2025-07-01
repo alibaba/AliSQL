@@ -824,6 +824,11 @@ static const SYMBOL symbols[] = {
     {SYM("ZEROFILL", ZEROFILL_SYM)},
     {SYM("ZONE", ZONE_SYM)},
     {SYM("||", OR_OR_SYM)},
+    {SYM("VECTOR", VECTOR_SYM)},
+    {SYM("M", M_SYM)},
+    {SYM("DISTANCE", DISTANCE_SYM)},
+    {SYM("EUCLIDEAN", EUCLIDEAN_SYM)},
+    {SYM("COSINE", COSINE_SYM)},
     /*
       Place keywords that accept optimizer hints below this comment.
     */

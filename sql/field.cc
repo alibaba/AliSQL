@@ -89,6 +89,7 @@
 #include "sql/tztime.h"      // Time_zone
 #include "template_utils.h"  // pointer_cast
 #include "typelib.h"
+#include "vidx/vidx_field.h"
 
 namespace dd {
 class Spatial_reference_system;
@@ -9308,7 +9309,8 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
                   TYPELIB *interval, const char *field_name, bool is_nullable,
                   bool is_zerofill, bool is_unsigned, uint decimals,
                   bool treat_bit_as_char, uint pack_length_override,
-                  std::optional<gis::srid_t> srid, bool is_array) {
+                  std::optional<gis::srid_t> srid, bool is_array,
+                  bool is_vector) {
   uchar *bit_ptr = nullptr;
   uchar bit_offset = 0;
   assert(mem_root);
@@ -9383,9 +9385,15 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
       return new (mem_root) Field_string(ptr, field_length, null_pos, null_bit,
                                          auto_flags, field_name, field_charset);
     case MYSQL_TYPE_VARCHAR:
-      return new (mem_root) Field_varstring(
-          ptr, field_length, HA_VARCHAR_PACKLENGTH(field_length), null_pos,
-          null_bit, auto_flags, field_name, share, field_charset);
+      if (is_vector) {
+        return new (mem_root) vidx::Field_vector(
+            ptr, field_length, HA_VARCHAR_PACKLENGTH(field_length), null_pos,
+            null_bit, auto_flags, field_name, share);
+      } else {
+        return new (mem_root) Field_varstring(
+            ptr, field_length, HA_VARCHAR_PACKLENGTH(field_length), null_pos,
+            null_bit, auto_flags, field_name, share, field_charset);
+      }
     case MYSQL_TYPE_BLOB:
     case MYSQL_TYPE_MEDIUM_BLOB:
     case MYSQL_TYPE_TINY_BLOB:
@@ -9538,7 +9546,7 @@ Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
                     create_field.is_zerofill, create_field.is_unsigned,
                     create_field.decimals, create_field.treat_bit_as_char,
                     create_field.pack_length_override, create_field.m_srid,
-                    create_field.is_array);
+                    create_field.is_array, create_field.is_vector);
 }
 
 Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
@@ -10051,10 +10059,11 @@ void Field_typed_array::init(TABLE *table_arg) {
       field_name, is_nullable(),
       false,  // zerofill is meaningless with JSON
       is_unsigned(), m_elt_decimals,
-      false,  // treat_bit_as_char
-      0,      // pack_length_override
-      {},     // srid
-      false   // is_array
+      false,       // treat_bit_as_char
+      0,           // pack_length_override
+      {},          // srid
+      false,       // is_array
+      is_vector()  // is_vector
   );
   if (conv_field == nullptr) return;
   uchar *buf =

@@ -185,3 +185,21 @@ void delete_dynamic(DYNAMIC_ARRAY *array) {
     array->elements = array->max_element = 0;
   }
 }
+
+/*
+  Pop last element from array.
+
+  SYNOPSIS
+    pop_dynamic()
+      array
+
+  RETURN VALUE
+    pointer	Ok
+    0		Array is empty
+*/
+
+void *pop_dynamic(DYNAMIC_ARRAY *array) {
+  if (array->elements)
+    return array->buffer + (--array->elements * array->size_of_element);
+  return 0;
+}
