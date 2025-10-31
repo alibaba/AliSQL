@@ -703,7 +703,7 @@ int main() {
 
 
 #
-# Test for endianess
+# Test for endianness
 #
 INCLUDE(TestBigEndian)
 IF(APPLE)
