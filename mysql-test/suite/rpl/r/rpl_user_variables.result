@@ -1,14 +1,14 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 include/sync_slave_sql_with_master.inc
 reset master;
 include/stop_slave.inc
 RESET MASTER;
 include/start_slave.inc
-create table t1(n char(30));
+create table t1(n char(30)) CHARACTER SET latin1;
 set @i1:=12345678901234, @i2:=-12345678901234, @i3:=0, @i4:=-1;
 set @s1:='This is a test', @r1:=12.5, @r2:=-12.5;
 set @n1:=null;
@@ -19,9 +19,18 @@ insert into t1 values (@s1), (@s2), (@s3), (@s4), (@s5);
 insert into t1 values (@n1);
 insert into t1 values (@n2);
 insert into t1 values (@a:=0), (@a:=@a+1), (@a:=@a+1);
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 insert into t1 values (@a+(@b:=@a+1));
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 set @q:='abc';
 insert t1 values (@q), (@q:=concat(@q, 'n1')), (@q:=concat(@q, 'n2'));
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 set @a:=5;
 insert into t1 values (@a),(@a);
 select * from t1 where n = '<nonexistant>';
@@ -237,6 +246,8 @@ k
 drop table t1, t2;
 create table t1(a int, b int);
 prepare s1 from 'insert into t1 values (@x:=@x+1, ?)';
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 set @x=1;
 execute s1 using @x;
 select * from t1;
@@ -250,18 +261,24 @@ drop table t1;
 create table t1(a int);
 insert into t1 values (1),(2);
 prepare s1 from 'insert into t1 select a from t1 limit ?';
-set @x='1.1';
+First, execute query using a signed integer
+set @x=CAST(1 AS SIGNED);
+execute s1 using @x;
+Next, execute query using an unsigned integer
+set @x=CAST(1 AS UNSIGNED);
 execute s1 using @x;
 select * from t1;
 a
 1
 2
 1
+1
 include/sync_slave_sql_with_master.inc
 select * from t1;
 a
 1
 2
+1
 1
 drop table t1;
 End of 5.0 tests.

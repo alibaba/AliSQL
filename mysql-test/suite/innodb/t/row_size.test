@@ -1,0 +1,81 @@
+--source include/have_innodb_16k.inc
+
+call mtr.add_suppression("Cannot create the table `test1`.`t1` because the record size will exceed the maximum allowed size for a record.");
+call mtr.add_suppression("Cannot alter the table `test1`.`t1` because the record size will exceed the maximum allowed size for a record on the index 'PRIMARY'.");
+call mtr.add_suppression("Trying to add or drop column\\(s\\) in table 'test1/t1'.*ADD or DROP column with ALGORITHM = INSTANT is not allowed.");
+
+--let $orig_innodb_strict_mode = `SELECT @@session.innodb_strict_mode;`
+CREATE DATABASE test1;
+USE test1;
+
+SET SESSION innodb_strict_mode=on;
+--error ER_TOO_BIG_ROWSIZE
+CREATE TABLE `t1` (
+      `c1` varchar(255),
+      `c2` varchar(255),
+      `c3` varchar(255),
+      `c4` varchar(255),
+      `c5` varchar(255),
+      `c6` varchar(255),
+      `c7` varchar(255),
+      `c8` varchar(255),
+      `c9` varchar(255),
+      `c10` varchar(255),
+      `c11` varchar(255),
+       primary key (`c1`(40))
+) ROW_FORMAT=COMPACT;
+
+SET SESSION innodb_strict_mode=off;
+CREATE TABLE `t1` (
+      `c1` varchar(255),
+      `c2` varchar(255),
+      `c3` varchar(255),
+      `c4` varchar(255),
+      `c5` varchar(255),
+      `c6` varchar(255),
+      `c7` varchar(255),
+      `c8` varchar(255),
+      `c9` varchar(255),
+      `c10` varchar(255),
+      `c11` varchar(255),
+       primary key (`c1`(40))
+) ROW_FORMAT=COMPACT;
+
+INSERT INTO test1.t1 SET c1="foobar";
+
+SET SESSION innodb_strict_mode=on;
+--error ER_TOO_BIG_ROWSIZE
+ALTER TABLE test1.t1 ADD COLUMN c12 varchar(255), ADD COLUMN c13 varchar(255);
+
+SET SESSION innodb_strict_mode=off;
+ALTER TABLE test1.t1 ADD COLUMN c12 varchar(255), ADD COLUMN c13 varchar(255);
+
+SET SESSION innodb_strict_mode=on;
+--error ER_TOO_BIG_ROWSIZE
+ALTER TABLE test1.t1 DROP COLUMN c12;
+
+SET SESSION innodb_strict_mode=off;
+ALTER TABLE test1.t1 DROP COLUMN c13;
+
+--error ER_INNODB_INSTANT_ADD_DROP_NOT_SUPPORTED_MAX_SIZE
+ALTER TABLE test1.t1 ADD COLUMN c13 varchar(255), algorithm=instant;
+
+--error ER_INNODB_INSTANT_ADD_DROP_NOT_SUPPORTED_MAX_SIZE
+ALTER TABLE test1.t1 DROP COLUMN c12, algorithm=instant;
+
+--source include/restart_mysqld.inc
+
+--let $COUNT_BEFORE =  `SELECT COUNT(*) from performance_schema.error_log;`
+
+# This should not emit warning/error message in the error log.
+SELECT * FROM test1.t1;
+
+--let $COUNT_AFTER =  `SELECT COUNT(*) from performance_schema.error_log;`
+
+--let $assert_text = count in the error_log table should be same
+--let $assert_cond = $COUNT_BEFORE = $COUNT_AFTER
+--source include/assert.inc
+
+# Clean up
+DROP DATABASE test1;
+--eval SET SESSION innodb_strict_mode = $orig_innodb_strict_mode

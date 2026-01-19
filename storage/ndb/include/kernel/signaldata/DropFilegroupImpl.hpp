@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2005, 2006, 2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2005, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,8 @@
 #define DROP_FILEGROUP_IMPL_HPP
 
 #include "SignalData.hpp"
+
+#define JAM_FILE_ID 149
 
 struct DropFilegroupImplReq {
   /**
@@ -32,19 +41,16 @@ struct DropFilegroupImplReq {
   /**
    * For printing
    */
-  friend bool printDROP_FILEGROUP_IMPL_REQ(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 6 );
-  
-  enum RequestInfo {
-    Prepare = 0x1,
-    Commit = 0x2,
-    Abort = 0x4
-  };
-  
+  friend bool printDROP_FILEGROUP_IMPL_REQ(FILE *, const Uint32 *, Uint32,
+                                           Uint16);
+
+  static constexpr Uint32 SignalLength = 6;
+
+  enum RequestInfo { Prepare = 0x1, Commit = 0x2, Abort = 0x4 };
+
   Uint32 senderData;
   Uint32 senderRef;
-  
+
   Uint32 requestInfo;
   Uint32 filegroup_id;
   Uint32 filegroup_version;
@@ -58,13 +64,14 @@ struct DropFilegroupImplRef {
   friend class Dbdict;
   friend class Tsman;
   friend class Lgman;
-  
+
   /**
    * For printing
    */
-  friend bool printDROP_FILEGROUP_IMPL_REF(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 3 );
+  friend bool printDROP_FILEGROUP_IMPL_REF(FILE *, const Uint32 *, Uint32,
+                                           Uint16);
+
+  static constexpr Uint32 SignalLength = 3;
 
   enum ErrorCode {
     NoError = 0,
@@ -72,7 +79,7 @@ struct DropFilegroupImplRef {
     InvalidFilegroupVersion = 767,
     FilegroupInUse = 768
   };
-  
+
   Uint32 senderData;
   Uint32 senderRef;
   Uint32 errorCode;
@@ -85,13 +92,14 @@ struct DropFilegroupImplConf {
   friend class Dbdict;
   friend class Tsman;
   friend class Lgman;
-  
+
   /**
    * For printing
    */
-  friend bool printDROP_FILEGROUP_IMPL_CONF(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 2 );
+  friend bool printDROP_FILEGROUP_IMPL_CONF(FILE *, const Uint32 *, Uint32,
+                                            Uint16);
+
+  static constexpr Uint32 SignalLength = 2;
 
   Uint32 senderData;
   Uint32 senderRef;
@@ -108,19 +116,15 @@ struct DropFileImplReq {
   /**
    * For printing
    */
-  friend bool printDROP_FILE_IMPL_REQ(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 8 );
-  
-  enum RequestInfo {
-    Prepare = 0x1,
-    Commit = 0x2,
-    Abort = 0x4
-  };
-  
+  friend bool printDROP_FILE_IMPL_REQ(FILE *, const Uint32 *, Uint32, Uint16);
+
+  static constexpr Uint32 SignalLength = 8;
+
+  enum RequestInfo { Prepare = 0x1, Commit = 0x2, Abort = 0x4 };
+
   Uint32 senderData;
   Uint32 senderRef;
-  
+
   Uint32 requestInfo;
   Uint32 file_id;
   Uint32 file_version;
@@ -133,13 +137,13 @@ struct DropFileImplRef {
   friend class Dbdict;
   friend class Tsman;
   friend class Lgman;
-  
+
   /**
    * For printing
    */
-  friend bool printDROP_FILE_IMPL_REF(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 5 );
+  friend bool printDROP_FILE_IMPL_REF(FILE *, const Uint32 *, Uint32, Uint16);
+
+  static constexpr Uint32 SignalLength = 5;
 
   enum ErrorCode {
     NoError = 0,
@@ -148,7 +152,7 @@ struct DropFileImplRef {
     NoSuchFile = 766,
     FileInUse = 770
   };
-  
+
   Uint32 senderData;
   Uint32 senderRef;
   Uint32 errorCode;
@@ -160,17 +164,18 @@ struct DropFileImplConf {
   friend class Dbdict;
   friend class Tsman;
   friend class Lgman;
-  
-  
+
   /**
    * For printing
    */
-  friend bool printDROP_FILE_IMPL_CONF(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 2 );
+  friend bool printDROP_FILE_IMPL_CONF(FILE *, const Uint32 *, Uint32, Uint16);
+
+  static constexpr Uint32 SignalLength = 2;
 
   Uint32 senderData;
   Uint32 senderRef;
 };
+
+#undef JAM_FILE_ID
 
 #endif

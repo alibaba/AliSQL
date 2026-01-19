@@ -1,0 +1,335 @@
+#
+# Attempt to load table into an undefined secondary engine.
+#
+CREATE TABLE t1 (a INT);
+ALTER TABLE t1 SECONDARY_LOAD;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined.
+DROP TABLE t1;
+#
+# Attempt to load table into an unknown storage engine.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+ALTER TABLE t1 SECONDARY_LOAD;
+Warnings:
+Warning	1286	Unknown storage engine 'NONEXISTENT'
+DROP TABLE t1;
+#
+# Attempt to load table into an unsupported secondary storage engine.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE InnoDB;
+ALTER TABLE t1 SECONDARY_LOAD;
+ERROR HY000: Secondary engine operation failed. Unsupported secondary storage engine.
+DROP TABLE t1;
+#
+# Create a table with a secondary engine defined.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=NONEXISTENT
+DROP TABLE t1;
+#
+# Attempt to redefine the secondary engine.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+ALTER TABLE t1 SECONDARY_ENGINE ANOTHER_NONEXISTENT;
+ERROR HY000: Secondary engine operation failed. Table already has a secondary engine defined.
+DROP TABLE t1;
+#
+# Define and undefine secondary engine (without loading in-between).
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+#
+# Attempt to create a temporary table with a secondary engine defined.
+#
+CREATE TEMPORARY TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+ERROR HY000: Secondary engine operation failed. Temporary tables not supported.
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+CREATE TEMPORARY TABLE t2 LIKE t1;
+ERROR HY000: Secondary engine operation failed. Temporary tables not supported.
+DROP TABLE t1;
+#
+# Attempt to create a table with a primary engine that does not support
+# loading tables into a secondary engine.
+CREATE TABLE t1 (a INT) ENGINE MYISAM SECONDARY_ENGINE NONEXISTENT;
+ERROR 42000: The storage engine for the table doesn't support SECONDARY_ENGINE
+#
+# Attempt to change primary storage engine to an engine that does not
+# support loading into a secondary engine.
+#
+CREATE TABLE t1 (a INT) ENGINE InnoDB SECONDARY_ENGINE NONEXISTENT;
+ALTER TABLE t1 ENGINE MYISAM;
+ERROR HY000: Secondary engine operation failed. Cannot change the primary engine of a table with a defined secondary engine.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=NONEXISTENT
+DROP TABLE t1;
+#
+# Attempt to use SECONDARY_LOAD when creating table.
+#
+CREATE TABLE t1 (a INT) SECONDARY_LOAD;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'SECONDARY_LOAD' at line 1
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT, SECONDARY_LOAD;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'SECONDARY_LOAD' at line 1
+#
+# Alter a table after a secondary engine has been defined.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+ALTER TABLE t1 COMMENT="Test1";
+ALTER TABLE t1 COMMENT="Test2", ALGORITHM=INPLACE;
+ALTER TABLE t1 COMMENT="Test3", ALGORITHM=COPY;
+ALTER TABLE t1 ADD COLUMN (b INT);
+ALTER TABLE t1 ADD COLUMN (c INT), ALGORITHM=INPLACE;
+ALTER TABLE t1 ADD COLUMN (d INT), ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Test3' SECONDARY_ENGINE=NONEXISTENT
+DROP TABLE t1;
+#
+# Truncate a table after a secondary engine has been defined.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+TRUNCATE TABLE t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=NONEXISTENT
+DROP TABLE t1;
+#
+# Attempt to alter table after its secondary engine has been removed.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=NONEXISTENT
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+ALTER TABLE t1 COMMENT="Test";
+ALTER TABLE t1 ADD COLUMN (b INT);
+ALTER TABLE t1 SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Test' SECONDARY_ENGINE=NONEXISTENT
+DROP TABLE t1;
+#
+# Attempt to truncate table after its secondary engine is removed
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=NONEXISTENT
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+TRUNCATE TABLE t1;
+ALTER TABLE t1 SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=NONEXISTENT
+DROP TABLE t1;
+#
+# Rename a table with a secondary engine defined.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+RENAME TABLE t1 TO t2;
+DROP TABLE t2;
+#
+# Attempt to use SECONDARY_LOAD in conjunction with another DDL.
+#
+CREATE TABLE t1 (i INT);
+ALTER TABLE t1 SECONDARY_LOAD, ADD KEY idx(i);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ', ADD KEY idx(i)' at line 1
+ALTER TABLE t1 SECONDARY_ENGINE NONEXISTENT;
+ALTER TABLE t1 SECONDARY_LOAD, ADD KEY idx(i);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ', ADD KEY idx(i)' at line 1
+DROP TABLE t1;
+#
+# Set NOT SECONDARY on columns when creating table.
+#
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT NOT SECONDARY);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 MODIFY a INT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+#
+# Set NOT SECONDARY after create table.
+#
+CREATE TABLE t1 (a INT, b INT);
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY;
+ALTER TABLE t1 MODIFY b INT NOT SECONDARY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+#
+# It should be possible to set or remove NOT SECONDARY on a column
+# if the table is defined with a secondary engine.
+#
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT NOT SECONDARY);
+ALTER TABLE t1 MODIFY a INT;
+ALTER TABLE t1 SECONDARY_ENGINE MOCK;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+ALTER TABLE t1 MODIFY b INT;
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+ALTER TABLE t1 MODIFY b INT;
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+#
+# Parts of the primary key can be excluded from the secondary engine.
+#
+CREATE TABLE t1 (a INT, b INT NOT SECONDARY, PRIMARY KEY(a, b));
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL NOT SECONDARY,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+#
+# Set and remove NOT SECONDARY in conjunction with other column options.
+#
+CREATE TABLE t1 (a INT, b INT);
+ALTER TABLE t1 MODIFY a INT NOT NULL NOT SECONDARY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL NOT SECONDARY,
+  `b` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 MODIFY a INT NOT NULL;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY, SECONDARY_ENGINE MOCK;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+DROP TABLE t1;
+#
+# NOT SECONDARY should be preserved with CREATE TABLE as SELECT FROM.
+#
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT, c INT NOT SECONDARY) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 AS SELECT * FROM t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1, t2;
+#
+# CREATE TABLE LIKE with NOT SECONDARY columns
+#
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT, c INT NOT SECONDARY) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 LIKE t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+DROP TABLE t1, t2;
+#
+# CREATE TABLE AS SELECT FROM with NOT SECONDARY columns
+#
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT, c INT NOT SECONDARY) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 AS SELECT * FROM t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int NOT SECONDARY DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int NOT SECONDARY DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1, t2;

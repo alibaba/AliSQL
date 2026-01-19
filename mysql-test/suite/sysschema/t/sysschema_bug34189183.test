@@ -1,0 +1,44 @@
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+#
+# BUG #34189183 - CALL sys.diagnostics() returns "Access denied"
+#
+
+--connection master
+
+# Create test user
+CREATE USER 'test'@'localhost' IDENTIFIED BY '';
+GRANT ALL ON *.* TO 'test'@'localhost';
+REVOKE SUPER ON *.* FROM 'test'@'localhost';
+REVOKE SYSTEM_VARIABLES_ADMIN ON *.* FROM 'test'@'localhost';
+REVOKE SESSION_VARIABLES_ADMIN ON *.* FROM 'test'@'localhost';
+
+connect (con1, localhost, test, , );
+
+# Check for 'current' config
+# Must NOT return Access Denied
+let $complete_log= $MYSQLTEST_VARDIR/log/sys_diagnose.log;
+--exec $MYSQL -utest -e "CALL sys.diagnostics(180, 60, 'current');" > $complete_log 2>&1
+--remove_file $complete_log
+
+# Check for 'medium' config
+# Must NOT return Access Denied
+let $complete_log= $MYSQLTEST_VARDIR/log/sys_diagnose.log;
+--exec $MYSQL -utest -e "CALL sys.diagnostics(60, 10, 'medium');" > $complete_log 2>&1
+--remove_file $complete_log
+
+# Check for 'full' config
+# Must NOT return Access Denied
+let $complete_log= $MYSQLTEST_VARDIR/log/sys_diagnose.log;
+--exec $MYSQL -utest -e "CALL sys.diagnostics(60, 10, 'full');" > $complete_log 2>&1
+--remove_file $complete_log
+
+# Revoke the privileges
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'test'@'localhost';
+
+# Drop the user, clean up done
+DROP USER test@localhost;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_end.inc

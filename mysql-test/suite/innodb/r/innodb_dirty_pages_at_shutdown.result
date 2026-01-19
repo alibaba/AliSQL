@@ -1,0 +1,13 @@
+CREATE TABLE t1 (c1 INT);
+INSERT INTO t1 VALUES (1);
+call mtr.add_suppression("\\[InnoDB\\] \\[FATAL\\] Page still fixed or dirty at shutdown.");
+call mtr.add_suppression("\\[InnoDB\\] Assertion failure.*ib::fatal triggered");
+call mtr.add_suppression("Attempting backtrace");
+SET GLOBAL DEBUG="+d,simulate_dirty_page_at_shutdown";
+# Shutdown the server
+# Search the server error logs for the FATAL message
+Pattern "Page still fixed or dirty at shutdown" found
+# Start the server
+# restart
+SET GLOBAL DEBUG="-d,simulate_dirty_page_at_shutdown";
+DROP TABLE t1;

@@ -1,8 +1,59 @@
+-- Copyright (c) 2009, 2025, Oracle and/or its affiliates.
+--
+-- This program is free software; you can redistribute it and/or modify
+-- it under the terms of the GNU General Public License, version 2.0,
+-- as published by the Free Software Foundation.
+--
+-- This program is designed to work with certain software (including
+-- but not limited to OpenSSL) that is licensed under separate terms,
+-- as designated in a particular file or component or in included license
+-- documentation.  The authors of MySQL hereby grant you an additional
+-- permission to link the program and your derivative works with the
+-- separately licensed software that they have either included with
+-- the program or referenced in the documentation.
+--
+-- This program is distributed in the hope that it will be useful,
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-- GNU General Public License, version 2.0, for more details.
+--
+-- You should have received a copy of the GNU General Public License
+-- along with this program; if not, write to the Free Software
+-- Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+--
 # the first statement is a drop table for the test table
 drop table if exists t_basic;
 # the second statement is a test; if it succeeds, skip the rest of the file.
 select id from t_basic where id = 9999;
 # the following statements are delimited by semicolon
+
+DROP TABLE IF EXISTS conversation_summary;
+CREATE TABLE conversation_summary (
+  source_user_id bigint(11) NOT NULL,
+  destination_user_id bigint(11) NOT NULL,
+  last_message_user_id bigint(11) NOT NULL,
+  text_summary varchar(255) NOT NULL DEFAULT '',
+  query_history_id bigint(20) NOT NULL DEFAULT '0',
+  answerer_id bigint(11) NOT NULL,
+  viewed bit(1) NOT NULL,
+  updated_at bigint(20) NOT NULL,
+  PRIMARY KEY (source_user_id,destination_user_id,query_history_id),
+  KEY IX_updated_at (updated_at)
+) ENGINE=ndbcluster;
+
+DROP TABLE IF EXISTS twopk;
+CREATE TABLE IF NOT EXISTS twopk (
+  id int not null,
+  name varchar(30)
+) ENGINE = ndbcluster;
+
+DROP TABLE IF EXISTS hashpk;
+CREATE TABLE IF NOT EXISTS hashpk (
+  id int not null,
+  name varchar(30),
+    CONSTRAINT PK_hashpk PRIMARY KEY (id) USING HASH  
+) ENGINE = ndbcluster;
+
 DROP TABLE IF EXISTS subscriber ;
 
 CREATE TABLE IF NOT EXISTS subscriber (
@@ -87,6 +138,20 @@ create table varbinarytypes (
 
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
 
+drop table if exists dynamicstringpks;
+create table dynamicstringpks (
+  key1 VARCHAR(85) collate utf8_unicode_ci NOT NULL,
+  key2 VARCHAR(85) collate utf8_unicode_ci NOT NULL,
+  key3 VARCHAR(85) collate utf8_unicode_ci NOT NULL,
+  key4 INT NOT NULL,
+  key5 VARCHAR(85) collate utf8_unicode_ci NOT NULL,
+  key6 INT NOT NULL,
+  key7 VARCHAR(85) collate utf8_unicode_ci NOT NULL,
+  number INT NOT NULL,
+  name VARCHAR(10) NOT NULL,
+  PRIMARY KEY (key1, key2, key3, key4, key5, key6, key7)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
 drop table if exists binarypk;
 create table binarypk (
  id binary(255) primary key not null,
@@ -133,7 +198,15 @@ create table charsetutf8 (
  mediumcolumn varchar(500),
  largecolumn text(10000)
 
-) ENGINE=ndbcluster DEFAULT CHARSET=utf8;
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb3;
+
+drop table if exists charsetswedishutf8;
+create table charsetswedishutf8 (
+ id int not null primary key,
+ swedishcolumn char(4) COLLATE latin1_swedish_ci,
+ utfcolumn char(4) COLLATE utf8mb3_general_ci
+ 
+) ENGINE=ndbcluster;
  
 drop table if exists charsetsjis;
 create table charsetsjis (
@@ -224,9 +297,12 @@ CREATE TABLE b0 (
 drop table if exists blobtypes;
 create table blobtypes (
  id int not null primary key,
+ id_null_none int,
+ id_null_hash int,
 
  blobbytes blob,
- blobstream blob
+
+ unique key idx_id_null_hash (id_null_hash) using hash
 
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
 
@@ -299,10 +375,10 @@ create table stringtypes (
  string_null_both varchar(20),
  string_null_none varchar(300),
 
- string_not_null_hash varchar(300),
- string_not_null_btree varchar(20),
- string_not_null_both varchar(300),
- string_not_null_none varchar(20),
+ string_not_null_hash varchar(300) not null default '0',
+ string_not_null_btree varchar(20) not null default '0',
+ string_not_null_both varchar(300) not null default '0',
+ string_not_null_none varchar(20) not null default '0',
  unique key idx_string_null_hash (string_null_hash) using hash,
  key idx_string_null_btree (string_null_btree),
  unique key idx_string_null_both (string_null_both),
@@ -469,6 +545,30 @@ create table nullvalues (
 
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
 
+drop table if exists shortpk;
+create table shortpk (
+ id smallint not null primary key,
+ short_null_none smallint,
+ short_null_btree smallint,
+ short_null_hash smallint,
+ short_null_both smallint,
+ key idx_short_null_btree (short_null_btree),
+ unique key idx_short_null_both (short_null_both),
+ unique key idx_short_null_hash (short_null_hash) using hash
+ ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+
+drop table if exists bytepk;
+create table bytepk (
+ id tinyint not null primary key,
+ byte_null_none tinyint,
+ byte_null_btree tinyint,
+ byte_null_hash tinyint,
+ byte_null_both tinyint,
+ key idx_byte_null_btree (byte_null_btree),
+ unique key idx_byte_null_both (byte_null_both),
+ unique key idx_byte_null_hash (byte_null_hash) using hash
+ ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+
 drop table if exists allprimitives;
 create table allprimitives (
  id int not null primary key,
@@ -569,18 +669,80 @@ create table bigintegertypes (
 
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
 
+drop table if exists mediumintegertypes;
+create table mediumintegertypes (
+ id int not null primary key,
+
+ medium_null_hash mediumint,
+ medium_null_btree mediumint,
+ medium_null_both mediumint,
+ medium_null_none mediumint,
+
+ medium_not_null_hash mediumint not null,
+ medium_not_null_btree mediumint not null,
+ medium_not_null_both mediumint not null,
+ medium_not_null_none mediumint not null,
+
+ unique key idx_medium_null_hash (medium_null_hash) using hash,
+ key idx_medium_null_btree (medium_null_btree),
+ unique key idx_medium_null_both (medium_null_both),
+
+ unique key idx_medium_not_null_hash (medium_not_null_hash) using hash,
+ key idx_medium_not_null_btree (medium_not_null_btree),
+ unique key idx_medium_not_null_both (medium_not_null_both)
+
+) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+
+drop table if exists mediumunsignedtypes;
+create table mediumunsignedtypes (
+ id int not null primary key,
+
+ medium_unsigned_null_hash mediumint unsigned,
+ medium_unsigned_null_btree mediumint unsigned,
+ medium_unsigned_null_both mediumint unsigned,
+ medium_unsigned_null_none mediumint unsigned,
+
+ medium_unsigned_not_null_hash mediumint unsigned not null,
+ medium_unsigned_not_null_btree mediumint unsigned not null,
+ medium_unsigned_not_null_both mediumint unsigned not null,
+ medium_unsigned_not_null_none mediumint unsigned not null,
+
+ unique key idx_medium_unsigned_null_hash (medium_unsigned_null_hash) using hash,
+ key idx_medium_unsigned_null_btree (medium_unsigned_null_btree),
+ unique key idx_medium_unsigned_null_both (medium_unsigned_null_both),
+
+ unique key idx_medium_unsigned_not_null_hash (medium_unsigned_not_null_hash) using hash,
+ key idx_medium_unsigned_not_null_btree (medium_unsigned_not_null_btree),
+ unique key idx_medium_unsigned_not_null_both (medium_unsigned_not_null_both)
+
+) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
 drop table if exists timestamptypes;
 create table timestamptypes (
  id int not null primary key,
 
- timestamp_not_null_hash timestamp not null,
- timestamp_not_null_btree timestamp not null,
- timestamp_not_null_both timestamp not null,
- timestamp_not_null_none timestamp not null,
+ timestamp_not_null_hash timestamp not null  default '2001-01-01 00:00:00',
+ timestamp_not_null_btree timestamp not null default '2001-01-01 00:00:00',
+ timestamp_not_null_both timestamp not null  default '2001-01-01 00:00:00',
+ timestamp_not_null_none timestamp not null  default '2001-01-01 00:00:00',
 
  unique key idx_timestamp_not_null_hash (timestamp_not_null_hash) using hash,
  key idx_timestamp_not_null_btree (timestamp_not_null_btree),
  unique key idx_timestamp_not_null_both (timestamp_not_null_both)
+
+) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+
+drop table if exists timestamp2types;
+create table timestamp2types (
+ id int not null primary key auto_increment,
+
+ timestampx timestamp    null,
+ timestamp0 timestamp(0) null,
+ timestamp1 timestamp(1) null,
+ timestamp2 timestamp(2) null,
+ timestamp3 timestamp(3) null,
+ timestamp4 timestamp(4) null,
+ timestamp5 timestamp(5) null,
+ timestamp6 timestamp(6) null
 
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
 
@@ -695,6 +857,36 @@ create table datetimetypes (
 
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
 
+drop table if exists autopkbigint;
+create table autopkbigint (
+  id bigint primary key auto_increment,
+  val bigint
+) ENGINE=ndb;
+
+drop table if exists autopkmediumint;
+create table autopkmediumint (
+  id mediumint primary key auto_increment,
+  val mediumint
+) ENGINE=ndb;
+
+drop table if exists autopkint;
+create table autopkint (
+  id int primary key auto_increment,
+  val int
+) ENGINE=ndb;
+
+drop table if exists autopksmallint;
+create table autopksmallint (
+  id smallint primary key auto_increment,
+  val smallint
+) ENGINE=ndb;
+
+drop table if exists autopktinyint;
+create table autopktinyint (
+  id tinyint primary key auto_increment,
+  val tinyint
+) ENGINE=ndb;
+
 drop table if exists longintstringix;
 create table longintstringix (
  id int(11) not null,
@@ -705,6 +897,123 @@ create table longintstringix (
  PRIMARY KEY (id),
  KEY idx_long_int_string (longix, intix, stringix)
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+
+drop table if exists cassandra_string;
+create table cassandra_string (
+  id varchar(10),
+  c1 varchar(34),
+  c2 varchar(34),
+  c3 varchar(34),
+  c4 varchar(34),
+  c5 varchar(34)
+) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+
+drop table if exists cassandra_byte_array;
+create table cassandra_byte_array (
+  id binary(10) primary key,
+  c1 binary(34),
+  c2 binary(34),
+  c3 binary(34),
+  c4 binary(34),
+  c5 binary(34)
+) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+
+drop table if exists stress;
+create table stress (
+  id int not null primary key,
+  i0 int not null,
+  l0 bigint not null,
+  f0 float not null,
+  d0 double not null,
+  i1 int not null,
+  l1 bigint not null,
+  f1 float not null,
+  d1 double not null,
+  i2 int not null,
+  l2 bigint not null,
+  f2 float not null,
+  d2 double not null,
+  i3 int not null,
+  l3 bigint not null,
+  f3 float not null,
+  d3 double not null,
+  i4 int not null,
+  l4 bigint not null,
+  f4 float not null,
+  d4 double not null,
+  i5 int not null,
+  l5 bigint not null,
+  f5 float not null,
+  d5 double not null,
+  i6 int not null,
+  l6 bigint not null,
+  f6 float not null,
+  d6 double not null,
+  i7 int not null,
+  l7 bigint not null,
+  f7 float not null,
+  d7 double not null,
+  i8 int not null,
+  l8 bigint not null,
+  f8 float not null,
+  d8 double not null,
+  i9 int not null,
+  l9 bigint not null,
+  f9 float not null,
+  d9 double not null,
+  i10 int not null,
+  l10 bigint not null,
+  f10 float not null,
+  d10 double not null,
+  i11 int not null,
+  l11 bigint not null,
+  f11 float not null,
+  d11 double not null,
+  i12 int not null,
+  l12 bigint not null,
+  f12 float not null,
+  d12 double not null,
+  i13 int not null,
+  l13 bigint not null,
+  f13 float not null,
+  d13 double not null,
+  i14 int not null,
+  l14 bigint not null,
+  f14 float not null,
+  d14 double not null,
+  i15 int not null,
+  l15 bigint not null,
+  f15 float not null,
+  d15 double not null,
+  i16 int not null,
+  l16 bigint not null,
+  f16 float not null,
+  d16 double not null,
+  i17 int not null,
+  l17 bigint not null,
+  f17 float not null,
+  d17 double not null,
+  i18 int not null,
+  l18 bigint not null,
+  f18 float not null,
+  d18 double not null,
+  i19 int not null,
+  l19 bigint not null,
+  f19 float not null,
+  d19 double not null
+  ) ENGINE=ndbcluster;
+
+drop table if exists `hope`;
+create table `hope` (
+  partition_id int,
+  id int,
+  int_col1 int NOT NULL,
+  int_col2 int NOT NULL,
+  str_col1 varchar(3000),
+  str_col2 varchar(3000),
+  str_col3 varchar(3000),
+  PRIMARY KEY (partition_id, id)
+  ) ENGINE=ndbcluster DEFAULT CHARSET=latin1 partition by key (partition_id);
 
 create database if not exists test2;
 use test2;

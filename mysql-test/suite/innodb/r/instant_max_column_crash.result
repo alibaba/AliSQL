@@ -1,0 +1,271 @@
+#
+# Bug: #34378513 : Assertion failure: dict0mem.h:2482:pos < n_def thread 140243300361984
+#
+# Create table with 1017 columns
+call create_table("tb1", 1017);
+# Generate row version
+INSERT INTO tb1 (col_1017) VALUES (1);
+# Keep a copy for other scenarios
+CREATE TABLE t1 AS SELECT * FROM tb1;
+CREATE TABLE t2 AS SELECT * FROM tb1;
+CREATE TABLE t3 AS SELECT * FROM tb1;
+CREATE TABLE t4 AS SELECT * FROM tb1;
+
+# 1017 (user cols) + 3 (system cols) = 1020 (MAX_FIELDS_ALLOWED)
+
+########################################
+# Scenario 1: ADD/DROP single column:
+########################################
+# Current: n_def = (user columns + system columns + n_drop_cols)
+# Current: n_def = 1020 (1017 + 3 + 0)
+# -----------------------------------------------------------------------
+# DROP - ADD columns till (n_def + n_col_added < MAX_FIELDS_ALLOWED)
+# -----------------------------------------------------------------------
+# DROP COLUMN should pass
+ALTER TABLE tb1 DROP COLUMN col_1017, ALGORITHM=INSTANT;
+# Current: n_def = 1020 (1016 + 3 + 1)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/tb1";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+1	1019	1016	1017	1017
+# ADD COLUMN should fail
+ALTER TABLE tb1 ADD COLUMN col_1017 INT, ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/tb1' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# DROP COLUMN should still pass
+ALTER TABLE tb1 DROP COLUMN col_1016, ALGORITHM=INSTANT;
+# Current: n_def = 1020 (1015 + 3 + 2)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/tb1";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+2	1018	1015	1017	1017
+# ADD COLUMN should still fail
+ALTER TABLE tb1 ADD COLUMN col_1017 INT, ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/tb1' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# -----------------------------------------------------------------------
+# Verify that ADD is possible without specifying ALGORITHM
+# (should fallback to INPLACE)
+# -----------------------------------------------------------------------
+# Table is rebuilt when ALGORITHM=INPLACE is used (internally)
+ALTER TABLE tb1 ADD COLUMN col_1017 INT;
+# Current: n_def = 1019 (1016 + 3)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/tb1";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+0	1019	1016	1016	1016
+# Cleanup
+DROP TABLE tb1;
+########################################
+# Scenario 2: ADD/DROP two columns:
+########################################
+# Current: n_def = (user columns + system columns + n_drop_cols)
+# Current: n_def = 1020 (1017 + 3 + 0)
+# -----------------------------------------------------------------------
+# DROP - ADD columns till (n_def + n_col_added < MAX_FIELDS_ALLOWED)
+# -----------------------------------------------------------------------
+# DROP COLUMN for 2 columns should pass
+ALTER TABLE t1
+DROP COLUMN col_1017,
+DROP COLUMN col_1016,
+ALGORITHM=INSTANT;
+# Current: n_def = 1020 (1015 + 3 + 2)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t1";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+1	1018	1015	1017	1017
+# ADD COLUMN should fail
+ALTER TABLE t1
+ADD COLUMN col_1017 INT,
+ADD COLUMN col_1016 INT,
+ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t1' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# DROP COLUMN for 2 columns should still pass
+ALTER TABLE t1
+DROP COLUMN col_1015,
+DROP COLUMN col_1014,
+ALGORITHM=INSTANT;
+# Current: n_def = 1020 (1013 + 3 + 4)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t1";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+2	1016	1013	1017	1017
+# ADD COLUMN should still fail
+ALTER TABLE t1
+ADD COLUMN col_1017 INT,
+ADD COLUMN col_1016 INT,
+ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t1' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# -----------------------------------------------------------------------
+# Verify that ADD is possible without specifying ALGORITHM
+# (should fallback to INPLACE)
+# -----------------------------------------------------------------------
+# Table is rebuilt when ALGORITHM=INPLACE is used (internally)
+ALTER TABLE t1
+ADD COLUMN col_1017 INT,
+ADD COLUMN col_1016 INT;
+# Current: n_def = 1018 (1015 + 3)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t1";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+0	1018	1015	1015	1015
+# Cleanup
+DROP TABLE t1;
+########################################
+# Scenario 3: ADD/DROP multiple columns:
+########################################
+# Current: n_def = (user columns + system columns + n_drop_cols)
+# Current: n_def = 1020 (1017 + 3 + 0)
+# -----------------------------------------------------------------------
+# ADD/DROP multiple columns and look for failures
+# -----------------------------------------------------------------------
+# DROP multiple columns should pass
+ALTER TABLE t2
+DROP COLUMN col_1016,
+DROP COLUMN col_1015,
+DROP COLUMN col_1014,
+DROP COLUMN col_1013,
+DROP COLUMN col_1012,
+DROP COLUMN col_1011,
+ALGORITHM=INSTANT;
+# Current: n_def = 1020 (1011 + 3 + 6)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t2";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+1	1014	1011	1017	1017
+# ADD COLUMN should fail
+ALTER TABLE t2
+ADD COLUMN col_1011 INT,
+DROP COLUMN col_1010,
+ADD COLUMN col_1012 INT,
+ADD COLUMN col_1013 INT,
+DROP COLUMN col_1009,
+DROP COLUMN col_1008,
+ADD COLUMN col_1014 INT,
+ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t2' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# -----------------------------------------------------------------------
+# Fallback to inplace for failed query
+# -----------------------------------------------------------------------
+ALTER TABLE t2
+ADD COLUMN col_1011 INT,
+DROP COLUMN col_1010,
+ADD COLUMN col_1012 INT,
+ADD COLUMN col_1013 INT,
+DROP COLUMN col_1009,
+DROP COLUMN col_1008,
+ADD COLUMN col_1014 INT;
+# Current: n_def = 1018 (1015 + 3 + 0)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t2";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+0	1015	1012	1012	1012
+# Cleanup
+DROP TABLE t2;
+########################################
+# Scenario 4: With other ALTER operations:
+########################################
+# Current: n_def = (user columns + system columns + n_drop_cols)
+# Current: n_def = 1020 (1017 + 3 + 0)
+# -----------------------------------------------------------------------
+# ADD/DROP with other ALTER operations
+# -----------------------------------------------------------------------
+# DROP COLUMN should pass
+ALTER TABLE t3
+DROP COLUMN col_1016,
+DROP COLUMN col_1015,
+DROP COLUMN col_1014,
+DROP COLUMN col_1013,
+DROP COLUMN col_1012,
+DROP COLUMN col_1011,
+DROP COLUMN col_1010,
+DROP COLUMN col_1009,
+ALGORITHM=INSTANT;
+Current: n_def = 1020 (1009 + 3 + 8)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t3";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+1	1012	1009	1017	1017
+# ADD COLUMN with other operations should fail
+ALTER TABLE t3
+ADD COLUMN col_1009 INT,
+RENAME COLUMN col_1017 TO col_10177,
+RENAME COLUMN col_1007 TO col_1007_new,
+DROP COLUMN col_1008,
+ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t3' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# ADD COLUMN should fail
+ALTER TABLE t3 ADD COLUMN col_1010 INT, ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t3' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# Similarly single column add/drop will fail
+ALTER TABLE t3 ADD COLUMN col_1010 INT, DROP COLUMN col_1008, ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t3' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# -----------------------------------------------------------------------
+# Fallback to inplace for failed query
+# -----------------------------------------------------------------------
+# ADD COLUMN should fallback to INPLACE and should pass
+ALTER TABLE t3 ADD COLUMN col_1010 INT;
+Current: n_def = 1013 (1010 + 3 + 0)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t3";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+0	1013	1010	1010	1010
+# Cleanup
+DROP TABLE t3;
+########################################
+# Scenario 5: ADD/DROP few columns:
+########################################
+# Current: n_def = (user columns + system columns + n_drop_cols)
+# Current: n_def = 1020 (1017 + 3 + 0)
+# -----------------------------------------------------------------------
+# ADD/DROP few columns together
+# -----------------------------------------------------------------------
+# DROP COLUMN should pass
+ALTER TABLE t4
+DROP COLUMN col_1016,
+DROP COLUMN col_1015,
+DROP COLUMN col_1014,
+DROP COLUMN col_1013,
+DROP COLUMN col_1012,
+DROP COLUMN col_1011,
+DROP COLUMN col_1010,
+DROP COLUMN col_1009,
+ALGORITHM=INSTANT;
+Current: n_def = 1020 (1009 + 3 + 8)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t4";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+1	1012	1009	1017	1017
+# ADD COLUMN should fail
+ALTER TABLE t4
+ADD COLUMN col_1016 INT,
+DROP COLUMN col_1008,
+ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t4' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# ADD COLUMN should fail
+ALTER TABLE t4
+ADD COLUMN col_1015 INT, 
+DROP COLUMN col_1007,
+DROP COLUMN col_1006,
+ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t4' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# ADD COLUMN should fail
+ALTER TABLE t4
+ADD COLUMN col_1014 INT,
+ADD COLUMN col_1013 INT,
+DROP COLUMN col_1005, 
+ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/t4' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# -----------------------------------------------------------------------
+# Fallback to inplace for failed query
+# -----------------------------------------------------------------------
+ALTER TABLE t4
+ADD COLUMN col_1014 INT,
+ADD COLUMN col_1013 INT,
+DROP COLUMN col_1005;
+Current: n_def = 1013 (1010 + 3 + 0)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t4";
+TOTAL_ROW_VERSIONS	N_COLS	CURRENT_COLUMN_COUNTS	INITIAL_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
+0	1013	1010	1010	1010
+# Cleanup
+DROP TABLE t4;
+DROP PROCEDURE create_table;

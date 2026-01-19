@@ -22,12 +22,13 @@
 # HELPER include/stage_setup.inc
 # ==============================
 
---source include/not_embedded.inc
---source include/have_perfschema.inc
+# Test requires: sp-protocol/ps-protocol/view-protocol/cursor-protocol disabled
 --source include/no_protocol.inc
 
 --disable_query_log
 
+create user user1@localhost, user2@localhost,
+            user3@localhost, user4@localhost;
 grant ALL on *.* to user1@localhost;
 grant ALL on *.* to user2@localhost;
 grant ALL on *.* to user3@localhost;
@@ -50,18 +51,24 @@ create table test.setup_actors as
 # Only instrument the user connections
 truncate table performance_schema.setup_actors;
 insert into performance_schema.setup_actors
-  set host= 'localhost', user= 'user1', role= '%';
+  set host= 'localhost', user= 'user1', `role`= '%',
+  enabled='YES', history='YES';
 insert into performance_schema.setup_actors
-  set host= 'localhost', user= 'user2', role= '%';
+  set host= 'localhost', user= 'user2', `role`= '%',
+  enabled='YES', history='YES';
 insert into performance_schema.setup_actors
-  set host= 'localhost', user= 'user3', role= '%';
+  set host= 'localhost', user= 'user3', `role`= '%',
+  enabled='YES', history='YES';
 insert into performance_schema.setup_actors
-  set host= 'localhost', user= 'user4', role= '%';
+  set host= 'localhost', user= 'user4', `role`= '%',
+  enabled='YES', history='YES';
 
 update performance_schema.threads set instrumented='NO';
 
 # Only instrument a few events of each kind
 update performance_schema.setup_instruments set enabled='YES', timed='YES';
+
+update performance_schema.setup_consumers set enabled='YES';
 
 # Start from a known clean state, to avoid noise from previous tests
 flush tables;

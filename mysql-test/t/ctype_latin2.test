@@ -1,4 +1,5 @@
 
+
 # Tests with the latin1 character set
 #
 --disable_warnings
@@ -39,14 +40,14 @@ INSERT INTO t1 VALUES (0xF8),(0xF9),(0xFA),(0xFB),(0xFC),(0xFD),(0xFE),(0xFF);
 #
 # Bug#6504 upper/lower conversion bug
 #
-SELECT hex(a) ha, hex(lower(a)) hl, hex(upper(a)) hu, 
-a, lower(a) l, upper(a) u from t1 order by ha;
+SELECT hex(a) ha, hex(lower(a)) hl, hex(upper(a)) hu
+from t1 order by ha;
 
 
 #
 # Bug#6505 wrong sorting order
 #
-SELECT group_concat(a collate latin2_croatian_ci order by binary a) from t1 group by a collate latin2_croatian_ci;
+SELECT HEX(group_concat(a collate latin2_croatian_ci order by binary a)) from t1 group by a collate latin2_croatian_ci;
 drop table t1;
 
 # End of 4.1 tests
@@ -64,11 +65,9 @@ drop table t1;
 
 set names latin2;
 --source include/weight_string.inc
---source include/weight_string_l1.inc
 
 set collation_connection=latin2_bin;
 --source include/weight_string.inc
---source include/weight_string_l1.inc
 
 --echo #
 --echo # Bugs#12635232: VALGRIND WARNINGS: IS_IPV6, IS_IPV4, INET6_ATON,

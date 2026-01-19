@@ -1,3 +1,25 @@
+Copyright (c) 2017, 2025, Oracle and/or its affiliates.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 CHARSET_INFO
 ============
@@ -7,7 +29,7 @@ Virtual functions that use this data are collected into separate
 structures, MY_CHARSET_HANDLER and MY_COLLATION_HANDLER.
 
 
-typedef struct charset_info_st
+struct CHARSET_INFO
 {
   uint      number;
   uint      primary_number;
@@ -15,16 +37,16 @@ typedef struct charset_info_st
   uint      state;
 
   const char *csname;
-  const char *name;
+  const char *m_coll_name;
   const char *comment;
 
-  uchar    *ctype;
-  uchar    *to_lower;
-  uchar    *to_upper;
-  uchar    *sort_order;
+  const uchar *ctype;
+  const uchar *to_lower;
+  const uchar *to_upper;
+  const uchar *sort_order;
 
-  uint16      *tab_to_uni;
-  MY_UNI_IDX  *tab_from_uni;
+  const uint16     *tab_to_uni;
+  const MY_UNI_IDX *tab_from_uni;
 
   uchar state_map[256];
   uchar ident_map[256];
@@ -32,12 +54,15 @@ typedef struct charset_info_st
   uint      strxfrm_multiply;
   uint      mbminlen;
   uint      mbmaxlen;
+  uint      mbmaxlenlen;
   uint16    max_sort_char; /* For LIKE optimization */
 
   MY_CHARSET_HANDLER *cset;
   MY_COLLATION_HANDLER *coll;
 
-} CHARSET_INFO;
+  Pad_attribute pad_attribute;
+
+};
 
 
 CHARSET_INFO fields description:
@@ -62,10 +87,10 @@ character set. Not really used now.
 Names
 -----
 
-  csname  - name of the character set for this charset+collation pair.
-  name    - name of the collation for this charset+collation pair.
-  comment - a text comment, displayed in "Description" column of
-            SHOW CHARACTER SET output.
+  csname      - name of the character set for this charset+collation pair.
+  m_coll_name - name of the collation for this charset+collation pair.
+  comment     - a text comment, displayed in "Description" column of
+                SHOW CHARACTER SET output.
 
 Conversion tables
 -----------------
@@ -180,6 +205,10 @@ Miscellaneous fields
   mbmaxlen         - maximum multi-byte sequence length.
                      1 for 8-bit charsets. Can be also 2 or 3.
 
+  mbmaxlenlen      - maximum leading bytes of a sequence to
+                     determine the length of the multi-byte
+                     sequence length.
+
   max_sort_char    - for LIKE range
                      in case of 8-bit character sets - native code
 		     of maximum character (max_str pad byte);
@@ -189,6 +218,11 @@ Miscellaneous fields
 		     and then used as a pad sequence for max_str.
 		     in case of other multi-byte character sets -
 		     max_str pad byte (usually 0xFF).
+
+  pad_attribute    - whether this collation is a PAD SPACE or NO PAD
+                     collation. PAD SPACE collations treat strings
+		     as if they were conceptually padded with an infinite
+		     amount of space characters at the end.
 
 MY_CHARSET_HANDLER
 ==================
@@ -202,8 +236,9 @@ Multi-byte routines
 ismbchar()  - detects whether the given string is a multi-byte sequence
 mbcharlen() - returns length of multi-byte sequence starting with
               the given character
-numchars()  - returns number of characters in the given string, e.g.
-              in SQL function CHAR_LENGTH().
+numchars()  - returns number of characters (in SQL terminology),
+              or code points (in character encoding terminology)
+              in the given string, e.g. in the SQL function CHAR_LENGTH().
 charpos()   - calculates the offset of the given position in the string.
               Used in SQL functions LEFT(), RIGHT(), SUBSTRING(), 
               INSERT()
@@ -220,8 +255,20 @@ lengthsp()  - returns the length of the given string without trailing spaces.
 Unicode conversion routines
 ---------------------------
 mb_wc       - converts the left multi-byte sequence into its Unicode code.
-mc_mb       - converts the given Unicode code into multi-byte sequence.
+  @retval   MY_CS_TOOSMALL If the string was too short to scan a character
+  @retval   1              If a 1-byte character was scanned
+  @retval   2              If a 2-byte character was scanned
+  @retval   3              If a 3-byte character was scanned
+  @retval  -2              If a 2-byte unassigned character was scanned
+  @retval  -3              If a 3-byte unassigned character was scanned
+  @retval   MY_CS_ILSEQ    If a wrong byte sequence was found
 
+wc_mb       - converts the given Unicode code into multi-byte sequence.
+  @retval   MY_CS_TOOSMALL If the string was too short to put a character
+  @retval   1              If a 1-byte character was put
+  @retval   2              If a 2-byte character was put
+  @retval   MY_CS_ILUNI    If the Unicode character does not exist in the
+                           given character set.
 
 Case and sort conversion
 ------------------------
@@ -267,7 +314,8 @@ scan()    - to skip leading spaces in the given string.
 MY_COLLATION_HANDLER
 ====================
 strnncoll()   - compares two strings according to the given collation
-strnncollsp() - like the above but ignores trailing spaces
+strnncollsp() - like the above but ignores trailing spaces for PAD SPACE
+                collations. For NO PAD collations, identical to strnncoll.
 strnxfrm()    - makes a sort key suitable for memcmp() corresponding
                 to the given string
 like_range()  - creates a LIKE range, for optimizer

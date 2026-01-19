@@ -33,7 +33,7 @@ if ($error_simulation)
     while ($i < $connections)
     {
       --connection con$i
-        set session debug="+d,simulate_binlog_flush_error";
+      set session debug="+d,simulate_binlog_flush_error";
       --inc $i
     }
 }
@@ -72,7 +72,7 @@ if ($error_simulation)
     while ($i < $connections)
     {
       --connection con$i
-        set session debug="-d,simulate_binlog_flush_error";
+      set session debug="-d,simulate_binlog_flush_error";
       --inc $i
     }
 }

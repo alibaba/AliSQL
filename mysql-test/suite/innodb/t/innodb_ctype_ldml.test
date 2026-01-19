@@ -1,7 +1,3 @@
---source include/have_ucs2.inc
---source include/have_utf8mb4.inc
---source include/have_utf16.inc
---source include/have_utf32.inc
 
 --disable_warnings
 drop table if exists t1;
@@ -11,7 +7,7 @@ drop table if exists t1;
 # They are reported to the server error log. Let's suppress them.
 --disable_query_log
 call mtr.add_suppression("Syntax error at '\\[strength tertiary\\]'");
-call mtr.add_suppression("Can't reset before a primary ignorable character U\\+A48C");
+call mtr.add_suppression("Failed to reset before a primary ignorable character U\\+A48C");
 --enable_query_log
 
 --echo In the following tests we change the order of letter "b"
@@ -112,7 +108,7 @@ DROP TABLE t1;
 # Crash happened with a user-defined utf8 collation,
 # on attempt to insert a string longer than the column can store.
 CREATE TABLE t1 (c1 VARCHAR(10) CHARACTER SET utf8 COLLATE utf8_test_ci);
-INSERT INTO t1 SELECT REPEAT('a',11);
+INSERT IGNORE INTO t1 SELECT REPEAT('a',11);
 DROP TABLE t1;
 
 #
@@ -166,7 +162,7 @@ select "foo" = "foo " collate latin1_test;
 # The file ../std-data/Index.xml has a number of collations with high IDs.
 
 # Test that the "ID" column in I_S and SHOW queries can handle two bytes
-select * from information_schema.collations where id>256 order by id;
+select collation_name, character_set_name, id from information_schema.collations where id>256 order by id;
 show collation like '%test%';
 
 # Test that two-byte collation ID is correctly transfered to the client side.

@@ -32,7 +32,7 @@ drop table t2;
 CREATE TABLE `t2` (
 `views` int(11) NOT NULL default '0',
 `clicks` int(11) NOT NULL default '0',
-`day` date NOT NULL default '0000-00-00',
+`day` date NOT NULL,
 `hour` tinyint(4) NOT NULL default '0',
 `bannerid` smallint(6) NOT NULL default '0',
 `zoneid` smallint(6) NOT NULL default '0',
@@ -41,6 +41,12 @@ PRIMARY KEY  (`day`,`hour`,`bannerid`,`zoneid`,`source`),
 KEY `bannerid_day` (`bannerid`,`day`),
 KEY `zoneid` (`zoneid`)
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO `t2` VALUES
 (  1,0,'2004-09-17', 5,100,100,''),
 (  1,0,'2004-09-18', 7,100,100,''),

@@ -1,14 +1,22 @@
-/* 
-   Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+/*
+   Copyright (c) 2007, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,33 +30,26 @@
  * Win32 Implementation of AsyncFile interface
  */
 
-#include <kernel_types.h>
 #include "AsyncFile.hpp"
 
-class Win32AsyncFile : public AsyncFile
-{
+#define JAM_FILE_ID 395
+
+class Ndbfs;
+class Request;
+
+class Win32AsyncFile : public AsyncFile {
   friend class Ndbfs;
-public:
-  Win32AsyncFile(SimulatedBlock& fs);
-  virtual ~Win32AsyncFile();
 
-  virtual int init();
-  virtual bool isOpen();
-  virtual void openReq(Request *request);
-  virtual void closeReq(Request *request);
-  virtual void syncReq(Request *request);
+ public:
+  Win32AsyncFile(Ndbfs &fs);
+
   virtual void removeReq(Request *request);
-  virtual void appendReq(Request *request);
-  virtual void rmrfReq(Request *request, const char * path, bool removePath);
+  virtual void rmrfReq(Request *request, const char *path, bool removePath);
 
-  virtual int readBuffer(Request*, char * buf, size_t size, off_t offset);
-  virtual int writeBuffer(const char * buf, size_t size, off_t offset);
-
-private:
-  int extendfile(Request* request);
+ private:
   void createDirectories();
-
-  HANDLE hFile;
 };
+
+#undef JAM_FILE_ID
 
 #endif

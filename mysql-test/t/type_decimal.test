@@ -1,10 +1,13 @@
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 # bug in decimal() with negative numbers by kaido@tradenet.ee
 
 --disable_warnings
 DROP TABLE IF EXISTS t1, t2;
 --enable_warnings
 SET SQL_WARNINGS=1;
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
    id int(11) NOT NULL auto_increment,
    datatype_id int(11) DEFAULT '0' NOT NULL,
@@ -16,6 +19,9 @@ CREATE TABLE t1 (
    PRIMARY KEY (id),
    UNIQUE datatype_id (datatype_id, min_value, max_value)
 );
+
+set names latin1;
+--character_set latin1
 INSERT INTO t1 VALUES ( '1', '4', '0.0000000000', '0.0000000000', 'Ei saja', '0', '16776960');
 INSERT INTO t1 VALUES ( '2', '4', '1.0000000000', '1.0000000000', 'Sajab', '16777215', '255');
 INSERT INTO t1 VALUES ( '3', '1', '2.0000000000', '49.0000000000', '', '0', '16777215');
@@ -151,6 +157,9 @@ INSERT INTO t1 VALUES ( '146', '16', '0.0000000000', '1.9000000000', '', '0', '1
 select * from t1 where min_value<=1 and max_value>=-1 and datatype_id=16;
 select * from t1 where min_value<=-1 and max_value>=-1 and datatype_id=16;
 drop table t1;
+
+set names utf8mb4;
+--character_set utf8mb4
 
 #
 # Test of correct handling leading zero and  +/- signs
@@ -307,9 +316,15 @@ insert into t1 values (1);
 select * from t1;
 drop table t1;
 create table t1 (d decimal(5));
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 create table t1 (d decimal);
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 --error 1426
@@ -484,6 +499,9 @@ SELECT ROUND( a, 100 ) AS c FROM t4 ORDER BY c;
 
 delete from t1;
 INSERT INTO t1 VALUES (1234567890, 20), (999.99, 5);
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 
 select round(a,b) as c from t1 order by c;
@@ -538,6 +556,7 @@ DROP TABLE t1, t2, t3, t4, t5, t6;
 #
 create table t1(`c` decimal(9,2));
 insert into t1 values (300),(201.11);
+--sorted_result
 select max(case 1 when 1 then c else null end) from t1 group by c;
 drop table t1;
 
@@ -583,3 +602,16 @@ JOIN
 WHERE CONCAT(t1.col1, CAST(subq.col0 AS DECIMAL));
 
 DROP TABLE t1, t2;
+SET sql_mode = default;
+
+--echo #
+--echo # Bug#32591589: ASSERTION `DIGITS <= DECIMAL_INT_PART()' FAILED|SQL/ITEM_FUNC.CC
+--echo #
+SELECT CAST(9.9 AS SIGNED INTEGER) AS f;
+
+--echo #
+--echo # Bug#34973932 	Decimal value assertion error
+--echo #
+SELECT 1 < ALL(VALUES ROW(2),ROW(CAST(3 AS DECIMAL))) FROM DUAL;
+SELECT 1 < ALL(VALUES ROW(2),ROW(3.0)) FROM DUAL;
+

@@ -1,40 +1,72 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-
-
 #define QMGR_C
 #include "Qmgr.hpp"
 
-#define DEBUG(x) { ndbout << "Qmgr::" << x << endl; }
+#define JAM_FILE_ID 361
 
+#define DEBUG(x) \
+  { ndbout << "Qmgr::" << x << endl; }
 
-void Qmgr::initData() 
-{
+void Qmgr::initData() {
   creadyDistCom = ZFALSE;
+  m_current_switch_multi_trp_node = 0;
+  m_get_num_multi_trps_sent = 0;
+  m_initial_set_up_multi_trp_done = false;
+  m_ref_set_up_multi_trp_req = 0;
 
   // Records with constant sizes
   nodeRec = new NodeRec[MAX_NODES];
-  for (Uint32 i = 0; i<MAX_NODES; i++)
-  {
+  for (Uint32 i = 0; i < MAX_NODES; i++) {
     nodeRec[i].m_secret = 0;
+    nodeRec[i].m_count_multi_trp_ref = 0;
+    nodeRec[i].m_initial_set_up_multi_trp_done = false;
+    nodeRec[i].m_is_multi_trp_setup = false;
+    nodeRec[i].m_is_get_num_multi_trp_active = false;
+    nodeRec[i].m_is_activate_trp_ready_for_me = false;
+    nodeRec[i].m_is_activate_trp_ready_for_other = false;
+    nodeRec[i].m_is_freeze_thread_completed = false;
+    nodeRec[i].m_is_ready_to_switch_trp = false;
+    nodeRec[i].m_is_preparing_switch_trp = false;
+    nodeRec[i].m_is_using_multi_trp = false;
+    nodeRec[i].m_set_up_multi_trp_started = false;
+    nodeRec[i].m_used_num_multi_trps = 0;
+    nodeRec[i].m_num_activated_trps = 0;
+    nodeRec[i].m_multi_trp_blockref = 0;
+    nodeRec[i].m_check_multi_trp_connect_loop_count = 0;
+    nodeRec[i].m_is_in_same_nodegroup = false;
   }
 
-  cnoCommitFailedNodes = 0;
+  nodeFailRec = new NodeFailRec[MAX_DATA_NODE_FAILURES];
+  for (Uint32 i = 0; i < MAX_DATA_NODE_FAILURES; i++) {
+    nodeFailRec[i].nodes.clear();
+    nodeFailRec[i].failureNr = 0;
+    nodeFailRec[i].president = 0;
+  }
+
   c_maxDynamicId = 0;
   c_clusterNodes.clear();
   c_stopReq.senderRef = 0;
@@ -44,7 +76,7 @@ void Qmgr::initData()
    */
   ndbrequire((Uint32)NodeInfo::DB == 0);
   ndbrequire((Uint32)NodeInfo::API == 1);
-  ndbrequire((Uint32)NodeInfo::MGM == 2); 
+  ndbrequire((Uint32)NodeInfo::MGM == 2);
 
   m_micro_gcp_enabled = false;
   m_hb_order_config_used = false;
@@ -53,22 +85,35 @@ void Qmgr::initData()
   nodePtr.i = getOwnNodeId();
   ptrAss(nodePtr, nodeRec);
   nodePtr.p->blockRef = reference();
+  ndbrequire(getNodeInfo(getOwnNodeId()).m_type == NodeInfo::DB);
 
   c_connectedNodes.set(getOwnNodeId());
   setNodeInfo(getOwnNodeId()).m_version = NDB_VERSION;
 
-
   /**
    * Timeouts
    */
-  const ndb_mgm_configuration_iterator * p = 
-    m_ctx.m_config.getOwnConfigIterator();
+  const ndb_mgm_configuration_iterator *p =
+      m_ctx.m_config.getOwnConfigIterator();
   ndbrequire(p != 0);
-  
+
   Uint32 hbDBAPI = 1500;
   ndb_mgm_get_int_parameter(p, CFG_DB_API_HEARTBEAT_INTERVAL, &hbDBAPI);
-  
+
   setHbApiDelay(hbDBAPI);
+
+  const NDB_TICKS now = NdbTick_getCurrentTicks();  // OJA bug#17757895
+  interface_check_timer.setDelay(1000);
+  interface_check_timer.reset(now);
+
+  Uint32 trp_keep_alive_send_interval = 60 * 1000;  // 1 minute
+  ndb_mgm_get_int_parameter(p, CFG_DB_TRP_KEEP_ALIVE_SEND_INTERVAL,
+                            &trp_keep_alive_send_interval);
+  if (trp_keep_alive_send_interval > 0 && trp_keep_alive_send_interval < 10) {
+    trp_keep_alive_send_interval = 10;
+  }
+  setTrpKeepAliveSendDelay(trp_keep_alive_send_interval);
+  c_keepalive_seqnum = 0;
 
 #ifdef ERROR_INSERT
   nodeFailCount = 0;
@@ -77,8 +122,9 @@ void Qmgr::initData()
   cfailureNr = 1;
   ccommitFailureNr = 1;
   cprepareFailureNr = 1;
-  cnoFailedNodes = 0;
-  cnoPrepFailedNodes = 0;
+  cfailedNodes.clear();
+  cprepFailedNodes.clear();
+  ccommitFailedNodes.clear();
   creadyDistCom = ZFALSE;
   cpresident = ZNIL;
   c_start.m_president_candidate = ZNIL;
@@ -87,20 +133,80 @@ void Qmgr::initData()
   cneighbourh = ZNIL;
   cneighbourl = ZNIL;
   cdelayRegreq = ZDELAY_REGREQ;
-  cactivateApiCheck = 0;
   c_allow_api_connect = 0;
   ctoStatus = Q_NOT_ACTIVE;
-  clatestTransactionCheck = 0;
-}//Qmgr::initData()
+  c_keep_alive_send_in_progress = false;
 
-void Qmgr::initRecords() 
-{
+  for (nodePtr.i = 1; nodePtr.i < MAX_NODES; nodePtr.i++) {
+    ptrAss(nodePtr, nodeRec);
+    nodePtr.p->ndynamicId = 0;
+    nodePtr.p->hbOrder = 0;
+    Uint32 cnt = 0;
+    Uint32 type = getNodeInfo(nodePtr.i).m_type;
+    switch (type) {
+      case NodeInfo::DB:
+        jam();
+        nodePtr.p->phase = ZINIT;
+        c_definedNodes.set(nodePtr.i);
+        break;
+      case NodeInfo::API:
+        jam();
+        nodePtr.p->phase = ZAPI_INACTIVE;
+        break;
+      case NodeInfo::MGM:
+        jam();
+        /**
+         * cmvmi allows ndb_mgmd to connect directly
+         */
+        nodePtr.p->phase = ZAPI_INACTIVE;
+        break;
+      default:
+        jam();
+        nodePtr.p->phase = ZAPI_INACTIVE;
+    }
+
+    set_hb_count(nodePtr.i) = cnt;
+    nodePtr.p->sendPrepFailReqStatus = Q_NOT_ACTIVE;
+    nodePtr.p->sendCommitFailReqStatus = Q_NOT_ACTIVE;
+    nodePtr.p->sendPresToStatus = Q_NOT_ACTIVE;
+    nodePtr.p->failState = NORMAL;
+  }  // for
+
+  /* Received ProcessInfo are indirectly addressed:
+     nodeId => fixed array lookup => dynamic array.
+     The dynamic array contains enough entries for all
+     configured MGM and API nodes.
+  */
+  int numOfApiAndMgmNodes = 0;
+  for (int i = 1; i < MAX_NODES; i++) {
+    Uint32 type = getNodeInfo(i).m_type;
+    switch (type) {
+      case NodeInfo::API:
+      case NodeInfo::MGM:
+        processInfoNodeIndex[i] = numOfApiAndMgmNodes++;
+        max_api_node_id = i;
+        break;
+      default:
+        processInfoNodeIndex[i] = -1;
+        break;
+    }
+  }
+  /*
+   * In reality there must be at least one MGM, API, and, DB node.
+   * And numOfApiAndMgmNodes will be betweeen 2 and 254 (MAX_NODES - 2).
+   *
+   * If in future one can have DB only cluster it is ok to leave
+   * receivedProcessInfo as nullptr since it is only used for MGM and API.
+   */
+  if (likely(numOfApiAndMgmNodes > 0))
+    receivedProcessInfo = new ProcessInfo[numOfApiAndMgmNodes];
+}  // Qmgr::initData()
+
+void Qmgr::initRecords() {
   // Records with dynamic sizes
-}//Qmgr::initRecords()
+}  // Qmgr::initRecords()
 
-Qmgr::Qmgr(Block_context& ctx)
-  : SimulatedBlock(QMGR, ctx)
-{
+Qmgr::Qmgr(Block_context &ctx) : SimulatedBlock(QMGR, ctx) {
   BLOCK_CONSTRUCTOR(Qmgr);
 
   // Transit signals
@@ -139,14 +245,17 @@ Qmgr::Qmgr(Block_context& ctx)
   addRecSignal(GSN_API_FAILREQ, &Qmgr::execAPI_FAILREQ);
   addRecSignal(GSN_API_FAILCONF, &Qmgr::execAPI_FAILCONF);
   addRecSignal(GSN_READ_NODESREQ, &Qmgr::execREAD_NODESREQ);
-  addRecSignal(GSN_API_BROADCAST_REP,  &Qmgr::execAPI_BROADCAST_REP);
+  addRecSignal(GSN_API_BROADCAST_REP, &Qmgr::execAPI_BROADCAST_REP);
+  addRecSignal(GSN_TRP_KEEP_ALIVE, &Qmgr::execTRP_KEEP_ALIVE);
 
   addRecSignal(GSN_NODE_FAILREP, &Qmgr::execNODE_FAILREP);
-  addRecSignal(GSN_ALLOC_NODEID_REQ,  &Qmgr::execALLOC_NODEID_REQ);
-  addRecSignal(GSN_ALLOC_NODEID_CONF,  &Qmgr::execALLOC_NODEID_CONF);
-  addRecSignal(GSN_ALLOC_NODEID_REF,  &Qmgr::execALLOC_NODEID_REF);
-  addRecSignal(GSN_ENABLE_COMCONF,  &Qmgr::execENABLE_COMCONF);
-  
+  addRecSignal(GSN_ALLOC_NODEID_REQ, &Qmgr::execALLOC_NODEID_REQ);
+  addRecSignal(GSN_ALLOC_NODEID_CONF, &Qmgr::execALLOC_NODEID_CONF);
+  addRecSignal(GSN_ALLOC_NODEID_REF, &Qmgr::execALLOC_NODEID_REF);
+  addRecSignal(GSN_ENABLE_COMCONF, &Qmgr::execENABLE_COMCONF);
+  addRecSignal(GSN_PROCESSINFO_REP, &Qmgr::execPROCESSINFO_REP);
+  addRecSignal(GSN_SYNC_THREAD_VIA_CONF, &Qmgr::execSYNC_THREAD_VIA_CONF);
+
   // Arbitration signals
   addRecSignal(GSN_ARBIT_PREPREQ, &Qmgr::execARBIT_PREPREQ);
   addRecSignal(GSN_ARBIT_PREPCONF, &Qmgr::execARBIT_PREPCONF);
@@ -162,22 +271,48 @@ Qmgr::Qmgr(Block_context& ctx)
 
   addRecSignal(GSN_DIH_RESTARTREF, &Qmgr::execDIH_RESTARTREF);
   addRecSignal(GSN_DIH_RESTARTCONF, &Qmgr::execDIH_RESTARTCONF);
+
+  addRecSignal(GSN_SET_UP_MULTI_TRP_REQ, &Qmgr::execSET_UP_MULTI_TRP_REQ);
+  addRecSignal(GSN_GET_NUM_MULTI_TRP_REQ, &Qmgr::execGET_NUM_MULTI_TRP_REQ);
+  addRecSignal(GSN_GET_NUM_MULTI_TRP_CONF, &Qmgr::execGET_NUM_MULTI_TRP_CONF);
+  addRecSignal(GSN_GET_NUM_MULTI_TRP_REF, &Qmgr::execGET_NUM_MULTI_TRP_REF);
+  addRecSignal(GSN_FREEZE_ACTION_REQ, &Qmgr::execFREEZE_ACTION_REQ);
+  addRecSignal(GSN_FREEZE_THREAD_CONF, &Qmgr::execFREEZE_THREAD_CONF);
+  addRecSignal(GSN_ACTIVATE_TRP_REQ, &Qmgr::execACTIVATE_TRP_REQ);
+  addRecSignal(GSN_ACTIVATE_TRP_CONF, &Qmgr::execACTIVATE_TRP_CONF);
+  addRecSignal(GSN_SWITCH_MULTI_TRP_REQ, &Qmgr::execSWITCH_MULTI_TRP_REQ);
+  addRecSignal(GSN_SWITCH_MULTI_TRP_CONF, &Qmgr::execSWITCH_MULTI_TRP_CONF);
+  addRecSignal(GSN_SWITCH_MULTI_TRP_REF, &Qmgr::execSWITCH_MULTI_TRP_REF);
+
   addRecSignal(GSN_NODE_VERSION_REP, &Qmgr::execNODE_VERSION_REP);
   addRecSignal(GSN_START_ORD, &Qmgr::execSTART_ORD);
 
   addRecSignal(GSN_UPGRADE_PROTOCOL_ORD, &Qmgr::execUPGRADE_PROTOCOL_ORD);
-  
+
   // Connectivity check signals
   addRecSignal(GSN_NODE_PING_REQ, &Qmgr::execNODE_PINGREQ);
   addRecSignal(GSN_NODE_PING_CONF, &Qmgr::execNODE_PINGCONF);
 
+  // Ndbinfo signal
+  addRecSignal(GSN_DBINFO_SCANREQ, &Qmgr::execDBINFO_SCANREQ);
+
+  // Message from NDBCNTR when our node is set to state STARTED
+  addRecSignal(GSN_NODE_STARTED_REP, &Qmgr::execNODE_STARTED_REP);
+
+  // Message from other blocks requesting node isolation
+  addRecSignal(GSN_ISOLATE_ORD, &Qmgr::execISOLATE_ORD);
+
+  addRecSignal(GSN_READ_LOCAL_SYSFILE_CONF, &Qmgr::execREAD_LOCAL_SYSFILE_CONF);
+
+  addRecSignal(GSN_NODE_STATE_REP, &Qmgr::execNODE_STATE_REP,
+               true);  // Override
+
   initData();
-}//Qmgr::Qmgr()
+}  // Qmgr::Qmgr()
 
-Qmgr::~Qmgr() 
-{
-  delete []nodeRec;
-}//Qmgr::~Qmgr()
-
+Qmgr::~Qmgr() {
+  delete[] nodeRec;
+  delete[] receivedProcessInfo;
+}  // Qmgr::~Qmgr()
 
 BLOCK_FUNCTIONS(Qmgr)

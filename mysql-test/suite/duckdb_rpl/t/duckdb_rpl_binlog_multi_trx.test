@@ -1,0 +1,64 @@
+--disable_warnings
+--let $rpl_topology= 1->2->3
+--source include/rpl_init.inc
+--enable_warnings
+
+--echo ###########################################################################
+--echo # 0. Prepare, InnoDB (server_1) -> DuckDB (server_2) -> DuckDB (server_3)
+--echo ###########################################################################
+--connection server_1
+--echo [connection server_1]
+--let $server1_uuid = `SELECT @@global.server_uuid`
+
+SET autocommit = 1;
+CREATE TABLE t1 (
+    id BIGINT NOT NULL,
+    c0 VARCHAR(20) NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+
+--source include/rpl_sync.inc
+--connection server_2
+--echo [connection server_2]
+SHOW CREATE TABLE t1;
+
+--source include/rpl_sync.inc
+--connection server_3
+--echo [connection server_3]
+SHOW CREATE TABLE t1;
+
+--echo ###########################################################################
+--echo # 1. Test for setting duckdb_multi_trx_in_batch=on on server_3
+--echo ###########################################################################
+--let $start_id = 1
+--source duckdb_rpl_binlog_multi_trx.inc
+
+--echo ###########################################################################
+--echo # 2. Test for setting duckdb_multi_trx_in_batch=off on server_3
+--echo ###########################################################################
+--connection server_3
+--echo [connection server_3]
+SET GLOBAL duckdb_multi_trx_in_batch=off;
+
+--let $start_id = 4
+--source duckdb_rpl_binlog_multi_trx.inc
+
+--echo ###########################################################################
+--echo # 3. Check server_3's Slave Status
+--echo ###########################################################################
+--connection server_3
+--echo [connection server_3]
+SET GLOBAL duckdb_multi_trx_in_batch=on;
+--let $status_items = Retrieved_Gtid_Set, Executed_Gtid_Set
+--let $slave_field_result_replace = /$server1_uuid/SERVER1_UUID/
+--source include/show_slave_status.inc
+
+--echo ###########################################################################
+--echo # Cleanup
+--echo ###########################################################################
+--connection server_1
+--echo [connection server_1]
+DROP TABLE t1;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

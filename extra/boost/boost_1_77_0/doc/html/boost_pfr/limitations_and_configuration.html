@@ -1,0 +1,221 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Limitations and Configuration</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../boost_pfr.html" title="Chapter 28. Boost.PFR 2.0">
+<link rel="prev" href="tutorial.html" title="Tutorial">
+<link rel="next" href="how_it_works.html" title="How it works">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../boost_pfr.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="how_it_works.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_pfr.limitations_and_configuration"></a><a class="link" href="limitations_and_configuration.html" title="Limitations and Configuration">Limitations and
+    Configuration</a>
+</h2></div></div></div>
+<div class="caution"><table border="0" summary="Caution">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Caution]" src="../../../doc/src/images/caution.png"></td>
+<th align="left">Caution</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        Recommended C++ Standards are C++17 and above. Library requires at least
+        C++14! Pre C++14 compilers (C++11, C++03...) are not supported.
+      </p></td></tr>
+</table></div>
+<p>
+      Boost.PFR library works with types that satisfy the requirements of <code class="computeroutput"><span class="identifier">SimpleAggregate</span></code>: aggregate types without
+      base classes, <code class="computeroutput"><span class="keyword">const</span></code> fields, references,
+      or C arrays:
+    </p>
+<pre class="programlisting"><span class="keyword">struct</span> <span class="identifier">simple_aggregate</span> <span class="special">{</span>  <span class="comment">// SimpleAggregate</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">name</span><span class="special">;</span>
+    <span class="keyword">int</span> <span class="identifier">age</span><span class="special">;</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">uuids</span><span class="special">::</span><span class="identifier">uuid</span> <span class="identifier">uuid</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="keyword">struct</span> <span class="identifier">empty</span> <span class="special">{</span>             <span class="comment">// SimpleAggregate</span>
+<span class="special">};</span>
+
+<span class="keyword">struct</span> <span class="identifier">aggregate</span> <span class="special">:</span> <span class="identifier">empty</span> <span class="special">{</span> <span class="comment">// not a SimpleAggregate</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">name</span><span class="special">;</span>
+    <span class="keyword">int</span> <span class="identifier">age</span><span class="special">;</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">uuids</span><span class="special">::</span><span class="identifier">uuid</span> <span class="identifier">uuid</span><span class="special">;</span>
+<span class="special">};</span>
+</pre>
+<p>
+      The library may work with aggregates that don't satisfy the requirements of
+      <code class="computeroutput"><span class="identifier">SimpleAggregate</span></code>, but the behavior
+      tends to be non-portable.
+    </p>
+<h3>
+<a name="boost_pfr.limitations_and_configuration.h0"></a>
+      <span class="phrase"><a name="boost_pfr.limitations_and_configuration.configuration_macro"></a></span><a class="link" href="limitations_and_configuration.html#boost_pfr.limitations_and_configuration.configuration_macro">Configuration
+      Macro</a>
+    </h3>
+<p>
+      By default Boost.PFR <span class="bold"><strong>auto-detects your compiler abilities</strong></span>
+      and automatically defines the configuration macro into appropriate values.
+      If you wish to override that behavior, just define:
+    </p>
+<div class="table">
+<a name="boost_pfr.limitations_and_configuration.linkmacro"></a><p class="title"><b>Table 28.2. Macros</b></p>
+<div class="table-contents"><table class="table" summary="Macros">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                Macro name
+              </p>
+            </th>
+<th>
+              <p>
+                Effect
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <span class="bold"><strong>BOOST_PFR_USE_CPP17</strong></span>
+              </p>
+            </td>
+<td>
+              <p>
+                Define to <code class="computeroutput"><span class="number">1</span></code> if you wish
+                to override Boost.PFR choice and use C++17 structured bindings for
+                reflection. Define to <code class="computeroutput"><span class="number">0</span></code>
+                to override Boost.PFR choice and disable C++17 structured bindings
+                usage.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <span class="bold"><strong>BOOST_PFR_USE_LOOPHOLE</strong></span>
+              </p>
+            </td>
+<td>
+              <p>
+                Define to <code class="computeroutput"><span class="number">1</span></code> if you wish
+                to override Boost.PFR choice and exploit <a href="http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_active.html#2118" target="_top">CWG
+                2118</a> for reflection. Define to <code class="computeroutput"><span class="number">0</span></code>
+                to override Boost.PFR choice and disable CWG 2118 usage.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <span class="bold"><strong>BOOST_PFR_USE_STD_MAKE_INTEGRAL_SEQUENCE</strong></span>
+              </p>
+            </td>
+<td>
+              <p>
+                Define to <code class="computeroutput"><span class="number">0</span></code> if you are
+                hit by the template instantiation depth issues with <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">make_integer_sequence</span></code> and wish
+                to use Boost.PFR version of that metafunction. Define to <code class="computeroutput"><span class="number">1</span></code> to override Boost.PFR detection logic.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <span class="bold"><strong>BOOST_PFR_HAS_GUARANTEED_COPY_ELISION</strong></span>
+              </p>
+            </td>
+<td>
+              <p>
+                Define to <code class="computeroutput"><span class="number">0</span></code> if your compiler
+                does not implement C++17 guaranteed copy elision properly and fails
+                to reflect aggregates with non-movable fields. Define to <code class="computeroutput"><span class="number">1</span></code> to override Boost.PFR detection logic.
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><h3>
+<a name="boost_pfr.limitations_and_configuration.h1"></a>
+      <span class="phrase"><a name="boost_pfr.limitations_and_configuration.details_on_limitations"></a></span><a class="link" href="limitations_and_configuration.html#boost_pfr.limitations_and_configuration.details_on_limitations">Details
+      on Limitations</a>
+    </h3>
+<p>
+      The Boost.PFRs reflection has some limitations that depend on a C++ Standard
+      and compiler capabilities:
+    </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+          Static variables are ignored
+        </li>
+<li class="listitem">
+          T must be aggregate initializable without empty base classes
+        </li>
+<li class="listitem">
+          if T contains C arrays or it is inherited from non-empty type then the
+          result of reflection may differ depending on the C++ version and library
+          configuration
+        </li>
+<li class="listitem">
+          Additional limitations if <span class="bold"><strong>BOOST_PFR_USE_CPP17 ==
+          0</strong></span>:
+          <div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: circle; ">
+<li class="listitem">
+                Non of the member fields should have a template constructor from
+                one parameter.
+              </li>
+<li class="listitem">
+                Additional limitations if <span class="bold"><strong>BOOST_PFR_USE_LOOPHOLE
+                == 0</strong></span>:
+                <div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: square; ">
+<li class="listitem">
+                      T must be constexpr aggregate initializable and all its fields
+                      must be constexpr default constructible
+                    </li>
+<li class="listitem">
+                      <code class="computeroutput"><a class="link" href="../boost/pfr/get.html" title="Function get">boost::pfr::get</a></code>,
+                      <code class="computeroutput"><a class="link" href="../boost/pfr/structure_to_tuple.html" title="Function template structure_to_tuple">boost::pfr::structure_to_tuple</a></code>,
+                      <code class="computeroutput"><a class="link" href="../boost/pfr/structure_tie.html" title="Function structure_tie">boost::pfr::structure_tie</a></code>,
+                      <code class="computeroutput"><a class="link" href="../reference_section.html#header.boost.pfr.core_hpp" title="Header &lt;boost/pfr/core.hpp&gt;">boost::pfr::tuple_element</a></code>
+                      require T to be a POD type with built-in types only.
+                    </li>
+</ul></div>
+              </li>
+</ul></div>
+        </li>
+</ul></div>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2016-2021 Antony Polukhin<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../boost_pfr.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="how_it_works.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

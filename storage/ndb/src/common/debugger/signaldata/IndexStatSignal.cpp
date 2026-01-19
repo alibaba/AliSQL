@@ -1,25 +1,33 @@
-/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2025, Oracle and/or its affiliates.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <signaldata/IndexStatSignal.hpp>
 
-static void
-get_req_rt_name(Uint32 rt, char* rt_name)
-{
+static void get_req_rt_name(Uint32 rt, char *rt_name) {
   strcpy(rt_name, "Unknown");
-#define set_req_rt_name(x) if (rt == IndexStatReq::x) strcpy(rt_name, #x)
+#define set_req_rt_name(x) \
+  if (rt == IndexStatReq::x) strcpy(rt_name, #x)
   set_req_rt_name(RT_UPDATE_STAT);
   set_req_rt_name(RT_CLEAN_NEW);
   set_req_rt_name(RT_SCAN_FRAG);
@@ -32,20 +40,23 @@ get_req_rt_name(Uint32 rt, char* rt_name)
 #undef set_req_rt_name
 }
 
-static void
-get_rep_rt_name(Uint32 rt, char* rt_name)
-{
+static void get_rep_rt_name(Uint32 rt, char *rt_name) {
   strcpy(rt_name, "Unknown");
-#define set_rep_rt_name(x) if (rt == IndexStatRep::x) strcpy(rt_name, #x)
+#define set_rep_rt_name(x) \
+  if (rt == IndexStatRep::x) strcpy(rt_name, #x)
   set_rep_rt_name(RT_UPDATE_REQ);
   set_rep_rt_name(RT_UPDATE_CONF);
 #undef set_rep_rt_name
 }
 
-bool
-printINDEX_STAT_REQ(FILE* output, const Uint32* theData, Uint32 len, Uint16)
-{
-  const IndexStatReq* sig = (const IndexStatReq*)theData;
+bool printINDEX_STAT_REQ(FILE *output, const Uint32 *theData, Uint32 len,
+                         Uint16) {
+  if (len < IndexStatReq::SignalLength) {
+    assert(false);
+    return false;
+  }
+
+  const IndexStatReq *sig = (const IndexStatReq *)theData;
   fprintf(output, " clientRef: 0x%x", sig->clientRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, "\n");
@@ -62,10 +73,14 @@ printINDEX_STAT_REQ(FILE* output, const Uint32* theData, Uint32 len, Uint16)
   return true;
 }
 
-bool
-printINDEX_STAT_IMPL_REQ(FILE* output, const Uint32* theData, Uint32 len, Uint16)
-{
-  const IndexStatImplReq* sig = (const IndexStatImplReq*)theData;
+bool printINDEX_STAT_IMPL_REQ(FILE *output, const Uint32 *theData, Uint32 len,
+                              Uint16) {
+  if (len < IndexStatImplReq::SignalLength) {
+    assert(false);
+    return false;
+  }
+
+  const IndexStatImplReq *sig = (const IndexStatImplReq *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
@@ -84,30 +99,42 @@ printINDEX_STAT_IMPL_REQ(FILE* output, const Uint32* theData, Uint32 len, Uint16
   return true;
 }
 
-bool
-printINDEX_STAT_CONF(FILE* output, const Uint32* theData, Uint32 len, Uint16)
-{
-  const IndexStatConf* sig = (const IndexStatConf*)theData;
+bool printINDEX_STAT_CONF(FILE *output, const Uint32 *theData, Uint32 len,
+                          Uint16) {
+  if (len < IndexStatConf::SignalLength) {
+    assert(false);
+    return false;
+  }
+
+  const IndexStatConf *sig = (const IndexStatConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
   return true;
 }
 
-bool
-printINDEX_STAT_IMPL_CONF(FILE* output, const Uint32* theData, Uint32 len, Uint16)
-{
-  const IndexStatImplConf* sig = (const IndexStatImplConf*)theData;
+bool printINDEX_STAT_IMPL_CONF(FILE *output, const Uint32 *theData, Uint32 len,
+                               Uint16) {
+  if (len < IndexStatImplConf::SignalLength) {
+    assert(false);
+    return false;
+  }
+
+  const IndexStatImplConf *sig = (const IndexStatImplConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
   return true;
 }
 
-bool
-printINDEX_STAT_REF(FILE* output, const Uint32* theData, Uint32 len, Uint16)
-{
-  const IndexStatRef* sig = (const IndexStatRef*)theData;
+bool printINDEX_STAT_REF(FILE *output, const Uint32 *theData, Uint32 len,
+                         Uint16) {
+  if (len < IndexStatRef::SignalLength) {
+    assert(false);
+    return false;
+  }
+
+  const IndexStatRef *sig = (const IndexStatRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, " errorCode: %u", sig->errorCode);
@@ -116,10 +143,14 @@ printINDEX_STAT_REF(FILE* output, const Uint32* theData, Uint32 len, Uint16)
   return true;
 }
 
-bool
-printINDEX_STAT_IMPL_REF(FILE* output, const Uint32* theData, Uint32 len, Uint16)
-{
-  const IndexStatImplRef* sig = (const IndexStatImplRef*)theData;
+bool printINDEX_STAT_IMPL_REF(FILE *output, const Uint32 *theData, Uint32 len,
+                              Uint16) {
+  if (len < IndexStatImplRef::SignalLength) {
+    assert(false);
+    return false;
+  }
+
+  const IndexStatImplRef *sig = (const IndexStatImplRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, " errorCode: %u", sig->errorCode);
@@ -128,10 +159,14 @@ printINDEX_STAT_IMPL_REF(FILE* output, const Uint32* theData, Uint32 len, Uint16
   return true;
 }
 
-bool
-printINDEX_STAT_REP(FILE* output, const Uint32* theData, Uint32 len, Uint16)
-{
-  const IndexStatRep* sig = (const IndexStatRep*)theData;
+bool printINDEX_STAT_REP(FILE *output, const Uint32 *theData, Uint32 len,
+                         Uint16) {
+  if (len < IndexStatRep::SignalLength) {
+    assert(false);
+    return false;
+  }
+
+  const IndexStatRep *sig = (const IndexStatRep *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");

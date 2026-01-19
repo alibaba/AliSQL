@@ -1,6 +1,11 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 STOP SLAVE;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 CREATE DATABASE ndbsynctest;
 USE ndbsynctest;
 CREATE DATABASE ndbsynctest;
@@ -33,10 +38,6 @@ Tables_in_ndbsynctest
 DROP DATABASE ndbsynctest;
 CREATE DATABASE ndbsynctest;
 USE ndbsynctest;
-SHOW TABLES;
-Tables_in_ndbsynctest
-t1
-t2
 SELECT hex(c1),hex(c2),c3 FROM t1 ORDER BY c3;
 hex(c1)	hex(c2)	c3
 1	1	row1
@@ -49,15 +50,18 @@ hex(c2)	hex(c3)	c1
 0	1	BCDEF
 1	0	CD
 0	0	DEFGHIJKL
-SELECT @the_epoch:=MAX(epoch) FROM mysql.ndb_apply_status;
-@the_epoch:=MAX(epoch)
+SELECT MAX(epoch) FROM mysql.ndb_apply_status into @the_epoch;
+SELECT @the_epoch;
+@the_epoch
 <the_epoch>
-@the_pos:=Position	@the_file:=SUBSTRING_INDEX(REPLACE(FILE,'\\','/'), '/', -1)
+@the_pos	@the_file
 <the_pos>	master-bin.000001
-CHANGE MASTER TO
-master_log_file = 'master-bin.000001',
-master_log_pos = <the_pos> ;
+CHANGE REPLICATION SOURCE TO
+SOURCE_LOG_FILE = 'master-bin.000001',
+SOURCE_LOG_POS = <the_pos> ;
 START SLAVE;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 include/check_slave_is_running.inc
 SELECT hex(c1),hex(c2),c3 FROM t1 ORDER BY c3;
 hex(c1)	hex(c2)	c3
@@ -73,10 +77,14 @@ hex(c2)	hex(c3)	c1
 0	0	DEFGHIJKL
 DROP DATABASE ndbsynctest;
 STOP SLAVE;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 reset master;
 select * from mysql.ndb_binlog_index;
-Position	File	epoch	inserts	updates	deletes	schemaops	orig_server_id	orig_epoch	gci
+Position	File	epoch	inserts	updates	deletes	schemaops	orig_server_id	orig_epoch	gci	next_position	next_file
 reset slave;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
 select * from mysql.ndb_apply_status;
 server_id	epoch	log_name	start_pos	end_pos
 include/rpl_end.inc

@@ -3,7 +3,6 @@
 # Access type: Static
 # Data type: numeric
 
---source include/have_innodb.inc
 
 SELECT COUNT(@@GLOBAL.innodb_purge_threads);
 --echo 1 Expected
@@ -16,17 +15,24 @@ SET @@GLOBAL.innodb_purge_threads=1;
 --echo Expected error 'Read-only variable'
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_purge_threads = @@SESSION.innodb_purge_threads;
---echo Expected error 'Read-only variable'
+SELECT innodb_purge_threads;
+--echo Expected error 'Unknown column'
 
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@SESSION.innodb_purge_threads;
+
+--disable_warnings
 SELECT @@GLOBAL.innodb_purge_threads = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_purge_threads';
+--enable_warnings
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='innodb_purge_threads';
+--enable_warnings
 --echo 1 Expected
 
 SELECT @@innodb_purge_threads = @@GLOBAL.innodb_purge_threads;
@@ -41,7 +47,9 @@ SELECT COUNT(@@SESSION.innodb_purge_threads);
 --echo Expected error 'Variable is a GLOBAL variable'
 
 # Check the default value
+--disable_warnings
 SELECT VARIABLE_NAME, VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME = 'innodb_purge_threads';
+--enable_warnings
 

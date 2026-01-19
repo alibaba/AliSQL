@@ -100,7 +100,7 @@ SELECT DATABASE();
 DATABASE()
 db2
 SELECT db1.f1(1);
-ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '1' for key 't1.PRIMARY'
 SELECT DATABASE();
 DATABASE()
 db2
@@ -161,28 +161,28 @@ TESTF_bug11763507()
 0
 SHOW FUNCTION STATUS LIKE  'testf_bug11763507';
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	testf_bug11763507	FUNCTION	root@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+test	testf_bug11763507	FUNCTION	root@localhost	#	#	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW FUNCTION STATUS WHERE NAME='testf_bug11763507';
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	testf_bug11763507	FUNCTION	root@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+test	testf_bug11763507	FUNCTION	root@localhost	#	#	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW FUNCTION STATUS LIKE  'TESTF_bug11763507';
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	testf_bug11763507	FUNCTION	root@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+test	testf_bug11763507	FUNCTION	root@localhost	#	#	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW FUNCTION STATUS WHERE NAME='TESTF_bug11763507';
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	testf_bug11763507	FUNCTION	root@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+test	testf_bug11763507	FUNCTION	root@localhost	#	#	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW CREATE FUNCTION testf_bug11763507;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-testf_bug11763507		CREATE DEFINER=`root`@`localhost` FUNCTION `testf_bug11763507`() RETURNS int(11)
+testf_bug11763507		CREATE DEFINER=`root`@`localhost` FUNCTION `testf_bug11763507`() RETURNS int
 BEGIN
 RETURN 0;
-END	latin1	latin1_swedish_ci	latin1_swedish_ci
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW CREATE FUNCTION TESTF_bug11763507;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-testf_bug11763507		CREATE DEFINER=`root`@`localhost` FUNCTION `testf_bug11763507`() RETURNS int(11)
+testf_bug11763507		CREATE DEFINER=`root`@`localhost` FUNCTION `testf_bug11763507`() RETURNS int
 BEGIN
 RETURN 0;
-END	latin1	latin1_swedish_ci	latin1_swedish_ci
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 CALL testp_bug11763507();
 PROCEDURE testp_bug11763507
 PROCEDURE testp_bug11763507
@@ -191,40 +191,363 @@ PROCEDURE testp_bug11763507
 PROCEDURE testp_bug11763507
 SHOW PROCEDURE STATUS LIKE  'testp_bug11763507';
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	testp_bug11763507	PROCEDURE	root@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+test	testp_bug11763507	PROCEDURE	root@localhost	#	#	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW PROCEDURE STATUS WHERE NAME='testp_bug11763507';
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	testp_bug11763507	PROCEDURE	root@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+test	testp_bug11763507	PROCEDURE	root@localhost	#	#	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW PROCEDURE STATUS LIKE  'TESTP_bug11763507';
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	testp_bug11763507	PROCEDURE	root@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+test	testp_bug11763507	PROCEDURE	root@localhost	#	#	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW PROCEDURE STATUS WHERE NAME='TESTP_bug11763507';
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	testp_bug11763507	PROCEDURE	root@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+test	testp_bug11763507	PROCEDURE	root@localhost	#	#	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW CREATE PROCEDURE testp_bug11763507;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 testp_bug11763507		CREATE DEFINER=`root`@`localhost` PROCEDURE `testp_bug11763507`()
 BEGIN
 SELECT "PROCEDURE testp_bug11763507";
-END	latin1	latin1_swedish_ci	latin1_swedish_ci
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW CREATE PROCEDURE TESTP_bug11763507;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 testp_bug11763507		CREATE DEFINER=`root`@`localhost` PROCEDURE `testp_bug11763507`()
 BEGIN
 SELECT "PROCEDURE testp_bug11763507";
-END	latin1	latin1_swedish_ci	latin1_swedish_ci
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name LIKE 'testf_bug11763507';
-specific_name
+SPECIFIC_NAME
 testf_bug11763507
 SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name LIKE 'TESTF_bug11763507';
-specific_name
+SPECIFIC_NAME
 testf_bug11763507
 SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name='testf_bug11763507';
-specific_name
+SPECIFIC_NAME
 testf_bug11763507
 SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name='TESTF_bug11763507';
-specific_name
+SPECIFIC_NAME
 testf_bug11763507
 DROP PROCEDURE testp_bug11763507;
 DROP FUNCTION testf_bug11763507;
 #END OF BUG#11763507 test.
+#
+# Bug#19418619 : SELECT QUERY WITH INVALID TIME WORKS FINE BUT SP FAILS UNDER STRICT MODE
+#
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
+CREATE FUNCTION f1(arg TINYINT UNSIGNED) RETURNS TINYINT
+BEGIN
+RETURN abs('1abcd');
+END|
+SELECT f1(-25);
+f1(-25)
+1
+Warnings:
+Warning	1264	Out of range value for column 'arg' at row 1
+Warning	1292	Truncated incorrect DOUBLE value: '1abcd'
+SELECT f1(25);
+f1(25)
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '1abcd'
+SET sql_mode=default;
+SELECT f1(-25);
+ERROR 22003: Out of range value for column 'arg' at row 1
+SELECT f1(10);
+f1(10)
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '1abcd'
+DROP FUNCTION f1;
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
+CREATE PROCEDURE f1(IN arg TINYINT UNSIGNED)
+BEGIN
+DECLARE arg1 TINYINT;
+select abs('1abcd') into arg;
+END|
+CALL f1(-25);
+Warnings:
+Warning	1264	Out of range value for column 'arg' at row 1
+Warning	1292	Truncated incorrect DOUBLE value: '1abcd'
+CALL f1(25);
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '1abcd'
+SET sql_mode=default;
+CALL f1(-25);
+ERROR 22003: Out of range value for column 'arg' at row 1
+CALL f1(10);
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '1abcd'
+DROP PROCEDURE f1;
+SELECT SUBTIME('2006-07-16' , '05:05:02.040778');
+SUBTIME('2006-07-16' , '05:05:02.040778')
+-04:44:56.040778
+Warnings:
+Warning	1292	Truncated incorrect time value: '2006-07-16'
+SELECT abs('1bcd');
+abs('1bcd')
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '1bcd'
+CREATE PROCEDURE sp1()
+BEGIN
+SELECT SUBTIME('2006-07-16' , '05:05:02.040778');
+END|
+CREATE PROCEDURE sp2()
+BEGIN
+DECLARE v1 TINYINT DEFAULT 450000;
+END|
+CALL sp1();
+SUBTIME('2006-07-16' , '05:05:02.040778')
+-04:44:56.040778
+Warnings:
+Warning	1292	Truncated incorrect time value: '2006-07-16'
+CALL sp2();
+ERROR 22003: Out of range value for column 'v1' at row 1
+DROP PROCEDURE sp1;
+DROP PROCEDURE sp2;
+CREATE FUNCTION fn1(arg TINYINT UNSIGNED) RETURNS float deterministic RETURN abs('1abcd');
+CREATE FUNCTION fn2() RETURNS tinyint
+BEGIN
+DECLARE v1 TINYINT DEFAULT 450000;
+RETURN v1;
+END|
+SELECT fn1(25);
+ERROR 22007: Truncated incorrect DOUBLE value: '1abcd'
+SELECT fn1(-25);
+ERROR 22003: Out of range value for column 'arg' at row 1
+SELECT fn2();
+ERROR 22003: Out of range value for column 'v1' at row 1
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
+SELECT fn1(-25);
+ERROR 22007: Truncated incorrect DOUBLE value: '1abcd'
+DROP FUNCTION fn1;
+DROP FUNCTION fn2;
+CREATE FUNCTION fn1() RETURNS float deterministic RETURN floor('1.1a');
+SET sql_mode=default;
+CREATE TABLE t1(a INT);
+CREATE FUNCTION fn2() RETURNS float deterministic RETURN floor('1.1a');
+CREATE TRIGGER tr1 BEFORE INSERT ON t1 FOR EACH ROW SET @a=fn2();
+INSERT INTO t1 VALUES(1);
+ERROR 22007: Truncated incorrect DOUBLE value: '1.1a'
+DROP TRIGGER tr1;
+CREATE TRIGGER tr1 BEFORE INSERT ON t1 FOR EACH ROW SET @a=fn1();
+INSERT INTO t1 VALUES(1);
+DROP FUNCTION fn1;
+DROP FUNCTION fn2;
+DROP TRIGGER tr1;
+DROP TABLE t1;
+SET sql_mode=traditional;
+SELECT 1/0;
+1/0
+NULL
+Warnings:
+Warning	1365	Division by 0
+SET sql_mode='';
+CREATE PROCEDURE proc_c()
+BEGIN
+DECLARE div_zero INTEGER;
+SET SQL_MODE='TRADITIONAL';
+SELECT 1/0;
+END|
+CALL proc_c();
+1/0
+NULL
+Warnings:
+Warning	1365	Division by 0
+DROP PROCEDURE proc_c;
+SET sql_mode=traditional;
+CREATE FUNCTION fn1() RETURNS TINYINT
+BEGIN
+SET  @x=floor('1a');
+RETURN 1;
+END|
+SELECT fn1();
+fn1()
+1
+DROP FUNCTION fn1;
+SET sql_mode= default;
+#
+# Bug#24401273: PROBLEM WITH STORED FUNCTION WHICH GENERATES
+#               BIGINT UNSIGNED USED IN WHERE CLAUSE
+#
+# Note: The AND TRUE is to work around Bug #24457368.
+#
+CREATE FUNCTION crc(_text TEXT) RETURNS BIGINT(20) UNSIGNED DETERMINISTIC
+RETURN CONV(LEFT(MD5(_text),16),16,10);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+CREATE TABLE t1 (
+id bigint(20) UNSIGNED NOT NULL
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t1 (id) VALUES (crc('photos'));
+INSERT INTO t1 (id) VALUES (crc('photos1'));
+ALTER TABLE t1 ADD INDEX idx (id);
+SELECT * FROM t1 FORCE INDEX (idx) WHERE (id = crc('photos')) AND TRUE;
+id
+15460588431078774149
+SELECT * FROM t1 IGNORE INDEX (idx) WHERE (id = crc('photos')) AND TRUE;
+id
+15460588431078774149
+DROP FUNCTION crc;
+DROP TABLE t1;
+# Bug#25398451: Segmentation fault in prepare_inner() at sql_call.cc
+CREATE TABLE t1(a INTEGER, b INTEGER);
+CREATE TRIGGER tr1 AFTER INSERT ON t1 FOR EACH ROW
+BEGIN
+CALL proc(NEW.a,NEW.b);
+END |
+CREATE PROCEDURE proc(IN aa INTEGER)
+BEGIN
+END |
+INSERT INTO t1 VALUES (1,10);
+ERROR 42000: Incorrect number of arguments for PROCEDURE test.proc; expected 1, got 2
+DROP PROCEDURE proc;
+DROP TABLE t1;
+#
+# Bug#28122841 - CREATE EVENT/PROCEDURE/FUNCTION CRASHES WITH ACCENT INSENSITIVE NAMES.
+#
+SET NAMES utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+#
+# Test case to verify stored procedure with case and accent insensitive names.
+#
+CREATE PROCEDURE cafe() BEGIN END;
+# Stored procedure names are case and accent insensitive. So from the
+# data-dictionary "cafe" is obtained for the following statement. Since
+# MDL key comparison is case and accent sensitive, assert condition to verify
+# expected lock with name "test.cafe" fails (lock is obtained on the
+# test.café).
+CREATE PROCEDURE café() BEGIN END;
+ERROR 42000: PROCEDURE café already exists
+# Following statement is to verify operation with the upper case name.
+CREATE PROCEDURE CAFE() BEGIN END;
+ERROR 42000: PROCEDURE CAFE already exists
+DROP PROCEDURE CaFé;
+# Procedure with NAME_LEN size name.
+CREATE PROCEDURE очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_e() BEGIN END;
+CREATE PROCEDURE очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_é() BEGIN END;
+ERROR 42000: PROCEDURE очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_é already exists
+CREATE PROCEDURE очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_E() BEGIN END;
+ERROR 42000: PROCEDURE очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_E already exists
+SHOW CREATE PROCEDURE очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_é;
+Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
+очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_e	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_e`()
+BEGIN END	utf8mb3	utf8mb3_general_ci	utf8mb4_0900_ai_ci
+DROP PROCEDURE очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_é;
+#
+# Test case to verify stored function with case and accent insensitive names.
+#
+CREATE FUNCTION cafe() RETURNS INT return 15081947;
+# Stored function names are case and accent insensitive. So from the
+# data-dictionary "cafe" is obtained for the following statement. Since
+# MDL key comparison is case and accent sensitive, assert condition to verify
+# expected lock with name "test.cafe" fails (lock is obtained on the
+# test.café).
+CREATE FUNCTION café() RETURNS INT return 15081947;
+ERROR 42000: FUNCTION café already exists
+# Following statement is to verify operation with the upper case name.
+CREATE FUNCTION CAFE() RETURNS INT return 15081947;
+ERROR 42000: FUNCTION CAFE already exists
+SHOW CREATE FUNCTION CaFé;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+cafe	#	#	#	#	#
+DROP FUNCTION CaFé;
+# Function with NAME_LEN size name.
+CREATE FUNCTION очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_e() RETURNS INT return 15081947;
+CREATE FUNCTION очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_é() RETURNS INT return 15081947;
+ERROR 42000: FUNCTION очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_é already exists
+CREATE FUNCTION очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_E() RETURNS INT return 15081947;
+ERROR 42000: FUNCTION очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_E already exists
+SHOW CREATE FUNCTION очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_é;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_e	#	#	#	#	#
+DROP FUNCTION очень_очень_очень_очень_очень_очень_очень_очень_длинная_строка_é;
+SET NAMES default;
+#
+# Bug#30034972 - Deterministic function returns different value after
+#                error.
+#
+CREATE FUNCTION myfunc(dt VARCHAR(50)) RETURNS VARCHAR(32) DETERMINISTIC
+BEGIN
+DECLARE dt_local TIMESTAMP(0);
+SET dt_local = dt;
+RETURN CONCAT(UNIX_TIMESTAMP(dt_local));
+END; //
+# Stored function returns seconds without fractional
+# part (e.g. 1546290000)
+SELECT myfunc('2019-01-01 00:00:00');
+myfunc('2019-01-01 00:00:00')
+1546290000
+SELECT myfunc('2019-01-01 00:00:71');
+ERROR 22007: Incorrect datetime value: '2019-01-01 00:00:71' for column 'dt_local' at row 1
+# Without the fix, the following returned second value with fractional
+# part (e.g. 1546290000.000000).
+SELECT myfunc('2019-01-01 00:00:00');
+myfunc('2019-01-01 00:00:00')
+1546290000
+DROP FUNCTION myfunc;
+# Issue exists with Prepared Statements too.
+PREPARE stmt FROM 'SELECT CONCAT(UNIX_TIMESTAMP(?))';
+SET @var = '2019-01-01 00:00:00';
+EXECUTE stmt USING @var;
+CONCAT(UNIX_TIMESTAMP(?))
+1546290000.000000
+SET @var = '2019-01-01 00:00:71';
+EXECUTE stmt USING @var;
+CONCAT(UNIX_TIMESTAMP(?))
+0.000000
+Warnings:
+Warning	1292	Incorrect datetime value: '2019-01-01 00:00:71'
+# Without the fix, the following returned second value with fractional
+# part (e.g. 1546290000.000000).
+SET @var = '2019-01-01 00:00:00';
+EXECUTE stmt USING @var;
+CONCAT(UNIX_TIMESTAMP(?))
+1546290000.000000
+DEALLOCATE PREPARE stmt;
+#
+# Bug#30561920 - Handler fails to trigger on error 1049 or SQLSTATE 42000
+#                or plain SQLEXCEPTION
+#
+CREATE FUNCTION func1() RETURNS INT
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION RETURN NULL;
+SELECT * INTO @a FROM fake_table;
+RETURN 1;
+END|
+CREATE FUNCTION func2() RETURNS INT
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION RETURN NULL;
+SELECT * INTO @a FROM fake_db.fake_table;
+RETURN 1;
+END|
+SELECT func1();
+func1()
+NULL
+# Without fix, exit handler is not triggered and unknown DB error
+# is reported.
+SELECT func2();
+func2()
+NULL
+DROP FUNCTION func1;
+DROP FUNCTION func2;
+#
+# Bug#33079184 - sp_lex_instr::reset_lex_and_exec_core: assertion
+#                `error || m_lex->is_exec_started()' failed.
+# Assertion to make sure sp instruction execution is started unless
+# there is an error, failed.
+#
+CREATE PROCEDURE p()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION BEGIN END;
+SET @x = 0;
+WHILE @x < 2 DO
+CASE((SELECT q > 1)) WHEN 1 THEN SELECT 1; END CASE;
+SET @x = @x + 1;
+END WHILE;
+END$
+# Without fix, assertion fails for following statement in debug build.
+# In non-debug build, statement executes successfully.
+CALL p();
+DROP PROCEDURE p;

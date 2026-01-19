@@ -1,75 +1,107 @@
 /*
-   Copyright (C) 2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2008, 2025, Oracle and/or its affiliates.
+    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include <AtrtClient.hpp>
 #include <NDBT.hpp>
 #include <NDBT_Test.hpp>
-#include <DbUtil.hpp>
-#include <AtrtClient.hpp>
+#include "SqlClient.hpp"
 
+// Create the minimal schema required for testing AtrtClient
+int runCreateAtrtSchema(NDBT_Context *ctx, NDBT_Step *step) {
+  SqlClient sql("");
 
-int runTestAtrtClient(NDBT_Context* ctx, NDBT_Step* step){
+  if (!sql.doQuery("DROP DATABASE IF EXISTS atrt")) {
+    return NDBT_FAILED;
+  }
+
+  if (!sql.doQuery("CREATE DATABASE atrt")) {
+    return NDBT_FAILED;
+  }
+
+  if (!sql.doQuery("CREATE TABLE atrt.cluster ("
+                   "   id int primary key,"
+                   "   name varchar(255),"
+                   "   unique(name)"
+                   "   ) engine = innodb")) {
+    return NDBT_FAILED;
+  }
+
+  return NDBT_OK;
+}
+
+// Drop the minimal atrt schema
+int runDropAtrtSchema(NDBT_Context *ctx, NDBT_Step *step) {
+  SqlClient sql("");
+
+  if (!sql.doQuery("DROP DATABASE IF EXISTS atrt")) {
+    return NDBT_FAILED;
+  }
+
+  return NDBT_OK;
+}
+
+int runTestAtrtClient(NDBT_Context *ctx, NDBT_Step *step) {
   AtrtClient atrt;
 
   SqlResultSet clusters;
-  if (!atrt.getClusters(clusters))
-    return NDBT_FAILED;
+  if (!atrt.getClusters(clusters)) return NDBT_FAILED;
 
-  int i= 0;
-  while(clusters.next())
-  {
+  int i = 0;
+  while (clusters.next()) {
     ndbout << clusters.column("name") << endl;
-    if (i++ == 1){
+    if (i++ == 1) {
       ndbout << "removing: " << clusters.column("name") << endl;
       clusters.remove();
     }
   }
 
   clusters.reset();
-  while(clusters.next())
-  {
+  while (clusters.next()) {
     ndbout << clusters.column("name") << endl;
   }
 
   return NDBT_OK;
 }
 
-
-int runTestDbUtil(NDBT_Context* ctx, NDBT_Step* step){
-  DbUtil sql("test");
+int runTestSqlClient(NDBT_Context *ctx, NDBT_Step *step) {
+  SqlClient sql("test");
 
   {
     // Select all rows from mysql.user
     SqlResultSet result;
-    if (!sql.doQuery("SELECT * FROM mysql.user", result))
-      return NDBT_FAILED;
+    if (!sql.doQuery("SELECT * FROM mysql.user", result)) return NDBT_FAILED;
     // result.print();
 
-    while(result.next())
-    {
-      ndbout << result.column("host") << ", "
-             << result.column("uSer") << ", "
-             << result.columnAsInt("max_updates") << ", "
-             << endl;
+    while (result.next()) {
+      ndbout << result.column("host") << ", " << result.column("uSer") << ", "
+             << result.columnAsInt("max_updates") << ", " << endl;
     }
 
     result.reset();
-    while(result.next())
-    {
+    while (result.next()) {
       ndbout << result.column("host") << endl;
     }
   }
@@ -96,8 +128,8 @@ int runTestDbUtil(NDBT_Context* ctx, NDBT_Step* step){
     // Change args to an find one row
     args.clear();
     args.put("0", "localhost");
-    if (!sql.doQuery("SELECT host, user FROM mysql.user WHERE host=?",
-                     args, result))
+    if (!sql.doQuery("SELECT host, user FROM mysql.user WHERE host=?", args,
+                     result))
       return NDBT_FAILED;
     result.print();
   }
@@ -121,69 +153,95 @@ int runTestDbUtil(NDBT_Context* ctx, NDBT_Step* step){
       return NDBT_FAILED;
     // result.print();
 
-    while(result.next())
-    {
+    while (result.next()) {
     }
 
-    // Select second row from sql_client_test
-    Properties args;
-    args.put("0", 2);
-    if (!sql.doQuery("SELECT * FROM sql_client_test WHERE a=?", args,result))
-      return NDBT_FAILED;
-    result.print();
-
-    result.reset();
-    while(result.next())
     {
-      ndbout << "a: " << result.columnAsInt("a") << endl
-             << "b: " << result.column("b") << endl
-             << "c: " << result.columnAsLong("c") << endl;
-      if (result.columnAsInt("a") != 2){
-        ndbout << "hepp1" << endl;
-        return NDBT_FAILED;
-      }
+      auto check_result = [](SqlResultSet &result) {
+        result.reset();
+        while (result.next()) {
+          ndbout << "a: " << result.columnAsInt("a") << endl
+                 << "b: " << result.column("b") << endl
+                 << "c: " << result.columnAsLong("c") << endl;
+          if (result.columnAsInt("a") != 2) {
+            ndbout << "Unexpected value for a" << endl;
+            return false;
+          }
 
-      if (strcmp(result.column("b"), "bye")){
-        ndbout << "hepp2" << endl;
-        return NDBT_FAILED;
-      }
+          if (strcmp(result.column("b"), "bye")) {
+            ndbout << "Unexpected value for b" << endl;
+            return false;
+          }
 
-      if (result.columnAsLong("c") != 9000000000ULL){
-        ndbout << "hepp3" << endl;
-        return NDBT_FAILED;
-      }
+          if (result.columnAsLong("c") != 9000000000ULL) {
+            ndbout << "Unexpected value for c" << endl;
+            return false;
+          }
+        }
+        return true;
+      };
 
+      // Select second row from sql_client_test using placeholders and check
+      // expected result, this will use prepared statement behind the scenes
+      Properties args;
+      args.put("0", 2);
+      if (!sql.doQuery("SELECT * FROM sql_client_test WHERE a=?", args, result))
+        return NDBT_FAILED;
+      result.print();
+      if (!check_result(result)) return NDBT_FAILED;
+
+      // Select second row from sql_client_test without placeholders and check
+      // expected result
+      if (!sql.doQuery("SELECT * FROM sql_client_test WHERE a=2", result))
+        return NDBT_FAILED;
+      result.print();
+      if (!check_result(result)) return NDBT_FAILED;
     }
 
-    if (sql.selectCountTable("sql_client_test") != 2)
-    {
+    if (sql.selectCountTable("sql_client_test") != 2) {
       ndbout << "Got wrong count" << endl;
       return NDBT_FAILED;
     }
 
-
-    if (!sql.doQuery("DROP TABLE sql_client_test"))
-      return NDBT_FAILED;
-
+    if (!sql.doQuery("DROP TABLE sql_client_test")) return NDBT_FAILED;
   }
+  return NDBT_OK;
+}
+
+int runTestSqlClientThread(NDBT_Context *ctx, NDBT_Step *step) {
+  SqlClient sql("");
+
+  // Select all rows from mysql.user
+  SqlResultSet result;
+  if (!sql.doQuery("SELECT * FROM mysql.user", result)) return NDBT_FAILED;
+  // result.print();
 
   return NDBT_OK;
 }
 
 NDBT_TESTSUITE(testNDBT);
-TESTCASE("AtrtClient",
-	 "Test AtrtClient class"){
-  INITIALIZER(runTestAtrtClient);
-}
-TESTCASE("DbUtil",
-	 "Test DbUtil class"){
-  INITIALIZER(runTestDbUtil);
-}
-NDBT_TESTSUITE_END(testNDBT);
 
-int main(int argc, const char** argv){
+/*
+  $> testNDBT -n AtrtClient
+*/
+TESTCASE("AtrtClient", "Test AtrtClient class") {
+  INITIALIZER(runCreateAtrtSchema);
+  INITIALIZER(runTestAtrtClient);
+  FINALIZER(runDropAtrtSchema);
+}
+/*
+  $> testNDBT -n SqlClient
+*/
+TESTCASE("SqlClient", "Test SqlClient class") { INITIALIZER(runTestSqlClient); }
+TESTCASE("SqlClientThreads", "Test SqlClient class with threads") {
+  STEPS(runTestSqlClientThread, 10);
+}
+NDBT_TESTSUITE_END(testNDBT)
+
+int main(int argc, const char **argv) {
   ndb_init();
   NDBT_TESTSUITE_INSTANCE(testNDBT);
+  testNDBT.setCreateTable(false);
+  testNDBT.setRunAllTables(true);
   return testNDBT.execute(argc, argv);
 }
-

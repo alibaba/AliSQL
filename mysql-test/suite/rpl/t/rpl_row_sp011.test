@@ -2,28 +2,24 @@
 # Original Author: JBM                                                      #
 # Original Date: Aug/18/2005                                                #
 # Updated: 08/29/2005  turned on diff and commented out debug SQL statements#
+# Updated: sep/16/2015                                                      #
+#          This testcase requires minimum stack size of 300KB to run on WIN.#
+#          Modified *-master.opt file to increase the thread_stack to 400KB.#
 #############################################################################
-#TEST: SP to test alter table and nested SP calls                           #
+# TEST: SP to test alter table and nested SP calls                          #
 #############################################################################
+
+# clang/UBSAN needs to override the small thread stack in our -master.opt
+call mtr.add_suppression("option 'thread_stack':");
 
 # Includes
 -- source include/have_binlog_format_row.inc
+-- source include/set_privilege_checks_user_as_system_user.inc
 -- source include/master-slave.inc
 
 
 # Begin clean up test section
 connection master;
---disable_warnings
-DROP PROCEDURE IF EXISTS test.p1;
-DROP PROCEDURE IF EXISTS test.p2;
-DROP PROCEDURE IF EXISTS test.p3;
-DROP PROCEDURE IF EXISTS test.p4;
-DROP PROCEDURE IF EXISTS test.p5;
-DROP PROCEDURE IF EXISTS test.p6;
-DROP PROCEDURE IF EXISTS test.p7;
-DROP TABLE IF EXISTS test.t1;
-DROP TABLE IF EXISTS test.t2;
-
 
 # Begin test section 1 
 CREATE TABLE test.t1 (a int, PRIMARY KEY(a));
@@ -92,7 +88,9 @@ DROP PROCEDURE IF EXISTS test.p4;
 DROP PROCEDURE IF EXISTS test.p5;
 DROP PROCEDURE IF EXISTS test.p6;
 DROP PROCEDURE IF EXISTS test.p7;
+--disable_warnings ER_BAD_TABLE_ERROR
 DROP TABLE IF EXISTS test.t1;
+--enable_warnings ER_BAD_TABLE_ERROR
 DROP TABLE IF EXISTS test.t2;
 --source include/sync_slave_sql_with_master.inc
 

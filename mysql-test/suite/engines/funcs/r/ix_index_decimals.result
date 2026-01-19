@@ -1,5 +1,7 @@
 DROP TABLE IF EXISTS t6,t7;
 CREATE TABLE t6(c1 REAL(1,0) NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t6(c1);
 SHOW TABLES;
 Tables_in_test
@@ -9,11 +11,13 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` double(1,0) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t7(c1 REAL(5,4) NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t7(c1);
 SHOW TABLES;
 Tables_in_test
@@ -23,11 +27,13 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` double(5,4) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t6(c1 DOUBLE(1,0) NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t6(c1);
 SHOW TABLES;
 Tables_in_test
@@ -37,11 +43,13 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` double(1,0) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t7(c1 DOUBLE(5,4) NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t7(c1);
 SHOW TABLES;
 Tables_in_test
@@ -51,11 +59,13 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` double(5,4) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t6(c1 FLOAT(1,0) NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t6(c1);
 SHOW TABLES;
 Tables_in_test
@@ -65,11 +75,13 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` float(1,0) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t7(c1 FLOAT(5,4) NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t7(c1);
 SHOW TABLES;
 Tables_in_test
@@ -79,7 +91,7 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` float(5,4) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
@@ -93,7 +105,7 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` decimal(1,0) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
@@ -107,7 +119,7 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` decimal(5,4) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
@@ -121,7 +133,7 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` decimal(1,0) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
@@ -135,11 +147,13 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` decimal(5,4) DEFAULT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t6(c1 REAL(1,0) NOT NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t6(c1);
 SHOW TABLES;
 Tables_in_test
@@ -149,11 +163,13 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` double(1,0) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t7(c1 REAL(5,4) NOT NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t7(c1);
 SHOW TABLES;
 Tables_in_test
@@ -163,11 +179,13 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` double(5,4) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t6(c1 DOUBLE(1,0) NOT NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t6(c1);
 SHOW TABLES;
 Tables_in_test
@@ -177,11 +195,13 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` double(1,0) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t7(c1 DOUBLE(5,4) NOT NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t7(c1);
 SHOW TABLES;
 Tables_in_test
@@ -191,11 +211,13 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` double(5,4) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t6(c1 FLOAT(1,0) NOT NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t6(c1);
 SHOW TABLES;
 Tables_in_test
@@ -205,11 +227,13 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` float(1,0) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t7(c1 FLOAT(5,4) NOT NULL);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE INDEX i1 ON t7(c1);
 SHOW TABLES;
 Tables_in_test
@@ -219,7 +243,7 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` float(5,4) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
@@ -233,7 +257,7 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` decimal(1,0) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
@@ -247,7 +271,7 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` decimal(5,4) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test
@@ -261,7 +285,7 @@ Table	Create Table
 t6	CREATE TABLE `t6` (
   `c1` decimal(1,0) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t6;
 SHOW TABLES;
 Tables_in_test
@@ -275,7 +299,7 @@ Table	Create Table
 t7	CREATE TABLE `t7` (
   `c1` decimal(5,4) NOT NULL,
   KEY `i1` (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t7;
 SHOW TABLES;
 Tables_in_test

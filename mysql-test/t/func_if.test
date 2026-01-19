@@ -1,3 +1,4 @@
+
 #
 # Init section
 #
@@ -14,19 +15,20 @@ select IF(0,"ERROR","this"),IF(1,"is","ERROR"),IF(NULL,"ERROR","a"),IF(1,2,3)|0,
 #
 # Test of IF and case-sensitiveness
 #
-CREATE TABLE t1 (st varchar(255) NOT NULL, u int(11) NOT NULL) ENGINE=MyISAM;
+CREATE TABLE t1 (st varchar(255) NOT NULL, u int(11) NOT NULL);
 INSERT INTO t1 VALUES ('a',1),('A',1),('aa',1),('AA',1),('a',1),('aaa',0),('BBB',0);
 select if(1,st,st) s from t1 order by s;
 select if(u=1,st,st) s from t1 order by s;
 select if(u=1,binary st,st) s from t1 order by s;
 select if(u=1,st,binary st) s from t1 where st like "%a%" order by s;
-explain extended select if(u=1,st,binary st) s from t1 where st like "%a%" order by s;
+analyze table t1;
+explain select if(u=1,st,binary st) s from t1 where st like "%a%" order by s;
 
 #
 # NULLIF test
 #
 select nullif(u, 1) from t1;
-explain extended select nullif(u, 1) from t1;
+explain select nullif(u, 1) from t1;
 drop table t1;
 select nullif(1,'test');
 
@@ -54,7 +56,9 @@ drop table t1;
 #
 create table t1 (a int);
 insert t1 values (1),(2);
+--source include/turn_off_only_full_group_by.inc
 select if(1>2,a,avg(a)) from t1;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1;
 
 #
@@ -95,7 +99,12 @@ DROP TABLE t1;
 #
 create table t1 (f1 int, f2 int);
 insert into t1 values(1,1),(0,0);
+--source include/turn_off_only_full_group_by.inc
+# Depends on whether a temporary table was inserted or not, we'll get 40.0 or 40.00.
+# Accept both.
+--replace_result 40.00 40.0
 select f1, f2, if(f1, 40.0, 5.00) from t1 group by f1 order by f2;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1;
 
 #
@@ -174,6 +183,7 @@ DROP TABLE t1;
 CREATE TABLE t1 (a LONGBLOB, b DOUBLE);
 INSERT INTO t1 VALUES (NULL, 0), (NULL, 1);
 
+--sorted_result
 SELECT IF(b, (SELECT a FROM t1 LIMIT 1), b) c FROM t1 GROUP BY c;
 
 DROP TABLE t1;
@@ -199,3 +209,93 @@ sum(distinct(if('a',
                 (select adddate(elt(convert($nines,decimal(64,0)),count(*)),
                                 interval 1 day))
                 , .1))) as foo;
+
+--echo #
+--echo # Bug#22148586 IF(BOOL, DATE STR, DATE STR) THROWS ERROR IN UPDATE
+--echo #
+
+CREATE TABLE t1(c1 INT);
+INSERT INTO t1 VALUES(1);
+
+UPDATE t1 SET c1 = 2 WHERE IF(true, '2015-01-01', '2015-01-01') IS NOT NULL;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#24492965 ERROR RESULTS FROM CALCULATION
+--echo #
+
+CREATE TABLE test_grids_1 (
+  unq_id int(11) NOT NULL DEFAULT '0',
+  var_fld int(11) DEFAULT '0'
+);
+
+INSERT INTO test_grids_1 VALUES
+  (1,4500),
+  (2,6000);
+
+CREATE TABLE test_grid_dtl_1 (
+  dtl_id int(11) NOT NULL DEFAULT '0',
+  unq_id int(11) DEFAULT '0'
+);
+
+INSERT INTO test_grid_dtl_1 VALUES
+  (1,1),
+  (2,1),
+  (3,2);
+
+--skip_if_hypergraph  # Hits bug #31848379 (ERROR RESULTS FROM CALCULATION).
+SELECT g.calc_var, g.if_var, g.case_var
+FROM
+  (
+  SELECT unq_id,
+    IF ( var_fld  > 5000, (     1 / var_fld ) , 5000 ) calc_var,
+    IF ( var_fld  > 5000, ( 00001 / var_fld ) , 5000 ) if_var,
+    CASE  var_fld  > 5000 WHEN TRUE THEN ( 1 / var_fld ) ELSE 5000 END case_var
+  FROM
+    test_grids_1
+  ) g
+  JOIN
+    test_grid_dtl_1 d USING (unq_id)
+ORDER BY 1
+;
+
+DROP TABLE test_grids_1, test_grid_dtl_1;
+
+--echo # Bug#25669606: regression: assertion failed: !is_temporal()
+
+DO NULLIF(CAST(DATABASE() AS TIME), 1);
+DO NULLIF(CAST(DATABASE() AS DATE), 1);
+DO NULLIF(CAST(DATABASE() AS DATETIME), 1);
+
+--echo #
+--echo # Bug#28007237  NULLIF returns boolean in context of JSON_ARRAYAGG and JSON_OBJECTAGG's value
+--echo #
+
+SELECT NULLIF(1,2);
+SELECT JSON_ARRAYAGG(NULLIF(1,2));
+SELECT JSON_ARRAYAGG(CASE WHEN 1 = 2 THEN NULL ELSE 1 END);
+SELECT NULLIF(true,false);
+SELECT JSON_ARRAYAGG(NULLIF(true,false));
+SELECT JSON_ARRAYAGG(CASE WHEN true = false THEN NULL ELSE true END);
+
+--echo # Bug#32231557: Field_blob::store_to_mem: assertion `field_charset == cs' failed.
+
+DO GROUP_CONCAT(NULLIF(ELT(1, @e), POINT(250,41)) ORDER BY 1);
+
+--echo # Bug#32816305: Prepare type checking error
+
+CREATE TABLE t (t_date DATETIME NULL);
+PREPARE ps FROM 'INSERT INTO t SET t_date = NULLIF(?, '''')';
+SET @t_date = NOW();
+EXECUTE ps USING @t_date;
+DEALLOCATE PREPARE ps;
+DROP TABLE t;
+
+--echo #
+--echo # Bug#34941663 casting unix_timestamp: \
+--echo #              Assertion `!null_value || is_nullable()' failed.
+--echo #
+
+DO CAST(UNIX_TIMESTAMP(IF('',3,13339)) AS UNSIGNED);
+DO CAST(UNIX_TIMESTAMP(CASE 1 WHEN 1 THEN 42 ELSE 42 END) AS UNSIGNED);

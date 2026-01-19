@@ -1,0 +1,39 @@
+########################################################################
+# Bug#36890891: Specific table schema causes table to become corrupted
+#               during MySQL 8 upgrade
+########################################################################
+########################################################################
+# Copy and unzip the datadir, and stop the server.
+########################################################################
+########################################################################
+# Restart the server to trigger upgrade.
+########################################################################
+# restart: --log-error=MYSQLD_LOG --log-error-verbosity=3 --check-table-functions=WARN --lower-case-table-names=1 --datadir=MYSQLD_DATADIR_UPGRADE
+
+########################################################################
+# Show which tables we inspected during upgrade, and what we saw.
+########################################################################
+
+# Show tables we could not open during upgrade (all except t0, t4).
+SELECT "errlog>>" AS indent, prio, data
+FROM performance_schema.error_log
+WHERE error_code IN("MY-014078", "MY-014079")
+ORDER BY logged ASC;
+indent	prio	data
+errlog>>	Warning	Can not open table `test`.`t1`; functions in constraints, partitions, or virtual columns may have failed.
+errlog>>	Note	TABLE `test`.`t1` = { CONSTRAINTS = {{ name: "ck_t_custom_prefix", clause: "regexp_like(cast(`custom_prefix` as char charset binary),_utf8mb4\'^[a-z0-9-]+$\')", state: 2 }}; };
+errlog>>	Warning	Can not open table `test`.`t2`; functions in constraints, partitions, or virtual columns may have failed.
+errlog>>	Note	TABLE `test`.`t2` = { GCOL = {{ name: "a1", virtual: 1, clause: "regexp_like(cast(`a0` as char charset binary),_utf8mb4\'^[a-z0-9-]+$\')" }}; };
+errlog>>	Warning	Can not open table `test`.`t3`; functions in constraints, partitions, or virtual columns may have failed.
+errlog>>	Note	TABLE `test`.`t3` = { DEFAULTS = {{ name: "f1", default: "regexp_like(cast(`custom_prefix` as char charset binary),_utf8mb4\'^[a-z0-9-]+$\')" }}; };
+errlog>>	Warning	Can not open table `test`.`t5`; functions in constraints, partitions, or virtual columns may have failed.
+errlog>>	Note	TABLE `test`.`t5` = { GCOL = {{ index: "i1", name: "e2e0ac096d6875f52424140f51904876", virtual: 1, clause: "regexp_like(cast(`custom_prefix` as char charset binary),_utf8mb4\'^[a-z0-9-]+$\')" }}; };
+errlog>>	Warning	Can not open table `test`.`t6`; functions in constraints, partitions, or virtual columns may have failed.
+errlog>>	Note	TABLE `test`.`t6` = { CONSTRAINTS = {{ name: "ck_t6_f1", clause: "regexp_like(cast(`f1` as char charset binary),_utf8mb4\'^[a-z0-9-]+$\')", state: 2 }}; };
+errlog>>	Warning	Can not open table `test`.`t7`; functions in constraints, partitions, or virtual columns may have failed.
+errlog>>	Note	TABLE `test`.`t7` = { CONSTRAINTS = {{ name: "ck_t7_f1", clause: "regexp_like(cast(`f1` as char charset binary),_utf8mb4\'^[a-z0-9-]+$\')", state: 2 }}; };
+
+########################################################################
+# Stop the server and do cleanup.
+########################################################################
+# restart:

@@ -1,25 +1,33 @@
-/* Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "DbtuxProxy.hpp"
-#include "Dbtux.hpp"
 #include "../dblqh/DblqhCommon.hpp"
+#include "Dbtux.hpp"
 
-DbtuxProxy::DbtuxProxy(Block_context& ctx) :
-  LocalProxy(DBTUX, ctx)
-{
+#define JAM_FILE_ID 370
+
+DbtuxProxy::DbtuxProxy(Block_context &ctx) : LocalProxy(DBTUX, ctx) {
   // GSN_ALTER_INDX_IMPL_REQ
   addRecSignal(GSN_ALTER_INDX_IMPL_REQ, &DbtuxProxy::execALTER_INDX_IMPL_REQ);
   addRecSignal(GSN_ALTER_INDX_IMPL_CONF, &DbtuxProxy::execALTER_INDX_IMPL_CONF);
@@ -34,83 +42,78 @@ DbtuxProxy::DbtuxProxy(Block_context& ctx) :
   addRecSignal(GSN_INDEX_STAT_REP, &DbtuxProxy::execINDEX_STAT_REP);
 }
 
-DbtuxProxy::~DbtuxProxy()
-{
-}
+DbtuxProxy::~DbtuxProxy() {}
 
-SimulatedBlock*
-DbtuxProxy::newWorker(Uint32 instanceNo)
-{
+SimulatedBlock *DbtuxProxy::newWorker(Uint32 instanceNo) {
   return new Dbtux(m_ctx, instanceNo);
 }
 
 // GSN_ALTER_INDX_IMPL_REQ
 
-void
-DbtuxProxy::execALTER_INDX_IMPL_REQ(Signal* signal)
-{
-  const AlterIndxImplReq* req = (const AlterIndxImplReq*)signal->getDataPtr();
-  Ss_ALTER_INDX_IMPL_REQ& ss = ssSeize<Ss_ALTER_INDX_IMPL_REQ>();
+void DbtuxProxy::execALTER_INDX_IMPL_REQ(Signal *signal) {
+  jam();
+  const AlterIndxImplReq *req = (const AlterIndxImplReq *)signal->getDataPtr();
+  Ss_ALTER_INDX_IMPL_REQ &ss = ssSeize<Ss_ALTER_INDX_IMPL_REQ>();
   ss.m_req = *req;
   ndbrequire(signal->getLength() == AlterIndxImplReq::SignalLength);
   sendREQ(signal, ss);
 }
 
-void
-DbtuxProxy::sendALTER_INDX_IMPL_REQ(Signal* signal, Uint32 ssId,
-                                    SectionHandle * handle)
-{
-  Ss_ALTER_INDX_IMPL_REQ& ss = ssFind<Ss_ALTER_INDX_IMPL_REQ>(ssId);
+void DbtuxProxy::sendALTER_INDX_IMPL_REQ(Signal *signal, Uint32 ssId,
+                                         SectionHandle *handle) {
+  jam();
+  Ss_ALTER_INDX_IMPL_REQ &ss = ssFind<Ss_ALTER_INDX_IMPL_REQ>(ssId);
 
-  AlterIndxImplReq* req = (AlterIndxImplReq*)signal->getDataPtrSend();
+  AlterIndxImplReq *req = (AlterIndxImplReq *)signal->getDataPtrSend();
   *req = ss.m_req;
   req->senderRef = reference();
   req->senderData = ssId;
-  sendSignalNoRelease(workerRef(ss.m_worker), GSN_ALTER_INDX_IMPL_REQ,
-                      signal, AlterIndxImplReq::SignalLength, JBB, handle);
+  sendSignalNoRelease(workerRef(ss.m_worker), GSN_ALTER_INDX_IMPL_REQ, signal,
+                      AlterIndxImplReq::SignalLength, JBB, handle);
 }
 
-void
-DbtuxProxy::execALTER_INDX_IMPL_CONF(Signal* signal)
-{
-  const AlterIndxImplConf* conf = (const AlterIndxImplConf*)signal->getDataPtr();
+void DbtuxProxy::execALTER_INDX_IMPL_CONF(Signal *signal) {
+  jam();
+  const AlterIndxImplConf *conf =
+      (const AlterIndxImplConf *)signal->getDataPtr();
   Uint32 ssId = conf->senderData;
-  Ss_ALTER_INDX_IMPL_REQ& ss = ssFind<Ss_ALTER_INDX_IMPL_REQ>(ssId);
+  Ss_ALTER_INDX_IMPL_REQ &ss = ssFind<Ss_ALTER_INDX_IMPL_REQ>(ssId);
   recvCONF(signal, ss);
 }
 
-void
-DbtuxProxy::execALTER_INDX_IMPL_REF(Signal* signal)
-{
-  const AlterIndxImplRef* ref = (const AlterIndxImplRef*)signal->getDataPtr();
+void DbtuxProxy::execALTER_INDX_IMPL_REF(Signal *signal) {
+  jam();
+  const AlterIndxImplRef *ref = (const AlterIndxImplRef *)signal->getDataPtr();
   Uint32 ssId = ref->senderData;
-  Ss_ALTER_INDX_IMPL_REQ& ss = ssFind<Ss_ALTER_INDX_IMPL_REQ>(ssId);
+  Ss_ALTER_INDX_IMPL_REQ &ss = ssFind<Ss_ALTER_INDX_IMPL_REQ>(ssId);
   recvREF(signal, ss, ref->errorCode);
 }
 
-void
-DbtuxProxy::sendALTER_INDX_IMPL_CONF(Signal* signal, Uint32 ssId)
-{
-  Ss_ALTER_INDX_IMPL_REQ& ss = ssFind<Ss_ALTER_INDX_IMPL_REQ>(ssId);
+void DbtuxProxy::sendALTER_INDX_IMPL_CONF(Signal *signal, Uint32 ssId) {
+  jam();
+  Ss_ALTER_INDX_IMPL_REQ &ss = ssFind<Ss_ALTER_INDX_IMPL_REQ>(ssId);
   BlockReference dictRef = ss.m_req.senderRef;
 
-  if (!lastReply(ss))
+  if (!lastReply(ss)) {
+    jam();
     return;
+  }
 
   if (ss.m_error == 0) {
     jam();
-    AlterIndxImplConf* conf = (AlterIndxImplConf*)signal->getDataPtrSend();
+    AlterIndxImplConf *conf = (AlterIndxImplConf *)signal->getDataPtrSend();
     conf->senderRef = reference();
     conf->senderData = ss.m_req.senderData;
-    sendSignal(dictRef, GSN_ALTER_INDX_IMPL_CONF,
-               signal, AlterIndxImplConf::SignalLength, JBB);
+    sendSignal(dictRef, GSN_ALTER_INDX_IMPL_CONF, signal,
+               AlterIndxImplConf::SignalLength, JBB);
   } else {
-    AlterIndxImplRef* ref = (AlterIndxImplRef*)signal->getDataPtrSend();
+    jam();
+    AlterIndxImplRef *ref = (AlterIndxImplRef *)signal->getDataPtrSend();
     ref->senderRef = reference();
     ref->senderData = ss.m_req.senderData;
     ref->errorCode = ss.m_error;
-    sendSignal(dictRef, GSN_ALTER_INDX_IMPL_REF,
-               signal, AlterIndxImplRef::SignalLength, JBB);
+    sendSignal(dictRef, GSN_ALTER_INDX_IMPL_REF, signal,
+               AlterIndxImplRef::SignalLength, JBB);
   }
 
   ssRelease<Ss_ALTER_INDX_IMPL_REQ>(ssId);
@@ -118,131 +121,92 @@ DbtuxProxy::sendALTER_INDX_IMPL_CONF(Signal* signal, Uint32 ssId)
 
 // GSN_INDEX_STAT_IMPL_REQ
 
-void
-DbtuxProxy::execINDEX_STAT_IMPL_REQ(Signal* signal)
-{
+void DbtuxProxy::execINDEX_STAT_IMPL_REQ(Signal *signal) {
   jamEntry();
-  const IndexStatImplReq* req =
-    (const IndexStatImplReq*)signal->getDataPtr();
-  Ss_INDEX_STAT_IMPL_REQ& ss = ssSeize<Ss_INDEX_STAT_IMPL_REQ>();
+  const IndexStatImplReq *req = (const IndexStatImplReq *)signal->getDataPtr();
+  Ss_INDEX_STAT_IMPL_REQ &ss = ssSeize<Ss_INDEX_STAT_IMPL_REQ>();
   ss.m_req = *req;
   ndbrequire(signal->getLength() == IndexStatImplReq::SignalLength);
   sendREQ(signal, ss);
 }
 
-void
-DbtuxProxy::sendINDEX_STAT_IMPL_REQ(Signal* signal, Uint32 ssId,
-                                    SectionHandle*)
-{
-  Ss_INDEX_STAT_IMPL_REQ& ss = ssFind<Ss_INDEX_STAT_IMPL_REQ>(ssId);
+void DbtuxProxy::sendINDEX_STAT_IMPL_REQ(Signal *signal, Uint32 ssId,
+                                         SectionHandle *) {
+  jam();
+  Ss_INDEX_STAT_IMPL_REQ &ss = ssFind<Ss_INDEX_STAT_IMPL_REQ>(ssId);
 
-  IndexStatImplReq* req = (IndexStatImplReq*)signal->getDataPtrSend();
+  IndexStatImplReq *req = (IndexStatImplReq *)signal->getDataPtrSend();
   *req = ss.m_req;
   req->senderRef = reference();
   req->senderData = ssId;
 
-  const Uint32 instance = workerInstance(ss.m_worker);
-  NdbLogPartInfo lpinfo(instance);
-
-  //XXX remove unused
   switch (req->requestType) {
-  case IndexStatReq::RT_START_MON:
-    /*
-     * DICT sets fragId if assigned frag is on this node, or else ZNIL
-     * to turn off any possible old assignment.  In MT-LQH we also have
-     * to check which worker owns the frag.
-     */
-    if (req->fragId != ZNIL
-        && !lpinfo.partNoOwner(req->indexId, req->fragId)) {
+    case IndexStatReq::RT_START_MON:
+      /*
+       * DICT sets fragId if assigned frag is on this node, or else ZNIL
+       * to turn off any possible old assignment.  In MT-LQH we also have
+       * to check which worker owns the frag.
+       */
       jam();
-      req->fragId = ZNIL;
-    }
-    break;
-  case IndexStatReq::RT_STOP_MON:
-    /*
-     * DICT sets fragId to ZNIL always.  There is no (pointless) check
-     * to see if the frag was ever assigned.
-     */
-    ndbrequire(req->fragId == ZNIL);
-    break;
-  case IndexStatReq::RT_SCAN_FRAG:
-    ndbrequire(req->fragId != ZNIL);
-    if (!lpinfo.partNoOwner(req->indexId, req->fragId)) {
+      break;
+    case IndexStatReq::RT_STOP_MON:
+      /*
+       * DICT sets fragId to ZNIL always.  There is no (pointless) check
+       * to see if the frag was ever assigned.
+       */
       jam();
-      skipReq(ss);
-      return;
-    }
-    break;
-  case IndexStatReq::RT_CLEAN_NEW:
-  case IndexStatReq::RT_CLEAN_OLD:
-  case IndexStatReq::RT_CLEAN_ALL:
-    ndbrequire(req->fragId == ZNIL);
-    break;
-  case IndexStatReq::RT_DROP_HEAD:
-    /*
-     * Only one client can do the PK-delete of the head record.  We use
-     * of course the worker which owns the assigned fragment.
-     */
-    ndbrequire(req->fragId != ZNIL);
-    if (!lpinfo.partNoOwner(req->indexId, req->fragId)) {
-      jam();
-      skipReq(ss);
-      return;
-    }
-    break;
-  default:
-    ndbrequire(false);
-    break;
+      ndbrequire(req->fragId == ZNIL);
+      break;
+    default:
+      ndbabort();
   }
 
-  sendSignal(workerRef(ss.m_worker), GSN_INDEX_STAT_IMPL_REQ,
-             signal, IndexStatImplReq::SignalLength, JBB);
+  sendSignal(workerRef(ss.m_worker), GSN_INDEX_STAT_IMPL_REQ, signal,
+             IndexStatImplReq::SignalLength, JBB);
 }
 
-void
-DbtuxProxy::execINDEX_STAT_IMPL_CONF(Signal* signal)
-{
+void DbtuxProxy::execINDEX_STAT_IMPL_CONF(Signal *signal) {
   jamEntry();
-  const IndexStatImplConf* conf =
-    (const IndexStatImplConf*)signal->getDataPtr();
+  const IndexStatImplConf *conf =
+      (const IndexStatImplConf *)signal->getDataPtr();
   Uint32 ssId = conf->senderData;
-  Ss_INDEX_STAT_IMPL_REQ& ss = ssFind<Ss_INDEX_STAT_IMPL_REQ>(ssId);
+  Ss_INDEX_STAT_IMPL_REQ &ss = ssFind<Ss_INDEX_STAT_IMPL_REQ>(ssId);
   recvCONF(signal, ss);
 }
 
-void
-DbtuxProxy::execINDEX_STAT_IMPL_REF(Signal* signal)
-{
+void DbtuxProxy::execINDEX_STAT_IMPL_REF(Signal *signal) {
   jamEntry();
-  const IndexStatImplRef* ref = (const IndexStatImplRef*)signal->getDataPtr();
+  const IndexStatImplRef *ref = (const IndexStatImplRef *)signal->getDataPtr();
   Uint32 ssId = ref->senderData;
-  Ss_INDEX_STAT_IMPL_REQ& ss = ssFind<Ss_INDEX_STAT_IMPL_REQ>(ssId);
+  Ss_INDEX_STAT_IMPL_REQ &ss = ssFind<Ss_INDEX_STAT_IMPL_REQ>(ssId);
   recvREF(signal, ss, ref->errorCode);
 }
 
-void
-DbtuxProxy::sendINDEX_STAT_IMPL_CONF(Signal* signal, Uint32 ssId)
-{
-  Ss_INDEX_STAT_IMPL_REQ& ss = ssFind<Ss_INDEX_STAT_IMPL_REQ>(ssId);
+void DbtuxProxy::sendINDEX_STAT_IMPL_CONF(Signal *signal, Uint32 ssId) {
+  jam();
+  Ss_INDEX_STAT_IMPL_REQ &ss = ssFind<Ss_INDEX_STAT_IMPL_REQ>(ssId);
   BlockReference dictRef = ss.m_req.senderRef;
 
-  if (!lastReply(ss))
+  if (!lastReply(ss)) {
+    jam();
     return;
+  }
 
   if (ss.m_error == 0) {
     jam();
-    IndexStatImplConf* conf = (IndexStatImplConf*)signal->getDataPtrSend();
+    IndexStatImplConf *conf = (IndexStatImplConf *)signal->getDataPtrSend();
     conf->senderRef = reference();
     conf->senderData = ss.m_req.senderData;
-    sendSignal(dictRef, GSN_INDEX_STAT_IMPL_CONF,
-               signal, IndexStatImplConf::SignalLength, JBB);
+    sendSignal(dictRef, GSN_INDEX_STAT_IMPL_CONF, signal,
+               IndexStatImplConf::SignalLength, JBB);
   } else {
-    IndexStatImplRef* ref = (IndexStatImplRef*)signal->getDataPtrSend();
+    jam();
+    IndexStatImplRef *ref = (IndexStatImplRef *)signal->getDataPtrSend();
     ref->senderRef = reference();
     ref->senderData = ss.m_req.senderData;
     ref->errorCode = ss.m_error;
-    sendSignal(dictRef, GSN_INDEX_STAT_IMPL_REF,
-               signal, IndexStatImplRef::SignalLength, JBB);
+    sendSignal(dictRef, GSN_INDEX_STAT_IMPL_REF, signal,
+               IndexStatImplRef::SignalLength, JBB);
   }
 
   ssRelease<Ss_INDEX_STAT_IMPL_REQ>(ssId);
@@ -250,42 +214,15 @@ DbtuxProxy::sendINDEX_STAT_IMPL_CONF(Signal* signal, Uint32 ssId)
 
 // GSN_INDEX_STAT_REP
 
-void
-DbtuxProxy::execINDEX_STAT_REP(Signal* signal)
-{
+void DbtuxProxy::execINDEX_STAT_REP(Signal *signal) {
   jamEntry();
-  const IndexStatRep* rep =
-    (const IndexStatRep*)signal->getDataPtr();
-  Ss_INDEX_STAT_REP& ss = ssSeize<Ss_INDEX_STAT_REP>();
-  ss.m_rep = *rep;
-  ndbrequire(signal->getLength() == IndexStatRep::SignalLength);
-  sendREQ(signal, ss);
-  ssRelease<Ss_INDEX_STAT_REP>(ss);
-}
+  const IndexStatRep *rep = (const IndexStatRep *)signal->getDataPtr();
 
-void
-DbtuxProxy::sendINDEX_STAT_REP(Signal* signal, Uint32 ssId,
-                               SectionHandle*)
-{
-  Ss_INDEX_STAT_REP& ss = ssFind<Ss_INDEX_STAT_REP>(ssId);
+  Uint32 instanceKey = getInstanceKey(rep->indexId, rep->fragId);
+  Uint32 instanceNo = getInstanceNo(getOwnNodeId(), instanceKey);
 
-  IndexStatRep* rep = (IndexStatRep*)signal->getDataPtrSend();
-  *rep = ss.m_rep;
-  rep->senderData = reference();
-  rep->senderData = ssId;
-
-  const Uint32 instance = workerInstance(ss.m_worker);
-  NdbLogPartInfo lpinfo(instance);
-
-  ndbrequire(rep->fragId != ZNIL);
-  if (!lpinfo.partNoOwner(rep->indexId, rep->fragId)) {
-    jam();
-    skipReq(ss);
-    return;
-  }
-
-  sendSignal(workerRef(ss.m_worker), GSN_INDEX_STAT_REP,
-             signal, IndexStatRep::SignalLength, JBB);
+  sendSignal(numberToRef(DBTUX, instanceNo, getOwnNodeId()), GSN_INDEX_STAT_REP,
+             signal, signal->getLength(), JBB);
 }
 
 BLOCK_FUNCTIONS(DbtuxProxy)

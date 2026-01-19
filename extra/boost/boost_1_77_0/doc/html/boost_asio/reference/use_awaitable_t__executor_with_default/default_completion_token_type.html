@@ -1,0 +1,164 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>use_awaitable_t::executor_with_default::default_completion_token_type</title>
+<link rel="stylesheet" href="../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../use_awaitable_t__executor_with_default.html" title="use_awaitable_t::executor_with_default">
+<link rel="prev" href="../use_awaitable_t__executor_with_default.html" title="use_awaitable_t::executor_with_default">
+<link rel="next" href="executor_with_default.html" title="use_awaitable_t::executor_with_default::executor_with_default">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../use_awaitable_t__executor_with_default.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../use_awaitable_t__executor_with_default.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="executor_with_default.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h4 class="title">
+<a name="boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type"></a><a class="link" href="default_completion_token_type.html" title="use_awaitable_t::executor_with_default::default_completion_token_type">use_awaitable_t::executor_with_default::default_completion_token_type</a>
+</h4></div></div></div>
+<p>
+          <a class="indexterm" name="boost_asio.indexterm.use_awaitable_t__executor_with_default.default_completion_token_type"></a> 
+Specify
+          <code class="computeroutput">use_awaitable_t</code> as the default completion token type.
+        </p>
+<pre class="programlisting">typedef use_awaitable_t default_completion_token_type;
+</pre>
+<h6>
+<a name="boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.h0"></a>
+          <span class="phrase"><a name="boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.types"></a></span><a class="link" href="default_completion_token_type.html#boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.types">Types</a>
+        </h6>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                  <p>
+                    Name
+                  </p>
+                </th>
+<th>
+                  <p>
+                    Description
+                  </p>
+                </th>
+</tr></thead>
+<tbody><tr>
+<td>
+                  <p>
+                    <a class="link" href="../use_awaitable_t__executor_with_default.html" title="use_awaitable_t::executor_with_default"><span class="bold"><strong>executor_with_default</strong></span></a>
+                  </p>
+                </td>
+<td>
+                  <p>
+                    Adapts an executor to add the use_awaitable_t completion token
+                    as the default.
+                  </p>
+                </td>
+</tr></tbody>
+</table></div>
+<h6>
+<a name="boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.h1"></a>
+          <span class="phrase"><a name="boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.member_functions"></a></span><a class="link" href="default_completion_token_type.html#boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.member_functions">Member
+          Functions</a>
+        </h6>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                  <p>
+                    Name
+                  </p>
+                </th>
+<th>
+                  <p>
+                    Description
+                  </p>
+                </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+                  <p>
+                    <a class="link" href="../use_awaitable_t/as_default_on.html" title="use_awaitable_t::as_default_on"><span class="bold"><strong>as_default_on</strong></span></a> <span class="silver">[static]</span>
+                  </p>
+                </td>
+<td>
+                  <p>
+                    Function helper to adapt an I/O object to use use_awaitable_t
+                    as its default completion token type.
+                  </p>
+                </td>
+</tr>
+<tr>
+<td>
+                  <p>
+                    <a class="link" href="../use_awaitable_t/use_awaitable_t.html" title="use_awaitable_t::use_awaitable_t"><span class="bold"><strong>use_awaitable_t</strong></span></a> <span class="silver">[constructor]</span>
+                  </p>
+                </td>
+<td>
+                  <p>
+                    Default constructor. <br> <span class="silver"> —</span><br> Constructor used to specify
+                    file name, line, and function name.
+                  </p>
+                </td>
+</tr>
+</tbody>
+</table></div>
+<p>
+          The <code class="computeroutput">use_awaitable_t</code> class, with its value <code class="computeroutput">use_awaitable</code>,
+          is used to represent the currently executing coroutine. This completion
+          token may be passed as a handler to an asynchronous operation. For example:
+        </p>
+<pre class="programlisting">awaitable&lt;void&gt; my_coroutine()
+{
+  std::size_t n = co_await my_socket.async_read_some(buffer, use_awaitable);
+  ...
+}
+</pre>
+<p>
+          When used with co_await, the initiating function (<code class="computeroutput">async_read_some</code>
+          in the above example) suspends the current coroutine. The coroutine is
+          resumed when the asynchronous operation completes, and the result of the
+          operation is returned.
+        </p>
+<h6>
+<a name="boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.h2"></a>
+          <span class="phrase"><a name="boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.requirements"></a></span><a class="link" href="default_completion_token_type.html#boost_asio.reference.use_awaitable_t__executor_with_default.default_completion_token_type.requirements">Requirements</a>
+        </h6>
+<p>
+          <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/use_awaitable.hpp</code>
+        </p>
+<p>
+          <span class="emphasis"><em>Convenience header: </em></span><code class="literal">boost/asio.hpp</code>
+        </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../use_awaitable_t__executor_with_default.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../use_awaitable_t__executor_with_default.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="executor_with_default.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

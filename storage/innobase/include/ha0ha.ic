@@ -1,246 +1,148 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2011, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1994, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file include/ha0ha.ic
-The hash table with external chains
+/** @file include/ha0ha.ic
+ The hash table with external chains
 
-Created 8/18/1994 Heikki Tuuri
-*************************************************************************/
+ Created 8/18/1994 Heikki Tuuri
+ *************************************************************************/
 
-#include "ut0rnd.h"
-#include "mem0mem.h"
 #include "btr0types.h"
+#include "mem0mem.h"
+#include "ut0rnd.h"
 
-/***********************************************************//**
-Deletes a hash node. */
-UNIV_INTERN
-void
-ha_delete_hash_node(
-/*================*/
-	hash_table_t*	table,		/*!< in: hash table */
-	ha_node_t*	del_node);	/*!< in: node to be deleted */
+/** Deletes a hash node. */
+void ha_delete_hash_node(hash_table_t *table,  /*!< in: hash table */
+                         ha_node_t *del_node); /*!< in: node to be deleted */
 
-/******************************************************************//**
-Gets a hash node data.
-@return	pointer to the data */
-UNIV_INLINE
-const rec_t*
-ha_node_get_data(
-/*=============*/
-	const ha_node_t*	node)	/*!< in: hash chain node */
+/** Gets a hash node data.
+ @return pointer to the data */
+static inline const rec_t *ha_node_get_data(
+    const ha_node_t *node) /*!< in: hash chain node */
 {
-	return(node->data);
+  return node->data;
 }
 
-/******************************************************************//**
-Sets hash node data. */
-UNIV_INLINE
-void
-ha_node_set_data_func(
-/*==================*/
-	ha_node_t*	node,	/*!< in: hash chain node */
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-	buf_block_t*	block,	/*!< in: buffer block containing the data */
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
-	const rec_t*	data)	/*!< in: pointer to the data */
-{
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-	node->block = block;
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
-	node->data = data;
-}
-
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
 /** Sets hash node data.
-@param n	in: hash chain node
-@param b	in: buffer block containing the data
-@param d	in: pointer to the data */
-# define ha_node_set_data(n,b,d) ha_node_set_data_func(n,b,d)
-#else /* UNIV_AHI_DEBUG || UNIV_DEBUG */
-/** Sets hash node data.
-@param n	in: hash chain node
-@param b	in: buffer block containing the data
-@param d	in: pointer to the data */
-# define ha_node_set_data(n,b,d) ha_node_set_data_func(n,d)
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
-
-/******************************************************************//**
-Gets the next node in a hash chain.
-@return	next node, NULL if none */
-UNIV_INLINE
-ha_node_t*
-ha_chain_get_next(
-/*==============*/
-	ha_node_t*	node)	/*!< in: hash chain node */
-{
-	return(node->next);
+@param[in] node chain node
+@param[in] block buffer block containing the data
+@param[in] data pointer to the data */
+static inline void ha_node_set_data(ha_node_t *node,
+                                    IF_AHI_DEBUG(buf_block_t *block, )
+                                        const rec_t *data) {
+  IF_AHI_DEBUG(node->block = block;)
+  node->data = data;
 }
 
-/******************************************************************//**
-Gets the first node in a hash chain.
-@return	first node, NULL if none */
-UNIV_INLINE
-ha_node_t*
-ha_chain_get_first(
-/*===============*/
-	hash_table_t*	table,	/*!< in: hash table */
-	ulint		fold)	/*!< in: fold value determining the chain */
+/** Gets the next node in a hash chain.
+ @return next node, NULL if none */
+static inline ha_node_t *ha_chain_get_next(
+    const ha_node_t *node) /*!< in: hash chain node */
 {
-	return((ha_node_t*)
-	       hash_get_nth_cell(table, hash_calc_hash(fold, table))->node);
+  return node->next;
 }
 
-#ifdef UNIV_DEBUG
-/********************************************************************//**
-Assert that the synchronization object in a hash operation involving
-possible change in the hash table is held.
-Note that in case of mutexes we assert that mutex is owned while in case
-of rw-locks we assert that it is held in exclusive mode. */
-UNIV_INLINE
-void
-hash_assert_can_modify(
-/*===================*/
-	hash_table_t*	table,	/*!< in: hash table */
-	ulint		fold)	/*!< in: fold value */
+/** Gets the first node in a hash chain.
+ @return first node, NULL if none */
+static inline ha_node_t *ha_chain_get_first(
+    hash_table_t *table, /*!< in: hash table */
+    uint64_t hash_value) /*!< in: hash value determining the chain */
 {
-	if (table->type == HASH_TABLE_SYNC_MUTEX) {
-		ut_ad(mutex_own(hash_get_mutex(table, fold)));
-	} else if (table->type == HASH_TABLE_SYNC_RW_LOCK) {
-# ifdef UNIV_SYNC_DEBUG
-		rw_lock_t* lock = hash_get_lock(table, fold);
-		ut_ad(rw_lock_own(lock, RW_LOCK_EX));
-# endif
-	} else {
-		ut_ad(table->type == HASH_TABLE_SYNC_NONE);
-	}
+  return (ha_node_t *)hash_get_nth_cell(table,
+                                        hash_calc_cell_id(hash_value, table))
+      ->node;
 }
 
-/********************************************************************//**
-Assert that the synchronization object in a hash search operation is held.
-Note that in case of mutexes we assert that mutex is owned while in case
-of rw-locks we assert that it is held either in x-mode or s-mode. */
-UNIV_INLINE
-void
-hash_assert_can_search(
-/*===================*/
-	hash_table_t*	table,	/*!< in: hash table */
-	ulint		fold)	/*!< in: fold value */
+/** Looks for an element in a hash table.
+ @return pointer to the data of the first hash table node in chain
+ having the hash number, NULL if not found */
+static inline const rec_t *ha_search_and_get_data(
+    hash_table_t *table, /*!< in: hash table */
+    uint64_t hash_value) /*!< in: hashed value of the searched data */
 {
-	if (table->type == HASH_TABLE_SYNC_MUTEX) {
-		ut_ad(mutex_own(hash_get_mutex(table, fold)));
-	} else if (table->type == HASH_TABLE_SYNC_RW_LOCK) {
-# ifdef UNIV_SYNC_DEBUG
-		rw_lock_t* lock = hash_get_lock(table, fold);
-		ut_ad(rw_lock_own(lock, RW_LOCK_EX)
-		      || rw_lock_own(lock, RW_LOCK_SHARED));
-# endif
-	} else {
-		ut_ad(table->type == HASH_TABLE_SYNC_NONE);
-	}
-}
-#endif /* UNIV_DEBUG */
+  hash_assert_can_search(table, hash_value);
+  ut_ad(btr_search_enabled);
 
-/*************************************************************//**
-Looks for an element in a hash table.
-@return pointer to the data of the first hash table node in chain
-having the fold number, NULL if not found */
-UNIV_INLINE
-const rec_t*
-ha_search_and_get_data(
-/*===================*/
-	hash_table_t*	table,	/*!< in: hash table */
-	ulint		fold)	/*!< in: folded value of the searched data */
-{
-	ha_node_t*	node;
+  for (const ha_node_t *node = ha_chain_get_first(table, hash_value);
+       node != nullptr; node = ha_chain_get_next(node)) {
+    if (node->hash_value == hash_value) {
+      return node->data;
+    }
+  }
 
-	hash_assert_can_search(table, fold);
-	ut_ad(btr_search_enabled);
-
-	node = ha_chain_get_first(table, fold);
-
-	while (node) {
-		if (node->fold == fold) {
-
-			return(node->data);
-		}
-
-		node = ha_chain_get_next(node);
-	}
-
-	return(NULL);
+  return nullptr;
 }
 
-/*********************************************************//**
-Looks for an element when we know the pointer to the data.
-@return	pointer to the hash table node, NULL if not found in the table */
-UNIV_INLINE
-ha_node_t*
-ha_search_with_data(
-/*================*/
-	hash_table_t*	table,	/*!< in: hash table */
-	ulint		fold,	/*!< in: folded value of the searched data */
-	const rec_t*	data)	/*!< in: pointer to the data */
+/** Looks for an element when we know the pointer to the data.
+ @return pointer to the hash table node, NULL if not found in the table */
+static inline ha_node_t *ha_search_with_data(
+    hash_table_t *table, /*!< in: hash table */
+    uint64_t hash_value, /*!< in: hashed value of the searched data */
+    const rec_t *data)   /*!< in: pointer to the data */
 {
-	ha_node_t*	node;
+  ha_node_t *node;
 
-	hash_assert_can_search(table, fold);
+  hash_assert_can_search(table, hash_value);
 
-	ut_ad(btr_search_enabled);
+  ut_ad(btr_search_enabled);
 
-	node = ha_chain_get_first(table, fold);
+  node = ha_chain_get_first(table, hash_value);
 
-	while (node) {
-		if (node->data == data) {
+  while (node) {
+    if (node->data == data) {
+      return node;
+    }
 
-			return(node);
-		}
+    node = ha_chain_get_next(node);
+  }
 
-		node = ha_chain_get_next(node);
-	}
-
-	return(NULL);
+  return nullptr;
 }
 
-/*********************************************************//**
-Looks for an element when we know the pointer to the data, and deletes
-it from the hash table, if found.
-@return	TRUE if found */
-UNIV_INLINE
-ibool
-ha_search_and_delete_if_found(
-/*==========================*/
-	hash_table_t*	table,	/*!< in: hash table */
-	ulint		fold,	/*!< in: folded value of the searched data */
-	const rec_t*	data)	/*!< in: pointer to the data */
+/** Looks for an element when we know the pointer to the data, and deletes
+ it from the hash table, if found.
+ @return true if found */
+static inline bool ha_search_and_delete_if_found(
+    hash_table_t *table, /*!< in: hash table */
+    uint64_t hash_value, /*!< in: hashed value of the searched data */
+    const rec_t *data)   /*!< in: pointer to the data */
 {
-	ha_node_t*	node;
+  ha_node_t *node;
 
-	hash_assert_can_modify(table, fold);
-	ut_ad(btr_search_enabled);
+  hash_assert_can_modify(table, hash_value);
+  ut_ad(btr_search_enabled);
 
-	node = ha_search_with_data(table, fold, data);
+  node = ha_search_with_data(table, hash_value, data);
 
-	if (node) {
-		ha_delete_hash_node(table, node);
+  if (node) {
+    ha_delete_hash_node(table, node);
 
-		return(TRUE);
-	}
+    return true;
+  }
 
-	return(FALSE);
+  return false;
 }

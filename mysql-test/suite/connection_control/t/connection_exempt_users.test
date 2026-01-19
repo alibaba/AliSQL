@@ -1,0 +1,78 @@
+# Perl socket test code itself is leaking
+--source include/not_valgrind.inc
+--source include/not_asan.inc
+--source include/big_test.inc
+
+# Make sure that connection_control plugin can be loaded
+--source ../inc/have_connection_control_plugin.inc
+
+--echo # Connection delay tests for unauthenticated connections
+--echo # (with or without control exemption)
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Setup
+--echo # Install connection_control plugin
+--source ../inc/install_connection_control_plugin.inc
+
+--echo # Save original values of connection_control variables
+SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
+SET @saved_max_delay = @@global.connection_control_max_connection_delay;
+SET @saved_exempt= @@global.connection_control_exempt_unknown_users;
+
+-- echo # Set small values for connection_control variables
+SET @@global.connection_control_failed_connections_threshold = 2;
+SET @global.connection_control_max_connection_delay = 1000;
+
+--echo # Check initial Connection_control_exempted_unknown_users - Should be 0
+SHOW STATUS LIKE 'Connection_control_exempted_unknown_users';
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Following attempt will not experience any delay in server response (exempt enabled)
+
+let SRV_HOST= 127.0.0.1;
+let SRV_PORT= `SELECT @@port`;
+
+SET @@global.connection_control_exempt_unknown_users= 1;
+--source ../inc/tcp_connection.inc
+--source ../inc/tcp_connection.inc
+--source ../inc/tcp_connection.inc
+--echo Connection_control_delay_generated should be 0
+SHOW STATUS LIKE 'Connection_control_delay_generated';
+--echo # Connection_control_exempted_unknown_users should be 3
+SHOW STATUS LIKE 'Connection_control_exempted_unknown_users';
+
+--echo # Following attempt will experience delay in server response (exempt disabled)
+
+SET @@global.connection_control_exempt_unknown_users= 0;
+--source ../inc/tcp_connection.inc
+--source ../inc/tcp_connection.inc
+--source ../inc/tcp_connection.inc
+--echo Connection_control_delay_generated should be 1
+SHOW STATUS LIKE 'Connection_control_delay_generated';
+--echo # Connection_control_exempted_unknown_users should still be 3
+SHOW STATUS LIKE 'Connection_control_exempted_unknown_users';
+# wait for connection delay to expire
+--sleep 2
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Cleanup
+
+--echo # Restore original values of connection_control variables
+SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
+SET @@global.connection_control_max_connection_delay = @saved_max_delay;
+SET @@global.connection_control_exempt_unknown_users= @saved_exempt;
+
+--echo # Uninstall connection_control plugin
+--source ../inc/uninstall_connection_control_plugin.inc
+
+--echo
+--echo # ----------------------------------------------------------------------

@@ -103,9 +103,11 @@ SELECT @@session.general_log;
 # Check if the value in GLOBAL Tables matches values in variable             #
 ##############################################################################
 
+--disable_warnings
 SELECT IF(@@global.general_log, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='general_log';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_004_06----------------------#'
@@ -152,7 +154,9 @@ SET global.general_log = ON;
 --Error ER_UNKNOWN_TABLE
 SELECT global.general_log;
 --Error ER_BAD_FIELD_ERROR
-SELECT general_log = @@session.general_log;
+SELECT general_log;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.general_log;
 
 
 

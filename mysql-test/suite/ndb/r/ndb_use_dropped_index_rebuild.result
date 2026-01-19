@@ -1,0 +1,96 @@
+result_format: 2
+## The MySQL Server supports opening tables with missing indexes.
+## This means that MySQL knows about an index which does
+## not exist in NDB but it still allows opening the table with
+## the index unavailable.
+##
+## This test makes sure that a table with missing index which
+## has been opened in MySQL detects when the index becomes available
+## in NDB again.
+##
+call mtr.add_suppression(".*Got error 126 when reading table '.*t1'");
+
+CREATE TABLE t1 (
+    pk INT PRIMARY KEY,
+    a INT,
+    b VARCHAR(255),
+    c DECIMAL(10,2),
+    INDEX idx_a (a)
+) ENGINE=NDBCLUSTER;
+
+INSERT INTO t1 VALUES
+    (1, 10, 'value1', 10.50),
+    (2, 20, 'value2', 20.25),
+    (3, 30, 'value3', 30.75);
+
+## Take backup in order to be able to restore the index
+
+## Read from table when index idx_a is available
+## thus opening the table and cache it
+SELECT a FROM t1 WHERE a = 10;
+a
+10
+EXPLAIN SELECT a FROM t1 WHERE a = 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ref	idx_a	idx_a	5	const	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` where (`test`.`t1`.`a` = 10)
+## Other queries work
+SELECT pk FROM t1 ORDER BY pk LIMIT 1;
+pk
+1
+SELECT pk FROM t1 WHERE pk = 1;
+pk
+1
+
+## Check index exist in NDB
+
+##########################################
+## Use ndb_drop_index to drop the index idx_a.
+Dropping index t1/idx_a...OK
+## Check index does NOT exist in NDB
+
+## Select from the table again, expect error since NDB
+## detects that table version has changed
+SELECT a FROM t1 WHERE a = 10;
+ERROR HY000: Table definition has changed, please retry transaction
+
+## Query using the index fails
+SELECT a FROM t1 WHERE a = 10;
+ERROR HY000: Incorrect key file for table 't1'; try to repair it
+
+## Other queries work
+SELECT pk FROM t1 ORDER BY pk LIMIT 1;
+pk
+1
+SELECT pk FROM t1 WHERE pk = 1;
+pk
+1
+
+###################################
+## Restore index from backup
+####################################
+## Check that index 'idx_a' exist in NDB again
+
+## Query using the index works again
+SELECT a FROM t1 WHERE a = 10;
+a
+10
+
+## Other queries work
+SELECT pk FROM t1 ORDER BY pk LIMIT 1;
+pk
+1
+SELECT pk FROM t1 WHERE pk = 1;
+pk
+1
+
+## Explain shows that MySQL still want to use idx_a
+EXPLAIN SELECT a FROM t1 WHERE a = 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ref	idx_a	idx_a	5	const	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` where (`test`.`t1`.`a` = 10)
+
+DROP TABLE t1;
+

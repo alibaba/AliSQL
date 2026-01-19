@@ -3,10 +3,10 @@
  *  memcached - memory caching daemon
  *
  *       http://www.danga.com/memcached/
- *  Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ *  Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *  Copyright 2003 Danga Interactive, Inc.  All rights reserved.
- *  This file was modified by Oracle on 28-08-2015.
- *  Modifications copyright (c) 2015, Oracle and/or its affiliates.
+ *  This file was modified by Oracle on 28-08-2015 and 23-03-2016.
+ *  Modifications Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *  All rights reserved.
  *
  *  Use and distribution licensed under the BSD license.  See
@@ -15,6 +15,8 @@
  *  Authors:
  *      Anatoly Vorobey <mellon@pobox.com>
  *      Brad Fitzpatrick <brad@danga.com>
+ *
+ *  Copyright (c) 2011, 2023, Oracle and/or its affiliates.
  */
 #include "config.h"
 #include "config_static.h"
@@ -35,10 +37,13 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <dlfcn.h>
 
 #include "memcached_mysql.h"
 
 #define INNODB_MEMCACHED
+void my_thread_init();
+void my_thread_end();
 
 static inline void item_set_cas(const void *cookie, item *it, uint64_t cas) {
     settings.engine.v1->item_set_cas(settings.engine.v0, cookie, it, cas);
@@ -88,7 +93,7 @@ static inline void item_set_cas(const void *cookie, item *it, uint64_t cas) {
 #define STATS_MISS(conn, op, key, nkey) \
     STATS_TWO(conn, op##_misses, cmd_##op, key, nkey)
 
-#if defined(HAVE_GCC_ATOMIC_BUILTINS)
+#if defined(HAVE_GCC_SYNC_BUILTINS)
 
 #define STATS_NOKEY(conn, op)	\
 do { \
@@ -114,7 +119,7 @@ do { \
 
 #define MEMCACHED_ATOMIC_MSG	"InnoDB MEMCACHED: Memcached uses atomic increment \n"
 
-#else /* HAVE_GCC_ATOMIC_BUILTINS */
+#else /* HAVE_GCC_SYNC_BUILTINS */
 #define STATS_NOKEY(conn, op) { \
     struct thread_stats *thread_stats = \
         get_thread_stats(conn); \
@@ -141,7 +146,7 @@ do { \
 }
 
 #define MEMCACHED_ATOMIC_MSG	"InnoDB Memcached: Memcached DOES NOT use atomic increment"
-#endif /* HAVE_GCC_ATOMIC_BUILTINS */
+#endif /* HAVE_GCC_SYNC_BUILTINS */
 
 volatile sig_atomic_t memcached_shutdown;
 volatile sig_atomic_t memcached_initialized;
@@ -169,7 +174,7 @@ static void register_callback(ENGINE_HANDLE *eh,
 enum try_read_result {
     READ_DATA_RECEIVED,
     READ_NO_DATA_RECEIVED,
-    READ_ERROR,            /** an error occured (on the socket) (or client closed connection) */
+    READ_ERROR,            /** an error occurred (on the socket) (or client closed connection) */
     READ_MEMORY_ERROR      /** failed to allocate more memory */
 };
 
@@ -729,11 +734,11 @@ static void conn_cleanup(conn *c) {
     }
 
     if (c->engine_storage) {
-	settings.engine.v1->clean_engine(settings.engine.v0, c,
-					 c->engine_storage);
+	void* cleanup_data = c->engine_storage;
+	c->engine_storage = NULL;
+	settings.engine.v1->clean_engine(settings.engine.v0, c, cleanup_data);
     }
 
-    c->engine_storage = NULL;
     c->tap_iterator = NULL;
     c->thread = NULL;
     assert(c->next == NULL);
@@ -1713,7 +1718,7 @@ static void complete_update_bin(conn *c) {
 }
 
 static void process_bin_get(conn *c) {
-    item *it;
+    item *it = NULL;
 
     protocol_binary_response_get* rsp = (protocol_binary_response_get*)c->wbuf;
     char* key = binary_get_key(c);
@@ -2171,10 +2176,12 @@ static void process_bin_sasl_auth(conn *c) {
     int nkey = c->binary_header.request.keylen;
     int vlen = c->binary_header.request.bodylen - nkey;
 
+    assert(vlen >= 0);
+
     if (nkey > MAX_SASL_MECH_LEN) {
-        write_bin_packet(c, PROTOCOL_BINARY_RESPONSE_EINVAL, vlen);
-        c->write_and_go = conn_swallow;
-        return;
+      write_bin_packet(c, PROTOCOL_BINARY_RESPONSE_EINVAL, vlen);
+      c->write_and_go = conn_swallow;
+      return;
     }
 
     char *key = binary_get_key(c);
@@ -2901,28 +2908,34 @@ static RESPONSE_HANDLER response_handlers[256] = {
 };
 
 static void dispatch_bin_command(conn *c) {
-    int protocol_error = 0;
+  int protocol_error = 0;
 
-    int extlen = c->binary_header.request.extlen;
-    uint16_t keylen = c->binary_header.request.keylen;
-    uint32_t bodylen = c->binary_header.request.bodylen;
+  uint8_t extlen = c->binary_header.request.extlen;
+  uint16_t keylen = c->binary_header.request.keylen;
+  uint32_t bodylen = c->binary_header.request.bodylen;
 
-    if (settings.require_sasl && !authenticated(c)) {
-        write_bin_packet(c, PROTOCOL_BINARY_RESPONSE_AUTH_ERROR, 0);
-        c->write_and_go = conn_closing;
-        return;
-    }
+  if (keylen > bodylen || keylen + extlen > bodylen) {
+    write_bin_packet(c, PROTOCOL_BINARY_RESPONSE_UNKNOWN_COMMAND, 0);
+    c->write_and_go = conn_closing;
+    return;
+  }
 
-    MEMCACHED_PROCESS_COMMAND_START(c->sfd, c->rcurr, c->rbytes);
-    c->noreply = true;
+  if (settings.require_sasl && !authenticated(c)) {
+    write_bin_packet(c, PROTOCOL_BINARY_RESPONSE_AUTH_ERROR, 0);
+    c->write_and_go = conn_closing;
+    return;
+  }
 
-    /* binprot supports 16bit keys, but internals are still 8bit */
-    if (keylen > KEY_MAX_LENGTH) {
-        handle_binary_protocol_error(c);
-        return;
-    }
+  MEMCACHED_PROCESS_COMMAND_START(c->sfd, c->rcurr, c->rbytes);
+  c->noreply = true;
 
-    switch (c->cmd) {
+  /* binprot supports 16bit keys, but internals are still 8bit */
+  if (keylen > KEY_MAX_LENGTH) {
+    handle_binary_protocol_error(c);
+    return;
+  }
+
+  switch (c->cmd) {
     case PROTOCOL_BINARY_CMD_SETQ:
         c->cmd = PROTOCOL_BINARY_CMD_SET;
         break;
@@ -3108,7 +3121,7 @@ static void process_bin_update(conn *c) {
     char *key;
     uint16_t nkey;
     uint32_t vlen;
-    item *it;
+    item *it = NULL;
     protocol_binary_request_set* req = binary_get_request(c);
 
     assert(c != NULL);
@@ -3231,7 +3244,7 @@ static void process_bin_append_prepend(conn *c) {
     char *key;
     int nkey;
     int vlen;
-    item *it;
+    item *it = NULL;
 
     assert(c != NULL);
 
@@ -3239,9 +3252,11 @@ static void process_bin_append_prepend(conn *c) {
     nkey = c->binary_header.request.keylen;
     vlen = c->binary_header.request.bodylen - nkey;
 
+    assert(vlen >= 0);
+
     if (settings.verbose > 1) {
-        settings.extensions.logger->log(EXTENSION_LOG_DEBUG, c,
-                                        "Value len is %d\n", vlen);
+      settings.extensions.logger->log(EXTENSION_LOG_DEBUG, c,
+                                      "Value len is %d\n", vlen);
     }
 
     if (settings.detail_enabled) {
@@ -3582,7 +3597,12 @@ static size_t tokenize_command(char *command, token_t *tokens, const size_t max_
     return ntokens;
 }
 
-static void detokenize(token_t *tokens, int ntokens, char **out, int *nbytes) {
+#ifdef INNODB_MEMCACHED
+static void detokenize(token_t *tokens, size_t ntokens, char **out, int *nbytes)
+#else
+static void detokenize(token_t *tokens, int ntokens, char **out, int *nbytes)
+#endif
+{
     int i, nb;
     char *buf, *p;
 
@@ -4042,21 +4062,24 @@ static inline char* process_get_command(conn *c, token_t *tokens, size_t ntokens
     char *key;
     size_t nkey;
     int i = c->ileft;
-    item *it;
+    item *it = NULL;
     token_t *key_token = &tokens[KEY_TOKEN];
+    int range = false;
     assert(c != NULL);
-
-    /* We temporarily block the mgets commands till wl6650 checked in. */
-    if ((key_token + 1)->length > 0) {
-	out_string(c, "We temporarily don't support multiple get option.");
-	return NULL;
-    }
 
     do {
         while(key_token->length != 0) {
+            /* whether there are more keys to fetch */
+            bool next_get = (key_token + 1)->value;
 
             key = key_token->value;
             nkey = key_token->length;
+
+            /* whether this is a range search */
+            if (nkey >=  2 && key[0] == '@'
+		&& (key[1] == '>' || key[1] == '<')) {
+		range = true;
+            }
 
             if(nkey > KEY_MAX_LENGTH) {
                 out_string(c, "CLIENT_ERROR bad command line format");
@@ -4067,7 +4090,8 @@ static inline char* process_get_command(conn *c, token_t *tokens, size_t ntokens
             c->aiostat = ENGINE_SUCCESS;
 
             if (ret == ENGINE_SUCCESS) {
-                ret = settings.engine.v1->get(settings.engine.v0, c, &it, key, nkey, 0);
+                ret = settings.engine.v1->get(settings.engine.v0, c, &it,
+					      key, nkey, next_get);
             }
 
             switch (ret) {
@@ -4181,7 +4205,14 @@ static inline char* process_get_command(conn *c, token_t *tokens, size_t ntokens
                 MEMCACHED_COMMAND_GET(c->sfd, key, nkey, -1, 0);
             }
 
-            key_token++;
+            if (!range) {
+		key_token++;
+            } else {
+		if (ret == ENGINE_KEY_ENOENT) {
+			key_token->value = NULL;
+		}
+		break;
+	    }
         }
 
         /*
@@ -4227,9 +4258,9 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
     unsigned int flags;
     int32_t exptime_int = 0;
     time_t exptime;
-    int vlen;
+    int vlen = 0;
     uint64_t req_cas_id=0;
-    item *it;
+    item *it = NULL;
 
     assert(c != NULL);
 
@@ -4352,7 +4383,7 @@ static char* process_arithmetic_command(conn *c, token_t *tokens, const size_t n
     ENGINE_ERROR_CODE ret = c->aiostat;
     c->aiostat = ENGINE_SUCCESS;
     uint64_t cas;
-    uint64_t result;
+    uint64_t result = 0;
     if (ret == ENGINE_SUCCESS) {
         ret = settings.engine.v1->arithmetic(settings.engine.v0, c, key, nkey,
                                              incr, false, delta, 0, 0, &cas,
@@ -4668,7 +4699,7 @@ static char* process_command(conn *c, char *command) {
     } else if (settings.extensions.ascii != NULL) {
         EXTENSION_ASCII_PROTOCOL_DESCRIPTOR *cmd;
         size_t nbytes = 0;
-        char *ptr;
+        char *ptr = NULL;
 
         if (ntokens > 0) {
             if (ntokens == MAX_TOKENS) {
@@ -7020,9 +7051,8 @@ daemon_memcached_make_option(char* option, int* option_argc,
 		num_arg++;
 	}
 
-	free(my_str);
-
-	my_str = option;
+	/* reset my_str, since strtok_r could alter it */
+	strncpy(my_str, option, strlen(option));
 
 	*option_argv = (char**) malloc((num_arg + 1)
 				       * sizeof(**option_argv));
@@ -7030,7 +7060,7 @@ daemon_memcached_make_option(char* option, int* option_argc,
 	for (opt_str = strtok_r(my_str, sep, &last);
 	     opt_str;
 	     opt_str = strtok_r(NULL, sep, &last)) {
-		(*option_argv)[i] = my_strdupl(opt_str, strlen(opt_str));
+		(*option_argv)[i] = opt_str;
 		i++;
 	}
 
@@ -7081,6 +7111,8 @@ int main (int argc, char **argv) {
     int option_argc = 0;
     char** option_argv = NULL;
     eng_config_info_t my_eng_config;
+
+    memcached_initialized = 0;
 
     if (m_config->m_engine_library) {
 	engine = m_config->m_engine_library;
@@ -7837,11 +7869,21 @@ int main (int argc, char **argv) {
     ENGINE_HANDLE *engine_handle = NULL;
     if (!load_engine(engine,get_server_api,settings.extensions.logger,&engine_handle)) {
         /* Error already reported */
+#ifdef INNODB_MEMCACHED
+        shutdown_server();
+        goto func_exit;
+#else
         exit(EXIT_FAILURE);
+#endif
     }
+
+#ifdef INNODB_MEMCACHED
+    my_thread_init();
+#endif
 
     if(!init_engine(engine_handle,engine_config,settings.extensions.logger)) {
 #ifdef INNODB_MEMCACHED
+	my_thread_end();
         shutdown_server();
         goto func_exit;
 #else
@@ -7927,6 +7969,7 @@ int main (int argc, char **argv) {
                                             portnumber_file)) {
 		vperror("failed to listen on TCP port %d", settings.port);
 #ifdef INNODB_MEMCACHED
+		my_thread_end();
 		shutdown_server();
 		goto func_exit;
 #else
@@ -7985,6 +8028,15 @@ func_exit:
     /* Clean up strdup() call for bind() address */
     if (settings.inter)
       free(settings.inter);
+
+#ifdef INNODB_MEMCACHED
+    /* free event base */
+    if (main_base) {
+        event_base_free(main_base);
+        main_base = NULL;
+    }
+    my_thread_end();
+#endif
 
     memcached_shutdown = 2;
     memcached_initialized = 2;

@@ -1,0 +1,230 @@
+# Tests for the SECONDARY_ENGINE table option.
+# Most DDLs are allowed on tables with SECONDARY_ENGINE when
+# the corresponding SECONDARY_ENGINE plugin is not installed.
+# Following tests are with SECONDARY_ENGINE plugin that doesn't exist.
+
+--echo #
+--echo # Attempt to load table into an undefined secondary engine.
+--echo #
+CREATE TABLE t1 (a INT);
+--error ER_SECONDARY_ENGINE
+ALTER TABLE t1 SECONDARY_LOAD;
+DROP TABLE t1;
+
+--echo #
+--echo # Attempt to load table into an unknown storage engine.
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+# expect warning
+ALTER TABLE t1 SECONDARY_LOAD;
+DROP TABLE t1;
+
+--echo #
+--echo # Attempt to load table into an unsupported secondary storage engine.
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE InnoDB;
+--error ER_SECONDARY_ENGINE
+ALTER TABLE t1 SECONDARY_LOAD;
+DROP TABLE t1;
+
+--echo #
+--echo # Create a table with a secondary engine defined.
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Attempt to redefine the secondary engine.
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+--error ER_SECONDARY_ENGINE
+ALTER TABLE t1 SECONDARY_ENGINE ANOTHER_NONEXISTENT;
+DROP TABLE t1;
+
+--echo #
+--echo # Define and undefine secondary engine (without loading in-between).
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Attempt to create a temporary table with a secondary engine defined.
+--echo #
+--error ER_SECONDARY_ENGINE
+CREATE TEMPORARY TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+--error ER_SECONDARY_ENGINE
+CREATE TEMPORARY TABLE t2 LIKE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Attempt to create a table with a primary engine that does not support
+--echo # loading tables into a secondary engine.
+--error ER_CHECK_NOT_IMPLEMENTED
+CREATE TABLE t1 (a INT) ENGINE MYISAM SECONDARY_ENGINE NONEXISTENT;
+
+--echo #
+--echo # Attempt to change primary storage engine to an engine that does not
+--echo # support loading into a secondary engine.
+--echo #
+CREATE TABLE t1 (a INT) ENGINE InnoDB SECONDARY_ENGINE NONEXISTENT;
+--error ER_SECONDARY_ENGINE
+ALTER TABLE t1 ENGINE MYISAM;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Attempt to use SECONDARY_LOAD when creating table.
+--echo #
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (a INT) SECONDARY_LOAD;
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT, SECONDARY_LOAD;
+
+--echo #
+--echo # Alter a table after a secondary engine has been defined.
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+ALTER TABLE t1 COMMENT="Test1";
+ALTER TABLE t1 COMMENT="Test2", ALGORITHM=INPLACE;
+ALTER TABLE t1 COMMENT="Test3", ALGORITHM=COPY;
+ALTER TABLE t1 ADD COLUMN (b INT);
+ALTER TABLE t1 ADD COLUMN (c INT), ALGORITHM=INPLACE;
+ALTER TABLE t1 ADD COLUMN (d INT), ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Truncate a table after a secondary engine has been defined.
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+TRUNCATE TABLE t1;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Attempt to alter table after its secondary engine has been removed.
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+ALTER TABLE t1 COMMENT="Test";
+ALTER TABLE t1 ADD COLUMN (b INT);
+ALTER TABLE t1 SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Attempt to truncate table after its secondary engine is removed
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+TRUNCATE TABLE t1;
+ALTER TABLE t1 SECONDARY_ENGINE NONEXISTENT;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Rename a table with a secondary engine defined.
+--echo #
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE NONEXISTENT;
+RENAME TABLE t1 TO t2;
+DROP TABLE t2;
+
+--echo #
+--echo # Attempt to use SECONDARY_LOAD in conjunction with another DDL.
+--echo #
+CREATE TABLE t1 (i INT);
+--error ER_PARSE_ERROR
+ALTER TABLE t1 SECONDARY_LOAD, ADD KEY idx(i);
+ALTER TABLE t1 SECONDARY_ENGINE NONEXISTENT;
+--error ER_PARSE_ERROR
+ALTER TABLE t1 SECONDARY_LOAD, ADD KEY idx(i);
+DROP TABLE t1;
+
+--echo #
+--echo # Set NOT SECONDARY on columns when creating table.
+--echo #
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT NOT SECONDARY);
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 MODIFY a INT;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Set NOT SECONDARY after create table.
+--echo #
+CREATE TABLE t1 (a INT, b INT);
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY;
+ALTER TABLE t1 MODIFY b INT NOT SECONDARY;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # It should be possible to set or remove NOT SECONDARY on a column
+--echo # if the table is defined with a secondary engine.
+--echo #
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT NOT SECONDARY);
+ALTER TABLE t1 MODIFY a INT;
+ALTER TABLE t1 SECONDARY_ENGINE MOCK;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 MODIFY b INT;
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+ALTER TABLE t1 MODIFY b INT;
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Parts of the primary key can be excluded from the secondary engine.
+--echo #
+CREATE TABLE t1 (a INT, b INT NOT SECONDARY, PRIMARY KEY(a, b));
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Set and remove NOT SECONDARY in conjunction with other column options.
+--echo #
+CREATE TABLE t1 (a INT, b INT);
+ALTER TABLE t1 MODIFY a INT NOT NULL NOT SECONDARY;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 MODIFY a INT NOT NULL;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 MODIFY a INT NOT SECONDARY, SECONDARY_ENGINE MOCK;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # NOT SECONDARY should be preserved with CREATE TABLE as SELECT FROM.
+--echo #
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT, c INT NOT SECONDARY) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 AS SELECT * FROM t1;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # CREATE TABLE LIKE with NOT SECONDARY columns
+--echo #
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT, c INT NOT SECONDARY) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 LIKE t1;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # CREATE TABLE AS SELECT FROM with NOT SECONDARY columns
+--echo #
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT, c INT NOT SECONDARY) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 AS SELECT * FROM t1;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+DROP TABLE t1, t2;

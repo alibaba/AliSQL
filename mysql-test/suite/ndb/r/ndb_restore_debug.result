@@ -1,0 +1,118 @@
+********************************************************
+ndb_restore threads exit cleanly on tuple restore error
+********************************************************
+Initial tests using ndb_restore error insert to trigger
+error on all parts.
+create table t1(id int primary key, val int) engine=ndb;
+Cause backup stall
+Starting backup
+Backup started
+update t1 set val=12345 where id between 125 and 850;
+Waiting for backup to complete
+Backup completed
+Test restore failure handling for log-replay failure
+select count(*) into @msgcount from ndb_restore_output where a like "%Thread % failed, exiting" order by a;
+select @msgcount as 'Count of thread exit messages';
+Count of thread exit messages
+4
+select * from ndb_restore_output where @msgcount != 4;
+a
+truncate table t1;
+Test restore failure handling for tuple-restore failure
+select count(*) into @msgcount from ndb_restore_output where a like "%Thread % failed, exiting" order by a;
+select @msgcount as 'Count of thread exit messages';
+Count of thread exit messages
+4
+select * from ndb_restore_output where @msgcount != 4;
+a
+drop table t1;
+Test single part restore failures, should cause all parts to stop promptly
+Constraint violation on DATA restore
+create table test.t1 (a int primary key, b int, c int) engine=ndb;
+insert into test.t1 values (1000,1000,999);
+Starting backup
+Backup started
+Waiting for backup to complete
+Backup completed
+truncate test.t1;
+alter table test.t1 add unique(c);
+Test restore failure handling for data apply failure
+Expect 1 error type message
+select count(*) into @msgcount from ndb_restore_output where a like "%Permanent% duplicate value in unique index%";
+select @msgcount as 'Count of error message 1';
+Count of error message 1
+1
+select * from ndb_restore_output where @msgcount != 1;
+a
+Expect 1 error location message
+select count(*) into @msgcount from ndb_restore_output where a like "%Failed restoring DATA to table%";
+select @msgcount as 'Count of error message 2';
+Count of error message 2
+1
+select * from ndb_restore_output where @msgcount != 1;
+a
+Expect 1 error detail message
+select count(*) into @msgcount from ndb_restore_output where a like "%Failing tuple :%";
+select @msgcount as 'Count of error message 3';
+Count of error message 3
+1
+select * from ndb_restore_output where @msgcount != 1;
+a
+drop table test.t1;
+Constraint violation on LOG restore
+create table test.t1 (a int, b int, c int, primary key (a,b)) engine=ndb partition by key(a);
+Cause backup stall while log open
+Starting backup
+Backup started
+insert into t1 values(999,1000,999);
+Waiting for backup to complete
+Backup completed
+truncate test.t1;
+alter table test.t1 add unique(c);
+Test restore failure handling for log apply failure
+Expect 1 error type message
+select count(*) into @msgcount from ndb_restore_output where a like "%Permanent% duplicate value in unique index%";
+select @msgcount as 'Count of error message 1';
+Count of error message 1
+1
+select * from ndb_restore_output where @msgcount != 1;
+a
+Expect 1 error location message
+select count(*) into @msgcount from ndb_restore_output where a like "%Failed restoring LOG entry type INSERT to table%";
+select @msgcount as 'Count of error message 2';
+Count of error message 2
+1
+select * from ndb_restore_output where @msgcount != 1;
+a
+Expect 1 error detail message
+select count(*) into @msgcount from ndb_restore_output where a like "%Failing log entry :%";
+select @msgcount as 'Count of error message 3';
+Count of error message 3
+1
+select * from ndb_restore_output where @msgcount != 1;
+a
+drop table test.t1;
+Test that a temporary error applying
+log eventually results in failure
+create table test.t1 (a int primary key, b int) engine=ndb;
+Cause backup stall while log open
+Starting backup
+Backup started
+insert into t1 values(1,1);
+Waiting for backup to complete
+Backup completed
+Take a row lock to block restore
+begin;
+select * from test.t1 where a=1 for update;
+a	b
+1	1
+Test restore failure handling for log apply failure
+after retries
+Expect error message
+select count(*) into @msgcount from ndb_restore_output where a like "%Error restoring the data log%";
+select @msgcount as 'Count of error message 1';
+Count of error message 1
+1
+select * from ndb_restore_output where @msgcount != 1;
+a
+drop table test.t1;

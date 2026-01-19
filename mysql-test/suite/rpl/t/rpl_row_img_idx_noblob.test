@@ -1,5 +1,6 @@
-#Want to skip this test from daily Valgrind execution
---source include/no_valgrind_without_big.inc
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
+--source include/big_test.inc
 #
 # This file contains tests for WL#5096.
 #
@@ -9,21 +10,20 @@
 -- source include/have_binlog_format_row.inc
 
 -- connection server_1
--- source include/have_innodb.inc
 -- connection server_2
--- source include/have_innodb.inc
 -- connection server_3
--- source include/have_innodb.inc
 -- connection server_1
 
 #
 # WL#5096
-# 
+#
 
 #
 # Tests NOBLOB image against a mix of MyISAM and InnoDB engines on
 # each of the three servers.
 #
+
+CALL mtr.add_suppression(".*Worker.*failed executing transaction.*at source log .*, end_log_pos.*Deadlock found when trying to get lock.*");
 
 -- let $row_img_set=server_1:NOBLOB:N,server_2:NOBLOB:Y,server_3:NOBLOB:Y
 -- source include/rpl_row_img_set.inc

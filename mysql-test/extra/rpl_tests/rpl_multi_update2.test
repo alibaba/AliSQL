@@ -18,7 +18,7 @@ eval CREATE TABLE t2 (
 
 INSERT INTO t1 VALUES (NULL, 0);
 
---disable_warnings ONCE
+--disable_warnings ER_BINLOG_UNSAFE_STATEMENT ONCE
 INSERT INTO t1 SELECT NULL, 0 FROM t1;
 
 INSERT INTO t2 VALUES (NULL, 0), (NULL,1);
@@ -26,7 +26,7 @@ INSERT INTO t2 VALUES (NULL, 0), (NULL,1);
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2 ORDER BY a;
 
---disable_warnings ONCE
+--disable_warnings ER_BINLOG_UNSAFE_STATEMENT ONCE
 UPDATE t1, t2 SET t1.b = (t2.b+4) WHERE t1.a = t2.a;
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2 ORDER BY a;
@@ -39,24 +39,5 @@ SELECT * FROM t2 ORDER BY a;
 
 connection master;
 drop table t1,t2;
---source include/sync_slave_sql_with_master.inc
-#
-# BUG#13236 multi-update with subquery & --replicate-ignore-table
-#
-reset master;
-connection slave;
-RESET MASTER;
-connection master;
-CREATE TABLE t1 ( a INT );
-INSERT INTO t1 VALUES (0);
-UPDATE t1, (SELECT 3 as b) AS x SET t1.a = x.b;
-select * from t1;
-
---source include/sync_slave_sql_with_master.inc
-connection slave;
-select * from t1;
-
-connection master;
-drop table t1;
 --source include/sync_slave_sql_with_master.inc
 # End of 4.1 tests

@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 CREATE TABLE t1 (c1 INT KEY) ROW_FORMAT=DYNAMIC ENGINE=NDB;
 INSERT INTO t1 VALUES (1),(2),(3);
@@ -25,15 +28,15 @@ c1	c2
 6	6
 7	7
 8	8
-ALTER ONLINE TABLE t1 ADD c CHAR(19);
+ALTER TABLE t1 algorithm=inplace, ADD c CHAR(19);
 INSERT INTO t1 values (11,1,"a");
-ALTER ONLINE TABLE t1 ADD d FLOAT;
+ALTER TABLE t1 algorithm=inplace, ADD d FLOAT;
 INSERT INTO t1 VALUES(12, 2,'b', -3.402823466E+38);
-ALTER ONLINE TABLE t1 ADD f DECIMAL(5,2);
+ALTER TABLE t1 algorithm=inplace, ADD f DECIMAL(5,2);
 INSERT INTO t1 VALUES(14, 4,'d', -3.402823466E+38, 456.78);
-ALTER ONLINE TABLE t1 ADD g DATETIME;
+ALTER TABLE t1 algorithm=inplace, ADD g DATETIME;
 INSERT INTO t1 VALUES(15, 5,'e', -3.402823466E+38, 456.78, '2007-10-26 12:00:00');
-ALTER ONLINE TABLE t1 ADD h BINARY(4);
+ALTER TABLE t1 algorithm=inplace, ADD h BINARY(4);
 INSERT INTO t1 VALUES(16, 6,'f', -3.402823466E+38, 456.78, '2007-10-26 12:00:00',"abcd");
 **********************
 "Master data"
@@ -107,7 +110,7 @@ DROP TABLE t1;
 CREATE TABLE t1 (a INT UNSIGNED KEY, b INT UNSIGNED) ROW_FORMAT=DYNAMIC ENGINE NDB;
 INSERT INTO t1 VALUES(1,1),(2,2);
 BEGIN;
-ALTER ONLINE TABLE t1 ADD c CHAR(19), ADD d VARCHAR(255), ADD e char(255);
+ALTER TABLE t1 algorithm=inplace, ADD c CHAR(19), ADD d VARCHAR(255), ADD e char(255);
 INSERT INTO t1 VALUES (3,0,'3','3','3'),(4,0,'4','4','4'),(5,0,null,null,null);
 UPDATE t1 SET c = 'aaa', d = 'bbb', e = 'ccc' WHERE a = 4;
 COMMIT;
@@ -142,13 +145,13 @@ ROLLBACK;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(10) unsigned NOT NULL,
-  `b` int(10) unsigned DEFAULT NULL,
+  `a` int unsigned NOT NULL,
+  `b` int unsigned DEFAULT NULL,
   `c` char(19) DEFAULT NULL,
   `d` varchar(255) DEFAULT NULL,
   `e` char(255) DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 SELECT * FROM t1 ORDER BY a;
 a	b	c	d	e
 1	1	NULL	NULL	NULL
@@ -159,13 +162,13 @@ a	b	c	d	e
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(10) unsigned NOT NULL,
-  `b` int(10) unsigned DEFAULT NULL,
+  `a` int unsigned NOT NULL,
+  `b` int unsigned DEFAULT NULL,
   `c` char(19) DEFAULT NULL,
   `d` varchar(255) DEFAULT NULL,
   `e` char(255) DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 SELECT * FROM t1 ORDER BY a;
 a	b	c	d	e
 1	1	NULL	NULL	NULL

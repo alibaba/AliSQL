@@ -1,0 +1,88 @@
+*** Set up circular replication on four servers *** 
+include/rpl_init.inc [topology=1->2->3->4->1]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+
+[connection server_4]
+SET auto_increment_increment= 4;
+SET auto_increment_offset= 4;
+[connection server_3]
+SET auto_increment_increment= 4;
+SET auto_increment_offset= 3;
+[connection server_2]
+SET auto_increment_increment= 4;
+SET auto_increment_offset= 2;
+[connection server_1]
+SET auto_increment_increment= 4;
+SET auto_increment_offset= 1;
+*** Preparing data ***
+CREATE TABLE t2 (a INT NOT NULL AUTO_INCREMENT, b VARCHAR(100), c INT NOT NULL, PRIMARY KEY(a)) ENGINE=InnoDB;
+include/rpl_sync.inc
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("Replica SQL: Coordinator thread of multi-threaded replica is exiting seeing a failed Worker to apply an event");
+call mtr.add_suppression("Replica worker thread has failed to apply an event");
+call mtr.add_suppression("Replica SQL.*Duplicate entry .6. for key t1.PRIMARY.* Error_code: MY-001062");
+
+* Transactions with commits *
+BEGIN;
+BEGIN;
+include/rpl_sync.inc
+SELECT 'Master A',b,COUNT(*) FROM t2 WHERE c = 1 GROUP BY b ORDER BY b;
+Master A	b	COUNT(*)
+Master A	A	100
+Master A	B	100
+Master A	C	100
+Master A	D	100
+SELECT 'Master B',b,COUNT(*) FROM t2 WHERE c = 1 GROUP BY b ORDER BY b;
+Master B	b	COUNT(*)
+Master B	A	100
+Master B	B	100
+Master B	C	100
+Master B	D	100
+SELECT 'Master C',b,COUNT(*) FROM t2 WHERE c = 1 GROUP BY b ORDER BY b;
+Master C	b	COUNT(*)
+Master C	A	100
+Master C	B	100
+Master C	C	100
+Master C	D	100
+SELECT 'Master D',b,COUNT(*) FROM t2 WHERE c = 1 GROUP BY b ORDER BY b;
+Master D	b	COUNT(*)
+Master D	A	100
+Master D	B	100
+Master D	C	100
+Master D	D	100
+
+* Transactions with rollbacks *
+BEGIN;
+BEGIN;
+include/rpl_sync.inc
+SELECT 'Master A',b,COUNT(*) FROM t2 WHERE c = 2 GROUP BY b ORDER BY b;
+Master A	b	COUNT(*)
+Master A	B	100
+Master A	D	100
+SELECT 'Master B',b,COUNT(*) FROM t2 WHERE c = 2 GROUP BY b ORDER BY b;
+Master B	b	COUNT(*)
+Master B	B	100
+Master B	D	100
+SELECT 'Master C',b,COUNT(*) FROM t2 WHERE c = 2 GROUP BY b ORDER BY b;
+Master C	b	COUNT(*)
+Master C	B	100
+Master C	D	100
+SELECT 'Master D',b,COUNT(*) FROM t2 WHERE c = 2 GROUP BY b ORDER BY b;
+Master D	b	COUNT(*)
+Master D	B	100
+Master D	D	100
+
+*** Clean up ***
+DROP TABLE t2;
+include/rpl_end.inc

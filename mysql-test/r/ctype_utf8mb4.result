@@ -77,16 +77,16 @@ CONVERT(_koi8r'????' USING utf8mb4) LIKE CONVERT(_koi8r'????' USING utf8mb4)
 1
 SELECT 'a' = 'a ';
 'a' = 'a '
-1
+0
 SELECT 'a\0' < 'a';
 'a\0' < 'a'
-1
+0
 SELECT 'a\0' < 'a ';
 'a\0' < 'a '
 1
 SELECT 'a\t' < 'a';
 'a\t' < 'a'
-1
+0
 SELECT 'a\t' < 'a ';
 'a\t' < 'a '
 1
@@ -109,10 +109,10 @@ CREATE TABLE t1 (a char(10) character set utf8mb4 not null);
 INSERT INTO t1 VALUES ('a'),('a\0'),('a\t'),('a ');
 SELECT hex(a),STRCMP(a,'a'), STRCMP(a,'a ') FROM t1;
 hex(a)	STRCMP(a,'a')	STRCMP(a,'a ')
-61	0	0
-6100	-1	-1
-6109	-1	-1
-61	0	0
+61	0	-1
+6100	0	-1
+6109	1	-1
+61	0	-1
 DROP TABLE t1;
 select insert('txs',2,1,'hi'),insert('is ',4,0,'a'),insert('txxxxt',2,4,'es');
 insert('txs',2,1,'hi')	insert('is ',4,0,'a')	insert('txxxxt',2,4,'es')
@@ -123,12 +123,14 @@ aa	b
 select char_length(left(@a:='тест',5)), length(@a), @a;
 char_length(left(@a:='тест',5))	length(@a)	@a
 4	8	тест
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 create table t1 select date_format("2004-01-19 10:10:10", "%Y-%m-%d");
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `date_format("2004-01-19 10:10:10", "%Y-%m-%d")` varchar(10) CHARACTER SET utf8mb4 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `date_format("2004-01-19 10:10:10", "%Y-%m-%d")` varchar(10) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 select * from t1;
 date_format("2004-01-19 10:10:10", "%Y-%m-%d")
 2004-01-19
@@ -155,6 +157,7 @@ F0CFCEC5C4C5CCD8CEC9CB	Понедельник
 F0CEC4	Пнд
 drop table t1;
 set LC_TIME_NAMES='en_US';
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 set names koi8r;
 create table t1 (s1 char(1) character set utf8mb4);
 insert into t1 values (_koi8r'��');
@@ -219,8 +222,9 @@ length(s1)	char_length(s1)
 65535	43690
 65534	32767
 drop table t1;
+SET sql_mode = default;
 create table t1 (s1 char(10) character set utf8mb4);
-insert into t1 values (0x41FF);
+insert ignore into t1 values (0x41FF);
 Warnings:
 Warning	1366	Incorrect string value: '\xFF' for column 's1' at row 1
 select hex(s1) from t1;
@@ -228,7 +232,7 @@ hex(s1)
 41
 drop table t1;
 create table t1 (s1 varchar(10) character set utf8mb4);
-insert into t1 values (0x41FF);
+insert ignore into t1 values (0x41FF);
 Warnings:
 Warning	1366	Incorrect string value: '\xFF' for column 's1' at row 1
 select hex(s1) from t1;
@@ -236,7 +240,7 @@ hex(s1)
 41
 drop table t1;
 create table t1 (s1 text character set utf8mb4);
-insert into t1 values (0x41FF);
+insert ignore into t1 values (0x41FF);
 Warnings:
 Warning	1366	Incorrect string value: '\xFF' for column 's1' at row 1
 select hex(s1) from t1;
@@ -279,9 +283,9 @@ select null, null;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `s1` varchar(64) CHARACTER SET utf8mb4 DEFAULT NULL,
-  `s2` varchar(64) CHARACTER SET utf8mb4 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `s1` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `s2` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=default_engine DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 delete from t1;
 insert into t1 values('aaa','aaa');
 insert into t1 values('aaa|qqq','qqq');
@@ -296,7 +300,6 @@ insert into t1 values('aaa','aba');
 insert into t1 values(null,'abc');
 insert into t1 values('def',null);
 insert into t1 values(null,null);
-insert into t1 values('ghi','ghi[');
 select HIGH_PRIORITY s1 regexp s2 from t1;
 s1 regexp s2
 1
@@ -312,31 +315,10 @@ s1 regexp s2
 NULL
 NULL
 NULL
-NULL
+SELECT 'ghi' REGEXP 'ghi[';
+ERROR HY000: The regular expression contains an unclosed bracket expression.
 drop table t1;
 set names utf8mb4;
-set names utf8mb4;
-select  'вася'  rlike '[[:<:]]вася[[:>:]]';
-'вася'  rlike '[[:<:]]вася[[:>:]]'
-1
-select  'вася ' rlike '[[:<:]]вася[[:>:]]';
-'вася ' rlike '[[:<:]]вася[[:>:]]'
-1
-select ' вася'  rlike '[[:<:]]вася[[:>:]]';
-' вася'  rlike '[[:<:]]вася[[:>:]]'
-1
-select ' вася ' rlike '[[:<:]]вася[[:>:]]';
-' вася ' rlike '[[:<:]]вася[[:>:]]'
-1
-select  'васяz' rlike '[[:<:]]вася[[:>:]]';
-'васяz' rlike '[[:<:]]вася[[:>:]]'
-0
-select 'zвася'  rlike '[[:<:]]вася[[:>:]]';
-'zвася'  rlike '[[:<:]]вася[[:>:]]'
-0
-select 'zвасяz' rlike '[[:<:]]вася[[:>:]]';
-'zвасяz' rlike '[[:<:]]вася[[:>:]]'
-0
 CREATE TABLE t1 (a enum ('Y', 'N') DEFAULT 'N' COLLATE utf8mb4_unicode_ci);
 ALTER TABLE t1 ADD COLUMN b CHAR(20);
 DROP TABLE t1;
@@ -345,8 +327,8 @@ create table t1 (a enum('aaaa','проба') character set utf8mb4);
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` enum('aaaa','проба') CHARACTER SET utf8mb4 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` enum('aaaa','проба') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 insert into t1 values ('проба');
 select * from t1;
 a
@@ -355,8 +337,8 @@ create table t2 select ifnull(a,a) from t1;
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `ifnull(a,a)` varchar(5) CHARACTER SET utf8mb4 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `ifnull(a,a)` varchar(5) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 select * from t2;
 ifnull(a,a)
 проба
@@ -366,42 +348,9 @@ create table t1 (c varchar(30) character set utf8mb4, unique(c(10)));
 insert into t1 values ('1'),('2'),('3'),('x'),('y'),('z');
 insert into t1 values ('aaaaaaaaaa');
 insert into t1 values ('aaaaaaaaaaa');
-ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 'c'
+ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 't1.c'
 insert into t1 values ('aaaaaaaaaaaa');
-ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 'c'
-insert into t1 values (repeat('b',20));
-select c c1 from t1 where c='1';
-c1
-1
-select c c2 from t1 where c='2';
-c2
-2
-select c c3 from t1 where c='3';
-c3
-3
-select c cx from t1 where c='x';
-cx
-x
-select c cy from t1 where c='y';
-cy
-y
-select c cz from t1 where c='z';
-cz
-z
-select c ca10 from t1 where c='aaaaaaaaaa';
-ca10
-aaaaaaaaaa
-select c cb20 from t1 where c=repeat('b',20);
-cb20
-bbbbbbbbbbbbbbbbbbbb
-drop table t1;
-create table t1 (c varchar(30) character set utf8mb4, unique(c(10))) engine=innodb;
-insert into t1 values ('1'),('2'),('3'),('x'),('y'),('z');
-insert into t1 values ('aaaaaaaaaa');
-insert into t1 values ('aaaaaaaaaaa');
-ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 'c'
-insert into t1 values ('aaaaaaaaaaaa');
-ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 'c'
+ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 't1.c'
 insert into t1 values (repeat('b',20));
 select c c1 from t1 where c='1';
 c1
@@ -433,46 +382,23 @@ insert into t1 values ('1'),('2'),('3'),('4'),('x'),('y'),('z');
 insert into t1 values ('a');
 insert into t1 values ('aa');
 insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'aa' for key 'c'
+ERROR 23000: Duplicate entry 'aa' for key 't1.c'
 insert into t1 values ('b');
 insert into t1 values ('bb');
 insert into t1 values ('bbb');
-ERROR 23000: Duplicate entry 'bb' for key 'c'
+ERROR 23000: Duplicate entry 'bb' for key 't1.c'
 insert into t1 values ('а');
 insert into t1 values ('аа');
 insert into t1 values ('ааа');
-ERROR 23000: Duplicate entry 'аа' for key 'c'
+ERROR 23000: Duplicate entry 'аа' for key 't1.c'
 insert into t1 values ('б');
 insert into t1 values ('бб');
 insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'бб' for key 'c'
+ERROR 23000: Duplicate entry 'бб' for key 't1.c'
 insert into t1 values ('ꪪ');
 insert into t1 values ('ꪪꪪ');
 insert into t1 values ('ꪪꪪꪪ');
-ERROR 23000: Duplicate entry 'ꪪꪪ' for key 'c'
-drop table t1;
-create table t1 (c char(3) character set utf8mb4, unique (c(2))) engine=innodb;
-insert into t1 values ('1'),('2'),('3'),('4'),('x'),('y'),('z');
-insert into t1 values ('a');
-insert into t1 values ('aa');
-insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'aa' for key 'c'
-insert into t1 values ('b');
-insert into t1 values ('bb');
-insert into t1 values ('bbb');
-ERROR 23000: Duplicate entry 'bb' for key 'c'
-insert into t1 values ('а');
-insert into t1 values ('аа');
-insert into t1 values ('ааа');
-ERROR 23000: Duplicate entry 'аа' for key 'c'
-insert into t1 values ('б');
-insert into t1 values ('бб');
-insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'бб' for key 'c'
-insert into t1 values ('ꪪ');
-insert into t1 values ('ꪪꪪ');
-insert into t1 values ('ꪪꪪꪪ');
-ERROR 23000: Duplicate entry 'ꪪꪪ' for key 'c'
+ERROR 23000: Duplicate entry 'ꪪꪪ' for key 't1.c'
 drop table t1;
 create table t1 (
 c char(10) character set utf8mb4,
@@ -481,19 +407,19 @@ unique key a using hash (c(1))
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c` char(10) CHARACTER SET utf8mb4 DEFAULT NULL,
+  `c` char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   UNIQUE KEY `a` (`c`(1)) USING HASH
-) ENGINE=MEMORY DEFAULT CHARSET=latin1
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 insert into t1 values ('a'),('b'),('c'),('d'),('e'),('f');
 insert into t1 values ('aa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 insert into t1 values ('б');
 insert into t1 values ('бб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
+ERROR 23000: Duplicate entry 'б' for key 't1.a'
 insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
+ERROR 23000: Duplicate entry 'б' for key 't1.a'
 select c as c_all from t1 order by c;
 c_all
 a
@@ -517,49 +443,19 @@ unique key a using btree (c(1))
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c` char(10) CHARACTER SET utf8mb4 DEFAULT NULL,
+  `c` char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   UNIQUE KEY `a` (`c`(1)) USING BTREE
-) ENGINE=MEMORY DEFAULT CHARSET=latin1
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 insert into t1 values ('a'),('b'),('c'),('d'),('e'),('f');
 insert into t1 values ('aa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 insert into t1 values ('б');
 insert into t1 values ('бб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
+ERROR 23000: Duplicate entry 'б' for key 't1.a'
 insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
-select c as c_all from t1 order by c;
-c_all
-a
-b
-c
-d
-e
-f
-б
-select c as c_a from t1 where c='a';
-c_a
-a
-select c as c_a from t1 where c='б';
-c_a
-б
-drop table t1;
-create table t1 (
-c char(10) character set utf8mb4,
-unique key a (c(1))
-) engine=innodb;
-insert into t1 values ('a'),('b'),('c'),('d'),('e'),('f');
-insert into t1 values ('aa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
-insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
-insert into t1 values ('б');
-insert into t1 values ('бб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
-insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
+ERROR 23000: Duplicate entry 'б' for key 't1.a'
 select c as c_all from t1 order by c;
 c_all
 a
@@ -580,9 +476,9 @@ create table t1 (c varchar(30) character set utf8mb4 collate utf8mb4_bin, unique
 insert into t1 values ('1'),('2'),('3'),('x'),('y'),('z');
 insert into t1 values ('aaaaaaaaaa');
 insert into t1 values ('aaaaaaaaaaa');
-ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 'c'
+ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 't1.c'
 insert into t1 values ('aaaaaaaaaaaa');
-ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 'c'
+ERROR 23000: Duplicate entry 'aaaaaaaaaa' for key 't1.c'
 insert into t1 values (repeat('b',20));
 select c c1 from t1 where c='1';
 c1
@@ -614,23 +510,23 @@ insert into t1 values ('1'),('2'),('3'),('4'),('x'),('y'),('z');
 insert into t1 values ('a');
 insert into t1 values ('aa');
 insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'aa' for key 'c'
+ERROR 23000: Duplicate entry 'aa' for key 't1.c'
 insert into t1 values ('b');
 insert into t1 values ('bb');
 insert into t1 values ('bbb');
-ERROR 23000: Duplicate entry 'bb' for key 'c'
+ERROR 23000: Duplicate entry 'bb' for key 't1.c'
 insert into t1 values ('а');
 insert into t1 values ('аа');
 insert into t1 values ('ааа');
-ERROR 23000: Duplicate entry 'аа' for key 'c'
+ERROR 23000: Duplicate entry 'аа' for key 't1.c'
 insert into t1 values ('б');
 insert into t1 values ('бб');
 insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'бб' for key 'c'
+ERROR 23000: Duplicate entry 'бб' for key 't1.c'
 insert into t1 values ('ꪪ');
 insert into t1 values ('ꪪꪪ');
 insert into t1 values ('ꪪꪪꪪ');
-ERROR 23000: Duplicate entry 'ꪪꪪ' for key 'c'
+ERROR 23000: Duplicate entry 'ꪪꪪ' for key 't1.c'
 drop table t1;
 create table t1 (
 c char(10) character set utf8mb4 collate utf8mb4_bin,
@@ -641,17 +537,17 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `c` char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   UNIQUE KEY `a` (`c`(1)) USING HASH
-) ENGINE=MEMORY DEFAULT CHARSET=latin1
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 insert into t1 values ('a'),('b'),('c'),('d'),('e'),('f');
 insert into t1 values ('aa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 insert into t1 values ('б');
 insert into t1 values ('бб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
+ERROR 23000: Duplicate entry 'б' for key 't1.a'
 insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
+ERROR 23000: Duplicate entry 'б' for key 't1.a'
 select c as c_all from t1 order by c;
 c_all
 a
@@ -677,47 +573,17 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `c` char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   UNIQUE KEY `a` (`c`(1)) USING BTREE
-) ENGINE=MEMORY DEFAULT CHARSET=latin1
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 insert into t1 values ('a'),('b'),('c'),('d'),('e'),('f');
 insert into t1 values ('aa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 insert into t1 values ('б');
 insert into t1 values ('бб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
+ERROR 23000: Duplicate entry 'б' for key 't1.a'
 insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
-select c as c_all from t1 order by c;
-c_all
-a
-b
-c
-d
-e
-f
-б
-select c as c_a from t1 where c='a';
-c_a
-a
-select c as c_a from t1 where c='б';
-c_a
-б
-drop table t1;
-create table t1 (
-c char(10) character set utf8mb4 collate utf8mb4_bin,
-unique key a (c(1))
-) engine=innodb;
-insert into t1 values ('a'),('b'),('c'),('d'),('e'),('f');
-insert into t1 values ('aa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
-insert into t1 values ('aaa');
-ERROR 23000: Duplicate entry 'a' for key 'a'
-insert into t1 values ('б');
-insert into t1 values ('бб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
-insert into t1 values ('ббб');
-ERROR 23000: Duplicate entry 'б' for key 'a'
+ERROR 23000: Duplicate entry 'б' for key 't1.a'
 select c as c_all from t1 order by c;
 c_all
 a
@@ -737,17 +603,7 @@ drop table t1;
 create table t1 (
 str varchar(255) character set utf8mb4 not null,
 key str  (str(2))
-) engine=myisam;
-INSERT INTO t1 VALUES ('str');
-INSERT INTO t1 VALUES ('str2');
-select * from t1 where str='str';
-str
-str
-drop table t1;
-create table t1 (
-str varchar(255) character set utf8mb4 not null,
-key str  (str(2))
-) engine=innodb;
+);
 INSERT INTO t1 VALUES ('str');
 INSERT INTO t1 VALUES ('str2');
 select * from t1 where str='str';
@@ -774,36 +630,12 @@ select * from t1 where str='str';
 str
 str
 drop table t1;
-create table t1 (
-str varchar(255) character set utf8mb4 not null,
-key str (str(2))
-) engine=innodb;
-INSERT INTO t1 VALUES ('str');
-INSERT INTO t1 VALUES ('str2');
-select * from t1 where str='str';
-str
-str
-drop table t1;
 CREATE TABLE t1 (a varchar(32) BINARY) CHARACTER SET utf8mb4;
+Warnings:
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
 INSERT INTO t1 VALUES ('test');
 SELECT a FROM t1 WHERE a LIKE '%te';
 a
-DROP TABLE t1;
-SET NAMES utf8mb4;
-CREATE TABLE t1 (
-subject varchar(255) character set utf8mb4 collate utf8mb4_unicode_ci,
-p varchar(15) character set utf8mb4
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-INSERT INTO t1 VALUES ('谷川俊二と申しますが、インターネット予約の会員登録をしましたところ、メールアドレスを間違えてしまい会員ＩＤが受け取ることが出来ませんでした。間違えアドレスはtani-shun@n.vodafone.ne.jpを書き込みました。どうすればよいですか？ その他、住所等は間違えありません。連絡ください。よろしくお願いします。m(__)m','040312-000057');
-INSERT INTO t1 VALUES ('aaa','bbb');
-SELECT length(subject) FROM t1;
-length(subject)
-432
-3
-SELECT length(subject) FROM t1 ORDER BY 1;
-length(subject)
-3
-432
 DROP TABLE t1;
 CREATE TABLE t1 (
 id       int unsigned NOT NULL auto_increment,
@@ -811,7 +643,7 @@ list_id  smallint unsigned NOT NULL,
 term     TEXT NOT NULL,
 PRIMARY KEY(id),
 INDEX(list_id, term(4))
-) ENGINE=MYISAM CHARSET=utf8mb4;
+) CHARSET=utf8mb4;
 INSERT INTO t1 SET list_id = 1, term = "letterc";
 INSERT INTO t1 SET list_id = 1, term = "letterb";
 INSERT INTO t1 SET list_id = 1, term = "lettera";
@@ -858,20 +690,6 @@ id	term
 DROP TABLE t1;
 set names utf8mb4;
 create table t1 (
-a int primary key,
-b varchar(6),
-index b3(b(3))
-) engine=innodb character set=utf8mb4;
-insert into t1 values(1,'foo'),(2,'foobar');
-select * from t1 where b like 'foob%';
-a	b
-2	foobar
-alter table t1 engine=innodb;
-select * from t1 where b like 'foob%';
-a	b
-2	foobar
-drop table t1;
-create table t1 (
 a enum('петя','вася','анюта') character set utf8mb4 not null default 'анюта',
 b set('петя','вася','анюта') character set utf8mb4 not null default 'анюта'
 );
@@ -879,9 +697,9 @@ create table t2 select concat(a,_utf8mb4'') as a, concat(b,_utf8mb4'')as b from 
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `a` varchar(5) CHARACTER SET utf8mb4 NOT NULL DEFAULT '',
-  `b` varchar(15) CHARACTER SET utf8mb4 NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` varchar(5) DEFAULT NULL,
+  `b` varchar(15) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 drop table t1;
 select 'c' like '\_' as want0;
@@ -984,6 +802,8 @@ uf	7566
 æ	C3A6
 Œ	C592
 œ	C593
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
 select group_concat(s1 order by binary s1) from t1 group by s1;
 group_concat(s1 order by binary s1)
 a,ä
@@ -1003,6 +823,8 @@ ue
 uf
 Æ,æ
 Œ,œ
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
 SELECT s1, hex(s1), hex(weight_string(s1)) FROM t1 ORDER BY s1, BINARY(s1);
 s1	hex(s1)	hex(weight_string(s1))
 a	61	0041
@@ -1028,9 +850,13 @@ uf	7566	00550046
 æ	C3A6	00C6
 Œ	C592	0152
 œ	C593	0152
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
 SELECT s1, hex(s1) FROM t1 WHERE s1='ae' ORDER BY s1, BINARY(s1);
 s1	hex(s1)
 ae	6165
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
 drop table t1;
 "END ctype_german.inc"
 SET collation_connection='utf8mb4_bin';
@@ -1050,8 +876,8 @@ CREATE TABLE t1 AS SELECT REPEAT('a',1) AS a LIMIT 0;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 VALUES (_utf8mb4 0xEFBE9D),(_utf8mb4 0xF0908E84);
 INSERT INTO t1 VALUES (_utf8mb4 0xCE85),(_utf8mb4 0xF4808080);
 SELECT HEX(a), HEX(CONVERT(a USING utf8mb4)) FROM t1 ORDER BY a;
@@ -1110,7 +936,7 @@ ab_def
 drop table t1;
 CREATE TABLE t1 (
 user varchar(255) NOT NULL default ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) DEFAULT CHARSET=latin1;
 INSERT INTO t1 VALUES ('one'),('two');
 SELECT CHARSET('a');
 CHARSET('a')
@@ -1190,13 +1016,15 @@ id	city
 2	Durban
 select * from t1 where city = 'Durban ';
 id	city
-2	Durban
 drop table t1;
 create table t1 (x set('A', 'B') default 0) character set utf8mb4;
 ERROR 42000: Invalid default value for 'x'
 create table t1 (x enum('A', 'B') default 0) character set utf8mb4;
 ERROR 42000: Invalid default value for 'x'
 SET NAMES UTF8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
 `id` int(20) NOT NULL auto_increment,
 `country` varchar(100) NOT NULL default '',
@@ -1214,7 +1042,10 @@ UNIQUE KEY `MSCCSPK_20030521130957121` (`momid`),
 KEY `IX_mobile_originated_message_keyword` (`keyword`),
 KEY `IX_mobile_originated_message_created` (`created`),
 KEY `IX_mobile_originated_message_support` (`msisdn`,`momid`,`keyword`,`gateway_id`,`created`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
+) DEFAULT CHARSET=utf8mb4;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES 
 (1,'blah','464','aaa','fkc1c9ilc20x0hgae7lx6j09','ERR','ERR Имри.Афимим.Аеимимримдмримрмрирор имримримримр имридм ирбднримрфмририримрфмфмим.Ад.Д имдимримрад.Адимримримрмдиримримримр м.Дадимфшьмримд им.Адимимрн имадми','ИМРИ.АФИМИМ.АЕИМИМРИМДМРИМРМРИРОР',3,'2005-06-01 17:30:43','1234567890'),
 (2,'blah','464','aaa','haxpl2ilc20x00bj4tt2m5ti','11','11 g','G',3,'2005-06-02 22:43:10','1234567890');
@@ -1227,8 +1058,8 @@ UNIQUE KEY `PK_user` (`msisdn`)
 INSERT INTO t2 VALUES ('1234567890',2,'2005-05-24 13:53:25');
 SELECT content, t2.msisdn FROM t1, t2 WHERE t1.msisdn = '1234567890';
 content	msisdn
-ERR Имри.Афимим.Аеимимримдмримрмрирор имримримримр имридм ирбднримрфмририримрфмфмим.Ад.Д имдимримрад.Адимримримрмдиримримримр м.Дадимфшьмримд им.Адимимрн имадми	1234567890
 11 g	1234567890
+ERR Имри.Афимим.Аеимимримдмримрмрирор имримримримр имридм ирбднримрфмририримрфмфмим.Ад.Д имдимримрад.Адимримримрмдиримримримр м.Дадимфшьмримд им.Адимимрн имадми	1234567890
 DROP TABLE t1,t2;
 create table t1 (a char(20) character set utf8mb4);
 insert into t1 values ('123456'),('андрей');
@@ -1241,6 +1072,7 @@ char_length(a)	length(a)	a
 2	2	12
 2	4	ан
 drop table t1;
+SET sql_mode = default;
 set names utf8mb4;
 select 'andre%' like 'andreñ%' escape 'ñ';
 'andre%' like 'andreñ%' escape 'ñ'
@@ -1284,19 +1116,21 @@ select * from t1 where a like "%abc\d%";
 a
 abcd
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
 a varchar(255) NOT NULL default '',
 KEY a (a)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
+) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 Warnings:
 Warning	1071	Specified key was too long; max key length is 1000 bytes
 insert into t1 values (_utf8mb4 0xe880bd);
 insert into t1 values (_utf8mb4 0x5b);
 select hex(a) from t1;
 hex(a)
-E880BD
 5B
+E880BD
 drop table t1;
+SET sql_mode = default;
 set names 'latin1';
 create table t1 (a varchar(255)) default charset=utf8mb4;
 select * from t1 where find_in_set('-1', a);
@@ -1321,21 +1155,26 @@ DROP TABLE t2;
 DROP TABLE t1;
 CREATE TABLE t1 (item varchar(255)) default character set utf8mb4;
 INSERT INTO t1 VALUES (N'\\');
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 INSERT INTO t1 VALUES (_utf8mb4'\\');
 INSERT INTO t1 VALUES (N'Cote d\'Ivoire');
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 INSERT INTO t1 VALUES (_utf8mb4'Cote d\'Ivoire');
 SELECT item FROM t1 ORDER BY item;
 item
-Cote d'Ivoire
-Cote d'Ivoire
 \
 \
+Cote d'Ivoire
+Cote d'Ivoire
 DROP TABLE t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 SET NAMES utf8mb4;
 DROP TABLE IF EXISTS t1;
 Warnings:
 Note	1051	Unknown table 'test.t1'
-CREATE TABLE t1(a VARCHAR(255), KEY(a)) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
+CREATE TABLE t1(a VARCHAR(255), KEY(a)) DEFAULT CHARSET=utf8mb4;
 Warnings:
 Warning	1071	Specified key was too long; max key length is 1000 bytes
 INSERT INTO t1 VALUES('uuABCDEFGHIGKLMNOPRSTUVWXYZ̈bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
@@ -1379,6 +1218,7 @@ check table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
 drop table t1;
+SET sql_mode = default;
 set names utf8mb4;
 create table t1 (s1 char(5) character set utf8mb4);
 insert into t1 values
@@ -1418,49 +1258,13 @@ select s1 as after_delete_bin from t1 where s1 like 'ペテ%';
 after_delete_bin
 ペテルグル
 drop table t1;
-set names utf8mb4;
-create table t1 (a varchar(30) not null primary key)
-engine=innodb  default character set utf8mb4 collate utf8mb4_general_ci;
-insert into t1 values ('あいうえおかきくけこさしすせそ');
-insert into t1 values ('さしすせそかきくけこあいうえお');
-select a as gci1 from t1 where a like 'さしすせそかきくけこあいうえお%';
-gci1
-さしすせそかきくけこあいうえお
-select a as gci2 from t1 where a like 'あいうえおかきくけこさしすせそ';
-gci2
-あいうえおかきくけこさしすせそ
-drop table t1;
-set names utf8mb4;
-create table t1 (a varchar(30) not null primary key)
-engine=innodb default character set utf8mb4 collate utf8mb4_unicode_ci;
-insert into t1 values ('あいうえおかきくけこさしすせそ');
-insert into t1 values ('さしすせそかきくけこあいうえお');
-select a as uci1 from t1 where a like 'さしすせそかきくけこあいうえお%';
-uci1
-さしすせそかきくけこあいうえお
-select a as uci2 from t1 where a like 'あいうえおかきくけこさしすせそ';
-uci2
-あいうえおかきくけこさしすせそ
-drop table t1;
-set names utf8mb4;
-create table t1 (a varchar(30) not null primary key)
-engine=innodb default character set utf8mb4 collate utf8mb4_bin;
-insert into t1 values ('あいうえおかきくけこさしすせそ');
-insert into t1 values ('さしすせそかきくけこあいうえお');
-select a as bin1 from t1 where a like 'さしすせそかきくけこあいうえお%';
-bin1
-さしすせそかきくけこあいうえお
-select a as bin2 from t1 where a like 'あいうえおかきくけこさしすせそ';
-bin2
-あいうえおかきくけこさしすせそ
-drop table t1;
 SET NAMES utf8mb4;
 CREATE TABLE t1 (id int PRIMARY KEY,
 a varchar(16) collate utf8mb4_unicode_ci NOT NULL default '',
 b int,
 f varchar(128) default 'XXX',
 INDEX (a(4))
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT INTO t1(id, a, b) VALUES
 (1, 'cccc', 50), (2, 'cccc', 70), (3, 'cccc', 30),
 (4, 'cccc', 30), (5, 'cccc', 20), (6, 'bbbbbb', 40),
@@ -1469,6 +1273,8 @@ INSERT INTO t1(id, a, b) VALUES
 SELECT id, a, b FROM t1;
 id	a	b
 1	cccc	50
+10	eeeee	40
+11	bbbbbb	60
 2	cccc	70
 3	cccc	30
 4	cccc	30
@@ -1477,14 +1283,12 @@ id	a	b
 7	dddd	30
 8	aaaa	10
 9	aaaa	50
-10	eeeee	40
-11	bbbbbb	60
 SELECT id, a, b FROM t1 WHERE a BETWEEN 'aaaa' AND 'bbbbbb';
 id	a	b
+11	bbbbbb	60
+6	bbbbbb	40
 8	aaaa	10
 9	aaaa	50
-6	bbbbbb	40
-11	bbbbbb	60
 SELECT id, a FROM t1 WHERE a='bbbbbb';
 id	a
 6	bbbbbb
@@ -1498,7 +1302,7 @@ SET NAMES utf8mb4;
 CREATE TABLE t1 (
 a CHAR(13) DEFAULT '',
 INDEX(a)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 INSERT INTO t1 VALUES 
 ('Käli Käli 2-4'), ('Käli Käli 2-4'),
 ('Käli Käli 2+4'), ('Käli Käli 2+4'),
@@ -1507,7 +1311,7 @@ INSERT INTO t1 SELECT * FROM t1;
 CREATE TABLE t2 (
 a CHAR(13) DEFAULT '',
 INDEX(a)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 COLLATE=latin1_general_ci;
+) DEFAULT CHARSET=latin1 COLLATE=latin1_general_ci;
 INSERT INTO t2 VALUES
 ('Kali Kali 2-4'), ('Kali Kali 2-4'),
 ('Kali Kali 2+4'), ('Kali Kali 2+4'),
@@ -1526,22 +1330,30 @@ Kali Kali 2+4
 Kali Kali 2+4
 Kali Kali 2+4
 EXPLAIN SELECT a FROM t1 WHERE a LIKE 'Käli Käli 2+4';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	a	a	53	NULL	4	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	a	a	53	NULL	4	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` where (`test`.`t1`.`a` like 'Käli Käli 2+4')
 EXPLAIN SELECT a FROM t1 WHERE a = 'Käli Käli 2+4';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	a	a	53	const	4	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	a	a	53	const	4	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` where (`test`.`t1`.`a` = 'Käli Käli 2+4')
 EXPLAIN SELECT a FROM t2 WHERE a LIKE 'Kali Kali 2+4';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	range	a	a	14	NULL	4	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	range	a	a	14	NULL	4	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`a` AS `a` from `test`.`t2` where (`test`.`t2`.`a` like 'Kali Kali 2+4')
 EXPLAIN SELECT a FROM t2 WHERE a = 'Kali Kali 2+4';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	ref	a	a	14	const	4	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ref	a	a	14	const	4	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`a` AS `a` from `test`.`t2` where (`test`.`t2`.`a` = 'Kali Kali 2+4')
 DROP TABLE t1,t2;
 CREATE TABLE t1 (
 a char(255) DEFAULT '', 
 KEY(a(10))
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 INSERT INTO t1 VALUES ('Käli Käli 2-4');
 SELECT * FROM t1 WHERE a LIKE 'Käli Käli 2%';
 a
@@ -1554,7 +1366,7 @@ Käli Käli 2-4
 DROP TABLE t1;
 CREATE TABLE t1 (
 a char(255) DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 INSERT INTO t1 VALUES ('Käli Käli 2-4');
 INSERT INTO t1 VALUES ('Käli Käli 2-4');
 SELECT * FROM t1 WHERE a LIKE 'Käli Käli 2%';
@@ -1573,7 +1385,10 @@ id int(11) NOT NULL default '0',
 tid int(11) NOT NULL default '0',
 val text NOT NULL,
 INDEX idx(tid, val(10))
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
+) DEFAULT CHARSET=utf8mb4;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES
 (40988,72,'VOLN� ADSL'),(41009,72,'VOLN� ADSL'),
 (41032,72,'VOLN� ADSL'),(41038,72,'VOLN� ADSL'),
@@ -1627,14 +1442,18 @@ create table t1(a char(200) collate utf8mb4_unicode_ci NOT NULL default '')
 default charset=utf8mb4 collate=utf8mb4_unicode_ci;
 insert into t1 values (unhex('65')), (unhex('C3A9')), (unhex('65'));
 explain select distinct a from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	Using temporary
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`a` AS `a` from `test`.`t1`
 select distinct a from t1;
 a
 e
 explain select a from t1 group by a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	Using temporary; Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` group by `test`.`t1`.`a`
 select a from t1 group by a;
 a
 e
@@ -1642,25 +1461,18 @@ drop table t1;
 create table t1(a char(10)) default charset utf8mb4;
 insert into t1 values ('123'), ('456');
 explain
-select substr(Z.a,-1), Z.a from t1 as Y join t1 as Z on Y.a=Z.a order by 1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	Y	ALL	NULL	NULL	NULL	NULL	2	Using temporary; Using filesort
-1	SIMPLE	Z	ALL	NULL	NULL	NULL	NULL	2	Using where; Using join buffer (Block Nested Loop)
-select substr(Z.a,-1), Z.a from t1 as Y join t1 as Z on Y.a=Z.a order by 1;
-substr(Z.a,-1)	a
+select substr(z.a,-1), z.a from t1 as y join t1 as z on y.a=z.a order by 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	y	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using temporary; Using filesort
+1	SIMPLE	z	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select substr(`test`.`z`.`a`,-(1)) AS `substr(z.a,-1)`,`test`.`z`.`a` AS `a` from `test`.`t1` `y` join `test`.`t1` `z` where (`test`.`z`.`a` = `test`.`y`.`a`) order by substr(`test`.`z`.`a`,-(1))
+select substr(z.a,-1), z.a from t1 as y join t1 as z on y.a=z.a order by 1;
+substr(z.a,-1)	a
 3	123
 6	456
 drop table t1;
 SET CHARACTER SET utf8mb4;
-SHOW VARIABLES LIKE 'character\_set\_%';
-Variable_name	Value
-character_set_client	utf8mb4
-character_set_connection	latin1
-character_set_database	latin1
-character_set_filesystem	binary
-character_set_results	utf8mb4
-character_set_server	latin1
-character_set_system	utf8
 CREATE DATABASE crashtest DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 USE crashtest;
 CREATE TABLE crashtest (crash char(10)) DEFAULT CHARSET=utf8mb4;
@@ -1668,18 +1480,20 @@ INSERT INTO crashtest VALUES ('35'), ('36'), ('37');
 SELECT * FROM crashtest ORDER BY CHAR(crash USING utf8mb4);
 crash
 35
-36
 37
+36
 INSERT INTO crashtest VALUES ('-1000');
 EXPLAIN SELECT * FROM crashtest ORDER BY CHAR(crash USING utf8mb4);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	crashtest	ALL	NULL	NULL	NULL	NULL	4	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	crashtest	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `crashtest`.`crashtest`.`crash` AS `crash` from `crashtest`.`crashtest` order by char(`crashtest`.`crashtest`.`crash`)
 SELECT * FROM crashtest ORDER BY CHAR(crash USING utf8mb4);
 crash
 -1000
 35
-36
 37
+36
 Warnings:
 Warning	1300	Invalid utf8mb4 character string: 'FFFFFC'
 DROP TABLE crashtest;
@@ -1696,8 +1510,8 @@ yyy
 aa
 SELECT DISTINCT id FROM t1;
 id
-xxx
 aa
+xxx
 yyy
 SELECT DISTINCT id FROM t1 ORDER BY id;
 id
@@ -1705,6 +1519,7 @@ aa
 xxx
 yyy
 DROP TABLE t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (
 a varchar(26) not null
 ) default character set utf8mb4;
@@ -1748,6 +1563,7 @@ select length(a) from t1;
 length(a)
 3000
 drop table t1;
+SET sql_mode = default;
 set names utf8mb4;
 select hex(char(1 using utf8mb4));
 hex(char(1 using utf8mb4))
@@ -1763,12 +1579,12 @@ char(53647 using utf8mb4)
 я
 select char(0xff,0x8f using utf8mb4);
 char(0xff,0x8f using utf8mb4)
-
+NULL
 Warnings:
 Warning	1300	Invalid utf8mb4 character string: 'FF8F'
 select convert(char(0xff,0x8f) using utf8mb4);
 convert(char(0xff,0x8f) using utf8mb4)
-
+NULL
 Warnings:
 Warning	1300	Invalid utf8mb4 character string: 'FF8F'
 set sql_mode=traditional;
@@ -1846,7 +1662,7 @@ insert into t1 values('t1_val');
 create view v1 as select 'v1_val' as col1;
 select coercibility(col1), collation(col1) from v1;
 coercibility(col1)	collation(col1)
-4	utf8mb4_general_ci
+4	utf8mb4_0900_ai_ci
 create view v2 as select col1 from v1 union select col1 from t1;
 select coercibility(col1), collation(col1)from v2;
 coercibility(col1)	collation(col1)
@@ -1870,8 +1686,11 @@ insert into t1 values ('a',1);
 select concat(a, if(b>10, N'x', N'y')) from t1;
 concat(a, if(b>10, N'x', N'y'))
 ay
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 select concat(a, if(b>10, N'æ', N'ß')) from t1;
-ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8_general_ci,COERCIBLE) for operation 'concat'
+ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb3_general_ci,COERCIBLE) for operation 'concat'
 drop table t1;
 set names utf8mb4;
 create table t1 (a varchar(10) character set latin1, b int);
@@ -1880,7 +1699,7 @@ select concat(a, if(b>10, _utf8mb4'x', _utf8mb4'y')) from t1;
 concat(a, if(b>10, _utf8mb4'x', _utf8mb4'y'))
 ay
 select concat(a, if(b>10, _utf8mb4'æ', _utf8mb4'ß')) from t1;
-ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_general_ci,COERCIBLE) for operation 'concat'
+ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'concat'
 drop table t1;
 set names utf8mb4;
 create table t1 (a varchar(10) character set latin1, b int);
@@ -1889,7 +1708,7 @@ select concat(a, if(b>10, _utf8mb4 0x78, _utf8mb4 0x79)) from t1;
 concat(a, if(b>10, _utf8mb4 0x78, _utf8mb4 0x79))
 ay
 select concat(a, if(b>10, _utf8mb4 0xC3A6, _utf8mb4 0xC3AF)) from t1;
-ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_general_ci,COERCIBLE) for operation 'concat'
+ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'concat'
 drop table t1;
 set names utf8mb4;
 create table t1 (a varchar(10) character set latin1, b int);
@@ -1898,26 +1717,8 @@ select concat(a, if(b>10, 'x' 'x', 'y' 'y')) from t1;
 concat(a, if(b>10, 'x' 'x', 'y' 'y'))
 ayy
 select concat(a, if(b>10, 'x' 'æ', 'y' 'ß')) from t1;
-ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_general_ci,COERCIBLE) for operation 'concat'
+ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'concat'
 drop table t1;
-CREATE TABLE t1 (
-colA int(11) NOT NULL,
-colB varchar(255) character set utf8mb4 NOT NULL,
-PRIMARY KEY  (colA)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-INSERT INTO t1 (colA, colB) VALUES (1, 'foo'), (2, 'foo bar');
-CREATE TABLE t2 (
-colA int(11) NOT NULL,
-colB varchar(255) character set utf8mb4 NOT NULL,
-KEY bad  (colA,colB(3))
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-INSERT INTO t2 (colA, colB) VALUES (1, 'foo'),(2, 'foo bar');
-SELECT * FROM t1 JOIN t2 ON t1.colA=t2.colA AND t1.colB=t2.colB
-WHERE t1.colA < 3;
-colA	colB	colA	colB
-1	foo	1	foo
-2	foo bar	2	foo bar
-DROP TABLE t1, t2;
 SELECT 'н1234567890' UNION SELECT _binary '1';
 н1234567890
 н1234567890
@@ -1977,12 +1778,12 @@ ERROR HY000: Invalid utf8mb4 character string: 'FF'
 set sql_mode=default;
 select hex(char(0xFF using utf8mb4));
 hex(char(0xFF using utf8mb4))
-
+NULL
 Warnings:
 Warning	1300	Invalid utf8mb4 character string: 'FF'
 select hex(convert(0xFF using utf8mb4));
 hex(convert(0xFF using utf8mb4))
-
+NULL
 Warnings:
 Warning	1300	Invalid utf8mb4 character string: 'FF'
 select hex(_utf8mb4 0x616263FF);
@@ -1997,9 +1798,9 @@ CREATE TABLE t1 (a INT NOT NULL, b INT NOT NULL);
 INSERT INTO t1 VALUES (70000, 1092), (70001, 1085), (70002, 1065);
 SELECT CONVERT(a, CHAR), CONVERT(b, CHAR) FROM t1 GROUP BY b;
 CONVERT(a, CHAR)	CONVERT(b, CHAR)
-70002	1065
-70001	1085
 70000	1092
+70001	1085
+70002	1065
 SELECT CONVERT(a, CHAR), CONVERT(b, CHAR) FROM t1;
 CONVERT(a, CHAR)	CONVERT(b, CHAR)
 70000	1092
@@ -2008,21 +1809,21 @@ CONVERT(a, CHAR)	CONVERT(b, CHAR)
 ALTER TABLE t1 ADD UNIQUE (b);
 SELECT CONVERT(a, CHAR), CONVERT(b, CHAR) FROM t1 GROUP BY b;
 CONVERT(a, CHAR)	CONVERT(b, CHAR)
-70002	1065
-70001	1085
 70000	1092
+70001	1085
+70002	1065
 DROP INDEX b ON t1;
 SELECT CONVERT(a, CHAR), CONVERT(b, CHAR) FROM t1 GROUP BY b;
 CONVERT(a, CHAR)	CONVERT(b, CHAR)
-70002	1065
-70001	1085
 70000	1092
+70001	1085
+70002	1065
 ALTER TABLE t1 ADD INDEX (b);
 SELECT CONVERT(a, CHAR), CONVERT(b, CHAR) from t1 GROUP BY b;
 CONVERT(a, CHAR)	CONVERT(b, CHAR)
-70002	1065
-70001	1085
 70000	1092
+70001	1085
+70002	1065
 DROP TABLE t1;
 #
 # Bug#26474: Add Sinhala script (Sri Lanka) collation to MySQL
@@ -2144,7 +1945,7 @@ create table t1 (utf8mb4 char(1) character set utf8mb4);
 Testing [F0][90..BF][80..BF][80..BF]
 insert into t1 values (0xF0908080);
 insert into t1 values (0xF0BFBFBF);
-insert into t1 values (0xF08F8080);
+insert ignore into t1 values (0xF08F8080);
 Warnings:
 Warning	1366	Incorrect string value: '\xF0\x8F\x80\x80' for column 'utf8mb4' at row 1
 select hex(utf8mb4) from t1;
@@ -2164,14 +1965,14 @@ delete from t1;
 Testing [F4][80..8F][80..BF][80..BF]
 insert into t1 values (0xF4808080);
 insert into t1 values (0xF48F8080);
-insert into t1 values (0xF4908080);
+insert ignore into t1 values (0xF4908080);
 Warnings:
 Warning	1366	Incorrect string value: '\xF4\x90\x80\x80' for column 'utf8mb4' at row 1
 select hex(utf8mb4) from t1;
 hex(utf8mb4)
+
 F4808080
 F48F8080
-
 drop table t1;
 #
 # Check strnxfrm() with odd length
@@ -2198,6 +1999,7 @@ set max_sort_length=default;
 #
 # Bug#26180: Can't add columns to tables created with utf8mb4 text indexes
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
 clipid INT NOT NULL,
 Tape TINYTEXT,
@@ -2205,18 +2007,19 @@ PRIMARY KEY (clipid),
 KEY tape(Tape(255))
 ) CHARACTER SET=utf8mb4;
 Warnings:
-Warning	1071	Specified key was too long; max key length is 1000 bytes
+Warning	1071	Specified key was too long; max key length is 255 bytes
 ALTER TABLE t1 ADD mos TINYINT DEFAULT 0 AFTER clipid;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `clipid` int(11) NOT NULL,
-  `mos` tinyint(4) DEFAULT '0',
+  `clipid` int NOT NULL,
+  `mos` tinyint DEFAULT '0',
   `Tape` tinytext,
   PRIMARY KEY (`clipid`),
-  KEY `tape` (`Tape`(250))
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4
+  KEY `tape` (`Tape`(63))
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
+SET sql_mode = default;
 #
 # Testing 4-byte values.
 #
@@ -2242,7 +2045,7 @@ INSERT INTO t1 VALUES (119040, x'f09d8480'),
 (917999, x'f3a087af');
 INSERT INTO t1 VALUES (119070, x'f09d849ef09d859ef09d859ef09d8480f09d859ff09d859ff09d859ff09d85a0f09d85a0f09d8480');
 INSERT INTO t1 VALUES (65131, x'efb9abf09d849ef09d859ef09d859ef09d8480f09d859fefb9abefb9abf09d85a0efb9ab');
-INSERT INTO t1 VALUES (119070, x'f09d849ef09d859ef09d859ef09d8480f09d859ff09d859ff09d859ff09d85a0f09d85a0f09d8480f09d85a0');
+INSERT IGNORE INTO t1 VALUES (119070, x'f09d849ef09d859ef09d859ef09d8480f09d859ff09d859ff09d859ff09d85a0f09d85a0f09d8480f09d85a0');
 Warnings:
 Warning	1265	Data truncated for column 'utf8mb4_encoding' at row 1
 SELECT u_decimal, hex(utf8mb4_encoding) FROM t1 ORDER BY utf8mb4_encoding COLLATE utf8mb4_general_ci, BINARY utf8mb4_encoding;
@@ -2258,28 +2061,32 @@ u_decimal	hex(utf8mb4_encoding)
 1114111	F48FBFBF
 119070	F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480
 119070	F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480
-INSERT INTO t1 VALUES (1114111, x'f5808080');
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+INSERT IGNORE INTO t1 VALUES (1114111, x'f5808080');
 Warnings:
 Warning	1366	Incorrect string value: '\xF5\x80\x80\x80' for column 'utf8mb4_encoding' at row 1
 SELECT character_maximum_length, character_octet_length FROM information_schema.columns WHERE
 table_name= 't1' AND column_name= 'utf8mb4_encoding';
-character_maximum_length	character_octet_length
+CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH
 10	40
 DROP TABLE IF EXISTS t2;
 CREATE TABLE t2 (
 u_decimal int NOT NULL,
 utf8mb3_encoding VARCHAR(10) NOT NULL
 ) CHARACTER SET utf8mb3;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t2 VALUES (42856, x'ea9da8');
 INSERT INTO t2 VALUES (65131, x'efb9ab');
-INSERT INTO t2 VALUES (1114111, x'f48fbfbf');
+INSERT IGNORE INTO t2 VALUES (1114111, x'f48fbfbf');
 Warnings:
 Warning	1366	Incorrect string value: '\xF4\x8F\xBF\xBF' for column 'utf8mb3_encoding' at row 1
 SELECT character_maximum_length, character_octet_length FROM information_schema.columns WHERE
 table_name= 't2' AND column_name= 'utf8mb3_encoding';
-character_maximum_length	character_octet_length
+CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH
 10	30
-UPDATE t2 SET utf8mb3_encoding= x'f48fbfbd' where u_decimal= 42856;
+UPDATE IGNORE t2 SET utf8mb3_encoding= x'f48fbfbd' where u_decimal= 42856;
 Warnings:
 Warning	1366	Incorrect string value: '\xF4\x8F\xBF\xBD' for column 'utf8mb3_encoding' at row 1
 UPDATE t2 SET utf8mb3_encoding= _utf8mb4 x'ea9da8' where u_decimal= 42856;
@@ -2297,50 +2104,54 @@ F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480
 EFB9ABF09D849EF09D859EF09D859EF09D8480F09D859FEFB9ABEFB9ABF09D85A0EFB9ABEA9DA8
 F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EA9DA8
 EA9DA8
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT HEX(CONCAT(utf8mb4_encoding, utf8mb3_encoding)) FROM t1,t2;
 HEX(CONCAT(utf8mb4_encoding, utf8mb3_encoding))
-F09D8480EA9DA8
-F09D8480EFB9AB
-F09D8480
-F09D849EEA9DA8
-F09D849EEFB9AB
-F09D849E
-F09D859EEA9DA8
-F09D859EEFB9AB
-F09D859E
-F09D878FEA9DA8
-F09D878FEFB9AB
-F09D878F
-F09D9C9FEA9DA8
-F09D9C9FEFB9AB
-F09D9C9F
-F09D9E9FEA9DA8
-F09D9E9FEFB9AB
-F09D9E9F
-F48FBFBFEA9DA8
-F48FBFBFEFB9AB
-F48FBFBF
-F3A087AFEA9DA8
-F3A087AFEFB9AB
-F3A087AF
-F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EA9DA8
-F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EFB9AB
-F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480
-EFB9ABF09D849EF09D859EF09D859EF09D8480F09D859FEFB9ABEFB9ABF09D85A0EFB9ABEA9DA8
-EFB9ABF09D849EF09D859EF09D859EF09D8480F09D859FEFB9ABEFB9ABF09D85A0EFB9ABEFB9AB
-EFB9ABF09D849EF09D859EF09D859EF09D8480F09D859FEFB9ABEFB9ABF09D85A0EFB9AB
-F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EA9DA8
-F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EFB9AB
-F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480
+
 EA9DA8
 EFB9AB
-
+EFB9ABF09D849EF09D859EF09D859EF09D8480F09D859FEFB9ABEFB9ABF09D85A0EFB9AB
+EFB9ABF09D849EF09D859EF09D859EF09D8480F09D859FEFB9ABEFB9ABF09D85A0EFB9ABEA9DA8
+EFB9ABF09D849EF09D859EF09D859EF09D8480F09D859FEFB9ABEFB9ABF09D85A0EFB9ABEFB9AB
+F09D8480
+F09D8480EA9DA8
+F09D8480EFB9AB
+F09D849E
+F09D849EEA9DA8
+F09D849EEFB9AB
+F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480
+F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480
+F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EA9DA8
+F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EA9DA8
+F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EFB9AB
+F09D849EF09D859EF09D859EF09D8480F09D859FF09D859FF09D859FF09D85A0F09D85A0F09D8480EFB9AB
+F09D859E
+F09D859EEA9DA8
+F09D859EEFB9AB
+F09D878F
+F09D878FEA9DA8
+F09D878FEFB9AB
+F09D9C9F
+F09D9C9FEA9DA8
+F09D9C9FEFB9AB
+F09D9E9F
+F09D9E9FEA9DA8
+F09D9E9FEFB9AB
+F3A087AF
+F3A087AFEA9DA8
+F3A087AFEFB9AB
+F48FBFBF
+F48FBFBFEA9DA8
+F48FBFBFEFB9AB
 SELECT count(*) FROM t1, t2
 WHERE t1.utf8mb4_encoding > t2.utf8mb3_encoding;
 count(*)
-33
+23
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 ALTER TABLE t1 CONVERT TO CHARACTER SET utf8;
 Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 Warning	1366	Incorrect string value: '\xF0\x9D\x84\x80' for column 'utf8mb4_encoding' at row 1
 Warning	1366	Incorrect string value: '\xF0\x9D\x84\x9E' for column 'utf8mb4_encoding' at row 2
 Warning	1366	Incorrect string value: '\xF0\x9D\x85\x9E' for column 'utf8mb4_encoding' at row 3
@@ -2352,12 +2163,13 @@ Warning	1366	Incorrect string value: '\xF3\xA0\x87\xAF' for column 'utf8mb4_enco
 Warning	1366	Incorrect string value: '\xF0\x9D\x84\x9E\xF0\x9D...' for column 'utf8mb4_encoding' at row 9
 Warning	1366	Incorrect string value: '\xF0\x9D\x84\x9E\xF0\x9D...' for column 'utf8mb4_encoding' at row 10
 Warning	1366	Incorrect string value: '\xF0\x9D\x84\x9E\xF0\x9D...' for column 'utf8mb4_encoding' at row 11
+SET sql_mode = default;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `u_decimal` int(11) NOT NULL,
+  `u_decimal` int NOT NULL,
   `utf8mb4_encoding` varchar(10) NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3
 SELECT u_decimal,hex(utf8mb4_encoding),utf8mb4_encoding FROM t1;
 u_decimal	hex(utf8mb4_encoding)	utf8mb4_encoding
 119040	3F	?
@@ -2376,33 +2188,37 @@ ALTER TABLE t2 CONVERT TO CHARACTER SET utf8mb4;
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `u_decimal` int(11) NOT NULL,
+  `u_decimal` int NOT NULL,
   `utf8mb3_encoding` varchar(10) NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT u_decimal,hex(utf8mb3_encoding) FROM t2;
 u_decimal	hex(utf8mb3_encoding)
 42856	EA9DA8
 65131	EFB9AB
 1114111	
 ALTER TABLE t2 CONVERT TO CHARACTER SET utf8mb3;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `u_decimal` int(11) NOT NULL,
+  `u_decimal` int NOT NULL,
   `utf8mb3_encoding` varchar(10) NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3
 SELECT u_decimal,hex(utf8mb3_encoding) FROM t2;
 u_decimal	hex(utf8mb3_encoding)
 42856	EA9DA8
 65131	EFB9AB
 1114111	
 ALTER TABLE t1 MODIFY utf8mb4_encoding VARCHAR(10) CHARACTER SET utf8mb3;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `u_decimal` int(11) NOT NULL,
-  `utf8mb4_encoding` varchar(10) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+  `u_decimal` int NOT NULL,
+  `utf8mb4_encoding` varchar(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3
 SELECT u_decimal,hex(utf8mb4_encoding) FROM t1;
 u_decimal	hex(utf8mb4_encoding)
 119040	3F
@@ -2421,9 +2237,9 @@ ALTER TABLE t1 MODIFY utf8mb4_encoding VARCHAR(10) CHARACTER SET utf8mb4;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `u_decimal` int(11) NOT NULL,
-  `utf8mb4_encoding` varchar(10) CHARACTER SET utf8mb4 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+  `u_decimal` int NOT NULL,
+  `utf8mb4_encoding` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3
 SELECT u_decimal,hex(utf8mb4_encoding) FROM t1;
 u_decimal	hex(utf8mb4_encoding)
 119040	3F
@@ -2442,9 +2258,9 @@ ALTER TABLE t2 MODIFY utf8mb3_encoding VARCHAR(10) CHARACTER SET utf8mb4;
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `u_decimal` int(11) NOT NULL,
-  `utf8mb3_encoding` varchar(10) CHARACTER SET utf8mb4 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+  `u_decimal` int NOT NULL,
+  `utf8mb3_encoding` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3
 SELECT u_decimal,hex(utf8mb3_encoding) FROM t2;
 u_decimal	hex(utf8mb3_encoding)
 42856	EA9DA8
@@ -2455,6 +2271,8 @@ CREATE TABLE t3 (
 u_decimal int NOT NULL,
 utf8mb3_encoding VARCHAR(10) NOT NULL
 ) CHARACTER SET utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 INSERT INTO t3 SELECT * FROM t1;
 DROP TABLE IF EXISTS t4;
 CREATE TABLE t4 (
@@ -2472,11 +2290,17 @@ DROP TABLE t4;
 SELECT CHARSET(CONCAT(_utf8mb4'a',_utf8'b'));
 CHARSET(CONCAT(_utf8mb4'a',_utf8'b'))
 utf8mb4
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 CREATE TABLE t1 (utf8mb4 VARCHAR(10) CHARACTER SET utf8mb4 NOT NULL);
 INSERT INTO t1 VALUES (x'ea9da8'),(x'f48fbfbf');
 SELECT CONCAT(utf8mb4, _utf8 x'ea9da8') FROM t1 LIMIT 0;
 CONCAT(utf8mb4, _utf8 x'ea9da8')
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 CREATE TABLE t2 (utf8mb3 VARCHAR(10) CHARACTER SET utf8mb3 NOT NULL);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t2 VALUES (x'ea9da8');
 SELECT HEX(CONCAT(utf8mb4, utf8mb3)) FROM t1,t2 ORDER BY 1;
 HEX(CONCAT(utf8mb4, utf8mb3))
@@ -2489,10 +2313,10 @@ CREATE TEMPORARY TABLE t3 AS SELECT *, concat(utf8mb4,utf8mb3) FROM t1, t2;
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TEMPORARY TABLE `t3` (
-  `utf8mb4` varchar(10) CHARACTER SET utf8mb4 NOT NULL,
-  `utf8mb3` varchar(10) CHARACTER SET utf8 NOT NULL,
-  `concat(utf8mb4,utf8mb3)` varchar(20) CHARACTER SET utf8mb4 NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `utf8mb4` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `utf8mb3` varchar(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL,
+  `concat(utf8mb4,utf8mb3)` varchar(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TEMPORARY TABLE t3;
 SELECT * FROM t1, t2 WHERE t1.utf8mb4 > t2.utf8mb3;
 utf8mb4	utf8mb3
@@ -2510,33 +2334,43 @@ DROP TABLE t2;
 CREATE TABLE t1 (utf8mb4 VARCHAR(10) CHARACTER SET utf8mb4);
 INSERT INTO t1 VALUES (x'f48fbfbf');
 SELECT CONCAT(utf8mb4, _utf8 '�') FROM t1;
-ERROR HY000: Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (utf8_general_ci,COERCIBLE) for operation 'concat'
+ERROR HY000: Illegal mix of collations (utf8mb4_0900_ai_ci,IMPLICIT) and (utf8mb3_general_ci,COERCIBLE) for operation 'concat'
 SELECT CONCAT('a', _utf8 '�') FROM t1;
-ERROR HY000: Illegal mix of collations (utf8mb4_general_ci,COERCIBLE) and (utf8_general_ci,COERCIBLE) for operation 'concat'
+ERROR HY000: Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE) and (utf8mb3_general_ci,COERCIBLE) for operation 'concat'
 DROP TABLE t1;
 #
 # Bug#51675 Server crashes on inserting 4 byte char.
 # after ALTER TABLE to 'utf8mb4' 
 #
 SET NAMES utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 CREATE TABLE t1 ( 
 subject varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci, 
 p VARCHAR(15) CHARACTER SET utf8 
 ) DEFAULT CHARSET=latin1;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 ALTER TABLE t1 ADD INDEX (subject);
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 ALTER TABLE t1
 DEFAULT CHARACTER SET utf8,
 MODIFY subject varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
 MODIFY p varchar(255) CHARACTER SET utf8;
 Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 Warning	1071	Specified key was too long; max key length is 1000 bytes
+SET sql_mode = default;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `subject` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `p` varchar(255) DEFAULT NULL,
+  `p` varchar(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL,
   KEY `subject` (`subject`(250))
-) ENGINE=MyISAM DEFAULT CHARSET=utf8
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3
 INSERT INTO t1(subject) VALUES ('abcd');
 INSERT INTO t1(subject) VALUES(x'f0909080');
 DROP TABLE t1;
@@ -2557,7 +2391,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `subject` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `p` varchar(15) CHARACTER SET utf8mb4 DEFAULT NULL
+  `p` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1
 SELECT *  FROM t1 ORDER BY 1;
 subject	p
@@ -2584,11 +2418,11 @@ s4 LONGTEXT CHARACTER SET utf8mb4
 SET NAMES utf8mb4, @@character_set_results=NULL;
 SELECT *, HEX(s1) FROM t1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	t1	t1	s1	s1	252	255	0	Y	16	0	45
-def	test	t1	t1	s2	s2	252	65535	0	Y	16	0	45
-def	test	t1	t1	s3	s3	252	16777215	0	Y	16	0	45
-def	test	t1	t1	s4	s4	252	4294967295	0	Y	16	0	45
-def					HEX(s1)	253	8160	0	Y	0	0	45
+def	test	t1	t1	s1	s1	252	255	0	Y	16	0	255
+def	test	t1	t1	s2	s2	252	65535	0	Y	16	0	255
+def	test	t1	t1	s3	s3	252	16777215	0	Y	16	0	255
+def	test	t1	t1	s4	s4	252	4294967295	0	Y	16	0	255
+def					HEX(s1)	253	8160	0	Y	0	31	255
 s1	s2	s3	s4	HEX(s1)
 SET NAMES latin1;
 SELECT *, HEX(s1) FROM t1;
@@ -2597,23 +2431,23 @@ def	test	t1	t1	s1	s1	252	255	0	Y	16	0	8
 def	test	t1	t1	s2	s2	252	65535	0	Y	16	0	8
 def	test	t1	t1	s3	s3	252	16777215	0	Y	16	0	8
 def	test	t1	t1	s4	s4	252	4294967295	0	Y	16	0	8
-def					HEX(s1)	253	2040	0	Y	0	0	8
+def					HEX(s1)	253	2040	0	Y	0	31	8
 s1	s2	s3	s4	HEX(s1)
 SET NAMES utf8mb4;
 SELECT *, HEX(s1) FROM t1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	t1	t1	s1	s1	252	1020	0	Y	16	0	45
-def	test	t1	t1	s2	s2	252	262140	0	Y	16	0	45
-def	test	t1	t1	s3	s3	252	67108860	0	Y	16	0	45
-def	test	t1	t1	s4	s4	252	4294967295	0	Y	16	0	45
-def					HEX(s1)	253	8160	0	Y	0	0	45
+def	test	t1	t1	s1	s1	252	1020	0	Y	16	0	255
+def	test	t1	t1	s2	s2	252	262140	0	Y	16	0	255
+def	test	t1	t1	s3	s3	252	67108860	0	Y	16	0	255
+def	test	t1	t1	s4	s4	252	4294967295	0	Y	16	0	255
+def					HEX(s1)	253	8160	0	Y	0	31	255
 s1	s2	s3	s4	HEX(s1)
 CREATE TABLE t2 AS SELECT CONCAT(s1) FROM t1;
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `CONCAT(s1)` varchar(255) CHARACTER SET utf8mb4 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `CONCAT(s1)` varchar(255) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1, t2;
 #
 # Bug#13581962 HIGH MEMORY USAGE ATTEMPT, THEN CRASH WITH LONGTEXT, UNION, USER VARIABLE
@@ -2627,6 +2461,7 @@ SELECT CAST(f1 AS SIGNED) FROM t1;
 0
 0
 Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 Warning	1292	Truncated incorrect INTEGER value: 'a'
 Warning	1292	Truncated incorrect INTEGER value: 'a'
 DROP TABLE t1;
@@ -2647,9 +2482,9 @@ is_ipv4(inet_ntoa('1'))
 SELECT is_ipv6(inet_ntoa('1'));
 is_ipv6(inet_ntoa('1'))
 0
-SELECT inet6_aton(inet_ntoa('1'));
-inet6_aton(inet_ntoa('1'))
-   
+SELECT HEX(inet6_aton(inet_ntoa('1')));
+HEX(inet6_aton(inet_ntoa('1')))
+00000001
 SELECT inet6_ntoa(inet_ntoa('1'));
 inet6_ntoa(inet_ntoa('1'))
 NULL
@@ -2660,5 +2495,809 @@ SELECT inet6_aton(soundex('a'));
 inet6_aton(soundex('a'))
 NULL
 #
+# Bug#19047425 UNINITIALISED VALUE IN STR_TO_IPV6
+#
+do is_ipv4_mapped(inet6_aton(convert(_ascii "a:" using utf8mb4)));
+#
 # End of 5.6 tests
 #
+#
+# WL#13054: Add utf8mb4 binary no-pad collation
+#
+SET NAMES utf8mb4 COLLATE utf8mb4_0900_bin;
+SET @test_character_set= 'utf8mb4';
+SET @test_collation= 'utf8mb4_0900_bin';
+SET @safe_character_set_server= @@character_set_server;
+SET @safe_collation_server= @@collation_server;
+SET @safe_character_set_client= @@character_set_client;
+SET @safe_character_set_results= @@character_set_results;
+SET character_set_server= @test_character_set;
+SET collation_server= @test_collation;
+CREATE DATABASE d1;
+USE d1;
+CREATE TABLE t1 (c CHAR(10), KEY(c));
+SHOW FULL COLUMNS FROM t1;
+Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
+c	char(10)	utf8mb4_0900_bin	YES	MUL	NULL			
+INSERT INTO t1 VALUES ('aaa'),('aaaa'),('aaaaa');
+SELECT c as want3results FROM t1 WHERE c LIKE 'aaa%';
+want3results
+aaa
+aaaa
+aaaaa
+DROP TABLE t1;
+CREATE TABLE t1 (c1 varchar(15), KEY c1 (c1(2)));
+SHOW FULL COLUMNS FROM t1;
+Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
+c1	varchar(15)	utf8mb4_0900_bin	YES	MUL	NULL			
+INSERT INTO t1 VALUES ('location'),('loberge'),('lotre'),('boabab');
+SELECT c1 as want3results from t1 where c1 like 'l%';
+want3results
+location
+loberge
+lotre
+SELECT c1 as want3results from t1 where c1 like 'lo%';
+want3results
+location
+loberge
+lotre
+SELECT c1 as want1result  from t1 where c1 like 'loc%';
+want1result
+location
+SELECT c1 as want1result  from t1 where c1 like 'loca%';
+want1result
+location
+SELECT c1 as want1result  from t1 where c1 like 'locat%';
+want1result
+location
+SELECT c1 as want1result  from t1 where c1 like 'locati%';
+want1result
+location
+SELECT c1 as want1result  from t1 where c1 like 'locatio%';
+want1result
+location
+SELECT c1 as want1result  from t1 where c1 like 'location%';
+want1result
+location
+DROP TABLE t1;
+create table t1 (a set('a') not null);
+insert ignore into t1 values (),();
+Warnings:
+Warning	1364	Field 'a' doesn't have a default value
+select cast(a as char(1)) from t1;
+cast(a as char(1))
+
+
+select a sounds like a from t1;
+a sounds like a
+1
+1
+select 1 from t1 order by cast(a as char(1));
+1
+1
+1
+drop table t1;
+set names utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+create table t1 (
+name varchar(10),
+level smallint unsigned);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `name` varchar(10) COLLATE utf8mb4_0900_bin DEFAULT NULL,
+  `level` smallint unsigned DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin
+insert into t1 values ('string',1);
+select concat(name,space(level)), concat(name, repeat(' ',level)) from t1;
+concat(name,space(level))	concat(name, repeat(' ',level))
+string 	string 
+drop table t1;
+DROP DATABASE d1;
+USE test;
+SET character_set_server= @safe_character_set_server;
+SET collation_server= @safe_collation_server;
+SET character_set_client= @safe_character_set_client;
+SET character_set_results= @safe_character_set_results;
+SET NAMES utf8mb4 COLLATE utf8mb4_0900_bin;
+create table t1 select repeat('a',4000) a;
+delete from t1;
+insert into t1 values ('a'), ('a '), ('a\t');
+select collation(a),hex(a) from t1 order by a;
+collation(a)	hex(a)
+utf8mb4_0900_bin	61
+utf8mb4_0900_bin	6109
+utf8mb4_0900_bin	6120
+drop table t1;
+create table t1 engine=innodb select repeat('a',50) as c1;
+alter table t1 add index(c1(5));
+insert into t1 values ('abcdefg'),('abcde100'),('abcde110'),('abcde111');
+select collation(c1) from t1 limit 1;
+collation(c1)
+utf8mb4_0900_bin
+select c1 from t1 where c1 like 'abcdef%' order by c1;
+c1
+abcdefg
+select c1 from t1 where c1 like 'abcde1%' order by c1;
+c1
+abcde100
+abcde110
+abcde111
+select c1 from t1 where c1 like 'abcde11%' order by c1;
+c1
+abcde110
+abcde111
+select c1 from t1 where c1 like 'abcde111%' order by c1;
+c1
+abcde111
+drop table t1;
+select @@collation_connection;
+@@collation_connection
+utf8mb4_0900_bin
+create table t1 ROW_FORMAT=DYNAMIC select repeat('a',50) as c1 ;
+insert into t1 values('abcdef');
+insert into t1 values('_bcdef');
+insert into t1 values('a_cdef');
+insert into t1 values('ab_def');
+insert into t1 values('abc_ef');
+insert into t1 values('abcd_f');
+insert into t1 values('abcde_');
+select c1 as c1u from t1 where c1 like 'ab\_def';
+c1u
+ab_def
+select c1 as c2h from t1 where c1 like 'ab#_def' escape '#';
+c2h
+ab_def
+drop table t1;
+drop table if exists t1;
+create table t1 select repeat('a',10) as c1;
+delete from t1;
+insert into t1 values (0x20),(0x21),(0x22),(0x23),(0x24),(0x25),(0x26),(0x27),(0x28),(0x29),(0x2A),(0x2B),(0x2C),(0x2D),(0x2E),(0x2F);
+insert into t1 values (0x30),(0x31),(0x32),(0x33),(0x34),(0x35),(0x36),(0x37),(0x38),(0x39),(0x3A),(0x3B),(0x3C),(0x3D),(0x3E),(0x3F);
+insert into t1 values (0x40),(0x41),(0x42),(0x43),(0x44),(0x45),(0x46),(0x47),(0x48),(0x49),(0x4A),(0x4B),(0x4C),(0x4D),(0x4E),(0x4F);
+insert into t1 values (0x50),(0x51),(0x52),(0x53),(0x54),(0x55),(0x56),(0x57),(0x58),(0x59),(0x5A),(0x5B),(0x5C),(0x5D),(0x5E),(0x5F);
+insert into t1 values (0x60),(0x61),(0x62),(0x63),(0x64),(0x65),(0x66),(0x67),(0x68),(0x69),(0x6A),(0x6B),(0x6C),(0x6D),(0x6E),(0x6F);
+insert into t1 values (0x70),(0x71),(0x72),(0x73),(0x74),(0x75),(0x76),(0x77),(0x78),(0x79),(0x7A),(0x7B),(0x7C),(0x7D),(0x7E),(0x7F);
+SELECT HEX(cx), cy
+FROM (SELECT GROUP_CONCAT(c1 ORDER BY binary c1 SEPARATOR '') AS cx,
+GROUP_CONCAT(HEX(c1) ORDER BY BINARY c1) AS cy
+FROM t1
+GROUP BY c1
+) AS dt;
+HEX(cx)	cy
+20	20
+21	21
+22	22
+23	23
+24	24
+25	25
+26	26
+27	27
+28	28
+29	29
+2A	2A
+2B	2B
+2C	2C
+2D	2D
+2E	2E
+2F	2F
+30	30
+31	31
+32	32
+33	33
+34	34
+35	35
+36	36
+37	37
+38	38
+39	39
+3A	3A
+3B	3B
+3C	3C
+3D	3D
+3E	3E
+3F	3F
+40	40
+41	41
+42	42
+43	43
+44	44
+45	45
+46	46
+47	47
+48	48
+49	49
+4A	4A
+4B	4B
+4C	4C
+4D	4D
+4E	4E
+4F	4F
+50	50
+51	51
+52	52
+53	53
+54	54
+55	55
+56	56
+57	57
+58	58
+59	59
+5A	5A
+5B	5B
+5C	5C
+5D	5D
+5E	5E
+5F	5F
+60	60
+61	61
+62	62
+63	63
+64	64
+65	65
+66	66
+67	67
+68	68
+69	69
+6A	6A
+6B	6B
+6C	6C
+6D	6D
+6E	6E
+6F	6F
+70	70
+71	71
+72	72
+73	73
+74	74
+75	75
+76	76
+77	77
+78	78
+79	79
+7A	7A
+7B	7B
+7C	7C
+7D	7D
+7E	7E
+7F	7F
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+drop table t1;
+select @@collation_connection;
+@@collation_connection
+utf8mb4_0900_bin
+select hex(weight_string('a'));
+hex(weight_string('a'))
+61
+select hex(weight_string('A'));
+hex(weight_string('A'))
+41
+select hex(weight_string('abc'));
+hex(weight_string('abc'))
+616263
+select hex(weight_string('abc' as char(2)));
+hex(weight_string('abc' as char(2)))
+6162
+select hex(weight_string('abc' as char(3)));
+hex(weight_string('abc' as char(3)))
+616263
+select hex(weight_string('abc' as char(5)));
+hex(weight_string('abc' as char(5)))
+616263
+select hex(weight_string('abc', 1, 2, 0xC0));
+hex(weight_string('abc', 1, 2, 0xC0))
+61
+select hex(weight_string('abc', 2, 2, 0xC0));
+hex(weight_string('abc', 2, 2, 0xC0))
+6162
+select hex(weight_string('abc', 3, 2, 0xC0));
+hex(weight_string('abc', 3, 2, 0xC0))
+616200
+select hex(weight_string('abc', 4, 2, 0xC0));
+hex(weight_string('abc', 4, 2, 0xC0))
+61620000
+select hex(weight_string('abc', 5, 2, 0xC0));
+hex(weight_string('abc', 5, 2, 0xC0))
+6162000000
+select hex(weight_string('abc',25, 2, 0xC0));
+hex(weight_string('abc',25, 2, 0xC0))
+61620000000000000000000000000000000000000000000000
+select hex(weight_string('abc', 1, 3, 0xC0));
+hex(weight_string('abc', 1, 3, 0xC0))
+61
+select hex(weight_string('abc', 2, 3, 0xC0));
+hex(weight_string('abc', 2, 3, 0xC0))
+6162
+select hex(weight_string('abc', 3, 3, 0xC0));
+hex(weight_string('abc', 3, 3, 0xC0))
+616263
+select hex(weight_string('abc', 4, 3, 0xC0));
+hex(weight_string('abc', 4, 3, 0xC0))
+61626300
+select hex(weight_string('abc', 5, 3, 0xC0));
+hex(weight_string('abc', 5, 3, 0xC0))
+6162630000
+select hex(weight_string('abc',25, 3, 0xC0));
+hex(weight_string('abc',25, 3, 0xC0))
+61626300000000000000000000000000000000000000000000
+select hex(weight_string('abc', 1, 4, 0xC0));
+hex(weight_string('abc', 1, 4, 0xC0))
+61
+select hex(weight_string('abc', 2, 4, 0xC0));
+hex(weight_string('abc', 2, 4, 0xC0))
+6162
+select hex(weight_string('abc', 3, 4, 0xC0));
+hex(weight_string('abc', 3, 4, 0xC0))
+616263
+select hex(weight_string('abc', 4, 4, 0xC0));
+hex(weight_string('abc', 4, 4, 0xC0))
+61626300
+select hex(weight_string('abc', 5, 4, 0xC0));
+hex(weight_string('abc', 5, 4, 0xC0))
+6162630000
+select hex(weight_string('abc',25, 4, 0xC0));
+hex(weight_string('abc',25, 4, 0xC0))
+61626300000000000000000000000000000000000000000000
+select @@collation_connection;
+@@collation_connection
+utf8mb4_0900_bin
+select hex(weight_string(cast(_latin1 0x80 as char)));
+hex(weight_string(cast(_latin1 0x80 as char)))
+E282AC
+select hex(weight_string(cast(_latin1 0x808080 as char)));
+hex(weight_string(cast(_latin1 0x808080 as char)))
+E282ACE282ACE282AC
+select hex(weight_string(cast(_latin1 0x808080 as char) as char(2)));
+hex(weight_string(cast(_latin1 0x808080 as char) as char(2)))
+E282ACE282AC
+select hex(weight_string(cast(_latin1 0x808080 as char) as char(3)));
+hex(weight_string(cast(_latin1 0x808080 as char) as char(3)))
+E282ACE282ACE282AC
+select hex(weight_string(cast(_latin1 0x808080 as char) as char(5)));
+hex(weight_string(cast(_latin1 0x808080 as char) as char(5)))
+E282ACE282ACE282AC
+select hex(weight_string(cast(_latin1 0x808080 as char), 1, 2, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 1, 2, 0xC0))
+E2
+select hex(weight_string(cast(_latin1 0x808080 as char), 2, 2, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 2, 2, 0xC0))
+E282
+select hex(weight_string(cast(_latin1 0x808080 as char), 3, 2, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 3, 2, 0xC0))
+E282AC
+select hex(weight_string(cast(_latin1 0x808080 as char), 4, 2, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 4, 2, 0xC0))
+E282ACE2
+select hex(weight_string(cast(_latin1 0x808080 as char), 5, 2, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 5, 2, 0xC0))
+E282ACE282
+select hex(weight_string(cast(_latin1 0x808080 as char),25, 2, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char),25, 2, 0xC0))
+E282ACE282AC00000000000000000000000000000000000000
+select hex(weight_string(cast(_latin1 0x808080 as char), 1, 3, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 1, 3, 0xC0))
+E2
+select hex(weight_string(cast(_latin1 0x808080 as char), 2, 3, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 2, 3, 0xC0))
+E282
+select hex(weight_string(cast(_latin1 0x808080 as char), 3, 3, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 3, 3, 0xC0))
+E282AC
+select hex(weight_string(cast(_latin1 0x808080 as char), 4, 3, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 4, 3, 0xC0))
+E282ACE2
+select hex(weight_string(cast(_latin1 0x808080 as char), 5, 3, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 5, 3, 0xC0))
+E282ACE282
+select hex(weight_string(cast(_latin1 0x808080 as char),25, 3, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char),25, 3, 0xC0))
+E282ACE282ACE282AC00000000000000000000000000000000
+select hex(weight_string(cast(_latin1 0x808080 as char), 1, 4, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 1, 4, 0xC0))
+E2
+select hex(weight_string(cast(_latin1 0x808080 as char), 2, 4, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 2, 4, 0xC0))
+E282
+select hex(weight_string(cast(_latin1 0x808080 as char), 3, 4, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 3, 4, 0xC0))
+E282AC
+select hex(weight_string(cast(_latin1 0x808080 as char), 4, 4, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 4, 4, 0xC0))
+E282ACE2
+select hex(weight_string(cast(_latin1 0x808080 as char), 5, 4, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char), 5, 4, 0xC0))
+E282ACE282
+select hex(weight_string(cast(_latin1 0x808080 as char),25, 4, 0xC0));
+hex(weight_string(cast(_latin1 0x808080 as char),25, 4, 0xC0))
+E282ACE282ACE282AC00000000000000000000000000000000
+CREATE TABLE t1 AS SELECT repeat('a', 10) as c LIMIT 0;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 VALUES (_utf32 0x0180),(_utf32 0x023A);
+INSERT INTO t1 VALUES (_utf32 0x023B),(_utf32 0x023C);
+INSERT INTO t1 VALUES (_utf32 0x023D),(_utf32 0x023E);
+INSERT INTO t1 VALUES (_utf32 0x0241),(_utf32 0x0242);
+INSERT INTO t1 VALUES (_utf32 0x0243),(_utf32 0x0244);
+INSERT INTO t1 VALUES (_utf32 0x0245),(_utf32 0x0246);
+INSERT INTO t1 VALUES (_utf32 0x0247),(_utf32 0x0248);
+INSERT INTO t1 VALUES (_utf32 0x0249),(_utf32 0x024A);
+INSERT INTO t1 VALUES (_utf32 0x024B),(_utf32 0x024C);
+INSERT INTO t1 VALUES (_utf32 0x024D),(_utf32 0x024E);
+INSERT INTO t1 VALUES (_utf32 0x024F),(_utf32 0x026B);
+INSERT INTO t1 VALUES (_utf32 0x027D),(_utf32 0x0289);
+INSERT INTO t1 VALUES (_utf32 0x028C);
+INSERT INTO t1 VALUES (_utf32 0x037B), (_utf32 0x037C);
+INSERT INTO t1 VALUES (_utf32 0x037D), (_utf32 0x03FD);
+INSERT INTO t1 VALUES (_utf32 0x03FE), (_utf32 0x03FF);
+INSERT INTO t1 VALUES (_utf32 0x04C0), (_utf32 0x04CF);
+INSERT INTO t1 VALUES (_utf32 0x04F6), (_utf32 0x04F7);
+INSERT INTO t1 VALUES (_utf32 0x04FA), (_utf32 0x04FB);
+INSERT INTO t1 VALUES (_utf32 0x04FC), (_utf32 0x04FD);
+INSERT INTO t1 VALUES (_utf32 0x04FE), (_utf32 0x04FF);
+INSERT INTO t1 VALUES (_utf32 0x0510), (_utf32 0x0511);
+INSERT INTO t1 VALUES (_utf32 0x0512), (_utf32 0x0513);
+INSERT INTO t1 VALUES (_utf32 0x10A0), (_utf32 0x10A1);
+INSERT INTO t1 VALUES (_utf32 0x10A2), (_utf32 0x10A3);
+INSERT INTO t1 VALUES (_utf32 0x10A4), (_utf32 0x10A5);
+INSERT INTO t1 VALUES (_utf32 0x10A6), (_utf32 0x10A7);
+INSERT INTO t1 VALUES (_utf32 0x2D00), (_utf32 0x2D01);
+INSERT INTO t1 VALUES (_utf32 0x2D02), (_utf32 0x2D03);
+INSERT INTO t1 VALUES (_utf32 0x2D04), (_utf32 0x2D05);
+INSERT INTO t1 VALUES (_utf32 0x2D06), (_utf32 0x2D07);
+INSERT INTO t1 VALUES (_utf32 0x1D7D);
+INSERT INTO t1 VALUES (_utf32 0x2132),(_utf32 0x214E);
+INSERT INTO t1 VALUES (_utf32 0x2183),(_utf32 0x2184);
+INSERT INTO t1 VALUES (_utf32 0x2C80), (_utf32 0x2C81);
+INSERT INTO t1 VALUES (_utf32 0x2C82), (_utf32 0x2C83);
+INSERT INTO t1 VALUES (_utf32 0x2C84), (_utf32 0x2C85);
+INSERT INTO t1 VALUES (_utf32 0x2C86), (_utf32 0x2C87);
+INSERT INTO t1 VALUES (_utf32 0x2C88), (_utf32 0x2C89);
+INSERT INTO t1 VALUES (_utf32 0x2C8A), (_utf32 0x2C8B);
+INSERT INTO t1 VALUES (_utf32 0x2C8C), (_utf32 0x2C8D);
+INSERT INTO t1 VALUES (_utf32 0x2C8E), (_utf32 0x2C8F);
+INSERT INTO t1 VALUES (_utf32 0x2C60), (_utf32 0x2C61);
+INSERT INTO t1 VALUES (_utf32 0x2C62), (_utf32 0x2C63);
+INSERT INTO t1 VALUES (_utf32 0x2C64), (_utf32 0x2C65);
+INSERT INTO t1 VALUES (_utf32 0x2C66), (_utf32 0x2C67);
+INSERT INTO t1 VALUES (_utf32 0x2C68), (_utf32 0x2C69);
+INSERT INTO t1 VALUES (_utf32 0x2C6A), (_utf32 0x2C6B);
+INSERT INTO t1 VALUES (_utf32 0x2C6C), (_utf32 0x2C75);
+INSERT INTO t1 VALUES (_utf32 0x2C76);
+INSERT INTO t1 VALUES (_utf32 0x2C00), (_utf32 0x2C01);
+INSERT INTO t1 VALUES (_utf32 0x2C02), (_utf32 0x2C03);
+INSERT INTO t1 VALUES (_utf32 0x2C04), (_utf32 0x2C05);
+INSERT INTO t1 VALUES (_utf32 0x2C06), (_utf32 0x2C07);
+INSERT INTO t1 VALUES (_utf32 0x2C30), (_utf32 0x2C31);
+INSERT INTO t1 VALUES (_utf32 0x2C32), (_utf32 0x2C33);
+INSERT INTO t1 VALUES (_utf32 0x2C34), (_utf32 0x2C35);
+INSERT INTO t1 VALUES (_utf32 0x2C36), (_utf32 0x2C37);
+INSERT INTO t1 VALUES (_utf32 0x10400), (_utf32 0x10401);
+INSERT INTO t1 VALUES (_utf32 0x10402), (_utf32 0x10403);
+INSERT INTO t1 VALUES (_utf32 0x10404), (_utf32 0x10405);
+INSERT INTO t1 VALUES (_utf32 0x10406), (_utf32 0x10407);
+INSERT INTO t1 VALUES (_utf32 0x10428), (_utf32 0x10429);
+INSERT INTO t1 VALUES (_utf32 0x1042A), (_utf32 0x1042B);
+INSERT INTO t1 VALUES (_utf32 0x1042C), (_utf32 0x1042D);
+INSERT INTO t1 VALUES (_utf32 0x1042E), (_utf32 0x1042F);
+INSERT INTO t1 VALUES (_utf32 0x0370);
+INSERT INTO t1 VALUES (_utf32 0x0371);
+INSERT INTO t1 VALUES (_utf32 0x0372);
+INSERT INTO t1 VALUES (_utf32 0x0373);
+INSERT INTO t1 VALUES (_utf32 0x0514);
+INSERT INTO t1 VALUES (_utf32 0x0515);
+INSERT INTO t1 VALUES (_utf32 0x0516);
+INSERT INTO t1 VALUES (_utf32 0x0517);
+INSERT INTO t1 VALUES (_utf32 0xA640);
+INSERT INTO t1 VALUES (_utf32 0xA641);
+INSERT INTO t1 VALUES (_utf32 0xA642);
+INSERT INTO t1 VALUES (_utf32 0xA643);
+INSERT INTO t1 VALUES (_utf32 0xA722);
+INSERT INTO t1 VALUES (_utf32 0xA723);
+INSERT INTO t1 VALUES (_utf32 0xA724);
+INSERT INTO t1 VALUES (_utf32 0xA725);
+INSERT INTO t1 VALUES (_utf32 0xA726);
+INSERT INTO t1 VALUES (_utf32 0xA727);
+INSERT INTO t1 VALUES (_utf32 0xA728);
+INSERT INTO t1 VALUES (_utf32 0xA729);
+INSERT INTO t1 VALUES (_utf32 0xA72A);
+INSERT INTO t1 VALUES (_utf32 0xA72B);
+INSERT INTO t1 VALUES (_utf32 0x2CEB);
+INSERT INTO t1 VALUES (_utf32 0x2CEC);
+INSERT INTO t1 VALUES (_utf32 0x2CED);
+INSERT INTO t1 VALUES (_utf32 0x2CEE);
+INSERT INTO t1 VALUES (_utf32 0x1FA01);
+INSERT INTO t1 VALUES (_utf32 0x1FB01);
+INSERT INTO t1 VALUES (_utf32 0x1FC01);
+INSERT INTO t1 VALUES (_utf32 0x1FD01);
+INSERT INTO t1 VALUES (_utf32 0x1F603);
+INSERT INTO t1 VALUES (_utf32 0x1F604);
+INSERT INTO t1 VALUES (_utf32 0x1F648);
+INSERT INTO t1 VALUES (_utf32 0x1F64F);
+INSERT INTO t1 VALUES (_utf32 0x2B759);
+INSERT INTO t1 VALUES (_utf32 0x2B760);
+INSERT INTO t1 VALUES (_utf32 0x2B761);
+INSERT INTO t1 VALUES (_utf32 0x2B762);
+INSERT INTO t1 VALUES (_utf32 0x16F00);
+INSERT INTO t1 VALUES (_utf32 0x16F01);
+INSERT INTO t1 VALUES (_utf32 0x08A2);
+INSERT INTO t1 VALUES (_utf32 0x08A3);
+INSERT INTO t1 VALUES (_utf32 0xA794);
+INSERT INTO t1 VALUES (_utf32 0xA795);
+INSERT INTO t1 VALUES (_utf32 0xA796);
+INSERT INTO t1 VALUES (_utf32 0xA797);
+INSERT INTO t1 VALUES (_utf32 0xAB37);
+INSERT INTO t1 VALUES (_utf32 0xAB38);
+INSERT INTO t1 VALUES (_utf32 0x10600);
+INSERT INTO t1 VALUES (_utf32 0x10601);
+INSERT INTO t1 VALUES (_utf32 0x10602);
+INSERT INTO t1 VALUES (_utf32 0x10603);
+INSERT INTO t1 VALUES (_utf32 0x1F800);
+INSERT INTO t1 VALUES (_utf32 0x1F801);
+INSERT INTO t1 VALUES (_utf32 0x1F802);
+INSERT INTO t1 VALUES (_utf32 0x1F803);
+INSERT INTO t1 VALUES (_utf32 0x10C92);
+INSERT INTO t1 VALUES (_utf32 0x10C93);
+INSERT INTO t1 VALUES (_utf32 0x10C94);
+INSERT INTO t1 VALUES (_utf32 0x10C95);
+INSERT INTO t1 VALUES (_utf32 0x2B836);
+INSERT INTO t1 VALUES (_utf32 0x2B837);
+INSERT INTO t1 VALUES (_utf32 0x2B838);
+INSERT INTO t1 VALUES (_utf32 0x2B839);
+SELECT hex(c), hex(lower(c)), hex(upper(c)), hex(weight_string(c)), c
+FROM t1 ORDER BY c, BINARY c;
+hex(c)	hex(lower(c))	hex(upper(c))	hex(weight_string(c))	c
+C680	C680	C983	C680	ƀ
+C8BA		C8BA	C8BA	Ⱥ
+C8BB	C8BC	C8BB	C8BB	Ȼ
+C8BC	C8BC	C8BB	C8BC	ȼ
+C8BD	C69A	C8BD	C8BD	Ƚ
+C8BE		C8BE	C8BE	Ⱦ
+C981	C982	C981	C981	Ɂ
+C982	C982	C981	C982	ɂ
+C983	C680	C983	C983	Ƀ
+C984	CA89	C984	C984	Ʉ
+C985	CA8C	C985	C985	Ʌ
+C986	C987	C986	C986	Ɇ
+C987	C987	C986	C987	ɇ
+C988	C989	C988	C988	Ɉ
+C989	C989	C988	C989	ɉ
+C98A	C98B	C98A	C98A	Ɋ
+C98B	C98B	C98A	C98B	ɋ
+C98C	C98D	C98C	C98C	Ɍ
+C98D	C98D	C98C	C98D	ɍ
+C98E	C98F	C98E	C98E	Ɏ
+C98F	C98F	C98E	C98F	ɏ
+C9AB	C9AB		C9AB	ɫ
+C9BD	C9BD		C9BD	ɽ
+CA89	CA89	C984	CA89	ʉ
+CA8C	CA8C	C985	CA8C	ʌ
+CDB0	CDB1	CDB0	CDB0	Ͱ
+CDB1	CDB1	CDB0	CDB1	ͱ
+CDB2	CDB3	CDB2	CDB2	Ͳ
+CDB3	CDB3	CDB2	CDB3	ͳ
+CDBB	CDBB	CFBD	CDBB	ͻ
+CDBC	CDBC	CFBE	CDBC	ͼ
+CDBD	CDBD	CFBF	CDBD	ͽ
+CFBD	CDBB	CFBD	CFBD	Ͻ
+CFBE	CDBC	CFBE	CFBE	Ͼ
+CFBF	CDBD	CFBF	CFBF	Ͽ
+D380	D38F	D380	D380	Ӏ
+D38F	D38F	D380	D38F	ӏ
+D3B6	D3B7	D3B6	D3B6	Ӷ
+D3B7	D3B7	D3B6	D3B7	ӷ
+D3BA	D3BB	D3BA	D3BA	Ӻ
+D3BB	D3BB	D3BA	D3BB	ӻ
+D3BC	D3BD	D3BC	D3BC	Ӽ
+D3BD	D3BD	D3BC	D3BD	ӽ
+D3BE	D3BF	D3BE	D3BE	Ӿ
+D3BF	D3BF	D3BE	D3BF	ӿ
+D490	D491	D490	D490	Ԑ
+D491	D491	D490	D491	ԑ
+D492	D493	D492	D492	Ԓ
+D493	D493	D492	D493	ԓ
+D494	D495	D494	D494	Ԕ
+D495	D495	D494	D495	ԕ
+D496	D497	D496	D496	Ԗ
+D497	D497	D496	D497	ԗ
+E0A2A2	E0A2A2	E0A2A2	E0A2A2	ࢢ
+E0A2A3	E0A2A3	E0A2A3	E0A2A3	ࢣ
+E182A0	E2B480	E182A0	E182A0	Ⴀ
+E182A1	E2B481	E182A1	E182A1	Ⴁ
+E182A2	E2B482	E182A2	E182A2	Ⴂ
+E182A3	E2B483	E182A3	E182A3	Ⴃ
+E182A4	E2B484	E182A4	E182A4	Ⴄ
+E182A5	E2B485	E182A5	E182A5	Ⴅ
+E182A6	E2B486	E182A6	E182A6	Ⴆ
+E182A7	E2B487	E182A7	E182A7	Ⴇ
+E1B5BD	E1B5BD	E2B1A3	E1B5BD	ᵽ
+E284B2	E2858E	E284B2	E284B2	Ⅎ
+E2858E	E2858E	E284B2	E2858E	ⅎ
+E28683	E28684	E28683	E28683	Ↄ
+E28684	E28684	E28683	E28684	ↄ
+E2B080	E2B0B0	E2B080	E2B080	Ⰰ
+E2B081	E2B0B1	E2B081	E2B081	Ⰱ
+E2B082	E2B0B2	E2B082	E2B082	Ⰲ
+E2B083	E2B0B3	E2B083	E2B083	Ⰳ
+E2B084	E2B0B4	E2B084	E2B084	Ⰴ
+E2B085	E2B0B5	E2B085	E2B085	Ⰵ
+E2B086	E2B0B6	E2B086	E2B086	Ⰶ
+E2B087	E2B0B7	E2B087	E2B087	Ⰷ
+E2B0B0	E2B0B0	E2B080	E2B0B0	ⰰ
+E2B0B1	E2B0B1	E2B081	E2B0B1	ⰱ
+E2B0B2	E2B0B2	E2B082	E2B0B2	ⰲ
+E2B0B3	E2B0B3	E2B083	E2B0B3	ⰳ
+E2B0B4	E2B0B4	E2B084	E2B0B4	ⰴ
+E2B0B5	E2B0B5	E2B085	E2B0B5	ⰵ
+E2B0B6	E2B0B6	E2B086	E2B0B6	ⰶ
+E2B0B7	E2B0B7	E2B087	E2B0B7	ⰷ
+E2B1A0	E2B1A1	E2B1A0	E2B1A0	Ⱡ
+E2B1A1	E2B1A1	E2B1A0	E2B1A1	ⱡ
+E2B1A2	C9AB	E2B1A2	E2B1A2	Ɫ
+E2B1A3	E1B5BD	E2B1A3	E2B1A3	Ᵽ
+E2B1A4	C9BD	E2B1A4	E2B1A4	Ɽ
+E2B1A5	E2B1A5	C8BA	E2B1A5	ⱥ
+E2B1A6	E2B1A6	C8BE	E2B1A6	ⱦ
+E2B1A7	E2B1A8	E2B1A7	E2B1A7	Ⱨ
+E2B1A8	E2B1A8	E2B1A7	E2B1A8	ⱨ
+E2B1A9	E2B1AA	E2B1A9	E2B1A9	Ⱪ
+E2B1AA	E2B1AA	E2B1A9	E2B1AA	ⱪ
+E2B1AB	E2B1AC	E2B1AB	E2B1AB	Ⱬ
+E2B1AC	E2B1AC	E2B1AB	E2B1AC	ⱬ
+E2B1B5	E2B1B6	E2B1B5	E2B1B5	Ⱶ
+E2B1B6	E2B1B6	E2B1B5	E2B1B6	ⱶ
+E2B280	E2B281	E2B280	E2B280	Ⲁ
+E2B281	E2B281	E2B280	E2B281	ⲁ
+E2B282	E2B283	E2B282	E2B282	Ⲃ
+E2B283	E2B283	E2B282	E2B283	ⲃ
+E2B284	E2B285	E2B284	E2B284	Ⲅ
+E2B285	E2B285	E2B284	E2B285	ⲅ
+E2B286	E2B287	E2B286	E2B286	Ⲇ
+E2B287	E2B287	E2B286	E2B287	ⲇ
+E2B288	E2B289	E2B288	E2B288	Ⲉ
+E2B289	E2B289	E2B288	E2B289	ⲉ
+E2B28A	E2B28B	E2B28A	E2B28A	Ⲋ
+E2B28B	E2B28B	E2B28A	E2B28B	ⲋ
+E2B28C	E2B28D	E2B28C	E2B28C	Ⲍ
+E2B28D	E2B28D	E2B28C	E2B28D	ⲍ
+E2B28E	E2B28F	E2B28E	E2B28E	Ⲏ
+E2B28F	E2B28F	E2B28E	E2B28F	ⲏ
+E2B3AB	E2B3AC	E2B3AB	E2B3AB	Ⳬ
+E2B3AC	E2B3AC	E2B3AB	E2B3AC	ⳬ
+E2B3AD	E2B3AE	E2B3AD	E2B3AD	Ⳮ
+E2B3AE	E2B3AE	E2B3AD	E2B3AE	ⳮ
+E2B480	E2B480	E182A0	E2B480	ⴀ
+E2B481	E2B481	E182A1	E2B481	ⴁ
+E2B482	E2B482	E182A2	E2B482	ⴂ
+E2B483	E2B483	E182A3	E2B483	ⴃ
+E2B484	E2B484	E182A4	E2B484	ⴄ
+E2B485	E2B485	E182A5	E2B485	ⴅ
+E2B486	E2B486	E182A6	E2B486	ⴆ
+E2B487	E2B487	E182A7	E2B487	ⴇ
+EA9980	EA9981	EA9980	EA9980	Ꙁ
+EA9981	EA9981	EA9980	EA9981	ꙁ
+EA9982	EA9983	EA9982	EA9982	Ꙃ
+EA9983	EA9983	EA9982	EA9983	ꙃ
+EA9CA2	EA9CA3	EA9CA2	EA9CA2	Ꜣ
+EA9CA3	EA9CA3	EA9CA2	EA9CA3	ꜣ
+EA9CA4	EA9CA5	EA9CA4	EA9CA4	Ꜥ
+EA9CA5	EA9CA5	EA9CA4	EA9CA5	ꜥ
+EA9CA6	EA9CA7	EA9CA6	EA9CA6	Ꜧ
+EA9CA7	EA9CA7	EA9CA6	EA9CA7	ꜧ
+EA9CA8	EA9CA9	EA9CA8	EA9CA8	Ꜩ
+EA9CA9	EA9CA9	EA9CA8	EA9CA9	ꜩ
+EA9CAA	EA9CAB	EA9CAA	EA9CAA	Ꜫ
+EA9CAB	EA9CAB	EA9CAA	EA9CAB	ꜫ
+EA9E94	EA9E94	EA9E94	EA9E94	ꞔ
+EA9E95	EA9E95	EA9E95	EA9E95	ꞕ
+EA9E96	EA9E97	EA9E96	EA9E96	Ꞗ
+EA9E97	EA9E97	EA9E96	EA9E97	ꞗ
+EAACB7	EAACB7	EAACB7	EAACB7	ꬷ
+EAACB8	EAACB8	EAACB8	EAACB8	ꬸ
+F0909080	F09090A8	F0909080	F0909080	𐐀
+F0909081	F09090A9	F0909081	F0909081	𐐁
+F0909082	F09090AA	F0909082	F0909082	𐐂
+F0909083	F09090AB	F0909083	F0909083	𐐃
+F0909084	F09090AC	F0909084	F0909084	𐐄
+F0909085	F09090AD	F0909085	F0909085	𐐅
+F0909086	F09090AE	F0909086	F0909086	𐐆
+F0909087	F09090AF	F0909087	F0909087	𐐇
+F09090A8	F09090A8	F0909080	F09090A8	𐐨
+F09090A9	F09090A9	F0909081	F09090A9	𐐩
+F09090AA	F09090AA	F0909082	F09090AA	𐐪
+F09090AB	F09090AB	F0909083	F09090AB	𐐫
+F09090AC	F09090AC	F0909084	F09090AC	𐐬
+F09090AD	F09090AD	F0909085	F09090AD	𐐭
+F09090AE	F09090AE	F0909086	F09090AE	𐐮
+F09090AF	F09090AF	F0909087	F09090AF	𐐯
+F0909880	F0909880	F0909880	F0909880	𐘀
+F0909881	F0909881	F0909881	F0909881	𐘁
+F0909882	F0909882	F0909882	F0909882	𐘂
+F0909883	F0909883	F0909883	F0909883	𐘃
+F090B292	F090B392	F090B292	F090B292	𐲒
+F090B293	F090B393	F090B293	F090B293	𐲓
+F090B294	F090B394	F090B294	F090B294	𐲔
+F090B295	F090B395	F090B295	F090B295	𐲕
+F096BC80	F096BC80	F096BC80	F096BC80	𖼀
+F096BC81	F096BC81	F096BC81	F096BC81	𖼁
+F09F9883	F09F9883	F09F9883	F09F9883	😃
+F09F9884	F09F9884	F09F9884	F09F9884	😄
+F09F9988	F09F9988	F09F9988	F09F9988	🙈
+F09F998F	F09F998F	F09F998F	F09F998F	🙏
+F09FA080	F09FA080	F09FA080	F09FA080	🠀
+F09FA081	F09FA081	F09FA081	F09FA081	🠁
+F09FA082	F09FA082	F09FA082	F09FA082	🠂
+F09FA083	F09FA083	F09FA083	F09FA083	🠃
+F09FA881	F09FA881	F09FA881	F09FA881	🨁
+F09FAC81	F09FAC81	F09FAC81	F09FAC81	🬁
+F09FB081	F09FB081	F09FB081	F09FB081	🰁
+F09FB481	F09FB481	F09FB481	F09FB481	🴁
+F0AB9D99	F0AB9D99	F0AB9D99	F0AB9D99	𫝙
+F0AB9DA0	F0AB9DA0	F0AB9DA0	F0AB9DA0	𫝠
+F0AB9DA1	F0AB9DA1	F0AB9DA1	F0AB9DA1	𫝡
+F0AB9DA2	F0AB9DA2	F0AB9DA2	F0AB9DA2	𫝢
+F0ABA0B6	F0ABA0B6	F0ABA0B6	F0ABA0B6	𫠶
+F0ABA0B7	F0ABA0B7	F0ABA0B7	F0ABA0B7	𫠷
+F0ABA0B8	F0ABA0B8	F0ABA0B8	F0ABA0B8	𫠸
+F0ABA0B9	F0ABA0B9	F0ABA0B9	F0ABA0B9	𫠹
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+INSERT INTO t1 VALUES ('a');
+INSERT INTO t1 VALUES (concat(_utf32 0x61, _utf32 0xFFFF));
+INSERT INTO t1 VALUES (concat(_utf32 0x61, _utf32 0x10FFFF));
+INSERT INTO t1 VALUES (concat(_utf32 0x61, _utf32 0x10400));
+SELECT hex(c), hex(weight_string(c)) FROM t1 WHERE c LIKE 'a%' ORDER BY c;
+hex(c)	hex(weight_string(c))
+61	61
+61EFBFBF	61EFBFBF
+61F0909080	61F0909080
+61F48FBFBF	61F48FBFBF
+SELECT hex(c), hex(weight_string(c)), c FROM t1 WHERE c LIKE _utf32 0x10400 ORDER BY c, BINARY c;
+hex(c)	hex(weight_string(c))	c
+F0909080	F0909080	𐐀
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+SELECT hex(c), hex(weight_string(c)), c FROM t1 WHERE c LIKE _utf32 0x10428 ORDER BY c, BINARY c;
+hex(c)	hex(weight_string(c))	c
+F09090A8	F09090A8	𐐨
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+ALTER TABLE t1 ADD KEY(c);
+EXPLAIN SELECT hex(c) FROM t1 WHERE c LIKE 'a%' ORDER BY c;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	c	c	43	NULL	3	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select hex(`test`.`t1`.`c`) AS `hex(c)` from `test`.`t1` where (`test`.`t1`.`c` like 'a%') order by `test`.`t1`.`c`
+SELECT hex(c), hex(weight_string(c)) FROM t1 WHERE c LIKE 'a%' ORDER BY c;
+hex(c)	hex(weight_string(c))
+61	61
+61EFBFBF	61EFBFBF
+61F0909080	61F0909080
+61F48FBFBF	61F48FBFBF
+SELECT hex(c), hex(weight_string(c)), c FROM t1 WHERE c LIKE _utf32 0x10400 ORDER BY c, BINARY c;
+hex(c)	hex(weight_string(c))	c
+F0909080	F0909080	𐐀
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+SELECT hex(c), hex(weight_string(c)), c FROM t1 WHERE c LIKE _utf32 0x10428 ORDER BY c, BINARY c;
+hex(c)	hex(weight_string(c))	c
+F09090A8	F09090A8	𐐨
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+DROP TABLE t1;
+CREATE TABLE t1(a CHAR(10)) COLLATE utf8mb4_0900_bin;
+INSERT INTO t1 VALUES('aaa'), ('aaaa'), ('aaaaa');
+SELECT a FROM t1 WHERE a = 'aaa ';
+a
+DROP TABLE t1;
+CREATE TABLE t1(a CHAR(10)) COLLATE latin1_swedish_ci;
+INSERT INTO t1 VALUES('aaa'), ('aaaa'), ('aaaaa');
+SELECT a FROM t1 WHERE a = 'aaa ';
+a
+aaa
+DROP TABLE t1;

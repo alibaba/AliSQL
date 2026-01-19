@@ -1,6 +1,6 @@
 drop table if exists t1;
-SET SQL_SAFE_UPDATES=1,SQL_SELECT_LIMIT=4, MAX_JOIN_SIZE=9;
-create table t1 (a int auto_increment primary key, b char(20));
+SET SQL_SAFE_UPDATES=1,SQL_SELECT_LIMIT=4, MAX_JOIN_SIZE=8;
+create table t1 (a int auto_increment primary key, b char(20)) charset utf8mb4;
 insert into t1 values(1,"test");
 SELECT SQL_BUFFER_RESULT * from t1;
 a	b
@@ -20,26 +20,36 @@ select 1 from t1,t1 as t2,t1 as t3;
 1
 1
 update t1 set b="a";
-ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
 update t1 set b="a" where b="test";
-ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
 delete from t1;
-ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
 delete from t1 where b="test";
-ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
 delete from t1 where a+0=1;
-ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column
-select 1 from t1,t1 as t2,t1 as t3,t1 as t4,t1 as t5;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+select 1 from t1,t1 as t2,t1 as t3,t1 as t4,t1 as t5, t1 as t6;
 ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+select /*+ SET_VAR(max_join_size = 10) */
+1 from t1,t1 as t2,t1 as t3,t1 as t4,t1 as t5, t1 as t6;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+select /*+ SET_VAR(max_join_size = 11) */
+1 from t1,t1 as t2,t1 as t3,t1 as t4,t1 as t5, t1 as t6;
+1
+1
+1
+1
+1
 update t1 set b="a" limit 1;
 update t1 set b="a" where b="b" limit 2;
 delete from t1 where b="test" limit 1;
 delete from t1 where a+0=1 limit 2;
 alter table t1 add key b (b);
-SET MAX_JOIN_SIZE=2;
+SET MAX_JOIN_SIZE=1;
 SELECT @@MAX_JOIN_SIZE, @@SQL_BIG_SELECTS;
 @@MAX_JOIN_SIZE	@@SQL_BIG_SELECTS
-2	0
+1	0
 insert into t1 values (null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a");
 SELECT * from t1 order by a;
 ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
@@ -50,11 +60,11 @@ a	b
 3	a
 4	a
 5	a
-SET MAX_JOIN_SIZE=2;
+SET MAX_JOIN_SIZE=1;
 SELECT * from t1;
 ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
 SET MAX_JOIN_SIZE=DEFAULT;
-SELECT * from t1;
+SELECT * from t1 order by a;
 a	b
 2	test2
 3	a
@@ -64,15 +74,22 @@ analyze table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 insert into t1 values (null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a"),(null,"a");
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 explain select STRAIGHT_JOIN * from t1,t1 as t2 where t1.b=t2.b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	b	NULL	NULL	NULL	21	Using where
-1	SIMPLE	t2	ref	b	b	21	test.t1.b	6	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	b	b	81	NULL	21	100.00	Using where; Using index
+1	SIMPLE	t2	NULL	ref	b	b	81	test.t1.b	10	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select straight_join `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b` from `test`.`t1` join `test`.`t1` `t2` where (`test`.`t2`.`b` = `test`.`t1`.`b`)
 set MAX_SEEKS_FOR_KEY=1;
 explain select STRAIGHT_JOIN * from t1,t1 as t2 where t1.b=t2.b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	b	NULL	NULL	NULL	21	Using where
-1	SIMPLE	t2	ref	b	b	21	test.t1.b	6	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	b	b	81	NULL	21	100.00	Using where; Using index
+1	SIMPLE	t2	NULL	ref	b	b	81	test.t1.b	10	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select straight_join `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b` from `test`.`t1` join `test`.`t1` `t2` where (`test`.`t2`.`b` = `test`.`t1`.`b`)
 SET MAX_SEEKS_FOR_KEY=DEFAULT;
 drop table t1;
 create table t1 (a int);
@@ -80,7 +97,17 @@ insert into t1 values (1),(2),(3),(4),(5);
 insert into t1 select * from t1;
 insert into t1 select * from t1;
 insert into t1 select * from t1;
-set local  max_join_size=8;
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+set local  max_join_size=4;
+select * from (select * from t1) x;
+a
+1
+2
+3
+4
+set max_join_size=3;
 select * from (select * from t1) x;
 ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
 set local  max_join_size=1;
@@ -88,6 +115,388 @@ select * from (select a.a as aa, b.a as ba from t1 a, t1 b) x;
 ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
 set local  max_join_size=1;
 select * from (select 1 union select 2 union select 3) x;
-ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+1
+1
+2
+3
 drop table t1;
 SET SQL_SAFE_UPDATES=0,SQL_SELECT_LIMIT=DEFAULT, MAX_JOIN_SIZE=DEFAULT;
+#
+# Bug #28145710: SQL_SAFE_UPDATES ERROR IS INSUFFICIENTLY INFORMATIVE
+#
+CREATE TABLE t1 (c1 INT NOT NULL, c2 VARCHAR(200) NOT NULL,
+UNIQUE KEY idx1 (c1), UNIQUE KEY idx2 (c2));
+CREATE TABLE t2 (c1 INT NOT NULL, c2 VARCHAR(200) NOT NULL,
+UNIQUE KEY idx1 (c1));
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd');
+INSERT INTO t2 VALUES (11, 'a'), (12, 'b'), (3, 'c'), (14, 'd');
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+SET SESSION sql_safe_updates=1;
+SET RANGE_OPTIMIZER_MAX_MEM_SIZE= 1;
+EXPLAIN DELETE FROM t1 WHERE c1 IN (1,22);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	DELETE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using where
+Warnings:
+Warning	3170	Memory capacity of 1 bytes for 'range_optimizer_max_mem_size' exceeded. Range optimization was not done for this query.
+Note	1003	delete from `test`.`t1` where (`test`.`t1`.`c1` in (1,22))
+DELETE FROM t1 WHERE c1 IN (1,22);
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. Memory capacity of 1 bytes for 'range_optimizer_max_mem_size' exceeded. Range optimization was not done for this query.
+EXPLAIN UPDATE t1 SET c1=20 WHERE c1 IN (1,22);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t1	NULL	index	NULL	idx1	4	NULL	4	100.00	Using where; Using temporary
+Warnings:
+Warning	3170	Memory capacity of 1 bytes for 'range_optimizer_max_mem_size' exceeded. Range optimization was not done for this query.
+Note	1003	update `test`.`t1` set `test`.`t1`.`c1` = 20 where (`test`.`t1`.`c1` in (1,22))
+UPDATE t1 SET c1=20 WHERE c1 IN (1,22);
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. Memory capacity of 1 bytes for 'range_optimizer_max_mem_size' exceeded. Range optimization was not done for this query.
+SET RANGE_OPTIMIZER_MAX_MEM_SIZE= default;
+EXPLAIN DELETE t1 FROM t1 JOIN t2 ON t1.c2 = t2.c1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	DELETE	t1	NULL	ALL	idx2	NULL	NULL	NULL	4	100.00	NULL
+1	SIMPLE	t2	NULL	eq_ref	idx1	idx1	4	test.t1.c2	1	100.00	Using where; Using index
+Warnings:
+Warning	1739	Cannot use ref access on index 'idx2' due to type or collation conversion on field 'c2'
+Note	1003	delete `test`.`t1` from `test`.`t1` join `test`.`t2` where (cast(`test`.`t1`.`c2` as double) = cast(`test`.`t2`.`c1` as double))
+DELETE t1 FROM t1 JOIN t2 ON t1.c2 = t2.c1;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. Cannot use ref access on index 'idx2' due to type or collation conversion on field 'c2'
+EXPLAIN UPDATE t1, t2 SET t1.c1=20 WHERE t1.c2 = t2.c1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t1	NULL	ALL	idx2	NULL	NULL	NULL	4	100.00	NULL
+1	SIMPLE	t2	NULL	eq_ref	idx1	idx1	4	test.t1.c2	1	100.00	Using where; Using index
+Warnings:
+Warning	1739	Cannot use ref access on index 'idx2' due to type or collation conversion on field 'c2'
+Note	1003	update `test`.`t1` join `test`.`t2` set `test`.`t1`.`c1` = 20 where (cast(`test`.`t1`.`c2` as double) = cast(`test`.`t2`.`c1` as double))
+UPDATE t1, t2 SET t1.c1=20 WHERE t1.c2 = t2.c1;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. Cannot use ref access on index 'idx2' due to type or collation conversion on field 'c2'
+EXPLAIN DELETE t2 FROM t1 JOIN t2 ON t1.c2 = t2.c1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	idx2	idx2	802	NULL	4	100.00	Using index
+1	DELETE	t2	NULL	eq_ref	idx1	idx1	4	test.t1.c2	1	100.00	Using where
+Warnings:
+Warning	1739	Cannot use ref access on index 'idx2' due to type or collation conversion on field 'c2'
+Note	1003	delete `test`.`t2` from `test`.`t1` join `test`.`t2` where (cast(`test`.`t1`.`c2` as double) = cast(`test`.`t2`.`c1` as double))
+DELETE t2 FROM t1 JOIN t2 ON t1.c2 = t2.c1;
+Warnings:
+Warning	1739	Cannot use ref access on index 'idx2' due to type or collation conversion on field 'c2'
+EXPLAIN DELETE FROM t1 WHERE c2 IN(1,2222);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	DELETE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using where
+Warnings:
+Warning	1739	Cannot use range access on index 'idx2' due to type or collation conversion on field 'c2'
+Note	1003	delete from `test`.`t1` where (`test`.`t1`.`c2` in (1,2222))
+DELETE FROM t1 WHERE c2 IN(1,2222);
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. Cannot use range access on index 'idx2' due to type or collation conversion on field 'c2'
+EXPLAIN UPDATE t1 SET c1=20 WHERE c2 IN(1,2222);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t1	NULL	index	NULL	idx1	4	NULL	4	100.00	Using where; Using temporary
+Warnings:
+Warning	1739	Cannot use range access on index 'idx2' due to type or collation conversion on field 'c2'
+Note	1003	update `test`.`t1` set `test`.`t1`.`c1` = 20 where (`test`.`t1`.`c2` in (1,2222))
+UPDATE t1 SET c1=20 WHERE c2 IN(1,2222);
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. Cannot use range access on index 'idx2' due to type or collation conversion on field 'c2'
+EXPLAIN DELETE FROM t2 WHERE c2 IN('a','e');
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	DELETE	t2	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using where
+Warnings:
+Note	1003	delete from `test`.`t2` where (`test`.`t2`.`c2` in ('a','e'))
+DELETE FROM t2 WHERE c2 IN('a','e');
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+EXPLAIN DELETE FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	DELETE	t2	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	#
+Warnings:
+Note	1003	delete from `test`.`t2`
+DELETE FROM t2;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+SET sql_log_bin= 0;
+DELETE FROM t2;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+SET sql_log_bin= default;
+DROP TABLE t1, t2;
+SET SESSION sql_safe_updates=default;
+#
+# Bug#25118903: MAX_JOIN_SIZE DOES NOT MATCH ROW ESTIMATES
+#
+CREATE TABLE t1(id INT PRIMARY KEY, x INT);
+INSERT INTO t1
+WITH RECURSIVE qn AS (SELECT 1 AS n UNION ALL SELECT 1+n FROM qn WHERE n < 100)
+SELECT n, n FROM qn;
+CREATE TABLE t2(id INT PRIMARY KEY, x INT);
+INSERT INTO t2 SELECT * FROM t1 WHERE id <= 10;
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+SELECT /*+ SET_VAR(max_join_size = 110) */
+COUNT(*) FROM t1, t2 WHERE t1.x = t2.x;
+COUNT(*)
+10
+SELECT /*+ SET_VAR(max_join_size = 109) */
+COUNT(*) FROM t1, t2 WHERE t1.x = t2.x;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT /*+ SET_VAR(max_join_size = 20) */
+COUNT(*) FROM t1, t2 WHERE t1.id = t2.x;
+COUNT(*)
+10
+SELECT /*+ SET_VAR(max_join_size = 19) */
+COUNT(*) FROM t1, t2 WHERE t1.id = t2.x;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT /*+ SET_VAR(max_join_size = 110) */ COUNT(x) FROM t1
+UNION ALL SELECT COUNT(x) FROM t2;
+COUNT(x)
+100
+10
+SELECT /*+ SET_VAR(max_join_size = 110) */ COUNT(x) FROM t1
+UNION SELECT COUNT(x) FROM t2;
+COUNT(x)
+100
+10
+SELECT /*+ SET_VAR(max_join_size = 109) */ COUNT(x) FROM t1
+UNION ALL SELECT COUNT(x) FROM t2;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT /*+ SET_VAR(max_join_size = 109) */ COUNT(x) FROM t1
+UNION SELECT COUNT(x) FROM t2;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT /*+ SET_VAR(max_join_size = 1111) */ COUNT(*) FROM t1, t2
+WHERE t1.x=t2.x AND (SELECT MAX(t1.id+t2.id+t3.id) FROM t2 AS t3);
+COUNT(*)
+10
+SELECT /*+ SET_VAR(max_join_size = 1109) */ COUNT(*) FROM t1, t2
+WHERE t1.x=t2.x AND (SELECT MAX(t1.id+t2.id+t3.id) FROM t2 AS t3);
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = 1111;
+SELECT COUNT(*) FROM t1 LEFT JOIN t2
+ON t1.x=t2.x AND (SELECT MAX(t1.id+t2.id+t3.id) FROM t2 AS t3);
+COUNT(*)
+100
+SET max_join_size = @@max_join_size - 2;
+SELECT COUNT(*) FROM t1 LEFT JOIN t2
+ON t1.x=t2.x AND (SELECT MAX(t1.id+t2.id+t3.id) FROM t2 AS t3);
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = DEFAULT;
+SET max_join_size = 120;
+SELECT COUNT(*) FROM t1, t2
+WHERE t1.x=t2.x AND (SELECT DISTINCT t3.x>0 FROM t2 AS t3);
+COUNT(*)
+10
+SET max_join_size = @@max_join_size - 1;
+SELECT COUNT(*) FROM t1, t2
+WHERE t1.x=t2.x AND (SELECT DISTINCT t3.x>0 FROM t2 AS t3);
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = DEFAULT;
+SELECT /*+ SET_VAR(max_join_size=110) */ COUNT(*) FROM
+(SELECT DISTINCT x FROM t1) AS dt1,
+(SELECT DISTINCT x FROM t2) AS dt2 WHERE dt1.x=dt2.x;
+COUNT(*)
+10
+SELECT /*+ SET_VAR(max_join_size=109) */ COUNT(*) FROM
+(SELECT DISTINCT x FROM t1) AS dt1,
+(SELECT DISTINCT x FROM t2) AS dt2 WHERE dt1.x=dt2.x;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+DROP TABLE t1, t2;
+# Test that LIMIT is taken into account.
+CREATE TABLE t(id INT PRIMARY KEY AUTO_INCREMENT, x INT, y INT, KEY (x));
+INSERT INTO t(x, y) VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5),
+(6, 6), (7, 7), (8, 8), (9, 9), (10, 10);
+INSERT INTO t(x, y) SELECT x, y FROM t;
+INSERT INTO t(x, y) SELECT x, y FROM t;
+INSERT INTO t(x, y) SELECT x, y FROM t;
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+SET max_join_size = 9;
+SELECT 1 FROM t LIMIT 10;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT x FROM t ORDER BY x LIMIT 10;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT * FROM t ORDER BY id LIMIT 10;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = 10;
+SELECT 1 FROM t LIMIT 10;
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+SELECT x FROM t ORDER BY x LIMIT 10;
+x
+1
+1
+1
+1
+1
+1
+1
+1
+2
+2
+SELECT * FROM t ORDER BY id LIMIT 10;
+id	x	y
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+7	7	7
+8	8	8
+9	9	9
+10	10	10
+SET max_join_size = 29;
+SELECT 1 FROM t WHERE y = 3 ORDER BY x LIMIT 3;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = @@max_join_size + 1;
+SELECT 1 FROM t WHERE y = 3 ORDER BY x LIMIT 3;
+1
+1
+1
+1
+SELECT /*+ SET_VAR(max_join_size = 79) */ y FROM t ORDER BY y LIMIT 10;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT /*+ SET_VAR(max_join_size = 80) */ y FROM t ORDER BY y LIMIT 10;
+y
+1
+1
+1
+1
+1
+1
+1
+1
+2
+2
+SET max_join_size = 79;
+SELECT SUM(y) FROM t LIMIT 10;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT SUM(y) FROM t GROUP BY x LIMIT 10;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SELECT SUM(x) FROM t GROUP BY y LIMIT 10;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = 80;
+SELECT SUM(y) FROM t LIMIT 10;
+SUM(y)
+440
+SELECT SUM(y) FROM t GROUP BY x LIMIT 10;
+SUM(y)
+16
+24
+32
+40
+48
+56
+64
+72
+8
+80
+SELECT SUM(x) FROM t GROUP BY y LIMIT 10;
+SUM(x)
+16
+24
+32
+40
+48
+56
+64
+72
+8
+80
+SET max_join_size = 6;
+(SELECT 1 FROM t LIMIT 3) UNION DISTINCT (SELECT 1 FROM t LIMIT 4);
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+(SELECT 1 FROM t LIMIT 3) UNION DISTINCT (SELECT 1 FROM t LIMIT 4) LIMIT 1;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+(SELECT 1 FROM t LIMIT 3) UNION ALL (SELECT 1 FROM t LIMIT 4);
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+(SELECT 1 FROM t LIMIT 3) UNION ALL (SELECT 1 FROM t LIMIT 4) LIMIT 10;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = 7;
+(SELECT 1 FROM t LIMIT 3) UNION DISTINCT (SELECT 1 FROM t LIMIT 4);
+1
+1
+(SELECT 1 FROM t LIMIT 3) UNION DISTINCT (SELECT 1 FROM t LIMIT 4) LIMIT 1;
+1
+1
+(SELECT 1 FROM t LIMIT 3) UNION ALL (SELECT 1 FROM t LIMIT 4);
+1
+1
+1
+1
+1
+1
+1
+1
+(SELECT 1 FROM t LIMIT 3) UNION ALL (SELECT 1 FROM t LIMIT 4) LIMIT 10;
+1
+1
+1
+1
+1
+1
+1
+1
+SET max_join_size = 4;
+(SELECT 1 FROM t LIMIT 3) UNION ALL (SELECT 1 FROM t LIMIT 4) LIMIT 5;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = 5;
+(SELECT 1 FROM t LIMIT 3) UNION ALL (SELECT 1 FROM t LIMIT 4) LIMIT 5;
+1
+1
+1
+1
+1
+1
+SET max_join_size = 17;
+SELECT 1 FROM t AS t1, t AS t2 WHERE t1.x = t2.x LIMIT 16;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = @@max_join_size + 1;
+SELECT 1 FROM t AS t1, t AS t2 WHERE t1.x = t2.x LIMIT 16;
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+SET max_join_size = 81;
+SELECT 1 FROM t AS t1, t AS t2 WHERE t1.y = t2.y LIMIT 16;
+ERROR 42000: The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay
+SET max_join_size = @@max_join_size + 1;
+SELECT 1 FROM t AS t1, t AS t2 WHERE t1.y = t2.y LIMIT 16;
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+SET max_join_size = DEFAULT;
+DROP TABLE t;

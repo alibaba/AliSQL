@@ -1,16 +1,24 @@
 #ifndef MESSAGE_INCLUDED
 #define MESSAGE_INCLUDED
-/* Copyright (c) 2008, 2009 Sun Microsystems, Inc.
+/* Copyright (c) 2008, 2025, Oracle and/or its affiliates.
    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,15 +27,14 @@
 /*
   To change or add messages mysqld writes to the Windows error log, run
    mc.exe message.mc
-  and checkin generated messages.h, messages.rc and msg000001.bin under the 
+  and checkin generated messages.h, messages.rc and msg000001.bin under the
   source control.
-  mc.exe can be installed with Windows SDK, some Visual Studio distributions 
+  mc.exe can be installed with Windows SDK, some Visual Studio distributions
   do not include it.
 */
 
-
 //
-//  Values are 32 bit values layed out as follows:
+//  Values are 32 bit values laid out as follows:
 //
 //   3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1
 //   1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
@@ -56,11 +63,9 @@
 // Define the facility codes
 //
 
-
 //
 // Define the severity codes
 //
-
 
 //
 // MessageId: MSG_DEFAULT
@@ -68,10 +73,9 @@
 // MessageText:
 //
 //  %1For more information, see Help and Support Center at http://www.mysql.com.
-//  
-//  
 //
-#define MSG_DEFAULT                      0xC0000064L
+//
+//
+#define MSG_DEFAULT 0xC0000064L
 
 #endif /* MESSAGE_INCLUDED */
-

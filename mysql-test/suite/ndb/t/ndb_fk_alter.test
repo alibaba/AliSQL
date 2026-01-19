@@ -1,0 +1,279 @@
+-- source include/have_ndb.inc
+
+###
+### PK vs PK
+###
+create table parent (
+  a int primary key auto_increment,
+  b int not null,
+  c int not null,
+  unique(b) using hash,
+  index(c)) engine = ndb;
+
+create table child (
+  a int primary key auto_increment,
+  b int not null,
+  c int not null,
+  unique(b) using hash,
+  index(c)) engine = ndb;
+
+# Parent pk
+# child pk, uk, oi
+alter table child algorithm=inplace, add constraint fk1 foreign key (a) references parent(a);
+alter table child algorithm=inplace, add constraint fk2 foreign key (b) references parent(a);
+alter table child algorithm=inplace, add constraint fk3 foreign key (c) references parent(a);
+
+--disable_warnings
+show create table child;
+--enable_warnings
+
+alter table child algorithm=inplace, drop foreign key fk1;
+
+--disable_warnings
+show create table child;
+--enable_warnings
+
+alter table child algorithm=inplace, drop foreign key fk2;
+
+--disable_warnings
+show create table child;
+--enable_warnings
+
+alter table child algorithm=inplace, drop foreign key fk3;
+
+--disable_warnings
+show create table child;
+--enable_warnings
+
+drop table parent, child;
+
+#
+#
+#
+CREATE TABLE bug46599a (
+	b VARCHAR(2), PRIMARY KEY(b)) ENGINE=ndb;
+
+CREATE TABLE bug46599b (b VARCHAR(2),
+       CONSTRAINT fk1 FOREIGN KEY (b) REFERENCES bug46599a (b)) ENGINE=Ndb;
+
+INSERT INTO bug46599a VALUES ('b');
+INSERT INTO bug46599b VALUES ('b'), (NULL);
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO bug46599b VALUES ('');
+
+--sorted_result
+SELECT * FROM bug46599a;
+--sorted_result
+SELECT * FROM bug46599b;
+
+--error ER_FK_COLUMN_CANNOT_CHANGE
+ALTER TABLE bug46599b MODIFY COLUMN b VARCHAR(2) NOT NULL DEFAULT '';
+
+--sorted_result
+SELECT * FROM bug46599b;
+
+DROP TABLE bug46599b,bug46599a;
+
+#
+# bug#16912989 - part I
+#
+#   copy_fk_for_offline_alter must use column name (not column number)
+#   in determining columns for newly created FK's
+#   This as column number change with DROP COLUMN
+#
+create table t1(
+  col1 int not null primary key,
+  col2 int not null,
+  col3 varchar(35) not null,
+  unique name0 (col2),
+  unique name1 (col3)
+) engine=ndb;
+
+create table t2(
+  col1 int not null unique,
+  col2 int not null,
+  col3 varchar(35),
+  constraint fk1 foreign key (col3) references t1(col3)
+) engine=ndb;
+
+ALTER TABLE t1 DROP COLUMN col2;
+
+drop table t2, t1;
+
+#
+# bug#16912989 - part II
+#
+#   When offline altering a parent table, the on the child recreated FK's
+#     can't be verified since the copying of data to the new parent
+#     is done later
+#
+let $i=2;
+while ($i)
+{
+	eval set @i=$i;
+	let $engine=`select if(@i=1,'ndb','innodb')`;
+
+	eval create table t1(
+	  col1 int not null primary key,
+	  col2 int not null unique,
+	  col3 varchar(35)
+	) engine=$engine;
+
+	eval create table t2(
+	  col1 int not null unique,
+	  col2 int not null,
+	  col3 varchar(35),
+	  constraint fk1 foreign key (col2) references t1(col1)
+	) engine=$engine;
+
+	insert into t1(col1,col2,col3) values (2, 3, 'abcdefghijkl');
+	insert into t2(col1,col2,col3) values (1, 2, 'abcdefghijkl');
+
+	--echo # Attempt to drop col1, should give error
+        --error ER_FK_COLUMN_CANNOT_DROP_CHILD
+	ALTER TABLE t1 DROP COLUMN col1;
+
+	--echo # Attempt to modify col1, should give error
+	--error ER_FK_INCOMPATIBLE_COLUMNS
+	ALTER TABLE t1 MODIFY COLUMN col1 bigint;
+
+	--echo # Drop the column t1.col3
+	ALTER TABLE t1 DROP COLUMN col3;
+
+	--echo # Drop t2.col2
+        --error 1553, 1828
+        ALTER TABLE t2 DROP COLUMN col2;
+
+	drop table t2, t1;
+	dec $i;
+}
+
+--echo #
+--echo # Test non-auto partitioning
+--echo #
+CREATE TABLE t1
+(col1 int NOT NULL PRIMARY KEY,
+ col2 int NOT NULL,
+ col3 varchar(35) NOT NULL,
+ UNIQUE KEY name0 (col2),
+ UNIQUE KEY name1 (col3)
+)
+ENGINE = NDB;
+
+CREATE TABLE t2
+(col1 int NOT NULL UNIQUE,
+ col2 int NOT NULL,
+ col3 varchar(35),
+ CONSTRAINT fk1 FOREIGN KEY (col3) REFERENCES t1 (col3)
+)
+ENGINE = NDB;
+
+--disable_warnings
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+--enable_warnings
+ALTER TABLE t1 PARTITION BY KEY ();
+--disable_warnings
+SHOW CREATE TABLE t1;
+--enable_warnings
+ALTER TABLE t1 PARTITION BY KEY (col1);
+--disable_warnings
+SHOW CREATE TABLE t1;
+--enable_warnings
+ALTER TABLE t1 REMOVE PARTITIONING;
+--disable_warnings
+SHOW CREATE TABLE t1;
+--enable_warnings
+
+ALTER TABLE t2 PARTITION BY KEY ();
+--disable_warnings
+SHOW CREATE TABLE t2;
+--enable_warnings
+ALTER TABLE t2 PARTITION BY KEY (col1);
+--disable_warnings
+SHOW CREATE TABLE t2;
+--enable_warnings
+ALTER TABLE t2 REMOVE PARTITIONING;
+--disable_warnings
+SHOW CREATE TABLE t2;
+--enable_warnings
+# Parent fk dependence
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+ALTER TABLE t1 RENAME COLUMN col3 TO col3_new;
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+ALTER TABLE t1 ALGORITHM=inplace, RENAME COLUMN col3 TO col3_new;
+# Child fk dependence
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+ALTER TABLE t2 RENAME COLUMN col3 TO col3_new;
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+ALTER TABLE t2 ALGORITHM=inplace, RENAME COLUMN col3 TO col3_new;
+--disable_warnings
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+--enable_warnings
+
+DROP TABLE t2, t1;
+
+--echo #
+--echo # Bug#30233405 SELF REFERENTIAL FKS ARE LOST WHEN THE TABLE IS ALTERED USING COPY ALGORITHM
+--echo #
+
+--echo # Setup
+CREATE TABLE self_ref (
+  pk INT PRIMARY KEY,
+  parent_col INT UNIQUE,
+  child_col INT,
+  FOREIGN KEY fk1(child_col) REFERENCES self_ref(parent_col)
+) ENGINE NDB;
+
+SHOW CREATE TABLE self_ref;
+INSERT INTO self_ref VALUES(1, 1, NULL);
+INSERT INTO self_ref VALUES(2, 2, 1);
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO self_ref VALUES(3, 3, 6);
+--error ER_ROW_IS_REFERENCED_2
+DELETE FROM self_ref WHERE parent_col = 1;
+
+--echo # Perform a COPY ALTER
+# Turn off foreign key checks during ALTER as the rows might not be
+# copied in order and hence might not be FK consistent.
+SET foreign_key_checks= 0;
+ALTER TABLE self_ref
+  ADD COLUMN dummy INT,
+  ALGORITHM=COPY;
+SET foreign_key_checks= 1;
+
+--echo # Verify the foreign keys
+SHOW CREATE TABLE self_ref;
+INSERT INTO self_ref VALUES(3, 3, 1, 0);
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO self_ref VALUES(4, 4, 8, 0);
+--error ER_ROW_IS_REFERENCED_2
+DELETE FROM self_ref WHERE parent_col = 1;
+
+--echo # Cleanup
+DROP TABLE self_ref;
+
+--echo #
+--echo # Bug#30512043 IGNORE CASE WHEN COMPARING FOREIGN KEY NAMES FROM DD WITH NDB
+--echo #
+
+--echo # Setup
+create table parent(col1 int primary key) engine=ndbcluster;
+create table child(col int) engine=ndbcluster;
+
+--echo # Create the foreign key with name in lowercase.
+alter table child add constraint fk1 foreign key (col) references parent(col1) on delete  set null;
+
+--echo # Check if the foreign key is added.
+Show create table child;
+
+--echo # Drop the foreign key using an uppercase identifier and check if the drop is successful.
+alter table child drop foreign key FK1;
+alter table child drop index FK1;
+
+--echo # Check if the foreign key is dropped successfully.
+Show create table child;
+
+--echo # Cleanup
+drop table child, parent;

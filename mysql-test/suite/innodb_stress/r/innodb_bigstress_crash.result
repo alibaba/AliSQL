@@ -1,9 +1,8 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
-SET GLOBAL innodb_file_format=Barracuda;
 DROP TABLE IF EXISTS t1;
 CREATE TABLE t1(id INT AUTO_INCREMENT PRIMARY KEY,
 msg_prefix VARCHAR(255),
@@ -13,22 +12,36 @@ msg_checksum varchar(128),
 KEY msg_i(msg_prefix))
 ENGINE=INNODB
 ROW_FORMAT=COMPRESSED
-KEY_BLOCK_SIZE=1;
-call mtr.add_suppression(".*");
+KEY_BLOCK_SIZE=16;
+CREATE TABLE errors (msg TEXT);
 Wait for reconnect
 Checksum master
 stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 Checksum slave
 Wait for reconnect
 Checksum master
 stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 Checksum slave
 DROP TABLE t1;
+DROP TABLE errors;
 stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 include/stop_slave.inc
 include/start_slave.inc
 include/stop_slave.inc
-SET GLOBAL innodb_file_format=Default;
+include/rpl_reconnect.inc
+include/rpl_end.inc

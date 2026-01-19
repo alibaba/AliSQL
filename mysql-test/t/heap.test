@@ -10,6 +10,7 @@ create table t1 (a int not null,b int not null, primary key (a)) engine=heap com
 insert into t1 values(1,1),(2,2),(3,3),(4,4);
 delete from t1 where a=1 or a=0;
 #show table status like "t1";
+analyze table t1;
 show keys from t1;
 select * from t1;
 select * from t1 where a=4;
@@ -28,7 +29,7 @@ drop table t1;
 
 create table t1 (a int not null,b int not null, primary key (a)) engine=heap comment="testing heaps";
 insert into t1 values(1,1),(2,2),(3,3),(4,4);
-alter table t1 modify a int not null auto_increment, engine=myisam, comment="new myisam table";
+alter table t1 modify a int not null auto_increment, engine=innodb, comment="new innodb table";
 #show table status like "t1";
 select * from t1;
 drop table t1;
@@ -39,16 +40,21 @@ select * from t1 where a > 736494;
 alter table t1 add unique uniq_id(a);
 select * from t1 where a > 736494;
 select * from t1 where a = 736494;
+--sorted_result
 select * from t1 where a=869751 or a=736494;
+--sorted_result
 select * from t1 where a in (869751,736494,226312,802616);
-alter table t1 engine=myisam;
+alter table t1 engine=innodb;
+--replace_column 10 # 11 #  
 explain select * from t1 where a in (869751,736494,226312,802616);
 drop table t1;
 
 create table t1 (x int not null, y int not null, key x (x), unique y (y))
 engine=heap;
 insert into t1 values (1,1),(2,2),(1,3),(2,4),(2,5),(2,6);
+--sorted_result
 select * from t1 where x=1;
+--sorted_result
 select * from t1,t1 as t2 where t1.x=t2.y;
 explain select * from t1,t1 as t2 where t1.x=t2.y;
 drop table t1;
@@ -60,8 +66,10 @@ drop table t1;
 
 CREATE TABLE t1 ( a int not null default 0, b int not null default 0,  key(a),  key(b)  ) ENGINE=HEAP;
 insert into t1 values(1,1),(1,2),(2,3),(1,3),(1,4),(1,5),(1,6);
+--sorted_result
 select * from t1 where a=1; 
 insert into t1 values(1,1),(1,2),(2,3),(1,3),(1,4),(1,5),(1,6);
+--sorted_result
 select * from t1 where a=1;
 drop table t1;
 
@@ -100,7 +108,7 @@ drop table t1;
 # Test when using part key searches
 #
 
-create table t1 (btn char(10) not null, key(btn)) engine=heap;
+create table t1 (btn char(10) not null, key(btn)) charset utf8mb4 engine=heap;
 insert into t1 values ("hello"),("hello"),("hello"),("hello"),("hello"),("a"),("b"),("c"),("d"),("e"),("f"),("g"),("h"),("i");
 explain select * from t1 where btn like "q%";
 select * from t1 where btn like "q%";
@@ -208,7 +216,7 @@ set default_storage_engine=HEAP;
 # Simple basic test that endspace is saved
 #
 
-create table t1 (v varchar(10), c char(10), t varchar(50));
+create table t1 (v varchar(10), c char(10), t varchar(50)) charset utf8mb4;
 insert into t1 values('+ ', '+ ', '+ ');
 set @a=repeat(' ',20);
 insert into t1 values (concat('+',@a),concat('+',@a),concat('+',@a));
@@ -218,13 +226,15 @@ select concat('*',v,'*',c,'*',t,'*') from t1;
 show create table t1;
 create table t2 like t1;
 show create table t2;
-create table t3 select * from t1;
+create table t3 charset utf8mb4 select * from t1;
 show create table t3;
 alter table t1 modify c varchar(10);
 show create table t1;
 alter table t1 modify v char(10);
 show create table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 alter table t1 modify t varchar(10);
+SET sql_mode = default;
 show create table t1;
 select concat('*',v,'*',c,'*',t,'*') from t1;
 drop table t1,t2,t3;
@@ -232,7 +242,7 @@ drop table t1,t2,t3;
 #
 # Testing of keys
 #
-create table t1 (v varchar(10), c char(10), t varchar(50), key(v), key(c), key(t(10)));
+create table t1 (v varchar(10), c char(10), t varchar(50), key(v), key(c), key(t(10))) charset latin1;
 show create table t1;
 disable_query_log;
 let $1=10;
@@ -250,7 +260,7 @@ while ($1)
 }
 enable_query_log;
 select count(*) from t1;
-insert into t1 values(concat('a',char(1)),concat('a',char(1)),concat('a',char(1)));
+insert into t1 values(concat('a','!'),concat('a','!'),concat('a','!'));
 select count(*) from t1 where v='a';
 select count(*) from t1 where c='a';
 select count(*) from t1 where t='a';
@@ -277,24 +287,24 @@ explain select * from t1 where v='a';
 
 # GROUP BY
 
-select v,count(*) from t1 group by v limit 10;
-select v,count(t) from t1 group by v limit 10;
-select v,count(c) from t1 group by v limit 10;
-select sql_big_result trim(v),count(t) from t1 group by v limit 10;
-select sql_big_result trim(v),count(c) from t1 group by v limit 10;
-select c,count(*) from t1 group by c limit 10;
-select c,count(t) from t1 group by c limit 10;
-select sql_big_result c,count(t) from t1 group by c limit 10;
-select t,count(*) from t1 group by t limit 10;
-select t,count(t) from t1 group by t limit 10;
-select sql_big_result trim(t),count(t) from t1 group by t limit 10;
+select v,count(*) from t1 group by v order by v limit 9;
+select v,count(t) from t1 group by v order by v limit 10;
+select v,count(c) from t1 group by v order by v limit 10;
+select sql_big_result trim(v),count(t) from t1 group by v order by v limit 10;
+select sql_big_result trim(v),count(c) from t1 group by v order by v limit 10;
+select c,count(*) from t1 group by c order by c limit 10;
+select c,count(t) from t1 group by c order by c limit 10;
+select sql_big_result c,count(t) from t1 group by c order by c limit 10;
+select t,count(*) from t1 group by t order by t limit 10;
+select t,count(t) from t1 group by t order by t limit 10;
+select sql_big_result trim(t),count(t) from t1 group by t order by t limit 10;
 drop table t1;
 
 #
 # Test unique keys
 #
 
-create table t1 (a char(10), unique (a));
+create table t1 (a char(10), unique (a)) charset latin1;
 insert into t1 values ('a');
 --error ER_DUP_ENTRY
 insert into t1 values ('a ');
@@ -316,7 +326,7 @@ drop table t1;
 # Testing of btree keys
 #
 
-create table t1 (v varchar(10), c char(10), t varchar(50), key using btree (v), key using btree (c), key using btree (t(10)));
+create table t1 (v varchar(10), c char(10), t varchar(50), key using btree (v), key using btree (c), key using btree (t(10))) charset latin1;
 show create table t1;
 disable_query_log;
 let $1=10;
@@ -342,26 +352,26 @@ select count(*) from t1 where v='a  ';
 select count(*) from t1 where c='a  ';
 select count(*) from t1 where t='a  ';
 select count(*) from t1 where v between 'a' and 'a ';
---replace_column 9 #
+--replace_column 10 #
 select count(*) from t1 where v between 'a' and 'a ' and v between 'a  ' and 'b\n';
---replace_column 9 #
+--replace_column 10 #
 explain select count(*) from t1 where v='a  ';
---replace_column 9 #
+--replace_column 10 #
 explain select count(*) from t1 where c='a  ';
---replace_column 9 #
+--replace_column 10 #
 explain select count(*) from t1 where t='a  ';
---replace_column 9 #
+--replace_column 10 #
 explain select count(*) from t1 where v like 'a%';
---replace_column 9 #
+--replace_column 10 #
 explain select count(*) from t1 where v between 'a' and 'a ';
---replace_column 9 #
+--replace_column 10 #
 explain select count(*) from t1 where v between 'a' and 'a ' and v between 'a  ' and 'b\n';
 
 --error ER_DUP_ENTRY
 alter table t1 add unique(v);
 select concat('*',v,'*',c,'*',t,'*') as qq from t1 where v='a' order by length(concat('*',v,'*',c,'*',t,'*'));
 # Number of rows is not constant for b-trees keys
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 where v='a';
 
 drop table t1;
@@ -370,7 +380,7 @@ drop table t1;
 # Test unique btree keys
 #
 
-create table t1 (a char(10), unique using btree (a)) engine=heap;
+create table t1 (a char(10), unique using btree (a)) charset latin1 engine=heap;
 insert into t1 values ('a');
 --error ER_DUP_ENTRY
 insert into t1 values ('a ');
@@ -392,11 +402,11 @@ drop table t1;
 # test show create table
 #
 
-create table t1 (v varchar(10), c char(10), t varchar(50), key(v(5)), key(c(5)), key(t(5)));
+create table t1 (v varchar(10), c char(10), t varchar(50), key(v(5)), key(c(5)), key(t(5))) charset utf8mb4;
 show create table t1;
 drop table t1;
 
-create table t1 (v varchar(65530), key(v(10)));
+create table t1 (v varchar(65530), key(v(10))) charset latin1;
 show create table t1;
 insert into t1 values(repeat('a',65530));
 select length(v) from t1 where v=repeat('a',65530);
@@ -452,8 +462,9 @@ drop table t1;
 #
 # Bug #3094: Row format of memory tables should always be reported as Fixed
 #
-create table t1 (c char(10)) engine=memory;
-create table t2 (c varchar(10)) engine=memory;
+create table t1 (c char(10)) charset utf8mb4 engine=memory;
+create table t2 (c varchar(10)) charset utf8mb4 engine=memory;
+analyze table t1, t2;
 --replace_column 8 # 12 #
 show table status like 't_';
 drop table t1, t2;
@@ -484,6 +495,8 @@ DROP TABLE t1;
 --echo #
 --echo # BUG#11825482: Broken key length calculation for btree index
 --echo #
+--source include/turn_off_only_full_group_by.inc
+
 CREATE TABLE h1 (f1 VARCHAR(1), f2 INT NOT NULL,
                  UNIQUE KEY h1i (f1,f2) USING BTREE ) ENGINE=HEAP;
 INSERT INTO h1 VALUES(NULL,0),(NULL,1);
@@ -516,6 +529,7 @@ WHERE ('h', 0) NOT IN ( SELECT * FROM v1);
 
 DROP TABLE t1,t2,h1;
 DROP VIEW v1;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 #
 # BUG 11755870 - 47704: HASH INDEX ON VARCHAR PREFIX NOT WORKING CORRECTLY.

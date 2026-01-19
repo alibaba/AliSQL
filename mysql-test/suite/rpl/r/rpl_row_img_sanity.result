@@ -1,11 +1,11 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
-call mtr.add_suppression("Slave: Can\'t find record in \'t\' Error_code: 1032");
-call mtr.add_suppression("Slave SQL: .*Could not execute Update_rows event on table test.t; Can.t find record in .t.* Error_code: 1032");
-call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("Replica: Can\'t find record in \'t\' Error_code: MY-001032");
+call mtr.add_suppression("Replica SQL for channel '': .*Could not execute Update_rows event on table test.t; Can.t find record in .t.* Error_code: MY-001032");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 SHOW VARIABLES LIKE 'binlog_row_image';
 Variable_name	Value
 binlog_row_image	FULL
@@ -32,9 +32,15 @@ SHOW VARIABLES LIKE 'binlog_row_image';
 Variable_name	Value
 binlog_row_image	FULL
 CREATE TABLE t (c1 int, c2 int, c3 blob, primary key(c1));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (1, 'a');
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t;;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 SET @img_types= 'MINIMAL NOBLOB FULL';
@@ -51,17 +57,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'UK-NOT-NULL'
 CREATE TABLE t (c1 int NOT NULL, c2 int, c3 blob, unique key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: MINIMAL, indexes: PK
@@ -69,17 +79,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'PK'
 CREATE TABLE t (c1 int, c2 int, c3 blob, primary key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: MINIMAL, indexes: UK
@@ -87,17 +101,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'UK'
 CREATE TABLE t (c1 int, c2 int, c3 blob, unique key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: MINIMAL, indexes: K
@@ -105,17 +123,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'K'
 CREATE TABLE t (c1 int, c2 int, c3 blob, key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: MINIMAL, indexes: NONE
@@ -123,17 +145,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'NONE'
 CREATE TABLE t (c1 int, c2 int, c3 blob);
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 CON: 'master', IMG: 'NOBLOB', RESTART SLAVE: 'N'
@@ -149,17 +175,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'UK-NOT-NULL'
 CREATE TABLE t (c1 int NOT NULL, c2 int, c3 blob, unique key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: NOBLOB, indexes: PK
@@ -167,17 +197,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'PK'
 CREATE TABLE t (c1 int, c2 int, c3 blob, primary key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: NOBLOB, indexes: UK
@@ -185,17 +219,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'UK'
 CREATE TABLE t (c1 int, c2 int, c3 blob, unique key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: NOBLOB, indexes: K
@@ -203,17 +241,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'K'
 CREATE TABLE t (c1 int, c2 int, c3 blob, key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: NOBLOB, indexes: NONE
@@ -221,17 +263,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'NONE'
 CREATE TABLE t (c1 int, c2 int, c3 blob);
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 CON: 'master', IMG: 'FULL', RESTART SLAVE: 'N'
@@ -247,17 +293,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'UK-NOT-NULL'
 CREATE TABLE t (c1 int NOT NULL, c2 int, c3 blob, unique key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: FULL, indexes: PK
@@ -265,17 +315,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'PK'
 CREATE TABLE t (c1 int, c2 int, c3 blob, primary key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: FULL, indexes: UK
@@ -283,17 +337,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'UK'
 CREATE TABLE t (c1 int, c2 int, c3 blob, unique key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: FULL, indexes: K
@@ -301,17 +359,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'K'
 CREATE TABLE t (c1 int, c2 int, c3 blob, key(c1));
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ITERATIONS: row_img: FULL, indexes: NONE
@@ -319,17 +381,21 @@ include/rpl_reset.inc
 CREATING TABLE IN master WITH INDEX 'NONE'
 CREATE TABLE t (c1 int, c2 int, c3 blob);
 include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 SET @img_types= 'MINIMAL NOBLOB FULL';
@@ -400,17 +466,23 @@ binlog_row_image	NOBLOB
 # PK (contains blob)
 ###################################
 CREATE TABLE t (c1 int, c2 int, c3 blob, primary key(c1,c3(512)));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
 Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+Warning	1364	Field 'c3' doesn't have a default value
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c1=2 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ###################################
@@ -418,17 +490,25 @@ include/sync_slave_sql_with_master.inc
 ###################################
 include/rpl_reset.inc
 CREATE TABLE t (c1 int, c2 int, c3 blob, primary key(c1,c2));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1,2,"a");
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1,c3) VALUES (10,"a");
-INSERT DELAYED INTO t(c1,c3) VALUES (100,"a");
 Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+Warning	1364	Field 'c2' doesn't have a default value
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1000);
-INSERT DELAYED INTO t(c1) VALUES (10000);
 Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+Warning	1364	Field 'c2' doesn't have a default value
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c3='b' WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ###################################
@@ -452,7 +532,9 @@ SHOW VARIABLES LIKE 'binlog_row_image';
 Variable_name	Value
 binlog_row_image	MINIMAL
 CREATE TABLE t (c1 int NOT NULL AUTO_INCREMENT, c2 int, c3 blob, primary key(c1,c2));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c2) VALUES (2);
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ##################################################################
@@ -479,8 +561,12 @@ SET SQL_LOG_BIN=0;
 CREATE TABLE t (c1 int NOT NULL AUTO_INCREMENT, c2 int, c3 blob, primary key(c1,c2));
 SET SQL_LOG_BIN=1;
 CREATE TABLE t (c1 int, c2 int, primary key(c1));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c2,c3) VALUES (2,'aaaaa');
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c2=3, c3='bbbbb' WHERE c2=2;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ##################################################################
@@ -507,8 +593,12 @@ SET SQL_LOG_BIN=0;
 CREATE TABLE t (c1 int, c2 int);
 SET SQL_LOG_BIN=1;
 CREATE TABLE t (c1 int, c2 int, c3 int DEFAULT 2005);
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (1);
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t(c1) VALUES (2);
+SET sql_mode = default;
 SELECT * FROM t;
 c1	c2	c3
 1	NULL	2005
@@ -543,8 +633,12 @@ SET SQL_LOG_BIN=0;
 CREATE TABLE t (c1 int NOT NULL, c2 int, c3 int, primary key(c1, c3), unique key(c1));
 SET SQL_LOG_BIN=1;
 CREATE TABLE t (c1 int NOT NULL, c2 int, unique key(c1));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1, 2, 3);
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c2= 4 WHERE c1=1;
+SET sql_mode = default;
 SELECT * FROM t;
 c1	c2
 1	4
@@ -578,9 +672,15 @@ SET SQL_LOG_BIN=0;
 CREATE TABLE t (c1 int NOT NULL, c2 int, c3 int, primary key(c1));
 SET SQL_LOG_BIN=1;
 CREATE TABLE t (c1 int NOT NULL, c2 int, c3 int, c4 blob, unique key(c1));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1, 2, 3);
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c2= 4 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=4;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 include/rpl_reset.inc
@@ -604,9 +704,15 @@ SET SQL_LOG_BIN=0;
 CREATE TABLE t (c1 int NOT NULL, c2 int, c3 int, primary key(c1));
 SET SQL_LOG_BIN=1;
 CREATE TABLE t (c1 int NOT NULL, c2 int, c3 int, c4 blob, unique key(c1));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t VALUES (1, 2, 3);
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t SET c2= 4 WHERE c1=1;
+SET sql_mode = default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 DELETE FROM t WHERE c2=4;
+SET sql_mode = default;
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 ################################################################
@@ -638,7 +744,90 @@ UPDATE t SET c2=4 WHERE c2=2;
 DROP TABLE t;
 include/wait_for_slave_sql_error.inc [errno=1032]
 DROP TABLE t;
+include/stop_slave_io.inc
+RESET REPLICA;
 include/rpl_reset.inc
+CON: 'master', IMG: 'FULL', RESTART SLAVE: 'N'
+SET SESSION binlog_row_image= 'FULL';
+SET GLOBAL binlog_row_image= 'FULL';
+FLUSH TABLES;
+SHOW VARIABLES LIKE 'binlog_row_image';
+Variable_name	Value
+binlog_row_image	FULL
+CON: 'slave', IMG: 'FULL', RESTART SLAVE: 'Y'
+SET SESSION binlog_row_image= 'FULL';
+SET GLOBAL binlog_row_image= 'FULL';
+include/stop_slave.inc
+include/start_slave.inc
+FLUSH TABLES;
+SHOW VARIABLES LIKE 'binlog_row_image';
+Variable_name	Value
+binlog_row_image	FULL
+CREATE TABLE t1(id INT PRIMARY KEY, a INT) ENGINE = INNODB;
+include/sync_slave_sql_with_master.inc
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+INSERT INTO t1 (id, a) VALUES (1, 1);
+SET sql_mode = default;
+"Case: FULL - EXPLAIN output should not display Using temporary"
+EXPLAIN UPDATE t1 SET a=a+1 WHERE id < 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t1	NULL	range	PRIMARY	PRIMARY	4	const	1	100.00	Using where
+Warnings:
+Note	1003	update `test`.`t1` set `test`.`t1`.`a` = (`test`.`t1`.`a` + 1) where (`test`.`t1`.`id` < 2)
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+UPDATE t1 SET a=a+1 WHERE id < 2;
+SET sql_mode = default;
+CON: 'master', IMG: 'NOBLOB', RESTART SLAVE: 'N'
+SET SESSION binlog_row_image= 'NOBLOB';
+SET GLOBAL binlog_row_image= 'NOBLOB';
+FLUSH TABLES;
+SHOW VARIABLES LIKE 'binlog_row_image';
+Variable_name	Value
+binlog_row_image	NOBLOB
+CON: 'slave', IMG: 'NOBLOB', RESTART SLAVE: 'Y'
+SET SESSION binlog_row_image= 'NOBLOB';
+SET GLOBAL binlog_row_image= 'NOBLOB';
+include/stop_slave.inc
+include/start_slave.inc
+FLUSH TABLES;
+SHOW VARIABLES LIKE 'binlog_row_image';
+Variable_name	Value
+binlog_row_image	NOBLOB
+"Case: NOBLOB - EXPLAIN output should not display Using temporary"
+EXPLAIN UPDATE t1 SET a=a+1 WHERE id < 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t1	NULL	range	PRIMARY	PRIMARY	4	const	1	100.00	Using where
+Warnings:
+Note	1003	update `test`.`t1` set `test`.`t1`.`a` = (`test`.`t1`.`a` + 1) where (`test`.`t1`.`id` < 2)
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+UPDATE t1 SET a=a+1 WHERE id < 2;
+SET sql_mode = default;
+CON: 'master', IMG: 'MINIMAL', RESTART SLAVE: 'N'
+SET SESSION binlog_row_image= 'MINIMAL';
+SET GLOBAL binlog_row_image= 'MINIMAL';
+FLUSH TABLES;
+SHOW VARIABLES LIKE 'binlog_row_image';
+Variable_name	Value
+binlog_row_image	MINIMAL
+CON: 'slave', IMG: 'MINIMAL', RESTART SLAVE: 'Y'
+SET SESSION binlog_row_image= 'MINIMAL';
+SET GLOBAL binlog_row_image= 'MINIMAL';
+include/stop_slave.inc
+include/start_slave.inc
+FLUSH TABLES;
+SHOW VARIABLES LIKE 'binlog_row_image';
+Variable_name	Value
+binlog_row_image	MINIMAL
+EXPLAIN UPDATE t1 SET a=a+1 WHERE id < 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t1	NULL	range	PRIMARY	PRIMARY	4	const	1	100.00	Using where
+Warnings:
+Note	1003	update `test`.`t1` set `test`.`t1`.`a` = (`test`.`t1`.`a` + 1) where (`test`.`t1`.`id` < 2)
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+UPDATE t1 SET a=a+1 WHERE id < 2;
+SET sql_mode = default;
+DROP TABLE t1;
+include/sync_slave_sql_with_master.inc
 SET GLOBAL binlog_row_image= @old_binlog_row_image;
 SET SESSION binlog_row_image= @old_binlog_row_image;
 SET GLOBAL binlog_row_image= @old_binlog_row_image;

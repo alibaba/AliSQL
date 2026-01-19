@@ -1,10 +1,9 @@
 SET GLOBAL EVENT_SCHEDULER = OFF;
-SET BINLOG_FORMAT = STATEMENT;
 CREATE DATABASE db1;
 USE db1;
 CREATE TABLE t1 (a INT, KEY a(a)) ENGINE=INNODB;
 INSERT INTO t1 VALUES (1),(2),(3),(4),(5);
-CREATE TABLE t3 (a INT) ENGINE=MyISAM;
+CREATE TABLE t3 (a INT) ENGINE=InnoDB;
 INSERT INTO t3 SELECT * FROM t1;
 CREATE TABLE trans (a INT) ENGINE=INNODB;
 CREATE PROCEDURE test_if_commit()
@@ -132,6 +131,11 @@ NO
 #
 select * from t2;
 a
+1
+2
+3
+4
+5
 INSERT INTO db1.trans (a) VALUES (1);
 update t2, t3 set t3.a=t2.a, t2.a=null where (1) in (select * from t1);
 CALL db1.test_if_commit();
@@ -426,6 +430,7 @@ NO
 #
 # SQLCOM_GRANT
 #
+create user mysqltest_2@localhost;
 INSERT INTO db1.trans (a) VALUES (1);
 grant all on test.t1 to mysqltest_2@localhost with grant option;
 CALL db1.test_if_commit();
@@ -508,9 +513,6 @@ NO
 # SQLCOM_ALTER_DB
 #
 #
-# SQLCOM_ALTER_DB_UPGRADE
-#
-#
 # SQLCOM_DROP_DB
 #
 use db1;
@@ -557,12 +559,16 @@ YES
 # SQLCOM_ASSIGN_TO_KEYCACHE
 #
 set global keycache.key_buffer_size=128*1024;
+Warnings:
+Warning	1287	keycache.key_buffer_size syntax is deprecated and will be removed in a future release
 INSERT INTO db1.trans (a) VALUES (1);
 cache index t3 in keycache;
 CALL db1.test_if_commit();
 IMPLICIT COMMIT
 YES
 set global keycache.key_buffer_size=0;
+Warnings:
+Warning	1287	keycache.key_buffer_size syntax is deprecated and will be removed in a future release
 #
 # SQLCOM_PRELOAD_KEYS
 #
@@ -652,14 +658,6 @@ IMPLICIT COMMIT
 YES
 INSERT INTO db1.trans (a) VALUES (1);
 rename table t4 to t3;
-CALL db1.test_if_commit();
-IMPLICIT COMMIT
-YES
-#
-# SQLCOM_RESET
-#
-INSERT INTO db1.trans (a) VALUES (1);
-reset query cache;
 CALL db1.test_if_commit();
 IMPLICIT COMMIT
 YES
@@ -953,6 +951,16 @@ YES
 #
 # SQLCOM_ALTER_TABLESPACE
 #
+INSERT INTO db1.trans (a) VALUES (1);
+CREATE TABLESPACE ts1 ADD DATAFILE './ts1.ibd' ENGINE=INNODB;
+CALL db1.test_if_commit();
+IMPLICIT COMMIT
+YES
+INSERT INTO db1.trans (a) VALUES (1);
+DROP TABLESPACE ts1  ENGINE=INNODB;
+CALL db1.test_if_commit();
+IMPLICIT COMMIT
+YES
 #
 # SQLCOM_INSTALL_PLUGIN
 #
@@ -1047,4 +1055,5 @@ DROP TABLE t2;
 DROP TABLE t3;
 USE test;
 DROP DATABASE db1;
+SET GLOBAL EVENT_SCHEDULER = ON;
 End of tests

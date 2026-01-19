@@ -1,15 +1,21 @@
-/*
-   Copyright (C) 2003-2006, 2008 MySQL AB, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+/* Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,119 +33,101 @@
  */
 
 class ScanFilter {
-public:
+ public:
 #if 0
   /**
    * Create a scan filter for table tab
    * colNo - column to filter on
-   * val - val to use when selecting valu to filter on
+   * val - val to use when selecting value to filter on
    *
    */
   ScanFilter(const NDBT_Table& tab, 
 	     int colNo,
 	     int val);
 #endif
-  ScanFilter(int records = 1000){};
+  ScanFilter(int records = 1000) {}
   virtual ~ScanFilter() {}
-  virtual int filterOp(NdbOperation*) = 0;
-  virtual int verifyRecord(NDBT_ResultRow&) = 0;
-private:
+  virtual int filterOp(NdbOperation *) = 0;
+  virtual int verifyRecord(NDBT_ResultRow &) = 0;
 
+ private:
   //  const NDBT_Table& tab;
 };
 
 class LessThanFilter : public ScanFilter {
-public:
-  LessThanFilter(int records){ compare_value = records / 100; };
-  virtual ~LessThanFilter(){}
-private:
+ public:
+  LessThanFilter(int records) { compare_value = records / 100; }
+  ~LessThanFilter() override {}
+
+ private:
   Uint32 compare_value;
-  int filterOp(NdbOperation* pOp);
-  int verifyRecord(NDBT_ResultRow&);
+  int filterOp(NdbOperation *pOp) override;
+  int verifyRecord(NDBT_ResultRow &) override;
 };
 
 class EqualFilter : public ScanFilter {
-public:
-  virtual ~EqualFilter(){}
+ public:
+  ~EqualFilter() override {}
 
   static const Uint32 compare_value = 100;
-  int filterOp(NdbOperation* pOp);
-  int verifyRecord(NDBT_ResultRow&);
+  int filterOp(NdbOperation *pOp) override;
+  int verifyRecord(NDBT_ResultRow &) override;
 };
 
 class NoFilter : public ScanFilter {
-public:
-  virtual ~NoFilter(){}
-  int filterOp(NdbOperation* pOp);
-  int verifyRecord(NDBT_ResultRow&);
+ public:
+  ~NoFilter() override {}
+  int filterOp(NdbOperation *pOp) override;
+  int verifyRecord(NDBT_ResultRow &) override;
 };
 
+int LessThanFilter::filterOp(NdbOperation *pOp) {
+  if (pOp->load_const_u32(1, compare_value) != 0) return NDBT_FAILED;
 
-int LessThanFilter::filterOp(NdbOperation* pOp){
-  
-  if (pOp->load_const_u32(1, compare_value) != 0)
-    return NDBT_FAILED;
+  if (pOp->read_attr("KOL2", 2) != 0) return NDBT_FAILED;
 
-  if (pOp->read_attr("KOL2", 2) != 0)
-    return NDBT_FAILED;
+  if (pOp->branch_lt(1, 2, 0) != 0) return NDBT_FAILED;
 
-  if (pOp->branch_lt(1, 2, 0) != 0)
-    return NDBT_FAILED;
+  if (pOp->interpret_exit_nok() != 0) return NDBT_FAILED;
 
-  if (pOp->interpret_exit_nok() != 0)
-    return NDBT_FAILED;
-  
-  if (pOp->def_label(0) != 0)
-    return NDBT_FAILED;
+  if (pOp->def_label(0) != 0) return NDBT_FAILED;
 
-  if (pOp->interpret_exit_ok() != 0)
-    return NDBT_FAILED;
+  if (pOp->interpret_exit_ok() != 0) return NDBT_FAILED;
 
   return NDBT_OK;
 }
 
-int LessThanFilter::verifyRecord(NDBT_ResultRow& row){
-  NdbRecAttr* rec = row.attributeStore(1);
-  if (rec->u_32_value() < compare_value)
-    return NDBT_OK;
+int LessThanFilter::verifyRecord(NDBT_ResultRow &row) {
+  NdbRecAttr *rec = row.attributeStore(1);
+  if (rec->u_32_value() < compare_value) return NDBT_OK;
   return NDBT_FAILED;
 }
 
-int EqualFilter::filterOp(NdbOperation* pOp){
-  
-  if (pOp->load_const_u32(1, compare_value) != 0)
-    return NDBT_FAILED;
+int EqualFilter::filterOp(NdbOperation *pOp) {
+  if (pOp->load_const_u32(1, compare_value) != 0) return NDBT_FAILED;
 
-  if (pOp->read_attr("KOL2", 2) != 0)
-    return NDBT_FAILED;
+  if (pOp->read_attr("KOL2", 2) != 0) return NDBT_FAILED;
 
-  if (pOp->branch_eq(1, 2, 0) != 0)
-    return NDBT_FAILED;
+  if (pOp->branch_eq(1, 2, 0) != 0) return NDBT_FAILED;
 
-  if (pOp->interpret_exit_nok() != 0)
-    return NDBT_FAILED;
-  
-  if (pOp->def_label(0) != 0)
-    return NDBT_FAILED;
+  if (pOp->interpret_exit_nok() != 0) return NDBT_FAILED;
 
-  if (pOp->interpret_exit_ok() != 0)
-    return NDBT_FAILED;
+  if (pOp->def_label(0) != 0) return NDBT_FAILED;
+
+  if (pOp->interpret_exit_ok() != 0) return NDBT_FAILED;
 
   return NDBT_OK;
 }
 
-int EqualFilter::verifyRecord(NDBT_ResultRow& row){
-  NdbRecAttr* rec = row.attributeStore(1);
-  if (rec->u_32_value() == compare_value)
-    return NDBT_OK;
+int EqualFilter::verifyRecord(NDBT_ResultRow &row) {
+  NdbRecAttr *rec = row.attributeStore(1);
+  if (rec->u_32_value() == compare_value) return NDBT_OK;
   return NDBT_FAILED;
 }
 
-int NoFilter::filterOp(NdbOperation* pOp){
-  return NDBT_OK;
-}
+int NoFilter::filterOp(NdbOperation *pOp) { return NDBT_OK; }
 
-int NoFilter::verifyRecord(NDBT_ResultRow& row){
+int NoFilter::verifyRecord(NDBT_ResultRow &row) {
   // Check if this record should be in the result set or not
   return NDBT_OK;
 }

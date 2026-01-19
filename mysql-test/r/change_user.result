@@ -1,10 +1,7 @@
-SET GLOBAL secure_auth = OFF;
-Warnings:
-Warning	1287	'pre-4.1 password hash' is deprecated and will be removed in a future release. Please use post-4.1 password hash instead
+create user test_nopw;
 grant select on test.* to test_nopw;
-create user test_oldpw identified with 'mysql_old_password';
-grant select on test.* to test_oldpw identified by password "09301740536db389";
-grant select on test.* to test_newpw identified by "newpw";
+create user test_newpw identified by "newpw";
+grant select on test.* to test_newpw;
 select user(), current_user(), database();
 user()	current_user()	database()
 root@localhost	root@localhost	test
@@ -16,9 +13,6 @@ concat('<', user(), '>')	concat('<', current_user(), '>')	database()
 <test_nopw@localhost>	<test_nopw@%>	NULL
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 concat('<', user(), '>')	concat('<', current_user(), '>')	database()
-<test_oldpw@localhost>	<test_oldpw@%>	NULL
-select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
-concat('<', user(), '>')	concat('<', current_user(), '>')	database()
 <test_newpw@localhost>	<test_newpw@%>	NULL
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 concat('<', user(), '>')	concat('<', current_user(), '>')	database()
@@ -28,17 +22,12 @@ concat('<', user(), '>')	concat('<', current_user(), '>')	database()
 <test_nopw@localhost>	<test_nopw@%>	test
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 concat('<', user(), '>')	concat('<', current_user(), '>')	database()
-<test_oldpw@localhost>	<test_oldpw@%>	test
-select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
-concat('<', user(), '>')	concat('<', current_user(), '>')	database()
 <test_newpw@localhost>	<test_newpw@%>	test
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 concat('<', user(), '>')	concat('<', current_user(), '>')	database()
 <root@localhost>	<root@localhost>	test
 drop user test_nopw;
-drop user test_oldpw;
 drop user test_newpw;
-SET GLOBAL secure_auth = DEFAULT;
 Bug#20023
 SELECT @@session.sql_big_selects;
 @@session.sql_big_selects
@@ -65,6 +54,21 @@ change_user
 SELECT @@session.sql_big_selects;
 @@session.sql_big_selects
 1
+SET INSERT_ID=12;
+SELECT @@INSERT_ID;
+@@INSERT_ID
+12
+SET TIMESTAMP=200;
+SELECT @@TIMESTAMP;
+@@TIMESTAMP
+200.000000
+change_user
+SELECT @@INSERT_ID;
+@@INSERT_ID
+0
+SELECT @@TIMESTAMP=200;
+@@TIMESTAMP=200
+0
 Bug#31418
 SELECT IS_FREE_LOCK('bug31418');
 IS_FREE_LOCK('bug31418')

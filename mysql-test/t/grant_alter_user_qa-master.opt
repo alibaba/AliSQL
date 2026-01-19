@@ -1,0 +1,4 @@
+$PLUGIN_AUTH_OPT $PLUGIN_AUTH_LOAD
+--tls-version=TLSv1.2
+--tls-ciphersuites=""
+--local-infile=true

@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS t1, t2;
 SET SQL_WARNINGS=1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
 id int(11) NOT NULL auto_increment,
 datatype_id int(11) DEFAULT '0' NOT NULL,
@@ -11,6 +12,12 @@ backcolor int(11),
 PRIMARY KEY (id),
 UNIQUE datatype_id (datatype_id, min_value, max_value)
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+set names latin1;
 INSERT INTO t1 VALUES ( '1', '4', '0.0000000000', '0.0000000000', 'Ei saja', '0', '16776960');
 INSERT INTO t1 VALUES ( '2', '4', '1.0000000000', '1.0000000000', 'Sajab', '16777215', '255');
 INSERT INTO t1 VALUES ( '3', '1', '2.0000000000', '49.0000000000', '', '0', '16777215');
@@ -151,6 +158,7 @@ select * from t1 where min_value<=-1 and max_value>=-1 and datatype_id=16;
 id	datatype_id	min_value	max_value	valuename	forecolor	backcolor
 143	16	-4.9000000000	-0.1000000000		NULL	15774720
 drop table t1;
+set names utf8mb4;
 create table t1 (a decimal(10,2));
 insert into t1 values ("0.0"),("-0.0"),("+0.0"),("01.0"),("+01.0"),("-01.0");
 insert into t1 values ("-.1"),("+.1"),(".1");
@@ -219,9 +227,10 @@ a
 123.00
 drop  table t1;
 create table t1 (a decimal(10,2) unsigned);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 insert into t1 values ("0.0"),("-0.0"),("+0.0"),("01.0"),("+01.0"),("-01.0");
 Warnings:
-Warning	1264	Out of range value for column 'a' at row 2
 Warning	1264	Out of range value for column 'a' at row 6
 insert into t1 values ("-.1"),("+.1"),(".1");
 Warnings:
@@ -278,9 +287,10 @@ a
 123.00
 drop  table t1;
 create table t1 (a decimal(10,2) zerofill);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
 insert into t1 values ("0.0"),("-0.0"),("+0.0"),("01.0"),("+01.0"),("-01.0");
 Warnings:
-Warning	1264	Out of range value for column 'a' at row 2
 Warning	1264	Out of range value for column 'a' at row 6
 insert into t1 values ("-.1"),("+.1"),(".1");
 Warnings:
@@ -407,6 +417,8 @@ a
 9999999999
 drop  table t1;
 create table t1 (a decimal unsigned);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 insert into t1 values (-99999999999999),(-1),('+1'),('01'),('+00000000000001'),('+1234567890'),(99999999999999);
 Warnings:
 Warning	1264	Out of range value for column 'a' at row 1
@@ -423,6 +435,8 @@ a
 9999999999
 drop  table t1;
 create table t1 (a decimal zerofill);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
 insert into t1 values (-99999999999999),(-1),('+1'),('01'),('+00000000000001'),('+1234567890'),(99999999999999);
 Warnings:
 Warning	1264	Out of range value for column 'a' at row 1
@@ -439,6 +453,9 @@ a
 9999999999
 drop  table t1;
 create table t1 (a decimal unsigned zerofill);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 insert into t1 values (-99999999999999),(-1),('+1'),('01'),('+00000000000001'),('+1234567890'),(99999999999999);
 Warnings:
 Warning	1264	Out of range value for column 'a' at row 1
@@ -711,17 +728,17 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `d` decimal(5,0) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (d decimal);
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `d` decimal(10,0) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (d decimal(66,0));
-ERROR 42000: Too big precision 66 specified for column 'd'. Maximum is 65.
+ERROR 42000: Too-big precision 66 specified for 'd'. Maximum is 65.
 CREATE TABLE t1 (i INT, d1 DECIMAL(9,2), d2 DECIMAL(9,2));
 INSERT INTO t1 VALUES (1, 101.40, 21.40), (1, -80.00, 0.00),
 (2, 0.00, 0.00), (2, -13.20, 0.00), (2, 59.60, 46.40),
@@ -791,6 +808,8 @@ CREATE TABLE t1 (
 qty decimal(16,6) default NULL, 
 dps tinyint(3) unsigned default NULL 
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1.1325,3);
 SELECT ROUND(qty,3), dps, ROUND(qty,dps) FROM t1;
 ROUND(qty,3)	dps	ROUND(qty,dps)
@@ -815,6 +834,8 @@ SELECT MOD(1, .12345678912345678912345678912345678912345678912345678912345678912
 MOD()
 0.012345687012345687012345687012345687012345687012345687012345687012345687000000000
 create table t1 (f1 decimal(6,6),f2 decimal(6,6) zerofill);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
 insert into t1 values (-0.123456,0.123456);
 select group_concat(f1),group_concat(f2) from t1;
 group_concat(f1)	group_concat(f2)
@@ -844,8 +865,8 @@ c
 123456
 SELECT ROUND( a, 100 ) AS c FROM t1 ORDER BY c;
 c
-123456.000000000000000000000000000000
-123456.000000000000000000000000000000
+123456
+123456
 CREATE TABLE t2( a NUMERIC, b INT );
 INSERT INTO t2 VALUES (123456, 100);
 SELECT TRUNCATE( a, b ) AS c FROM t2 ORDER BY c;
@@ -866,8 +887,8 @@ c
 123456
 SELECT ROUND( a, 100 ) AS c FROM t3 ORDER BY c;
 c
-123456.000000000000000000000000000000
-123456.000000000000000000000000000000
+123456
+123456
 CREATE TABLE t4( a DECIMAL, b INT );
 INSERT INTO t4 VALUES (123456, 40), (123456, 40);
 SELECT TRUNCATE( a, b ) AS c FROM t4 ORDER BY c;
@@ -880,8 +901,8 @@ c
 123456
 SELECT ROUND( a, 100 ) AS c FROM t4 ORDER BY c;
 c
-123456.000000000000000000000000000000
-123456.000000000000000000000000000000
+123456
+123456
 delete from t1;
 INSERT INTO t1 VALUES (1234567890, 20), (999.99, 5);
 Warnings:
@@ -890,8 +911,8 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` decimal(10,0) DEFAULT NULL,
-  `b` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `b` int DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 select round(a,b) as c from t1 order by c;
 c
 1000
@@ -994,3 +1015,19 @@ GROUP BY t2.col0
 WHERE CONCAT(t1.col1, CAST(subq.col0 AS DECIMAL));
 1
 DROP TABLE t1, t2;
+SET sql_mode = default;
+#
+# Bug#32591589: ASSERTION `DIGITS <= DECIMAL_INT_PART()' FAILED|SQL/ITEM_FUNC.CC
+#
+SELECT CAST(9.9 AS SIGNED INTEGER) AS f;
+f
+10
+#
+# Bug#34973932 	Decimal value assertion error
+#
+SELECT 1 < ALL(VALUES ROW(2),ROW(CAST(3 AS DECIMAL))) FROM DUAL;
+1 < ALL(VALUES ROW(2),ROW(CAST(3 AS DECIMAL)))
+1
+SELECT 1 < ALL(VALUES ROW(2),ROW(3.0)) FROM DUAL;
+1 < ALL(VALUES ROW(2),ROW(3.0))
+1

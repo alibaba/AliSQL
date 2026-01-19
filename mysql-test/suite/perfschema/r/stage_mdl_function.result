@@ -1,3 +1,8 @@
+select INSTRUMENTED, HISTORY
+from performance_schema.threads
+where PROCESSLIST_ID = connection_id();
+INSTRUMENTED	HISTORY
+YES	YES
 drop function if exists test.f1;
 create function test.f1() returns int
 return 1;
@@ -5,6 +10,11 @@ begin;
 select test.f1();
 test.f1()
 1
+select INSTRUMENTED, HISTORY
+from performance_schema.threads
+where PROCESSLIST_ID = connection_id();
+INSTRUMENTED	HISTORY
+YES	YES
 drop function test.f1;
 call dump_one_thread('user1');
 username	event_name	sql_text
@@ -14,20 +24,15 @@ username	event_name	nesting_event_type
 user1	stage/sql/init	STATEMENT
 user1	stage/sql/System lock	STATEMENT
 user1	stage/sql/optimizing	STATEMENT
-user1	stage/sql/executing	STATEMENT
-user1	stage/sql/Opening tables	STATEMENT
-user1	stage/sql/end	STATEMENT
-user1	stage/sql/query end	STATEMENT
-user1	stage/sql/closing tables	STATEMENT
-user1	stage/sql/freeing items	STATEMENT
-user1	stage/sql/cleaning up	STATEMENT
 call dump_one_thread('user2');
 username	event_name	sql_text
 user2	statement/sql/drop_function	drop function test.f1
 username	event_name	nesting_event_type
 user2	stage/sql/Waiting for stored function metadata lock	STATEMENT
 username	event_name	nesting_event_type
-user2	stage/sql/init	STATEMENT
+user2	stage/sql/starting	STATEMENT
+user2	stage/sql/Executing hook on transaction begin.	STATEMENT
+user2	stage/sql/starting	STATEMENT
 select f1();
 f1()
 1

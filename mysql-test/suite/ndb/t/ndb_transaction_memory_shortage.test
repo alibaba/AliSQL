@@ -1,0 +1,169 @@
+--source include/have_ndb.inc
+--source include/have_ndb_debug.inc
+
+create table t0 (c int primary key) engine=ndbcluster;
+
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  d int NOT NULL,
+  PRIMARY KEY (`b`,`a`),
+  unique key(d),
+  key (c),
+  foreign key (c) references t0(c) on delete cascade
+) ENGINE=ndbcluster;
+
+# A helper table for generating inserts into t1.
+create table num (n int);
+insert into num value (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+
+# Transient transaction memory pools from Dbtc.hpp:
+# DBTC_ATTRIBUTE_BUFFER_TRANSIENT_POOL_INDEX = 0
+# DBTC_COMMIT_ACK_MARKER_BUFFER_TRANSIENT_POOL_INDEX = 1
+# DBTC_FIRED_TRIGGER_DATA_TRANSIENT_POOL_INDEX = 2
+# DBTC_INDEX_OPERATION_TRANSIENT_POOL_INDEX = 3
+# DBTC_CONNECT_RECORD_TRANSIENT_POOL_INDEX = 4
+# DBTC_API_CONNECT_TIMERS_TRANSIENT_POOL_INDEX = 5
+# DBTC_API_CONNECT_RECORD_TRANSIENT_POOL_INDEX = 6
+# DBTC_CACHE_RECORD_TRANSIENT_POOL_INDEX = 7
+# DBTC_FRAG_LOCATION_TRANSIENT_POOL_INDEX = 8
+# DBTC_SCAN_FRAGMENT_TRANSIENT_POOL_INDEX = 9
+# DBTC_SCAN_RECORD_TRANSIENT_POOL_INDEX = 10
+# DBTC_GCP_RECORD_TRANSIENT_POOL_INDEX = 11
+# DBTC_COMMIT_ACK_MARKER_TRANSIENT_POOL_INDEX = 12
+
+set @pool = 13;
+while (`select @pool > 0`)
+{
+  set @pool = @pool - 1;
+
+  # Testing of two pools are disabled:
+  # Pool 7: Bug#29131828 OUT OF DBTC::CACHERECORD CAUSE MEMORY CORRUPTION LIKE
+  # Overuse GCP record pool (11) will abort nodes, can not recover from that.
+  if (`select @pool not in (7, 11)`)
+  {
+    insert into t0 (c) values (1),(2),(3),(4);
+    let $pool=`select @pool`;
+    echo === Make DBTC pool $pool out of memory ===;
+
+    # Send DUMP to all data nodes to set new max size of pool for fired triggers.
+    #   TcSetTransientPoolMaxSize(2556)
+    #   MAX_SIZE(0)
+    exec $NDB_MGM --execute "ALL DUMP 2556 $pool 0";
+    source ndb_transaction_memory_shortage.inc;
+    # Send DUMP to all data nodes to reset max size of pool for fired triggers.
+    #   TcResetTransientPoolMaxSize(2557)
+    exec $NDB_MGM --execute "ALL DUMP 2557 $pool";
+    sleep 0.1;
+    delete from t0;
+  }
+}
+
+# Transient transaction memory pools from Dblqh.hpp:
+# DBLQH_OPERATION_RECORD_TRANSIENT_POOL_INDEX = 0
+# DBLQH_SCAN_RECORD_TRANSIENT_POOL_INDEX = 1
+set @pool = 2;
+while (`select @pool > 0`)
+{
+  set @pool = @pool - 1;
+
+  insert into t0 (c) values (1),(2),(3),(4);
+  let $pool=`select @pool`;
+  echo === Make DBLQH pool $pool out of memory ===;
+
+  # Send DUMP to all data nodes to set new max size of pool for fired triggers.
+  #   LqhSetTransientPoolMaxSize(2356)
+  #   MAX_SIZE(0)
+  exec $NDB_MGM --execute "ALL DUMP 2356 $pool 0";
+  source ndb_transaction_memory_shortage.inc;
+  # Send DUMP to all data nodes to reset max size of pool for fired triggers.
+  #   LqhResetTransientPoolMaxSize(2357)
+  exec $NDB_MGM --execute "ALL DUMP 2357 $pool";
+  sleep 0.1;
+  delete from t0;
+}
+
+# Transient transaction memory pools from Dbtup.hpp:
+# DBTUP_OPERATION_RECORD_TRANSIENT_POOL_INDEX = 0
+# DBTUP_STORED_PROCEDURE_TRANSIENT_POOL_INDEX = 1
+# DBTUP_SCAN_LOCK_TRANSIENT_POOL_INDEX = 2
+# DBTUP_SCAN_OPERATION_TRANSIENT_POOL_INDEX = 3
+set @pool = 4;
+while (`select @pool > 0`)
+{
+  set @pool = @pool - 1;
+
+  insert into t0 (c) values (1),(2),(3),(4);
+  let $pool=`select @pool`;
+  echo === Make DBTUP pool $pool out of memory ===;
+
+  # Send DUMP to all data nodes to set new max size of pool for fired triggers.
+  #   TupSetTransientPoolMaxSize(1214)
+  #   MAX_SIZE(0)
+  exec $NDB_MGM --execute "ALL DUMP 1214 $pool 0";
+  source ndb_transaction_memory_shortage.inc;
+  # Send DUMP to all data nodes to reset max size of pool for fired triggers.
+  #   TupResetTransientPoolMaxSize(1215)
+  exec $NDB_MGM --execute "ALL DUMP 1215 $pool";
+  sleep 0.1;
+  delete from t0;
+}
+
+# Transient transaction memory pools from Dbacc.hpp:
+# DBACC_SCAN_RECORD_TRANSIENT_POOL_INDEX = 0
+# DBACC_OPERATION_RECORD_TRANSIENT_POOL_INDEX = 1
+set @pool = 2;
+while (`select @pool > 0`)
+{
+  set @pool = @pool - 1;
+
+  # Testing of one pool is done in ndb.ndb_transaction_memory_shortage_dbacc.
+  # Pool 0: Bug #31977133 NDB.NDB_TRANSACTION_MEMORY_SHORTAGE: SOME OPERATION SHOULD HAVE FAILED
+  if (`select @pool not in (0)`)
+  {
+    insert into t0 (c) values (1),(2),(3),(4);
+    let $pool=`select @pool`;
+    echo === Make DBACC pool $pool out of memory ===;
+
+    # Send DUMP to all data nodes to set new max size of pool for fired triggers.
+    #   AccSetTransientPoolMaxSize(2407)
+    #   MAX_SIZE(0)
+    exec $NDB_MGM --execute "ALL DUMP 2407 $pool 0";
+    source ndb_transaction_memory_shortage.inc;
+    # Send DUMP to all data nodes to reset max size of pool for fired triggers.
+    #   AccResetTransientPoolMaxSize(2408)
+    exec $NDB_MGM --execute "ALL DUMP 2408 $pool";
+    sleep 0.1;
+    delete from t0;
+  }
+}
+
+# Transient transaction memory pools from Dbtux.hpp:
+# DBTUX_SCAN_OPERATION_TRANSIENT_POOL_INDEX = 0
+# DBTUX_SCAN_LOCK_TRANSIENT_POOL_INDEX = 1
+# DBTUX_SCAN_BOUND_TRANSIENT_POOL_INDEX = 2
+set @pool = 3;
+while (`select @pool > 0`)
+{
+  set @pool = @pool - 1;
+
+  insert into t0 (c) values (1),(2),(3),(4);
+  let $pool=`select @pool`;
+  echo === Make DBTUX pool $pool out of memory ===;
+
+  # Send DUMP to all data nodes to set new max size of pool for fired triggers.
+  #   TuxSetTransientPoolMaxSize(12010)
+  #   MAX_SIZE(0)
+  exec $NDB_MGM --execute "ALL DUMP 12010 $pool 0";
+  source ndb_transaction_memory_shortage.inc;
+  # Send DUMP to all data nodes to reset max size of pool for fired triggers.
+  #   TuxResetTransientPoolMaxSize(12011)
+  exec $NDB_MGM --execute "ALL DUMP 12011 $pool";
+  sleep 0.1;
+  delete from t0;
+}
+
+drop table num;
+drop table t1;
+drop table t0;

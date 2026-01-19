@@ -1,0 +1,51 @@
+!include ../my.cnf
+
+[cluster_config.1]
+ndbd=,,,
+#MaxDMLOperationsPerTransaction=4294967039
+#MaxDMLOperationsPerTransaction=4294967039
+MaxDMLOperationsPerTransaction=32
+MaxNoOfLocalOperations=1024
+# Disable auto create index stats. This ensures that
+# the error inserted in the test fails at the expected
+# place i.e. during TCCOMMITREQ and not TCKEYREQ as is
+# the case with auto index stats. The latter leads to a
+# small Result Content Mismatch with an additional NdbApi
+# message being written
+IndexStatAutoCreate=0
+
+[cluster_config.ndbd.1.1]
+NodeId=1
+MaxNoOfConcurrentOperations=32
+ReservedConcurrentOperations=32
+MaxNoOfConcurrentTransactions=32
+ReservedConcurrentTransactions=32
+
+[cluster_config.ndbd.2.1]
+NodeId=2
+MaxNoOfConcurrentOperations=1024
+ReservedConcurrentOperations=1024
+MaxNoOfConcurrentTransactions=32
+ReservedConcurrentTransactions=32
+#MaxDMLOperationsPerTransaction=1024
+MaxDMLOperationsPerTransaction=92
+
+[cluster_config.ndbd.3.1]
+NodeId=3
+MaxNoOfConcurrentOperations=32
+ReservedConcurrentOperations=32
+MaxNoOfConcurrentTransactions=32
+ReservedConcurrentTransactions=32
+
+[cluster_config.ndbd.4.1]
+NodeId=4
+MaxNoOfConcurrentOperations=32
+ReservedConcurrentOperations=32
+MaxNoOfConcurrentTransactions=32
+ReservedConcurrentTransactions=32
+
+[mysqld]
+# Make sure (write) transaction uses data node 2
+ndb-data-node-neighbour=2
+# insert select in same transaction seems to find another node than 2 with RB on. Right or wrong?
+ndb-read-backup=0

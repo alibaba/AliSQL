@@ -1,0 +1,524 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Tutorial</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../boost_pfr.html" title="Chapter 28. Boost.PFR 2.0">
+<link rel="prev" href="short_examples_for_the_impatient.html" title="Short Examples for the Impatient">
+<link rel="next" href="limitations_and_configuration.html" title="Limitations and Configuration">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="short_examples_for_the_impatient.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../boost_pfr.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="limitations_and_configuration.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_pfr.tutorial"></a><a class="link" href="tutorial.html" title="Tutorial">Tutorial</a>
+</h2></div></div></div>
+<div class="toc"><dl class="toc">
+<dt><span class="section"><a href="tutorial.html#boost_pfr.tutorial.why_tuples_are_bad_and_aggregate">Why
+      tuples are bad and aggregates are more preferable?</a></span></dt>
+<dt><span class="section"><a href="tutorial.html#boost_pfr.tutorial.accessing_structure_member_by_in">Accessing
+      structure member by index</a></span></dt>
+<dt><span class="section"><a href="tutorial.html#boost_pfr.tutorial.custom_printing_of_aggregates">Custom
+      printing of aggregates</a></span></dt>
+<dt><span class="section"><a href="tutorial.html#boost_pfr.tutorial.three_ways_of_getting_operators">Three
+      ways of getting operators </a></span></dt>
+<dt><span class="section"><a href="tutorial.html#boost_pfr.tutorial.reflection_of_unions">Reflection of
+      unions </a></span></dt>
+</dl></div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_pfr.tutorial.why_tuples_are_bad_and_aggregate"></a><a class="link" href="tutorial.html#boost_pfr.tutorial.why_tuples_are_bad_and_aggregate" title="Why tuples are bad and aggregates are more preferable?">Why
+      tuples are bad and aggregates are more preferable?</a>
+</h3></div></div></div>
+<p>
+        <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span></code> and <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span></code>
+        are good for generic programming, however they have disadvantages. First
+        of all, code that uses them becomes barely readable. Consider two definitions:
+      </p>
+<div class="informaltable">
+<a name="boost_pfr.tutorial.why_tuples_are_bad_and_aggregate.tuples_vs_aggregates"></a><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Tuple
+                </p>
+              </th>
+<th>
+                <p>
+                  Aggregate
+                </p>
+              </th>
+</tr></thead>
+<tbody><tr>
+<td>
+<pre xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" class="table-programlisting"><span class="keyword">using</span> <span class="identifier">auth_info_tuple</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&lt;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">int64_t</span><span class="special">,</span> <span class="comment">// What does this integer represents?</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">int64_t</span><span class="special">,</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">time_t</span>
+<span class="special">&gt;;</span>
+</pre>
+              </td>
+<td>
+<pre xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" class="table-programlisting"><span class="keyword">struct</span> <span class="identifier">auth_info_aggregate</span> <span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">int64_t</span> <span class="identifier">user_id</span><span class="special">;</span>    <span class="comment">// Oh, now I see!</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">int64_t</span> <span class="identifier">session_id</span><span class="special">;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">time_t</span>  <span class="identifier">valid_till</span><span class="special">;</span>
+<span class="special">};</span>
+</pre>
+              </td>
+</tr></tbody>
+</table>
+</div>
+<p>
+        Definition via aggregate initializable structure is much more clear. Same
+        story with usages: <code class="computeroutput"><span class="keyword">return</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">get</span><span class="special">&lt;</span><span class="number">1</span><span class="special">&gt;(</span><span class="identifier">value</span><span class="special">);</span></code> vs. <code class="computeroutput"><span class="keyword">return</span>
+        <span class="identifier">value</span><span class="special">.</span><span class="identifier">session_id</span><span class="special">;</span></code>.
+      </p>
+<p>
+        Another advantage of aggregates is a more efficient copy, move construction
+        and assignments.
+      </p>
+<p>
+        Because of the above issues some guidelines recommend to <span class="bold"><strong>use
+        aggregates instead of tuples</strong></span>. However aggregates fail when it
+        comes to the functional like programming.
+      </p>
+<p>
+        Boost.PFR library <span class="bold"><strong>provides tuple like methods for aggregate
+        initializable structures</strong></span>, making aggregates usable in contexts
+        where only tuples were useful.
+      </p>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_pfr.tutorial.accessing_structure_member_by_in"></a><a class="link" href="tutorial.html#boost_pfr.tutorial.accessing_structure_member_by_in" title="Accessing structure member by index">Accessing
+      structure member by index</a>
+</h3></div></div></div>
+<p>
+        The following example shows how to access structure fields by index using
+        <code class="computeroutput"><a class="link" href="../boost/pfr/get.html" title="Function get">boost::pfr::get</a></code>.
+      </p>
+<p>
+        Let's define some structure:
+      </p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">pfr</span><span class="special">/</span><span class="identifier">core</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="keyword">struct</span> <span class="identifier">foo</span> <span class="special">{</span>            <span class="comment">// defining structure</span>
+    <span class="keyword">int</span> <span class="identifier">some_integer</span><span class="special">;</span>
+    <span class="keyword">char</span> <span class="identifier">c</span><span class="special">;</span>
+<span class="special">};</span>
+</pre>
+<p>
+        We can access fields of that structure by index:
+      </p>
+<pre class="programlisting"><span class="identifier">foo</span> <span class="identifier">f</span> <span class="special">{</span><span class="number">777</span><span class="special">,</span> <span class="char">'!'</span><span class="special">};</span>
+<span class="keyword">auto</span><span class="special">&amp;</span> <span class="identifier">r1</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">pfr</span><span class="special">::</span><span class="identifier">get</span><span class="special">&lt;</span><span class="number">0</span><span class="special">&gt;(</span><span class="identifier">f</span><span class="special">);</span> <span class="comment">// accessing field with index 0, returns reference to `foo::some_integer`</span>
+<span class="keyword">auto</span><span class="special">&amp;</span> <span class="identifier">r2</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">pfr</span><span class="special">::</span><span class="identifier">get</span><span class="special">&lt;</span><span class="number">1</span><span class="special">&gt;(</span><span class="identifier">f</span><span class="special">);</span> <span class="comment">// accessing field with index 1, returns reference to `foo::c`</span>
+</pre>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_pfr.tutorial.custom_printing_of_aggregates"></a><a class="link" href="tutorial.html#boost_pfr.tutorial.custom_printing_of_aggregates" title="Custom printing of aggregates">Custom
+      printing of aggregates</a>
+</h3></div></div></div>
+<p>
+        The following example shows how to write your own io-manipulator for printing:
+      </p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">pfr</span><span class="special">/</span><span class="identifier">ops</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">ostream</span><span class="special">&gt;</span>
+
+<span class="keyword">namespace</span> <span class="identifier">my_ns</span> <span class="special">{</span>
+
+<span class="comment">/// Usage:</span>
+<span class="comment">///     struct foo {std::uint8_t a, b;};</span>
+<span class="comment">///     ...</span>
+<span class="comment">///     std::cout &lt;&lt; my_ns::my_io(foo{42, 22});</span>
+<span class="comment">///</span>
+<span class="comment">/// Output: 42, 22</span>
+<span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+<span class="keyword">auto</span> <span class="identifier">my_io</span><span class="special">(</span><span class="keyword">const</span> <span class="identifier">T</span><span class="special">&amp;</span> <span class="identifier">value</span><span class="special">);</span>
+
+<span class="keyword">namespace</span> <span class="identifier">detail</span> <span class="special">{</span>
+    <span class="comment">// Helpers to print individual values</span>
+    <span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+    <span class="keyword">void</span> <span class="identifier">print_each</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">ostream</span><span class="special">&amp;</span> <span class="identifier">out</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span><span class="special">&amp;</span> <span class="identifier">v</span><span class="special">)</span> <span class="special">{</span> <span class="identifier">out</span> <span class="special">&lt;&lt;</span> <span class="identifier">v</span><span class="special">;</span> <span class="special">}</span>
+    <span class="keyword">void</span> <span class="identifier">print_each</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">ostream</span><span class="special">&amp;</span> <span class="identifier">out</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">uint8_t</span> <span class="identifier">v</span><span class="special">)</span> <span class="special">{</span> <span class="identifier">out</span> <span class="special">&lt;&lt;</span> <span class="keyword">static_cast</span><span class="special">&lt;</span><span class="keyword">unsigned</span><span class="special">&gt;(</span><span class="identifier">v</span><span class="special">);</span> <span class="special">}</span>
+    <span class="keyword">void</span> <span class="identifier">print_each</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">ostream</span><span class="special">&amp;</span> <span class="identifier">out</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">int8_t</span> <span class="identifier">v</span><span class="special">)</span> <span class="special">{</span> <span class="identifier">out</span> <span class="special">&lt;&lt;</span> <span class="keyword">static_cast</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;(</span><span class="identifier">v</span><span class="special">);</span> <span class="special">}</span>
+
+    <span class="comment">// Structure to keep a reference to value, that will be ostreamed lower</span>
+    <span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+    <span class="keyword">struct</span> <span class="identifier">io_reference</span> <span class="special">{</span>
+        <span class="keyword">const</span> <span class="identifier">T</span><span class="special">&amp;</span> <span class="identifier">value</span><span class="special">;</span>
+    <span class="special">};</span>
+
+    <span class="comment">// Output each field of io_reference::value</span>
+    <span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">ostream</span><span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">&lt;&lt;(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">ostream</span><span class="special">&amp;</span> <span class="identifier">out</span><span class="special">,</span> <span class="identifier">io_reference</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;&amp;&amp;</span> <span class="identifier">x</span><span class="special">)</span> <span class="special">{</span>
+        <span class="keyword">const</span> <span class="keyword">char</span><span class="special">*</span> <span class="identifier">sep</span> <span class="special">=</span> <span class="string">""</span><span class="special">;</span>
+
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">pfr</span><span class="special">::</span><span class="identifier">for_each_field</span><span class="special">(</span><span class="identifier">x</span><span class="special">.</span><span class="identifier">value</span><span class="special">,</span> <span class="special">[&amp;](</span><span class="keyword">const</span> <span class="keyword">auto</span><span class="special">&amp;</span> <span class="identifier">v</span><span class="special">)</span> <span class="special">{</span>
+            <span class="identifier">out</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">exchange</span><span class="special">(</span><span class="identifier">sep</span><span class="special">,</span> <span class="string">", "</span><span class="special">);</span>
+            <span class="identifier">detail</span><span class="special">::</span><span class="identifier">print_each</span><span class="special">(</span><span class="identifier">out</span><span class="special">,</span> <span class="identifier">v</span><span class="special">);</span>
+        <span class="special">});</span>
+        <span class="keyword">return</span> <span class="identifier">out</span><span class="special">;</span>
+    <span class="special">}</span>
+<span class="special">}</span>
+
+<span class="comment">// Definition:</span>
+<span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+<span class="keyword">auto</span> <span class="identifier">my_io</span><span class="special">(</span><span class="keyword">const</span> <span class="identifier">T</span><span class="special">&amp;</span> <span class="identifier">value</span><span class="special">)</span> <span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">detail</span><span class="special">::</span><span class="identifier">io_reference</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;{</span><span class="identifier">value</span><span class="special">};</span>
+<span class="special">}</span>
+
+<span class="special">}</span> <span class="comment">// namespace my_ns</span>
+</pre>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_pfr.tutorial.three_ways_of_getting_operators"></a><a class="link" href="tutorial.html#boost_pfr.tutorial.three_ways_of_getting_operators" title="Three ways of getting operators">Three
+      ways of getting operators </a>
+</h3></div></div></div>
+<p>
+        There are three ways to start using Boost.PFR hashing, comparison and streaming
+        for type <code class="computeroutput"><span class="identifier">T</span></code> in your code.
+        Each method has its own drawbacks and suits own cases.
+      </p>
+<div class="table">
+<a name="boost_pfr.tutorial.three_ways_of_getting_operators.ops_comp"></a><p class="title"><b>Table 28.1. Different approaches for operators</b></p>
+<div class="table-contents"><table class="table" summary="Different approaches for operators">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Approach
+                </p>
+              </th>
+<th>
+                <p>
+                  When to use
+                </p>
+              </th>
+<th>
+                <p>
+                  Operators could be found by ADL
+                </p>
+              </th>
+<th>
+                <p>
+                  Works for local types
+                </p>
+              </th>
+<th>
+                <p>
+                  Usable locally, without affecting code from other scopes
+                </p>
+              </th>
+<th>
+                <p>
+                  Ignores implicit conversion operators
+                </p>
+              </th>
+<th>
+                <p>
+                  Respects user defined operators
+                </p>
+              </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+                <p>
+                  <code class="computeroutput"><a class="link" href="../reference_section.html#header.boost.pfr.ops_hpp" title="Header &lt;boost/pfr/ops.hpp&gt;">boost/pfr/ops.hpp: eq, ne,
+                  gt, lt, le, ge</a></code>
+                </p>
+                <p>
+                  <code class="computeroutput"><a class="link" href="../reference_section.html#header.boost.pfr.io_hpp" title="Header &lt;boost/pfr/io.hpp&gt;">boost/pfr/io.hpp: io</a></code>
+                </p>
+              </td>
+<td>
+                <p>
+                  Use when you need to compare values by provided for them operators
+                  or via field-by-field comparison.
+                </p>
+              </td>
+<td>
+                <p>
+                  no
+                </p>
+              </td>
+<td>
+                <p>
+                  yes
+                </p>
+              </td>
+<td>
+                <p>
+                  yes
+                </p>
+              </td>
+<td>
+                <p>
+                  no
+                </p>
+              </td>
+<td>
+                <p>
+                  yes
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <code class="computeroutput"><a class="link" href="../BOOST_PFR_FUNCTIONS_FOR.html" title="Macro BOOST_PFR_FUNCTIONS_FOR">BOOST_PFR_FUNCTIONS_FOR(T)</a></code>
+                </p>
+              </td>
+<td>
+                <p>
+                  Use near the type definition to define the whole set of operators
+                  for your type.
+                </p>
+              </td>
+<td>
+                <p>
+                  yes
+                </p>
+              </td>
+<td>
+                <p>
+                  no
+                </p>
+              </td>
+<td>
+                <p>
+                  no
+                </p>
+              </td>
+<td>
+                <p>
+                  yes for T
+                </p>
+              </td>
+<td>
+                <p>
+                  no (compile time error)
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <code class="computeroutput"><a class="link" href="../reference_section.html#header.boost.pfr.ops_fields_hpp" title="Header &lt;boost/pfr/ops_fields.hpp&gt;">boost/pfr/ops_fields.hpp:
+                  eq_fields, ne_fields, gt_fields, lt_fields, le_fields, ge_fields</a></code>
+                </p>
+                <p>
+                  <code class="computeroutput"><a class="link" href="../reference_section.html#header.boost.pfr.io_hpp" title="Header &lt;boost/pfr/io.hpp&gt;">boost/pfr/io_fields.hpp: io_fields</a></code>
+                </p>
+              </td>
+<td>
+                <p>
+                  Use to implement the required set of operators for your type.
+                </p>
+              </td>
+<td>
+                <p>
+                  no
+                </p>
+              </td>
+<td>
+                <p>
+                  yes
+                </p>
+              </td>
+<td>
+                <p>
+                  yes
+                </p>
+              </td>
+<td>
+                <p>
+                  yes
+                </p>
+              </td>
+<td>
+                <p>
+                  yes
+                </p>
+              </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+        More detailed description follows:
+      </p>
+<p>
+        <span class="bold"><strong>1. <code class="computeroutput"><span class="identifier">eq</span><span class="special">,</span> <span class="identifier">ne</span><span class="special">,</span>
+        <span class="identifier">gt</span><span class="special">,</span> <span class="identifier">lt</span><span class="special">,</span> <span class="identifier">le</span><span class="special">,</span> <span class="identifier">ge</span><span class="special">,</span>
+        <span class="identifier">io</span></code> approach</strong></span>
+      </p>
+<p>
+        This method is good if you're writing generic algorithms and need to use
+        operators from Boost.PFR only if there are no operators defined for the type:
+      </p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">pfr</span><span class="special">/</span><span class="identifier">ops</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">uniform_comparator_less</span> <span class="special">{</span>
+    <span class="keyword">bool</span> <span class="keyword">operator</span><span class="special">()(</span><span class="keyword">const</span> <span class="identifier">T</span><span class="special">&amp;</span> <span class="identifier">lhs</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span><span class="special">&amp;</span> <span class="identifier">rhs</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span> <span class="special">{</span>
+        <span class="comment">// If T has operator&lt; or conversion operator then it is used.</span>
+        <span class="keyword">return</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">pfr</span><span class="special">::</span><span class="identifier">lt</span><span class="special">(</span><span class="identifier">lhs</span><span class="special">,</span> <span class="identifier">rhs</span><span class="special">);</span>
+    <span class="special">}</span>
+<span class="special">};</span>
+</pre>
+<p>
+        This methods effects are local to the function. It works even for local types,
+        like structures defined in functions.
+      </p>
+<p>
+        <span class="bold"><strong>2. BOOST_PFR_FUNCTIONS_FOR(T) approach</strong></span>
+      </p>
+<p>
+        This method is good if you're writing a structure and wish to define operators
+        for that structure.
+      </p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">pfr</span><span class="special">/</span><span class="identifier">functions_for</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="keyword">struct</span> <span class="identifier">pair_like</span> <span class="special">{</span>
+    <span class="keyword">int</span> <span class="identifier">first</span><span class="special">;</span>
+    <span class="keyword">short</span> <span class="identifier">second</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="identifier">BOOST_PFR_FUNCTIONS_FOR</span><span class="special">(</span><span class="identifier">pair_like</span><span class="special">)</span>   <span class="comment">// Defines operators</span>
+
+<span class="comment">// ...</span>
+
+<span class="identifier">assert</span><span class="special">(</span><span class="identifier">pair_like</span><span class="special">{</span><span class="number">1</span><span class="special">,</span> <span class="number">2</span><span class="special">}</span> <span class="special">&lt;</span> <span class="identifier">pair_like</span><span class="special">{</span><span class="number">1</span><span class="special">,</span> <span class="number">3</span><span class="special">});</span>
+</pre>
+<p>
+        Argument Dependant Lookup works well. <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">less</span></code>
+        will find the operators for <code class="computeroutput"><span class="keyword">struct</span>
+        <span class="identifier">pair_like</span></code>. <code class="computeroutput"><a class="link" href="../BOOST_PFR_FUNCTIONS_FOR.html" title="Macro BOOST_PFR_FUNCTIONS_FOR">BOOST_PFR_FUNCTIONS_FOR(T)</a></code>
+        can not be used for local types. It does not respect conversion operators
+        of <code class="computeroutput"><span class="identifier">T</span></code>, so for example the
+        following code will output different values:
+      </p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">pfr</span><span class="special">/</span><span class="identifier">functions_for</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="keyword">struct</span> <span class="identifier">empty</span> <span class="special">{</span>
+    <span class="keyword">operator</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span><span class="special">()</span> <span class="special">{</span> <span class="keyword">return</span> <span class="string">"empty{}"</span><span class="special">;</span> <span class="special">}</span>
+<span class="special">};</span>
+<span class="comment">// Uncomment to get different output:</span>
+<span class="comment">// BOOST_PFR_FUNCTIONS_FOR(empty)</span>
+
+<span class="comment">// ...</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">cout</span> <span class="special">&lt;&lt;</span> <span class="identifier">empty</span><span class="special">{};</span> <span class="comment">// Outputs `empty{}` if BOOST_PFR_FUNCTIONS_FOR(empty) is commented out, '{}' otherwise.</span>
+</pre>
+<p>
+        <span class="bold"><strong>3. <code class="computeroutput"><span class="identifier">eq_fields</span><span class="special">,</span> <span class="identifier">ne_fields</span><span class="special">,</span> <span class="identifier">gt_fields</span><span class="special">,</span> <span class="identifier">lt_fields</span><span class="special">,</span> <span class="identifier">le_fields</span><span class="special">,</span> <span class="identifier">ge_fields</span><span class="special">,</span> <span class="identifier">io_fields</span></code>
+        approach</strong></span>
+      </p>
+<p>
+        This method is good if you're willing to provide only some operators for
+        your type:
+      </p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">pfr</span><span class="special">/</span><span class="identifier">io_fields</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="keyword">struct</span> <span class="identifier">pair_like</span> <span class="special">{</span>
+    <span class="keyword">int</span> <span class="identifier">first</span><span class="special">;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">second</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="keyword">inline</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">ostream</span><span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">&lt;&lt;(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">ostream</span><span class="special">&amp;</span> <span class="identifier">os</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">pair_like</span><span class="special">&amp;</span> <span class="identifier">x</span><span class="special">)</span> <span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">os</span> <span class="special">&lt;&lt;</span>  <span class="identifier">bost</span><span class="special">::</span><span class="identifier">pfr</span><span class="special">::</span><span class="identifier">io_fields</span><span class="special">(</span><span class="identifier">x</span><span class="special">);</span>
+<span class="special">}</span>
+</pre>
+<p>
+        All the <code class="computeroutput"><span class="special">*</span><span class="identifier">_fields</span></code>
+        functions do ignore user defined operators and work only with fields of a
+        type. This makes them perfect for defining you own operators.
+      </p>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_pfr.tutorial.reflection_of_unions"></a><a class="link" href="tutorial.html#boost_pfr.tutorial.reflection_of_unions" title="Reflection of unions">Reflection of
+      unions </a>
+</h3></div></div></div>
+<p>
+        You could use tuple-like representation if a type contains union. But be
+        sure that operations for union are manually defined:
+      </p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">pfr</span><span class="special">/</span><span class="identifier">ops</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="keyword">union</span> <span class="identifier">test_union</span> <span class="special">{</span>
+    <span class="keyword">int</span> <span class="identifier">i</span><span class="special">;</span>
+    <span class="keyword">float</span> <span class="identifier">f</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="keyword">inline</span> <span class="keyword">bool</span> <span class="keyword">operator</span><span class="special">==(</span><span class="identifier">test_union</span> <span class="identifier">l</span><span class="special">,</span> <span class="identifier">test_union</span> <span class="identifier">r</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span> <span class="comment">// Compile time error without this operator</span>
+
+<span class="keyword">bool</span> <span class="identifier">some_function</span><span class="special">(</span><span class="identifier">test_union</span> <span class="identifier">f1</span><span class="special">,</span> <span class="identifier">test_union</span> <span class="identifier">f2</span><span class="special">)</span> <span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">pfr</span><span class="special">::</span><span class="identifier">eq</span><span class="special">(</span><span class="identifier">f1</span><span class="special">,</span> <span class="identifier">f2</span><span class="special">);</span> <span class="comment">// OK</span>
+<span class="special">}</span>
+</pre>
+<p>
+        Reflection of unions is disabled in the Boost.PFR library for safety reasons.
+        Alas, there's no way to find out <span class="bold"><strong>active</strong></span>
+        member of a union and accessing an inactive member is an Undefined Behavior.
+        For example, library could always return the first member, but ostreaming
+        <code class="computeroutput"><span class="identifier">u</span></code> in <code class="computeroutput"><span class="keyword">union</span>
+        <span class="special">{</span><span class="keyword">char</span><span class="special">*</span> <span class="identifier">c</span><span class="special">;</span>
+        <span class="keyword">long</span> <span class="keyword">long</span>
+        <span class="identifier">ll</span><span class="special">;</span> <span class="special">}</span> <span class="identifier">u</span><span class="special">;</span>
+        <span class="identifier">u</span><span class="special">.</span><span class="identifier">ll</span><span class="special">=</span> <span class="number">1</span><span class="special">;</span></code> will crash your program with an invalid
+        pointer dereference.
+      </p>
+<p>
+        Any attempt to reflect unions leads to a compile time error. In many cases
+        a static assert is triggered that outputs the following message:
+      </p>
+<pre class="programlisting"><span class="identifier">error</span><span class="special">:</span> <span class="keyword">static_assert</span> <span class="identifier">failed</span> <span class="string">"====================&gt; Boost.PFR: For safety reasons it is forbidden
+        to reflect unions. See `Reflection of unions` section in the docs for more info."</span>
+</pre>
+</div>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2016-2021 Antony Polukhin<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="short_examples_for_the_impatient.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../boost_pfr.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="limitations_and_configuration.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

@@ -1,0 +1,7 @@
+!include ../my.cnf
+
+[cluster_config.1]
+MaxNoOfLocalOperations=225K
+MaxNoOfConcurrentOperations=225K
+LongMessageBuffer=384M
+DataMemory=128M

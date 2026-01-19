@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 use test;
 CREATE TABLE test.regular_tbl(id MEDIUMINT NOT NULL AUTO_INCREMENT,
@@ -109,16 +109,16 @@ include/sync_slave_sql_with_master.inc
 show create table test.byrange_tbl;
 Table	byrange_tbl
 Create Table	CREATE TABLE `byrange_tbl` (
-  `id` mediumint(9) NOT NULL AUTO_INCREMENT,
+  `id` mediumint NOT NULL AUTO_INCREMENT,
   `dt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `user` char(255) DEFAULT NULL,
   `uuidf` longblob,
-  `fkid` mediumint(9) DEFAULT NULL,
+  `fkid` mediumint DEFAULT NULL,
   `filler` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (id)
-SUBPARTITION BY HASH (id)
+) ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`id`)
+SUBPARTITION BY HASH (`id`)
 SUBPARTITIONS 2
 (PARTITION pa1 VALUES LESS THAN (10) ENGINE = InnoDB,
  PARTITION pa2 VALUES LESS THAN (20) ENGINE = InnoDB,

@@ -19,7 +19,9 @@ create table t2 (i int not null, unique (i));
 insert into t2 select distinct i from t1;
 select * from t2; 
 select distinct t2.i,@vv1:=if(sv1.i,1,0),@vv2:=if(sv2.i,1,0),@vv3:=if(sv3.i,1,0), @vv1+@vv2+@vv3 from t2 left join t1 as sv1 on sv1.i=t2.i and sv1.v=1 left join t1 as sv2 on sv2.i=t2.i and sv2.v=2 left join t1 as sv3 on sv3.i=t2.i and sv3.v=3;
+analyze table t1;
 explain select * from t1 where i=@vv1;
+--skip_if_hypergraph  # SELECT DISTINCT not suppored, so @vv1 is wrong.
 select @vv1,i,v from t1 where i=@vv1;
 explain select * from t1 where @vv1:=@vv1+1 and i=@vv1;
 explain select @vv1:=i from t1 where i=@vv1;
@@ -68,16 +70,22 @@ select @a:=10, @b:=2, @a>@b, @a:="10", @b:="2", @a>@b, @a:=10, @b:=2, @a>@b, @a:
 #
 create table t1 (i int not null);
 insert t1 values (1),(2),(2),(3),(3),(3);
-select @a:=0; select @a, @a:=@a+count(*), count(*), @a from t1 group by i;
-select @a:=0; select @a+0, @a:=@a+0+count(*), count(*), @a+0 from t1 group by i;
+select @a:=0;
+--skip_if_hypergraph  # Depends on the query plan.
+select @a, @a:=@a+count(*), count(*), @a from t1 group by i;
+select @a:=0;
+--skip_if_hypergraph  # Depends on the query plan.
+select @a+0, @a:=@a+0+count(*), count(*), @a+0 from t1 group by i;
 
 set @a=0;
+--skip_if_hypergraph  # Depends on the query plan.
 select @a,@a:="hello",@a,@a:=3,@a,@a:="hello again" from t1 group by i;
+--skip_if_hypergraph  # Depends on the query plan.
 select @a,@a:="hello",@a,@a:=3,@a,@a:="hello again" from t1 group by i;
 drop table t1;
 
 #
-# Bug #2244: User variables didn't copy collation and derivation
+# Bug #2244: User variables did not copy collation and derivation
 # attributes from values they were initialized to.
 #
 
@@ -206,11 +214,14 @@ drop table bigfailure;
 #
 create table t1(f1 int, f2 int);
 insert into t1 values (1,2),(2,3),(3,1);
+--source include/turn_off_only_full_group_by.inc
 select @var:=f2 from t1 group by f1 order by f2 desc limit 1;
+--skip_if_hypergraph  # ORDER BY + GROUP by is not supported together, so @var is not set.
 select @var;
 create table t2 as select @var:=f2 from t1 group by f1 order by f2 desc limit 1;
 select * from t2;
 select @var;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1,t2;
 
 #
@@ -229,11 +240,11 @@ insert into t1 values
   (1, "a", 1.5, 1.6), (1, "a", 1.5, 1.6), (2, "b", 2.5, 2.6),
   (3, "c", 3.5, 3.6), (4, "d", 4.5, 4.6), (1, "a", 1.5, 1.6),
   (3, "c", 3.5, 3.6), (1, "a", 1.5, 1.6);
-select @a:=f1, count(f1) from t1 group by 1 desc;
-select @a:=f1, count(f1) from t1 group by 1 asc;
-select @a:=f2, count(f2) from t1 group by 1 desc;
-select @a:=f3, count(f3) from t1 group by 1 desc;
-select @a:=f4, count(f4) from t1 group by 1 desc;
+select @a:=f1, count(f1) from t1 group by 1 order by 1 desc;
+select @a:=f1, count(f1) from t1 group by 1 order by 1 asc;
+select @a:=f2, count(f2) from t1 group by 1 order by 1 desc;
+select @a:=f3, count(f3) from t1 group by 1 order by 1 desc;
+select @a:=f4, count(f4) from t1 group by 1 order by 1 desc;
 drop table t1;
 
 #
@@ -254,8 +265,8 @@ set @prev_score := NULL;
 # of a statement and use the same variable in other part of the same statement,
 # so we can get unexpected results.
 --disable_result_log
-select @rownum := @rownum + 1 as row,
- @rank := IF(@prev_score!=a, @rownum, @rank) as rank,
+select @rownum := @rownum + 1 as `row`,
+ @rank := IF(@prev_score!=a, @rownum, @rank) as `rank`,
  @prev_score := a as score
 from t1 order by score desc;
 --enable_result_log
@@ -306,11 +317,13 @@ INSERT INTO t2 VALUES(10, 10, 10);
 INSERT INTO t2 VALUES(10, 10, 10);
 INSERT INTO t3 VALUES(10, 10);
 INSERT INTO t3 VALUES(10, 10);
+--source include/turn_off_only_full_group_by.inc
 
 SELECT MIN(t2.f1),
 @bar:= (SELECT MIN(t3.f2) FROM t3 WHERE t3.f2 > foo)
 FROM t1,t2 WHERE t1.f1 = t2.f1 ORDER BY t2.f1;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1, t2, t3;
 
 --echo End of 5.0 tests
@@ -441,9 +454,11 @@ INSERT INTO t1 VALUES (1,2),(2,3),(3,1);
 CREATE TABLE t2(a INT);
 INSERT INTO t2 VALUES (1);
 SET @var=NULL;
+--source include/turn_off_only_full_group_by.inc
 SELECT @var:=(SELECT f2 FROM t2 WHERE @var) FROM t1 GROUP BY f1 ORDER BY f2 DESC
 LIMIT 1;
 SELECT @var;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1, t2;
 
 #
@@ -461,15 +476,280 @@ INSERT INTO t3 VALUES (1), (4), (7), (10);
 
 SET @var1 = 6;
 
+ANALYZE TABLE t1,t2,t3;
+
 let $query=
 SELECT t1.a, t2.a, t3.a, (@var1:= @var1+0) AS var
 FROM t1
      LEFT JOIN t2 ON t1.a=t2.a AND t2.a < @var1
      LEFT JOIN t3 ON t1.a=t3.a AND t3.a < @var1;
 
+--skip_if_hypergraph  # Depends on the query plan.
 eval explain format=json $query;
 
 --sorted_result
 eval $query;
 
 DROP TABLE t1, t2, t3;
+
+#
+# Starting with MySQL 5.7:
+# Enforcing max length on variable names
+#
+
+# Length 64 is ok.
+set    @X234567890123456789012345678901234567890123456789012345678901234 = 12;
+select @X234567890123456789012345678901234567890123456789012345678901234;
+
+# Length 65 is illegal
+-- error ER_ILLEGAL_USER_VAR
+set    @X2345678901234567890123456789012345678901234567890123456789012345 = 12;
+
+# Length 0 is illegal
+-- error ER_ILLEGAL_USER_VAR
+set @``= "illegal";
+
+# trailing spaces are illegal
+-- error ER_ILLEGAL_USER_VAR
+set @`endswithspace `= "illegal";
+
+# No error reported, illegal identifier treated as non existent
+select @X2345678901234567890123456789012345678901234567890123456789012345;
+select @``;
+select @`endswithspace `;
+
+#
+#Bug#18486509 ASSERTION FAILED: TABLE->KEY_READ == 0 IN CLOSE_THREAD_TABLE
+#
+CREATE TABLE t1(a INT,KEY(a))ENGINE=INNODB;
+SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 GROUP BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col;
+SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 ORDER BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col;
+SET @c =(SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 GROUP BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col);
+SET @d =(SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 ORDER BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col);
+DROP TABLE t1; 
+
+--echo Bug#25727892: Refactor Item::const_item() as a non-virtual function
+
+--echo Coverage for cached and non-cached user variables
+
+CREATE TABLE t1(a INTEGER, b INTEGER);
+INSERT INTO t1 VALUES (1,1), (1,2), (2,1);
+
+
+
+let $query1=SELECT a FROM t1 WHERE a = @x;
+let $query2=SELECT a FROM t1 WHERE a = @x AND (@x:= @x);
+let $query3=SELECT a FROM t1 WHERE a = @x INTO @x;
+
+ANALYZE TABLE t1;
+
+eval explain $query1;
+eval explain $query2;
+eval explain $query3;
+
+SET @x= 1;
+
+eval $query1;
+eval $query2;
+--error ER_TOO_MANY_ROWS
+eval $query3;
+
+SET @x= 2;
+eval $query3;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#28960901: ASSERTION FAILED: (TLEN % 2) == 0
+--echo #
+--disable_ps_protocol
+CREATE TABLE t1(a VARCHAR(10) CHARSET latin1, b VARCHAR(20) CHARSET utf16);
+INSERT INTO t1 VALUES ('a', 'abcd');
+SELECT (@x:=b) FROM t1;
+SELECT * FROM t1 WHERE b = (SELECT (@x:=1) FROM t1) OR a = @x;
+SELECT (@x:=a) FROM t1;
+--error ER_INVALID_CHARACTER_STRING
+SELECT * FROM t1 WHERE a = (SELECT (@x:=_utf16 0x1023) FROM t1) OR b = @x;
+DROP TABLE t1;
+--enable_ps_protocol
+
+--echo #
+--echo # Bug#29665165: REGRESSION: SOUNDS LIKE CRASHING TO ME
+--echo #
+SET @c := FROM_UNIXTIME(1537002029);
+--error ER_INVALID_CHARACTER_STRING
+DO ((@c := (_utf32' -'))) SOUNDS LIKE(@c);
+
+--echo # 'Temporal = string literal' compares as temporals, but
+--echo # 'Temporal = string user variable' compares as DOUBLE.
+--echo # It is a behaviour change introduced by WL#6570.
+--echo # Note that
+--echo # https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+--echo # suggests explicit casts as safer. Bug#90076 should fix this.
+
+CREATE TABLE t1 (pk INTEGER PRIMARY KEY, d DATE);
+INSERT INTO t1 VALUES(1, '2017-01-01');
+# As temporals, comparison is false
+SELECT d < 00010101000000.0 AS a FROM t1;
+set @tsn= 00010101000000.0; # same value as above
+# As DOUBLE, date is 20170101.
+SELECT d < @tsn AS a FROM t1;
+DROP TABLE t1;
+
+# Test prepared statements with signed and unsigned integer user variables
+
+CREATE TABLE numbers
+(pk INTEGER PRIMARY KEY,
+ ui BIGINT UNSIGNED,
+ si BIGINT
+);
+
+INSERT INTO numbers VALUES
+(0, 0, -9223372036854775808), (1, 18446744073709551615, 9223372036854775807);
+
+SET @ui_min = CAST(0 AS UNSIGNED);
+SET @ui_max = CAST(18446744073709551615 AS UNSIGNED);
+SET @si_min = CAST(-9223372036854775808 AS SIGNED);
+SET @si_max = CAST(9223372036854775807 AS SIGNED);
+
+PREPARE s1 FROM 'SELECT * FROM numbers WHERE ui=?';
+PREPARE s2 FROM 'SELECT * FROM numbers WHERE si=?';
+
+EXECUTE s1 USING @ui_min;
+EXECUTE s1 USING @ui_max;
+EXECUTE s1 USING @si_min;
+EXECUTE s1 USING @si_max;
+EXECUTE s2 USING @ui_min;
+EXECUTE s2 USING @ui_max;
+EXECUTE s2 USING @si_min;
+EXECUTE s2 USING @si_max;
+
+DEALLOCATE PREPARE s1;
+DEALLOCATE PREPARE s2;
+
+DROP TABLE numbers;
+
+# Test prepared statements with user variables with varying collations
+
+CREATE TABLE strings
+(pk INTEGER PRIMARY KEY,
+ vc_ascii VARCHAR(20) COLLATE ascii_general_ci,
+ vc_latin1 VARCHAR(20) COLLATE latin1_general_ci,
+ vc_utf8mb4 VARCHAR(20) COLLATE utf8mb4_0900_ai_ci,
+ vc_utf16 VARCHAR(20) COLLATE utf16_general_ci,
+ vc_utf32 VARCHAR(20) COLLATE utf32_general_ci
+);
+
+SET @str_ascii=_ASCII'abcxyz';
+SET @str_utf8mb4=CONVERT(x'616263C3A6C3B8C3A578797A' USING utf8mb4);
+SET @str_latin1=CONVERT(@str_utf8mb4 USING latin1);
+SET @str_utf16=CONVERT(@str_utf8mb4 USING utf16);
+SET @str_utf32=CONVERT(@str_utf8mb4 USING utf32);
+
+INSERT INTO strings VALUES
+(0, @str_ascii, @str_ascii, @str_ascii, @str_ascii, @str_ascii),
+(1, @str_ascii, @str_utf8mb4, @str_utf8mb4, @str_utf8mb4, @str_utf8mb4);
+
+PREPARE s1 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_ascii = ?';
+PREPARE s2 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_latin1 = ?';
+PREPARE s3 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_utf8mb4 = ?';
+PREPARE s4 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_utf16 = ?';
+PREPARE s5 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_utf32 = ?';
+
+EXECUTE s1 USING @str_ascii;
+--error ER_IMPOSSIBLE_STRING_CONVERSION
+EXECUTE s1 USING @str_latin1;
+--error ER_IMPOSSIBLE_STRING_CONVERSION
+EXECUTE s1 USING @str_utf8mb4;
+--error ER_IMPOSSIBLE_STRING_CONVERSION
+EXECUTE s1 USING @str_utf16;
+--error ER_IMPOSSIBLE_STRING_CONVERSION
+EXECUTE s1 USING @str_utf32;
+EXECUTE s2 USING @str_ascii;
+EXECUTE s2 USING @str_latin1;
+EXECUTE s2 USING @str_utf8mb4;
+EXECUTE s2 USING @str_utf16;
+EXECUTE s2 USING @str_utf32;
+EXECUTE s3 USING @str_ascii;
+EXECUTE s3 USING @str_latin1;
+EXECUTE s3 USING @str_utf8mb4;
+EXECUTE s3 USING @str_utf16;
+EXECUTE s3 USING @str_utf32;
+EXECUTE s4 USING @str_ascii;
+EXECUTE s4 USING @str_latin1;
+EXECUTE s4 USING @str_utf8mb4;
+EXECUTE s4 USING @str_utf16;
+EXECUTE s4 USING @str_utf32;
+EXECUTE s5 USING @str_ascii;
+EXECUTE s5 USING @str_latin1;
+EXECUTE s5 USING @str_utf8mb4;
+EXECUTE s5 USING @str_utf16;
+EXECUTE s5 USING @str_utf32;
+
+DEALLOCATE PREPARE s1;
+DEALLOCATE PREPARE s2;
+DEALLOCATE PREPARE s3;
+DEALLOCATE PREPARE s4;
+DEALLOCATE PREPARE s5;
+
+DROP TABLE strings;
+
+set @maxint=18446744073709551615;
+
+# Tests user_var_entry::val_real/decimal()
+# was wrong -1
+SELECT @maxint + 0e0;
+SELECT 18446744073709551615 + 0e0;
+# was wrong -1
+SELECT @maxint + 0.0;
+SELECT 18446744073709551615 + 0.0;
+
+# Tests Item_param::val_real/decimal/int/str()
+PREPARE s FROM 'SELECT 0e0 + ?';
+# was wrong -1
+EXECUTE s USING @maxint;
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT 0.0 + ?';
+# was wrong -1
+EXECUTE s USING @maxint;
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT 0 + ?';
+# was correct
+EXECUTE s USING @maxint;
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT concat(?,"")';
+# was wrong -1
+EXECUTE s USING @maxint;
+DEALLOCATE PREPARE s;
+
+--echo # Bug#31358565: Assertion `false' failed. In Item_func_get_user_var::propagate_type'
+
+do null not between 1 and @undefined_var;
+do null not between @undefined_var and 1;
+
+--echo # Bug#28013997: Assertion failed: (slen % 4) == 0
+
+SET @f = _utf32 'a';
+CREATE TABLE t1 (a TIMESTAMP);
+INSERT INTO t1 VALUES ('2018-05-12 07:43:04'), ('2018-05-12 07:43:04');
+SELECT 1 FROM t1 WHERE @f<>'3761-03-28' XOR (@f:='5570-12-30') > a;
+DROP TABLE t1;
+
+--echo # Bug#31599885: Global-buffer-overflow in decimal_bin_size_inline
+
+CREATE TABLE t(a BIT(4), b INTEGER);
+SELECT AVG((@e:= a)) FROM t;
+SELECT AVG((@e:= a)) FROM t GROUP BY b;
+DROP TABLE t;
+
+--echo #
+--echo # Bug #32802216: RECENT REGRESSION: PROTOCOL_TEXT::STORE_LONGLONG: ASSERTION `SEND_METADATA || FIELD_TYPES == NULLPTR || FIELD_TYPES[FIELD_POS] == MYSQL_TYPE_LONGLONG' FAILED.
+--echo #
+
+CREATE TABLE t1 (a TINYINT);
+INSERT INTO t1 VALUES (1);
+SELECT (@a:=a) FROM t1 GROUP BY 1;
+DROP TABLE t1;

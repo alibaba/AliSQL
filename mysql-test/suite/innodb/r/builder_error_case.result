@@ -1,0 +1,54 @@
+# Create big enough table to ensure another call to Builder::insert_direct
+CREATE TABLE t1 (c1 INT);
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+11000
+# Builder::insert_direct returns DB_ONLINE_LOG_TOO_BIG
+SET DEBUG="+d,builder_insert_direct_trigger_error";
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 20, ALGORITHM=INPLACE;
+ERROR HY000: Creating index 'GEN_CLUST_INDEX' required more than 'innodb_online_alter_log_max_size' bytes of modification log. Please try again.
+SET DEBUG="-d,builder_insert_direct_trigger_error";
+# Builder::add_row returns DB_ONLINE_LOG_TOO_BIG
+SET DEBUG="+d,builder_add_row_trigger_error";
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 20, ALGORITHM=INPLACE;
+ERROR HY000: Creating index 'GEN_CLUST_INDEX' required more than 'innodb_online_alter_log_max_size' bytes of modification log. Please try again.
+SET DEBUG="-d,builder_add_row_trigger_error";
+call mtr.add_suppression("\\[InnoDB\\] DDL failed as Builder is already freed");
+# Builder::bulk_add_row returns DB_DUPLICATE_KEY
+SET DEBUG="+d,builder_bulk_add_row_trigger_error_1";
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	error	Duplicate entry '' for key '*UNKNOWN*'
+test.t1	optimize	status	Operation failed
+Warnings:
+Error	1062	Duplicate entry '' for key '*UNKNOWN*'
+SET DEBUG="-d,builder_bulk_add_row_trigger_error_1";
+# Builder::bulk_add_row returns DB_INVALID_NULL
+SET DEBUG="+d,builder_bulk_add_row_trigger_error_2";
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	error	Invalid use of NULL value
+test.t1	optimize	status	Operation failed
+Warnings:
+Error	1138	Invalid use of NULL value
+SET DEBUG="-d,builder_bulk_add_row_trigger_error_2";
+# Builder::bulk_add_row returns DB_IO_ERROR
+SET DEBUG="+d,builder_bulk_add_row_trigger_error_3";
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SET DEBUG="-d,builder_bulk_add_row_trigger_error_3";
+# ddl::pwrite returns DB_IO_ERROR
+SET DEBUG="+d,builder_bulk_add_row_trigger_error_4";
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SET DEBUG="-d,builder_bulk_add_row_trigger_error_4";
+# Pages still buffer fixed should assert during shutdown
+# restart
+# Cleanup
+DROP TABLE t1;

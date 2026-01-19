@@ -1,0 +1,201 @@
+################################################################################
+# This test validates the functioning of the version handshake algorithm on
+# group replication.
+# The test makes the group go through several changes involving different member
+# versions validating the expected outcome on each case.
+# The test script is:
+# *) The test requires five servers: S1, S2, S3, S4
+#
+# Server  Step                                      Version (to base)    Outcome
+#-------------------------------------------------------------------------------
+#  (S1)   join member with a higher patch version*  (patch version + 1)    OK
+#  (S2)   join member with a higher minor version   (minor version + 1)    OK
+#  (S3)   join member with the base version         (base version)       Failure
+#  (S3)   member leaves
+#  (S3)   join member with a higher major version   (major version +1)     OK
+#  (S4)   join member with a higher minor version   (minor version + 1)    OK
+#  (S1)   member leaves
+#  (S1)   join member with the base version         (base version)       Failure
+#
+# *) The group start happens with Server 1 joining
+#
+# The base version is version of the plugin associated with this test:
+#  Version= MAJOR.MINOR.PATCH
+#
+################################################################################
+
+--source include/not_valgrind.inc
+--source include/big_test.inc
+--source include/have_debug.inc
+--let $group_replication_group_name= 8a1da670-05fa-11e5-b939-0800200c9a66
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 4
+--source include/group_replication.inc
+
+--echo #
+--echo # Check the version of member 1 is fully visible in the plugin table
+--echo #
+
+--let $assert_text= The plugin major and minor versions are visible in the version column
+--let $assert_cond= [SELECT COUNT(*) FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME= "group_replication" and PLUGIN_VERSION= "1.1" ] = 1;
+--source include/assert.inc
+
+--let $assert_text= The plugin total version can be seen in the description column
+--let $assert_cond= [SELECT COUNT(*) FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME= "group_replication" and PLUGIN_DESCRIPTION= "Group Replication (1.1.0)" ] = 1;
+--source include/assert.inc
+
+--echo #
+--echo # Setup a new member with version a higher patch version
+--echo # Version= Base version + 1 patch version
+--echo #
+
+--connection server1
+--echo server1
+
+SET @debug_saved_s1= @@GLOBAL.DEBUG;
+SET @@GLOBAL.DEBUG= '+d,group_replication_compatibility_higher_patch_version';
+
+--source include/start_and_bootstrap_group_replication.inc
+
+# Add some data for recovery
+
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1);
+
+
+--echo #
+--echo # Try to add a new member with a higher minor version
+--echo # Version = Base version + 1 minor version
+--echo # The member will join the group
+--echo #
+
+--connection server2
+--echo server2
+
+SET @debug_saved_s2= @@GLOBAL.DEBUG;
+# Cause the member to broadcast and compare himself using a higher version
+SET @@GLOBAL.DEBUG= '+d,group_replication_compatibility_higher_minor_version';
+
+SET session sql_log_bin=0;
+call mtr.add_suppression("Member version is read compatible with the group.");
+SET session sql_log_bin=1;
+
+--source include/start_group_replication.inc
+
+# Check the data is there
+
+--let $assert_text= On the recovered member, the table should contain 1 elements
+--let $assert_cond= [SELECT COUNT(*) FROM t1] = 1;
+--source include/assert.inc
+
+--echo #
+--echo # Try to add a new member with a base version.
+--echo # Version = Base version
+--echo # It will fail since group lowest version is (patch + 1)
+--echo # Try to add server 3 again with higher major version.
+--echo # Version= Base version + 1 major version
+--echo # It will succeed and join group in read only mode.
+--echo #
+
+--connection server3
+--echo server3
+
+SET session sql_log_bin=0;
+call mtr.add_suppression("Member version is incompatible with the group");
+call mtr.add_suppression("Member version is read compatible with the group.");
+SET session sql_log_bin=1;
+
+--eval SET GLOBAL group_replication_group_name= "$group_replication_group_name"
+--error ER_GROUP_REPLICATION_CONFIGURATION
+START GROUP_REPLICATION;
+
+# Cause the member to broadcast and compare himself using a higher version
+SET @@GLOBAL.DEBUG= '+d,group_replication_compatibility_higher_major_version';
+
+--source include/start_group_replication.inc
+
+# Check the data is there
+
+--let $assert_text= On the recovered member, the table should contain 1 elements
+--let $assert_cond= [SELECT COUNT(*) FROM t1] = 1;
+--source include/assert.inc
+
+--echo #
+--echo # Try to add a new member with a major version equal to the base version,
+--echo # but a higher minor version.
+--echo # Version = Base version + 1 minor version
+--echo #
+
+--connection server4
+--echo server4
+
+SET @debug_saved_s4= @@GLOBAL.DEBUG;
+
+SET session sql_log_bin=0;
+call mtr.add_suppression("Member version is read compatible with the group.");
+SET session sql_log_bin=1;
+
+# Cause the member to broadcast and compare himself using a high version
+SET @@GLOBAL.DEBUG= '+d,group_replication_compatibility_higher_minor_version';
+SET GLOBAL group_replication_group_name= "8a1da670-05fa-11e5-b939-0800200c9a66";
+
+# Before < 8.0.16 this join used to fail because higher major version member is present i.e. S3 server
+# Post 8.0.16 this will succeed, since comparison is done with only lowest version i.e. S1 in this scenario
+# S4 is compatible since its greater then patch version present in group i.e. S1 server
+--source include/start_group_replication.inc
+
+# Check the data is there
+
+--let $assert_text= On the recovered member, the table should contain 1 elements
+--let $assert_cond= [SELECT COUNT(*) FROM t1] = 1;
+--source include/assert.inc
+
+--echo #
+--echo # Stop GR on server 1 and start server 1 with base version.
+--echo # Version = Base version
+--echo # It will fail since group lowest version is (minor + 1)
+--echo #
+
+--connection server1
+--echo server1
+
+# DROP table now, else we will have to start all servers for cleanup
+DROP TABLE t1;
+--source include/rpl_sync.inc
+
+--source include/stop_group_replication.inc
+
+SET session sql_log_bin=0;
+call mtr.add_suppression("Member version is incompatible with the group");
+SET session sql_log_bin=1;
+
+SET @@GLOBAL.DEBUG= @debug_save_s1;
+--eval SET GLOBAL group_replication_group_name= "$group_replication_group_name"
+--error ER_GROUP_REPLICATION_CONFIGURATION
+START GROUP_REPLICATION;
+
+--echo #
+--echo # Clean up
+--echo #
+
+--connection server2
+--echo server2
+
+SET @@GLOBAL.DEBUG= @debug_save_s2;
+--source include/stop_group_replication.inc
+
+--connection server3
+--echo server3
+
+SET @@GLOBAL.DEBUG= @debug_save_s3;
+--source include/stop_group_replication.inc
+
+--connection server4
+--echo server4
+
+SET @@GLOBAL.DEBUG= @debug_save_s4;
+--source include/stop_group_replication.inc
+
+
+--source include/group_replication_end.inc

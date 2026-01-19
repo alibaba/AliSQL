@@ -60,7 +60,7 @@ DROP USER test_user@'localhost';
 CREATE USER test_user@'localhost';
 GRANT ALL ON *.* TO test_user@'localhost';
 REVOKE PROCESS ON *.* FROM test_user@'localhost';
-SET PASSWORD FOR test_user@'localhost' = PASSWORD('ddictpass');
+SET PASSWORD FOR test_user@'localhost' = 'ddictpass';
 --disable_warnings
 DROP TABLE IF EXISTS test.t1;
 --enable_warnings
@@ -72,6 +72,7 @@ echo
 # Show the definition of the PROCESSLIST table
 #--------------------------------------------------------------------------
 ;
+--replace_result InnoDB TMP_TABLE_ENGINE MyISAM TMP_TABLE_ENGINE 
 SHOW CREATE TABLE INFORMATION_SCHEMA.PROCESSLIST;
 
 echo
@@ -96,7 +97,7 @@ echo
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST;
---replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME> 9 # 10 # 11 # 12 # 13 # 14 #
+--replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME>
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SHOW FULL PROCESSLIST;
@@ -173,7 +174,7 @@ let $wait_condition= SELECT COUNT(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST;
---replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME> 9 # 10 # 11 # 12 # 13 # 14 #
+--replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME>
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SHOW FULL PROCESSLIST;
@@ -191,7 +192,7 @@ SELECT @test_user_con1_id = @default_id + 1
 SELECT 0 <=  @time < 10 AS "Has TIME a reasonable value?";
 #
 # 4. HOST must be for both connections similar (varying port on Win)
-SELECT COUNT(*) = 2 AS "Is HOST LIKE 'localhost%'?"
+SELECT COUNT(*) = 3 AS "Is HOST LIKE 'localhost%'?"
 FROM INFORMATION_SCHEMA.PROCESSLIST
 WHERE HOST LIKE 'localhost%';
 #
@@ -222,7 +223,7 @@ connection con1;
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST;
---replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME> 9 # 10 # 11 # 12 # 13 # 14 #
+--replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME>
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SHOW FULL PROCESSLIST;
@@ -260,7 +261,7 @@ connection con2;
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST;
---replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME> 9 # 10 # 11 # 12 # 13 # 14 #
+--replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME>
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SHOW FULL PROCESSLIST;
@@ -324,7 +325,7 @@ WHERE ID = @test_user_con2_id AND Command IN('Query','Execute')
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST;
---replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME> 9 # 10 # 11 # 12 # 13 # 14 #
+--replace_column 1 <ID> 3 <HOST_NAME> 6 <TIME>
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SHOW FULL PROCESSLIST;
@@ -460,7 +461,7 @@ echo
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST;
---replace_column 1 <ID> 3 <HOST_NAME> 5 <COMMAND> 6 <TIME> 7 <STATE> 9 # 10 # 11 # 12 # 13 # 14 #
+--replace_column 1 <ID> 3 <HOST_NAME> 5 <COMMAND> 6 <TIME> 7 <STATE>
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
 --sorted_result
 SHOW FULL PROCESSLIST;

@@ -1,15 +1,22 @@
 /*
- Copyright 2010 Sun Microsystems, Inc.
- All rights reserved. Use is subject to license terms.
+ Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is designed to work with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have either included with
+ the program or referenced in the documentation.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -23,6 +30,7 @@
 #define jtie_tconv_vwidth_hpp
 
 #include <jni.h>
+#include <limits.h>
 
 #include "jtie_tconv.hpp"
 #include "jtie_tconv_value.hpp"
@@ -33,10 +41,7 @@
 
 // No definitions are given here for [[un]signed] char types; instead
 // char is treated as an exact-width type of 8 bits.
-#if 0 // use a static_assert() when made available in upcoming C++0x
-#include <limits.h> // not using namespaces yet
-static_assert(CHAR_BIT == 8);
-#endif // use a static_assert() when made available in upcoming C++0x
+static_assert(CHAR_BIT == 8, "8-bit char type required");
 
 /*
  * If defined, provides a default Java type mapping for the variable-width
@@ -51,23 +56,24 @@ static_assert(CHAR_BIT == 8);
  */
 
 #ifdef JTIE_JNI_SHORT_T
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_SHORT_T, signed short, short);
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_SHORT_T, unsigned short, ushort);
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_SHORT_T, signed short, short)
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_SHORT_T, unsigned short, ushort)
 #endif
 #ifdef JTIE_JNI_INT_T
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_INT_T, signed int, int);
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_INT_T, unsigned int, uint);
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_INT_T, signed int, int)
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_INT_T, unsigned int, uint)
 #endif
 #ifdef JTIE_JNI_LONG_T
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONG_T, signed long, long);
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONG_T, unsigned long, ulong);
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONG_T, signed long, long)
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONG_T, unsigned long, ulong)
 #endif
 #ifdef JTIE_JNI_LONGLONG_T
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONGLONG_T, signed long long, longlong);
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONGLONG_T, unsigned long long, ulonglong);
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONGLONG_T, signed long long, longlong)
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONGLONG_T, unsigned long long,
+                               ulonglong)
 #endif
 #ifdef JTIE_JNI_LONGDOUBLE_T
-JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONGDOUBLE_T, long double, longdouble);
+JTIE_DEFINE_BASIC_TYPE_MAPPING(JTIE_JNI_LONGDOUBLE_T, long double, longdouble)
 #endif
 
 // ---------------------------------------------------------------------------
@@ -123,4 +129,4 @@ JTIE_DEFINE_BYTEBUFFER_PTR_LENGTH1_TYPE_MAPPING(long double, longdouble)
 
 // ---------------------------------------------------------------------------
 
-#endif // jtie_tconv_vwidth_hpp
+#endif  // jtie_tconv_vwidth_hpp

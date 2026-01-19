@@ -1,0 +1,24 @@
+--source include/have_ndb.inc
+
+# Test that the number of reported schema distribution participants
+# quickly resolves to 2. The mysql server has already started before
+# this test begins running, so this should happen within one second.
+#
+# The number 2 comes from the 2 mysql servers defined in
+# mysql-test/suite/ndb/my.cnf
+
+let $time_left= 5;
+let $p=query_get_value(SHOW STATUS LIKE 'Ndb_schema_participant_count', Value, 1);
+while($p != 2)
+{
+  dec $time_left;
+  if($time_left == 0)
+  {
+    echo Final count: $p;
+    die;
+  }
+  sleep 0.200;
+  let $p=query_get_value(SHOW STATUS LIKE 'Ndb_schema_participant_count', Value, 1);
+}
+
+echo ok;

@@ -1,6 +1,6 @@
 call mtr.add_suppression("2001:db8::6:6");
 flush status;
-flush hosts;
+TRUNCATE TABLE performance_schema.host_cache;
 flush user_resources;
 flush privileges;
 select @@global.debug;
@@ -23,6 +23,7 @@ select `User`, `Host` from mysql.`user` where `user` like '2001:%';
 User	Host
 select `User`, `Host` from mysql.`user` where `user` like 'santa.claus.%';
 User	Host
+create user 'root'@'2001:db8::6:6', 'root'@'santa.claus.ipv6.example.com';
 grant select on test.* to 'root'@'2001:db8::6:6';
 grant select on test.* to 'root'@'santa.claus.ipv6.example.com';
 select "Con1 is alive";

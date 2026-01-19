@@ -1,10 +1,8 @@
 # Tests for PERFORMANCE_SCHEMA
 
---source include/not_embedded.inc
---source include/have_perfschema.inc
-
 # Setup
-
+--source include/have_myisam.inc
+--source include/force_myisam_default.inc
 update performance_schema.setup_instruments set enabled='NO';
 update performance_schema.setup_instruments set enabled='YES'
   where name like "wait/io/file/myisam/%";
@@ -50,7 +48,7 @@ select event_name,
   order by thread_id, event_id;
 
 # In case of failures, this will tell if file io are lost.
-show status like 'performance_schema_%';
+show global status like 'performance_schema_%_lost';
 
 # Cleanup
 

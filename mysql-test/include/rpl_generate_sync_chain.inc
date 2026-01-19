@@ -73,13 +73,18 @@ while ($_rpl_start_server)
   --let $_rpl_continue_loop= 1
   while ($_rpl_continue_loop)
   {
-    --let $_rpl_master= `SELECT SUBSTRING('$rpl_master_list', 1 + ($_rpl_server - 1) * $rpl_server_count_length, $rpl_server_count_length)`
+    # Set $_rpl_master to the master of $_rpl_server, or '' if it does
+    # not have one.
+    --let $_rpl_slave_position= LOCATE('s$_rpl_server ', '$rpl_connection_list')
+    --let $_rpl_master= `SELECT IF($_rpl_slave_position > 0, SUBSTRING('$rpl_connection_list', $_rpl_slave_position - 1 - $rpl_server_count_length, $rpl_server_count_length), '$_rpl_no_server')`
+
     # We need to delimit elements of $_rpl_seen_list with commas, so
     # that LOCATE() below will not find spurious matches that begin in
     # the middle of one element and end in the middle of next element.
     --let $_rpl_seen_list= $_rpl_server,$_rpl_seen_list
     # If server is marked seen or synced, or has no master
-    if (`SELECT SUBSTRING('$_rpl_server_marks', $_rpl_server, 1) != 0 OR '$_rpl_master' = ''`)
+
+    if (`SELECT SUBSTRING('$_rpl_server_marks', $_rpl_server, 1) != 0 OR '$_rpl_master' = ' '`)
     {
       # If server is marked seen but not synced.
       if (`SELECT SUBSTRING('$_rpl_server_marks', $_rpl_server, 1) = 1`)

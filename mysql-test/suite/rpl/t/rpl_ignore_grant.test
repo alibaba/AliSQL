@@ -2,6 +2,9 @@
 # when --replicate-wild-ignore-table=mysql.%
 # In BUG#980, this test would _randomly_ fail.
 
+--source include/not_group_replication_plugin.inc
+source include/set_privilege_checks_user_as_system_user.inc;
+let $rpl_privilege_checks_user_grant_option = 1;
 source include/master-slave.inc;
 
 # do not be influenced by other tests.
@@ -20,13 +23,15 @@ flush privileges;
 
 # test non-replication of GRANT
 connection master;
+create user rpl_ignore_grant@localhost;
 grant select on *.* to rpl_ignore_grant@localhost;
 grant drop on test.* to rpl_ignore_grant@localhost;
 show grants for rpl_ignore_grant@localhost;
 save_master_pos;
 connection slave;
 sync_with_master;
---error 1141 #("no such grant for user")
+# No such grant for user
+--error 1141
 show grants for rpl_ignore_grant@localhost;
 # check it another way
 select count(*) from mysql.user where user=_binary'rpl_ignore_grant';
@@ -36,13 +41,14 @@ select count(*) from mysql.db where user=_binary'rpl_ignore_grant';
 # first force creation of the user on slave (because as the user does not exist
 # on slave, the SET PASSWORD may be replicated but silently do nothing; this is
 # not what we want; we want it to be not-replicated).
+create user rpl_ignore_grant@localhost;
 grant select on *.* to rpl_ignore_grant@localhost;
 connection master;
-set password for rpl_ignore_grant@localhost=password("does it work?");
+set password for rpl_ignore_grant@localhost="does it work?";
 save_master_pos;
 connection slave;
 sync_with_master;
-select password<>_binary'' from mysql.user where user=_binary'rpl_ignore_grant';
+select authentication_string<>_binary'' from mysql.user where user=_binary'rpl_ignore_grant';
 
 # clear what we have done, to not influence other tests.
 connection master;

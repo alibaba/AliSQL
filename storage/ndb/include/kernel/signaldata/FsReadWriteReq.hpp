@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,14 +28,16 @@
 
 #include "SignalData.hpp"
 
+#define JAM_FILE_ID 156
+
 /**
  * FsReadWriteReq - Common signal class for FSWRITEREQ and FSREADREQ
  *
  */
 
 /**
- * 
- * SENDER:  
+ *
+ * SENDER:
  * RECIVER: Ndbfs
  */
 class FsReadWriteReq {
@@ -37,7 +47,7 @@ class FsReadWriteReq {
   friend class Ndbfs;
   friend class VoidFs;
   friend class AsyncFile;
-  friend class PosixAsyncFile; // FIXME
+  friend class PosixAsyncFile;  // FIXME
   friend class Win32AsyncFile;
 
   /**
@@ -49,71 +59,89 @@ class FsReadWriteReq {
   friend class Pgman;
   friend class Restore;
   friend class Dblqh;
+  friend class Backup;
+  friend class Dbtup;
+  friend class Ndbcntr;
+  friend class Dbdih;
 
   /**
    * For printing
    */
-  friend bool printFSREADWRITEREQ(FILE * output, const Uint32 * theData, Uint32 len, Uint16 receiverBlockNo);
+  friend bool printFSREADWRITEREQ(FILE *output, const Uint32 *theData,
+                                  Uint32 len, Uint16 receiverBlockNo);
 
-public:
+ public:
   /**
- * Enum type for errorCode
- */
+   * Enum type for errorCode
+   */
   enum NdbfsFormatType {
-    fsFormatListOfPairs=0,
-    fsFormatArrayOfPages=1,
-    fsFormatListOfMemPages=2,
-    fsFormatGlobalPage=3,
-    fsFormatSharedPage=4,
+    fsFormatListOfPairs = 0,
+    fsFormatArrayOfPages = 1,
+    fsFormatListOfMemPages = 2,
+    fsFormatGlobalPage = 3,
+    fsFormatSharedPage = 4,
+    fsFormatMemAddress = 5,
     fsFormatMax
   };
-  
+
   /**
    * Length of signal
    */
-  STATIC_CONST( FixedLength = 6 );
+  static constexpr Uint32 FixedLength = 6;
 
-private:
-
+ private:
   /**
    * DATA VARIABLES
    */
-  UintR filePointer;          // DATA 0
-  UintR userReference;        // DATA 1
-  UintR userPointer;          // DATA 2
-  UintR operationFlag;        // DATA 3
-  UintR varIndex;             // DATA 4
-  UintR numberOfPages;        // DATA 5  
+  UintR filePointer;    // DATA 0
+  UintR userReference;  // DATA 1
+  UintR userPointer;    // DATA 2
+  UintR operationFlag;  // DATA 3
+  UintR varIndex;       // DATA 4
+  UintR numberOfPages;  // DATA 5
 
-//-------------------------------------------------------------
-// Variable sized part. Those will contain 
-// info about memory/file pages to read/write
-//-------------------------------------------------------------  
-  union {
-    UintR pageData[16];        // DATA 6 - 21
+  //-------------------------------------------------------------
+  // Variable sized part. Those will contain
+  // info about memory/file pages to read/write
+  //-------------------------------------------------------------
+  union {  // DATA 6 - 21
     struct {
-      Uint32 varIndex;   // In unit cluster size
-      Uint32 fileOffset; // In unit page size
+      Uint32 varIndex;    // In unit cluster size
+      Uint32 fileOffset;  // In unit page size
     } listOfPair[8];
     struct {
       Uint32 varIndex;
       Uint32 fileOffset;
     } arrayOfPages;
     struct {
-      Uint32 varIndex[1]; // Size = numberOfPages
       Uint32 fileOffset;
+      Uint32 memoryOffset;
+      Uint32 size;
+    } memoryAddress;
+    struct {
+      Uint32 fileOffset;
+      Uint32 varIndex[15];  // Size = numberOfPages
     } listOfMemPages;
+    struct {
+      Uint32 pageNumber;
+    } globalPage;
+    struct {
+      Uint32 pageNumber;
+    } sharedPage;
   } data;
 
-  static Uint8 getSyncFlag(const UintR & opFlag);
-  static void setSyncFlag(UintR & opFlag, Uint8 flag);
+  static Uint8 getSyncFlag(const UintR &opFlag);
+  static void setSyncFlag(UintR &opFlag, Uint8 flag);
 
-  static NdbfsFormatType getFormatFlag(const UintR & opFlag);
-  static void setFormatFlag(UintR & opFlag, Uint8 flag);
+  static NdbfsFormatType getFormatFlag(const UintR &opFlag);
+  static void setFormatFlag(UintR &opFlag, Uint8 flag);
 
   static Uint32 getPartialReadFlag(UintR opFlag);
-  static void setPartialReadFlag(UintR & opFlag, Uint32 flag);
+  static void setPartialReadFlag(UintR &opFlag, Uint32 flag);
 };
+
+DECLARE_SIGNAL_SCOPE(GSN_FSREADREQ, Local);
+DECLARE_SIGNAL_SCOPE(GSN_FSWRITEREQ, Local);
 
 /**
  * Operation flag
@@ -127,57 +155,47 @@ private:
 */
 
 #define SYNC_SHIFT (4)
-#define SYNC_MASK  (0x01)
+#define SYNC_MASK (0x01)
 
 #define FORMAT_MASK (0x0F)
 
 #define PARTIAL_READ_SHIFT (5)
 
-inline
-Uint8
-FsReadWriteReq::getSyncFlag(const UintR & opFlag){
+inline Uint8 FsReadWriteReq::getSyncFlag(const UintR &opFlag) {
   return (Uint8)((opFlag >> SYNC_SHIFT) & SYNC_MASK);
 }
 
-inline
-FsReadWriteReq::NdbfsFormatType
-FsReadWriteReq::getFormatFlag(const UintR & opFlag){
+inline FsReadWriteReq::NdbfsFormatType FsReadWriteReq::getFormatFlag(
+    const UintR &opFlag) {
   return (NdbfsFormatType)(opFlag & FORMAT_MASK);
 }
 
-inline
-void 
-FsReadWriteReq::setSyncFlag(UintR & opFlag, Uint8 flag){
+inline void FsReadWriteReq::setSyncFlag(UintR &opFlag, Uint8 flag) {
   ASSERT_BOOL(flag, "FsReadWriteReq::setSyncFlag");
   opFlag |= (flag << SYNC_SHIFT);
 }
 
-inline
-void 
-FsReadWriteReq::setFormatFlag(UintR & opFlag, Uint8 flag){
+inline void FsReadWriteReq::setFormatFlag(UintR &opFlag, Uint8 flag) {
   ASSERT_MAX(flag, fsFormatMax, "FsReadWriteReq::setSyncFlag");
   opFlag |= flag;
 }
 
-inline
-void 
-FsReadWriteReq::setPartialReadFlag(UintR & opFlag, Uint32 flag){
+inline void FsReadWriteReq::setPartialReadFlag(UintR &opFlag, Uint32 flag) {
   ASSERT_BOOL(flag, "FsReadWriteReq::setSyncFlag");
   opFlag |= (flag << PARTIAL_READ_SHIFT);
 }
 
-inline
-Uint32
-FsReadWriteReq::getPartialReadFlag(UintR opFlag){
+inline Uint32 FsReadWriteReq::getPartialReadFlag(UintR opFlag) {
   return (opFlag >> PARTIAL_READ_SHIFT) & 1;
 }
 
-struct FsSuspendOrd
-{
-  UintR filePointer;          // DATA 0
+struct FsSuspendOrd {
+  UintR filePointer;  // DATA 0
   Uint32 milliseconds;
 
-  STATIC_CONST(SignalLength = 2);
+  static constexpr Uint32 SignalLength = 2;
 };
+
+#undef JAM_FILE_ID
 
 #endif

@@ -188,6 +188,12 @@ CREATE TABLE t3 (a3 INT NOT NULL, b3 INT NOT NULL, PRIMARY KEY (a3,b3));
 INSERT INTO t1 VALUES (1,1), (2,1), (1,3);
 INSERT INTO t2 VALUES (1,1), (2,2), (3,3);
 INSERT INTO t3 VALUES (1,1), (2,1), (1,3);
+# Need to run ANALYZE to get correct index statistics
+--disable_query_log
+--disable_result_log
+ANALYZE TABLE t1, t2, t3;
+--enable_result_log
+--enable_query_log
 --let $query =  DELETE t1,t2,t3 FROM t1,t2,t3 WHERE a1=a2 AND b2=a3 AND b1=b3
 --let $select = SELECT *        FROM t1,t2,t3 WHERE a1=a2 AND b2=a3 AND b1=b3
 --source include/explain_utils.inc
@@ -206,7 +212,7 @@ DROP TABLE t1, t2;
 --echo #21
 CREATE TABLE t1 (a1 INT);
 INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
-CREATE TABLE t2 (a2 VARCHAR(10));
+CREATE TABLE t2 (a2 VARCHAR(10)) charset utf8mb4;
 INSERT INTO t2 VALUES (1), (2), (3), (4), (5);
 SET @save_optimizer_switch= @@optimizer_switch;
 --disable_query_log
@@ -239,7 +245,15 @@ CREATE TABLE t1 (i INT, j INT);
 INSERT INTO t1 VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
 --let $query =  DELETE FROM t1
 --let $select = SELECT * FROM t1
+# Disabling binary logging temporarily as optimized delete is not used when log-bin is enabled in row mode
+--disable_query_log
+SET @save_log_bin= @@sql_log_bin;
+SET SQL_LOG_BIN=0;
+--enable_query_log
 --source include/explain_utils.inc
+--disable_query_log
+SET SQL_LOG_BIN=@save_log_bin;
+--enable_query_log
 DROP TABLE t1;
 
 --echo #24
@@ -262,6 +276,9 @@ INSERT INTO t1 VALUES (1), (2), (3);
 CREATE TABLE t2 (i INT);
 --let $query =  INSERT INTO t2 SELECT * FROM t1
 --let $select =                SELECT * FROM t1
+--source include/explain_utils.inc
+--let $query =  INSERT INTO t2 SELECT * FROM t1 JOIN t1 AS tt USING(i)
+--let $select =                SELECT * FROM t1 JOIN t1 AS tt USING(i)
 --source include/explain_utils.inc
 DROP TABLE t1, t2;
 
@@ -291,13 +308,15 @@ CREATE TABLE t1 (a INT, i INT PRIMARY KEY);
 INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                           (30),(31),(32),(33),(34),(35);
---let $query =  DELETE   FROM t1 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
---let $select = SELECT * FROM t1 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
+--let $query =  DELETE   FROM t1 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 1
+--let $select = SELECT * FROM t1 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1;
 
 --echo #30
-CREATE TABLE t1(a INT, i CHAR(2), INDEX(i(1)));
+CREATE TABLE t1(a INT, i CHAR(2), INDEX(i(1))) charset utf8mb4;
 INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                           (30),(31),(32),(33),(34),(35);
@@ -337,7 +356,8 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                           (30),(31),(32),(33),(34),(35);
-CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), d CHAR(2), INDEX (a,b(1),c));
+CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), d CHAR(2), INDEX (a,b(1),c))
+charset utf8mb4;
 INSERT INTO t2 SELECT i, i, i, i FROM t1;
 --let $query =  DELETE   FROM t2 WHERE b = 10 ORDER BY a, c LIMIT 5
 --let $select = SELECT * FROM t2 WHERE b = 10 ORDER BY a, c LIMIT 5
@@ -350,7 +370,7 @@ INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                           (30),(31),(32),(33),(34),(35);
 CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), d CHAR(2), INDEX (a,b,c))
-  ENGINE=HEAP;
+charset utf8mb4  ENGINE=HEAP;
 INSERT INTO t2 SELECT i, i, i, i FROM t1;
 --let $query =  DELETE   FROM t2 WHERE b = 10 ORDER BY a, c LIMIT 5
 --let $select = SELECT * FROM t2 WHERE b = 10 ORDER BY a, c LIMIT 5
@@ -362,12 +382,14 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                           (30),(31),(32),(33),(34),(35),(36),(37),(38),(39),
-                          (40),(41),(42);
+                          (40),(41),(42),(43),(44);
 CREATE TABLE t2 (i INT, key1 INT, key2 INT, INDEX (key1), INDEX (key2));
 INSERT INTO t2 (key1, key2) SELECT i, i FROM t1;
 --let $query =  DELETE   FROM t2 WHERE key1 < 13 or key2 < 14 ORDER BY key1
 --let $select = SELECT * FROM t2 WHERE key1 < 13 or key2 < 14 ORDER BY key1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1, t2;
 
 --echo #36
@@ -377,9 +399,11 @@ INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (30),(31),(32),(33),(34),(35);
 CREATE TABLE t2(a INT, i INT PRIMARY KEY);
 INSERT INTO t2 (i) SELECT i FROM t1;
---let $query =  DELETE   FROM t2 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 5
---let $select = SELECT * FROM t2 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 5
+--let $query =  DELETE   FROM t2 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 1
+--let $select = SELECT * FROM t2 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1, t2;
 
 --echo #37
@@ -387,7 +411,7 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                           (30),(31),(32),(33),(34),(35);
-CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), INDEX (a, b));
+CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), INDEX (a, b)) charset utf8mb4;
 INSERT INTO t2 SELECT i, i, i FROM t1;
 --let $query =  DELETE   FROM t2 ORDER BY a, b DESC LIMIT 5
 --let $select = SELECT * FROM t2 ORDER BY a, b DESC LIMIT 5
@@ -399,7 +423,7 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                       (30),(31),(32),(33),(34),(35);
-CREATE TABLE t2 (a CHAR(2), b CHAR(2), c INT, INDEX (a, b));
+CREATE TABLE t2 (a CHAR(2), b CHAR(2), c INT, INDEX (a, b)) charset utf8mb4;
 INSERT INTO t2 (a, b) SELECT i, i FROM t1;
 INSERT INTO t2 (a, b) SELECT t1.i, t1.i FROM t1, t1 x1, t1 x2;
 --let $query =  DELETE   FROM t2 ORDER BY a DESC, b DESC LIMIT 5
@@ -415,8 +439,8 @@ INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (30),(31),(32),(33),(34),(35);
 CREATE TABLE t2(a INT, i INT PRIMARY KEY);
 INSERT INTO t2 (i) SELECT i FROM t1;
---let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
---let $select = SELECT * FROM  t2    WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
+--let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 1
+--let $select = SELECT * FROM  t2    WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 1
 --let $no_rows = 1
 --source include/explain_utils.inc
 DROP TABLE t1, t2;
@@ -426,7 +450,7 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                       (30),(31),(32),(33),(34),(35);
-CREATE TABLE t2(a INT, i CHAR(2), INDEX(i(1)));
+CREATE TABLE t2(a INT, i CHAR(2), INDEX(i(1))) charset utf8mb4;
 INSERT INTO t2 (i) SELECT i FROM t1;
 --let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
 --let $select = SELECT * FROM t2     WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
@@ -464,7 +488,8 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                       (30),(31),(32),(33),(34),(35);
-CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), d CHAR(2), INDEX (a,b(1),c));
+CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), d CHAR(2), INDEX (a,b(1),c))
+charset utf8mb4;
 INSERT INTO t2 SELECT i, i, i, i FROM t1;
 --let $query =  UPDATE t2 SET d = 10 WHERE b = 10 ORDER BY a, c LIMIT 5
 --let $select = SELECT * FROM t2     WHERE b = 10 ORDER BY a, c LIMIT 5
@@ -477,7 +502,7 @@ INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                       (30),(31),(32),(33),(34),(35);
 CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), d CHAR(2), INDEX (a,b,c))
-  ENGINE=HEAP;
+charset utf8mb4  ENGINE=HEAP;
 INSERT INTO t2 SELECT i, i, i, i FROM t1;
 --let $query =  UPDATE t2 SET d = 10 WHERE b = 10 ORDER BY a, c LIMIT 5
 --let $select = SELECT * FROM t2     WHERE b = 10 ORDER BY a, c LIMIT 5
@@ -489,12 +514,14 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                       (30),(31),(32),(33),(34),(35),(36),(37),(38),(39),
-                      (40),(41),(42);
+                      (40),(41),(42),(43),(44);
 CREATE TABLE t2 (i INT, key1 INT, key2 INT, INDEX (key1), INDEX (key2));
 INSERT INTO t2 (key1, key2) SELECT i, i FROM t1;
 --let $query =  UPDATE t2 SET i = 123 WHERE key1 < 13 or key2 < 14 ORDER BY key1
 --let $select = SELECT * FROM t2      WHERE key1 < 13 or key2 < 14 ORDER BY key1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1, t2;
 
 --echo #46
@@ -504,9 +531,11 @@ INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (30),(31),(32),(33),(34),(35);
 CREATE TABLE t2(a INT, i INT PRIMARY KEY);
 INSERT INTO t2 (i) SELECT i FROM t1;
---let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 5
---let $select = SELECT * FROM t2     WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 5
+--let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 1
+--let $select = SELECT * FROM t2     WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1, t2;
 
 --echo #47
@@ -514,7 +543,7 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                       (30),(31),(32),(33),(34),(35);
-CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), INDEX (a, b));
+CREATE TABLE t2 (a CHAR(2), b CHAR(2), c CHAR(2), INDEX (a, b)) charset utf8mb4;
 INSERT INTO t2 SELECT i, i, i FROM t1;
 --let $query =  UPDATE t2 SET c = 10 ORDER BY a, b DESC LIMIT 5
 --let $select = SELECT * FROM t2     ORDER BY a, b DESC LIMIT 5
@@ -526,7 +555,7 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                       (30),(31),(32),(33),(34),(35);
-CREATE TABLE t2 (a CHAR(2), b CHAR(2), c INT, INDEX (a, b));
+CREATE TABLE t2 (a CHAR(2), b CHAR(2), c INT, INDEX (a, b)) charset utf8mb4;
 INSERT INTO t2 (a, b) SELECT i, i FROM t1;
 INSERT INTO t2 (a, b) SELECT t1.i, t1.i FROM t1, t1 x1, t1 x2;
 --let $query =  UPDATE t2 SET c = 10 ORDER BY a DESC, b DESC LIMIT 5
@@ -542,7 +571,7 @@ CREATE TABLE t1 (
   c2 INT,
   PRIMARY KEY (pk),
   INDEX c1_idx (c1_idx)
-);
+) charset utf8mb4;
 INSERT INTO t1 VALUES (1,'y',1), (2,'n',2), (3,'y',3), (4,'n',4);
 --let $query =  UPDATE t1 SET c2 = 0 WHERE c1_idx = 'y' ORDER BY pk DESC LIMIT 2
 --let $select = SELECT * FROM t1     WHERE c1_idx = 'y' ORDER BY pk DESC LIMIT 2
@@ -578,6 +607,12 @@ CREATE TABLE t2(f3 INT, f4 INT);
 CREATE INDEX IDX ON t2(f3);
 INSERT INTO t1 VALUES(1,0),(2,0);
 INSERT INTO t2 VALUES(1,1),(2,2);
+# Need to run ANALYZE to get correct index statistics
+-- disable_query_log
+-- disable_result_log
+ANALYZE TABLE t1,t2;
+-- enable_result_log
+-- enable_query_log
 --let $query =  UPDATE t1 SET t1.f2=(SELECT MAX(t2.f4) FROM t2 WHERE t2.f3=t1.f1)
 --let $select = SELECT              (SELECT MAX(t2.f4) FROM t2 WHERE t2.f3=t1.f1) FROM t1
 --source include/explain_utils.inc
@@ -599,13 +634,13 @@ INSERT INTO t1 VALUES (1), (2), (3);
 --error ER_BAD_FIELD_ERROR
                  DELETE FROM t1 USING t1 WHERE uknown_column = 12345;
 --error ER_BAD_FIELD_ERROR
-EXPLAIN EXTENDED DELETE FROM t1 USING t1 WHERE uknown_column = 12345;
+EXPLAIN DELETE FROM t1 USING t1 WHERE uknown_column = 12345;
 DROP TABLE t1;
 
 --echo #57
 CREATE TABLE t1(f1 INT);
 --error ER_BAD_FIELD_ERROR
-EXPLAIN EXTENDED UPDATE t1 SET f2=1 ORDER BY f2;
+EXPLAIN UPDATE t1 SET f2=1 ORDER BY f2;
 --error ER_BAD_FIELD_ERROR
 UPDATE t1 SET f2=1 ORDER BY f2;
 DROP TABLE t1;
@@ -615,8 +650,7 @@ CREATE TABLE t1 ( a INT, KEY( a ) );
 INSERT INTO t1 VALUES (0), (1);
 CREATE VIEW v1 AS SELECT t11.a, t12.a AS b FROM t1 t11, t1 t12;
 SET SESSION sql_safe_updates = 1;
---error ER_UPDATE_WITHOUT_KEY_IN_SAFE_MODE
-EXPLAIN EXTENDED UPDATE IGNORE v1 SET a = 1;
+EXPLAIN UPDATE IGNORE v1 SET a = 1;
 --error ER_UPDATE_WITHOUT_KEY_IN_SAFE_MODE
 UPDATE IGNORE v1 SET a = 1;
 SET SESSION sql_safe_updates = DEFAULT;
@@ -642,7 +676,9 @@ INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
 CREATE VIEW v1 (a) AS SELECT a FROM t1;
 --let $query =  DELETE   FROM v1 WHERE a < 4
 --let $select = SELECT * FROM v1 WHERE a < 4
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1;
 DROP VIEW v1;
 
@@ -690,11 +726,6 @@ CREATE VIEW v1 (x) AS SELECT b FROM t2;
 DROP TABLE t1, t2;
 DROP VIEW v1;
 
---echo #68
-CREATE TABLE t1 (i INT);
-EXPLAIN INSERT DELAYED INTO t1 VALUES (1);
-DROP TABLE t1;
-
 --echo #69
 CREATE TABLE t1 (a INT);
 INSERT INTO t1 VALUES (1), (2), (3);
@@ -715,7 +746,7 @@ DROP TABLE t1,t2;
 CREATE TABLE t1 (c1 INT KEY);
 CREATE TABLE t2 (c2 INT);
 CREATE TABLE t3 (c3 INT);
-EXPLAIN EXTENDED UPDATE t3 SET c3 = (
+EXPLAIN UPDATE t3 SET c3 = (
   SELECT COUNT(d1.c1)
     FROM (
       SELECT a11.c1 FROM t1 AS a11 
@@ -746,7 +777,7 @@ while ($1) {
 CREATE TABLE t2 LIKE t1;
 
 # replace "rows" column for InnoDB
---replace_column 9 X
+--replace_column 10 X
 EXPLAIN INSERT INTO t2 SELECT * FROM t1;
 INSERT INTO t2 SELECT * FROM t1;
 --disable_result_log
@@ -805,7 +836,11 @@ CREATE PROCEDURE p9() BEGIN EXPLAIN UPDATE t1 SET i = 10;END|
 CREATE PROCEDURE p10() BEGIN         UPDATE t1 SET i = 10;END|
 CREATE PROCEDURE p11() BEGIN EXPLAIN UPDATE t1,t2 SET t1.i = 10 WHERE t1.i = t2.i ;END|
 CREATE PROCEDURE p12() BEGIN         UPDATE t1,t2 SET t1.i = 10 WHERE t1.i = t2.i ;END|
-CREATE PROCEDURE p13() BEGIN EXPLAIN DELETE FROM t1;END|
+CREATE PROCEDURE p13() BEGIN
+# Disabling binary logging temporarily as optimized delete is not used when log-bin is enabled in row mode
+SET @save_log_bin= @@sql_log_bin;SET SQL_LOG_BIN=0;
+EXPLAIN DELETE FROM t1;
+SET SQL_LOG_BIN=@save_log_bin; END|
 CREATE PROCEDURE p14() BEGIN         DELETE FROM t1;END|
 CREATE PROCEDURE p15() BEGIN EXPLAIN DELETE FROM t1 USING t1;END|
 CREATE PROCEDURE p16() BEGIN         DELETE FROM t1 USING t1;END|

@@ -1,0 +1,259 @@
+--source include/have_ndb.inc
+
+#
+# Test MDL on tablespaces. Locks on tablespaces are taken in the following
+# cases:
+#
+# 1. Tablespace DDL - X lock
+# 2. Disk data table DDL - IX lock
+# 3. Metadata change detection - SHARED lock
+#
+
+#
+# Testcase 1: Parallel disk data table DDL queries using the same tablespace
+#
+
+# Create logfile group
+CREATE LOGFILE GROUP lg1
+  ADD UNDOFILE 'lg1_undofile.dat'
+  INITIAL_SIZE 1M
+  UNDO_BUFFER_SIZE = 1M
+  ENGINE NDB;
+
+# Create tablespace using the logfile group
+CREATE TABLESPACE ts1
+  ADD DATAFILE 'ts1_datafile.dat'
+  USE LOGFILE GROUP lg1
+  INITIAL_SIZE 16M
+  ENGINE NDB;
+
+# Procedure p1 communicates through the `procedure_control` table
+CREATE TABLE procedure_control(
+  stop_flag INT
+) ENGINE NDB;
+
+DELIMITER //;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  REPEAT
+    CREATE TABLE t1 (
+      a INT PRIMARY KEY,
+      b VARCHAR(255)
+    )
+    ENGINE NDB TABLESPACE ts1 STORAGE DISK;
+    DROP TABLE t1;
+    SELECT stop_flag INTO done FROM procedure_control;
+  UNTIL done END REPEAT;
+END//
+DELIMITER ;//
+
+INSERT INTO procedure_control VALUE(0);
+
+# Run CREATE + DROP TABLE queries in parallel across 2 connections
+--echo Start background load of CREATE + DROP TABLE t1 which uses tablespace ts1
+--send CALL p1()
+
+# Create another connection
+--connect (con2,127.0.0.1,root,,test,$MASTER_MYPORT,)
+--connection con2
+--echo Start CREATE + DROP TABLE t2 which uses tablespace ts1
+--disable_query_log
+--let $count = 1
+while ($count <= 30)
+{
+  CREATE TABLE t2 (
+    a INT PRIMARY KEY,
+    b VARCHAR(255)
+  )
+  ENGINE NDB TABLESPACE ts1 STORAGE DISK;
+  DROP TABLE t2;
+  --inc $count
+}
+--enable_query_log
+
+# Signal procedure to stop background queries
+UPDATE procedure_control SET stop_flag=1;
+
+--connection default
+--echo Wait for background load to complete
+--reap
+
+# Cleanup
+DROP PROCEDURE p1;
+DROP TABLE procedure_control;
+ALTER TABLESPACE ts1
+  DROP DATAFILE 'ts1_datafile.dat';
+DROP TABLESPACE ts1;
+DROP LOGFILE GROUP lg1
+  ENGINE NDB;
+
+#
+# Testcase 2: Parallel tablespace and disk data table DDL queries
+#
+
+# Create logfile group
+CREATE LOGFILE GROUP lg1
+  ADD UNDOFILE 'lg1_undofile.dat'
+  INITIAL_SIZE 1M
+  UNDO_BUFFER_SIZE = 1M
+  ENGINE NDB;
+
+# Create tablespace using the logfile group
+CREATE TABLESPACE ts1
+  ADD DATAFILE 'ts1_datafile.dat'
+  USE LOGFILE GROUP lg1
+  INITIAL_SIZE 16M
+  ENGINE NDB;
+
+# Procedure p1 communicates through 'procedure_control' table
+CREATE TABLE procedure_control(
+  stop_flag INT
+) ENGINE NDB;
+
+# The query of the 'dummy' table in procedure p1() helps
+# speed up the test by creating more opportunities to the
+# CREATE/DROP TABLE statement to acquire the global schema
+# lock. These statements are often the ones 'victimized'
+# by deadlock detection and lose out in terms of contention
+# for the GSL.
+CREATE TABLE dummy (
+  a INT PRIMARY KEY
+) ENGINE NDB;
+INSERT INTO dummy VALUES (1), (2), (3), (4), (5);
+
+DELIMITER //;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE dummy_var INT DEFAULT 5;
+  REPEAT
+    ALTER TABLESPACE ts1
+      ADD DATAFILE 'ts1_datafile2.dat';
+    ALTER TABLESPACE ts1
+      DROP DATAFILE 'ts1_datafile2.dat';
+    SELECT stop_flag INTO done FROM procedure_control;
+    SELECT a INTO dummy_var FROM dummy WHERE a > 4;
+  UNTIL done END REPEAT;
+END//
+DELIMITER ;//
+
+INSERT INTO procedure_control VALUE(0);
+
+# Run CREATE + DROP TABLE and ALTER TABLESPACE queries in parallel
+--echo Start background load of ALTER TABLESPACE ts1 ADD/DROP DATAFILE
+--send CALL p1()
+
+--connection con2
+--echo Start CREATE + DROP TABLE t1 which uses tablespace ts1
+--disable_query_log
+--let $count = 1
+while ($count <= 30)
+{
+  # 0 - No error
+  # ER_LOCK_DEADLOCK - Transaction encountered deadlock
+  # ER_TABLE_EXISTS_ERROR - In case the previous DROP TABLE failed
+  --error 0,ER_LOCK_DEADLOCK,ER_TABLE_EXISTS_ERROR
+  CREATE TABLE t1 (
+    a INT PRIMARY KEY,
+    b VARCHAR(255)
+  )
+  ENGINE NDB TABLESPACE ts1 STORAGE DISK;
+  # 0 - No error
+  # ER_LOCK_DEADLOCK - Transaction encountered deadlock
+  # ER_BAD_TABLE_ERROR - In case the previous CREATE TABLE failed
+  --error 0,ER_LOCK_DEADLOCK,ER_BAD_TABLE_ERROR
+  DROP TABLE t1;
+  --inc $count
+}
+--enable_query_log
+
+# Signal procedure to stop background queries
+UPDATE procedure_control SET stop_flag=1;
+
+--connection default
+--echo Wait for background load to complete
+--error 0,ER_LOCK_DEADLOCK
+--reap
+
+# Cleanup
+DROP PROCEDURE p1;
+DROP TABLE procedure_control;
+ALTER TABLESPACE ts1
+  DROP DATAFILE 'ts1_datafile.dat';
+DROP TABLESPACE ts1;
+DROP LOGFILE GROUP lg1
+  ENGINE NDB;
+
+#
+# Testcase 3: Parallel tablespace DDL queries
+#
+
+# Create logfile group
+CREATE LOGFILE GROUP lg1
+  ADD UNDOFILE 'lg1_undofile.dat'
+  INITIAL_SIZE 1M
+  UNDO_BUFFER_SIZE = 1M
+  ENGINE NDB;
+
+# Create tablespace using the logfile group
+CREATE TABLESPACE ts1
+  ADD DATAFILE 'ts1_datafile.dat'
+  USE LOGFILE GROUP lg1
+  INITIAL_SIZE 16M
+  ENGINE NDB;
+
+# Procedure p1 communicates through 'procedure_control' table
+CREATE TABLE procedure_control(
+  stop_flag INT
+) ENGINE NDB;
+
+DELIMITER //;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  REPEAT
+    ALTER TABLESPACE ts1
+      ADD DATAFILE 'ts1_datafile2.dat';
+    ALTER TABLESPACE ts1
+      DROP DATAFILE 'ts1_datafile2.dat';
+    SELECT stop_flag INTO done FROM procedure_control;
+  UNTIL done END REPEAT;
+END//
+DELIMITER ;//
+
+INSERT INTO procedure_control VALUE(0);
+
+# Run ALTER TABLESPACE queries in parallel
+--echo Start background load of ALTER TABLESPACE ts1 ADD/DROP DATAFILE
+--send CALL p1()
+
+--connection con2
+--echo Start ALTER TABLESPACE ts1 ADD/DROP DATAFILE
+--disable_query_log
+--let $count = 1
+while ($count <= 30)
+{
+  ALTER TABLESPACE ts1
+    ADD DATAFILE 'ts1_datafile3.dat';
+  ALTER TABLESPACE ts1
+    DROP DATAFILE 'ts1_datafile3.dat';
+  --inc $count
+}
+--enable_query_log
+
+# Signal procedure to stop background queries
+UPDATE procedure_control SET stop_flag=1;
+
+--connection default
+--echo Wait for background load to complete
+--reap
+
+# Cleanup
+DROP PROCEDURE p1;
+DROP TABLE procedure_control,dummy;
+ALTER TABLESPACE ts1
+  DROP DATAFILE 'ts1_datafile.dat';
+DROP TABLESPACE ts1;
+DROP LOGFILE GROUP lg1
+  ENGINE NDB;

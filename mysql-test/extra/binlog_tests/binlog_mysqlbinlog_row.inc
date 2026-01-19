@@ -182,17 +182,17 @@ INSERT INTO t1 VALUES ('a');
 DELETE FROM t1 WHERE c37='a';
 DROP TABLE t1;
 
-CREATE TABLE t1 (c38 NATIONAL CHAR(0));
+CREATE TABLE t1 (c38 CHAR(0) CHARACTER SET utf8mb4);
 INSERT INTO t1 VALUES ('');
 DELETE FROM t1 WHERE c38='';
 DROP TABLE t1;
 
-CREATE TABLE t1 (c39 NATIONAL CHAR(1));
+CREATE TABLE t1 (c39 CHAR(1) CHARACTER SET utf8mb4);
 INSERT INTO t1 VALUES ('a');
 DELETE FROM t1 WHERE c39='a';
 DROP TABLE t1;
 
-CREATE TABLE t1 (c40 NATIONAL CHAR(255));
+CREATE TABLE t1 (c40 CHAR(255) CHARACTER SET utf8mb4);
 INSERT INTO t1 VALUES (repeat('a', 255));
 INSERT INTO t1 VALUES (repeat(_latin1 0xDF, 255));
 DELETE FROM t1 WHERE c40>'a';
@@ -245,23 +245,23 @@ DROP TABLE t1;
 
 #
 
-CREATE TABLE t1 (c49 NATIONAL VARCHAR(0));
+CREATE TABLE t1 (c49 VARCHAR(0) CHARACTER SET utf8mb4);
 INSERT INTO t1 VALUES ('');
 DELETE FROM t1 WHERE c49='';
 DROP TABLE t1;
 
-CREATE TABLE t1 (c50 NATIONAL VARCHAR(1));
+CREATE TABLE t1 (c50 VARCHAR(1) CHARACTER SET utf8mb4);
 INSERT INTO t1 VALUES ('a');
 DELETE FROM t1 WHERE c50='a';
 DROP TABLE t1;
 
-CREATE TABLE t1 (c51 NATIONAL VARCHAR(255));
+CREATE TABLE t1 (c51 VARCHAR(255) CHARACTER SET utf8mb4);
 INSERT INTO t1 VALUES (repeat('a',255));
 INSERT INTO t1 VALUES (repeat(_latin1 0xDF, 255));
 DELETE FROM t1 WHERE c51>'a';
 DROP TABLE t1;
 
-CREATE TABLE t1 (c52 NATIONAL VARCHAR(261));
+CREATE TABLE t1 (c52 VARCHAR(261) CHARACTER SET utf8mb4);
 INSERT INTO t1 VALUES (repeat('a',261));
 INSERT INTO t1 VALUES (repeat(_latin1 0xDF, 261));
 DELETE FROM t1 WHERE c52>'a';
@@ -448,6 +448,7 @@ INSERT INTO t1 VALUES (NOW(6), NOW(6), NOW(6), NOW(6), NOW(6), NOW(6));
 DROP TABLE t1;
 
 SET @ts='2001-01-01 00:00:00.123456';
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
   c85 TIMESTAMP(6), c86 TIMESTAMP(5), c87 TIMESTAMP(4),
   c88 TIMESTAMP(3), c89 TIMESTAMP(2), c90 TIMESTAMP(1)
@@ -459,6 +460,7 @@ DROP TABLE t1;
 
 SET timestamp=1000000000;
 SET time_zone=default;
+SET sql_mode = default;
 #
 # End of FSP-enabled data types
 #
@@ -511,6 +513,5 @@ DROP TABLE t1;
 flush logs;
 
 let $MYSQLD_DATADIR= `select @@datadir`;
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---replace_regex /SQL_LOAD_MB-[0-9]-[0-9]/SQL_LOAD_MB-#-#/ /exec_time=[0-9]*/exec_time=#/ /end_log_pos [0-9]*/end_log_pos #/ /# at [0-9]*/# at #/ /thread_id=[0-9]*/thread_id=#/ /table id [0-9]*/table id #/ /mapped to number [0-9]*/mapped to number #/ /server v [^ ]*/server v #.##.##/ /(@[0-9]*=[0-9]*[.][0-9]{1,3})[0-9e+-]*[^ ]*(.*(FLOAT|DOUBLE).*[*].)/\1...\2/ /SET @@SESSION.GTID_NEXT= '.*'/SET @@SESSION.GTID_NEXT= 'GTID'/ /CRC32 0x[0-9a-f]{8}/CRC32 #/
---exec $MYSQL_BINLOG --base64-output=decode-rows -v -v $MYSQLD_DATADIR/master-bin.000001
+--let $mysqlbinlog_parameters= --base64-output=decode-rows -v -v $MYSQLD_DATADIR/binlog.000001
+--source include/mysqlbinlog.inc

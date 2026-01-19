@@ -1,25 +1,9 @@
 # test --crl for the client : should connect
-Variable_name	Value
-have_openssl	YES
-have_ssl	YES
-ssl_ca	MYSQL_TEST_DIR/std_data/crl-ca-cert.pem
-ssl_capath	
-ssl_cert	MYSQL_TEST_DIR/std_data/crl-server-cert.pem
-ssl_cipher	
-ssl_crl	MYSQL_TEST_DIR/std_data/crl-client-revoked.crl
-ssl_crlpath	
-ssl_key	MYSQL_TEST_DIR/std_data/crl-server-key.pem
+LENGTH(VARIABLE_VALUE) > 0
+1
 # test --crlpath for the client : should connect
-Variable_name	Value
-have_openssl	YES
-have_ssl	YES
-ssl_ca	MYSQL_TEST_DIR/std_data/crl-ca-cert.pem
-ssl_capath	
-ssl_cert	MYSQL_TEST_DIR/std_data/crl-server-cert.pem
-ssl_cipher	
-ssl_crl	MYSQL_TEST_DIR/std_data/crl-client-revoked.crl
-ssl_crlpath	
-ssl_key	MYSQL_TEST_DIR/std_data/crl-server-key.pem
+LENGTH(VARIABLE_VALUE) > 0
+1
 # try logging in with a certificate in the server's --ssl-crl : should fail
 #
 # Bug#21920678: SSL-CA DOES NOT ACCEPT ~USER TILDE HOME DIRECTORY
@@ -28,8 +12,8 @@ ssl_key	MYSQL_TEST_DIR/std_data/crl-server-key.pem
 # try to connect with '--ssl-crl' option using tilde home directoy
 # path substitution : should connect
 Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-GCM-SHA256
+Ssl_cipher	SSL_CIPHER
 # try to connect with '--ssl-crlpath' option using tilde home directoy
 # path substitution : should connect
 Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-GCM-SHA256
+Ssl_cipher	SSL_CIPHER

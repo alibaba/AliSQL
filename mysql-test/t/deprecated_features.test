@@ -23,3 +23,411 @@ show table types;
 --error ER_PARSE_ERROR
 show mutex status;
 
+--echo # WL#13070 Deprecate && as synonym for AND and || as synonym for OR in SQL statements
+# Verify that || sends no warning if PIPES_AS_CONCAT
+
+set sql_mode=pipes_as_concat;
+select 2 || 3;
+select 2 or 3;
+select concat(2,3);
+set sql_mode='';
+select 2 || 3;
+select 2 or 3;
+set sql_mode=default;
+
+--echo # WL#13068 Deprecate BINARY keyword for specifying _bin collations
+
+--echo # (I) Those statements SHOULD WARN
+
+# CREATE TABLE for column
+create table t1 (v varchar(10) binary);
+show create table t1;
+drop table t1;
+# "binary" after "character set" is one yacc rule:
+create table t1 (v varchar(10) character set latin1 binary);
+show create table t1;
+drop table t1;
+# and the reverse order is another rule:
+create table t1 (v varchar(10) binary character set latin1);
+show create table t1;
+drop table t1;
+
+# ASCII and UNICODE have dedicated yacc rules
+create table t1 (v varchar(10) binary ascii);
+show create table t1;
+drop table t1;
+create table t1 (v varchar(10) ascii binary);
+show create table t1;
+drop table t1;
+create table t1 (v varchar(10) binary unicode);
+show create table t1;
+drop table t1;
+create table t1 (v varchar(10) unicode binary);
+show create table t1;
+drop table t1;
+
+# ALTER TABLE for column
+create table t1 (v varchar(10));
+show create table t1;
+alter table t1 modify v varchar(10) binary character set latin1;
+show create table t1;
+alter table t1 modify v varchar(10) unicode binary;
+show create table t1;
+alter table t1 modify v varchar(10) binary ascii;
+show create table t1;
+drop table t1;
+
+select collation(cast('a' as char(2))), collation(cast('a' as char(2) binary));
+select collation(convert('a', char(2))), collation(convert('a', char(2) binary));
+select collation(convert('a',char(2) ascii)), collation(convert('a',char(2) ascii binary));
+
+--echo # (II) Those statements SHOULDN'T WARN, as they do make
+--echo # "binary" charset, not just a "_bin" collation of another charset.
+
+# A binary column:
+
+create table t1 (v binary(10));
+show create table t1;
+drop table t1;
+
+# table's charset:
+
+create table t1 (v varchar(10)) character set binary;
+show create table t1;
+drop table t1;
+
+create table t1 (v varchar(10));
+show create table t1;
+alter table t1 character set binary;
+show create table t1;
+drop table t1;
+
+# database's charset:
+
+create database mysqltest2 default character set = binary;
+show create database mysqltest2 ;
+drop database mysqltest2;
+create database mysqltest2 default character set = latin1;
+show create database mysqltest2 ;
+alter database mysqltest2 default character set = binary;
+show create database mysqltest2 ;
+drop database mysqltest2;
+
+# session variables:
+
+select @@character_set_client;
+set character set binary;
+select @@character_set_client;
+set character set default;
+select @@character_set_client;
+set names binary;
+select @@character_set_client;
+set names default;
+
+# misc:
+
+# gives binary charset
+select convert("123" using binary);
+select char(123 using binary);
+select collation(char(123)), collation(char(123 using binary));
+
+# creates varbinary
+create table t1 (v varchar(10) byte);
+show create table t1;
+
+# LOAD DATA INFILE '$file' :
+# and SELECT ... INTO OUTFILE:
+
+# https://dev.mysql.com/doc/refman/8.0/en/load-data.html says:
+# "If the contents of the input file use a character set that differs
+# from the default, it is usually preferable to specify the character set
+# of the file by using the CHARACTER SET clause. A character set of
+# binary specifies "no conversion.""
+# So it's not about implying a _bin collation of another charset:
+# no warning.
+
+insert into t1 values("xyz");
+select * from t1 into outfile 'tmp1.txt' character set binary;
+load data infile 'tmp1.txt' into table t1 character set binary;
+select * from t1;
+let $MYSQLD_DATADIR= `select @@datadir`;
+remove_file $MYSQLD_DATADIR/test/tmp1.txt;
+drop table t1;
+
+--echo
+--echo # WL#13588 Deprecate support for prefix keys in partition functions.
+--echo
+
+CREATE SCHEMA testdb;
+
+--echo
+--echo # Should show deprecation warnings on CREATE TABLE for affected tables.
+
+--echo
+CREATE TABLE testdb.t1 (
+    a VARCHAR (10000),
+    b VARCHAR (25),
+    c VARCHAR (10),
+    PRIMARY KEY (a(10),b,c(2))
+) PARTITION BY KEY() PARTITIONS 2;
+
+--echo
+CREATE TABLE testdb.t2 (
+    a VARCHAR (200),
+    b VARCHAR (10),
+    PRIMARY KEY (a(2),b)
+) PARTITION BY KEY() PARTITIONS 2;
+
+--echo
+CREATE TABLE testdb.t3 (
+    a VARCHAR (200),
+    b VARCHAR (10),
+    PRIMARY KEY (a(2),b)
+) PARTITION BY KEY() PARTITIONS 10;
+
+--echo
+--echo # Should not show deprecation warnings if prefix key is not used
+--echo # in the PARTITION BY KEY() clause.
+CREATE TABLE testdb.t4 (
+    a VARCHAR (200),
+    b VARCHAR (10),
+    c VARCHAR (100),
+    KEY (a),
+    KEY (b(5))
+) PARTITION BY KEY(c) PARTITIONS 10;
+
+--echo
+--echo # Should not show deprecation warnings for CREATE TABLE LIKE.
+CREATE TABLE testdb.l1 LIKE testdb.t1;
+
+--echo
+--echo # Should show deprecation warnings for ALTER TABLE on affected tables.
+
+--echo
+ALTER TABLE testdb.t1 COMMENT='t1';
+
+--echo
+--echo # Should show deprecation warnings if a table having prefix keys is
+--echo # altered to be partitioned by key.
+CREATE TABLE testdb.t5 (
+    a VARCHAR (10000),
+    b VARCHAR (25),
+    c VARCHAR (10),
+    PRIMARY KEY (a(10),b,c(2))
+);
+ALTER TABLE testdb.t5 PARTITION BY KEY() PARTITIONS 10;
+
+--echo
+--echo # Should not show deprecation warnings on removing partitioning from an
+--echo # affected table.
+ALTER TABLE testdb.t5 REMOVE PARTITIONING;
+
+--echo
+--echo # Should not show deprecation warning if prefix length = column length.
+CREATE TABLE testdb.t6 (
+    a VARCHAR (200),
+    b VARCHAR (10),
+    PRIMARY KEY (a(200),b)
+) PARTITION BY KEY() PARTITIONS 10;
+
+--echo
+--echo # Should not show deprecation warnings for RENAME TABLE.
+RENAME TABLE testdb.t1 TO testdb.t1_renamed;
+
+--echo
+--echo # Should show deprecation warnings if prefix key is used in the
+--echo # PARTITION BY KEY() clause, regardless of lettercase.
+CREATE TABLE testdb.t7 (
+    a VARCHAR (200),
+    b VARCHAR (10),
+    c VARCHAR (100),
+    KEY (a),
+    KEY (b(5))
+) PARTITION BY KEY(B) PARTITIONS 2;
+
+--echo
+CREATE TABLE testdb.t8 (
+    A VARCHAR (200),
+    B VARCHAR (10),
+    C VARCHAR (100),
+    KEY (A),
+    KEY (B(5))
+) PARTITION BY KEY(b) PARTITIONS 2;
+
+--echo
+--echo # Should not show deprecation warnings when there is no index.
+CREATE TABLE testdb.m1 (
+    firstname VARCHAR (25) NOT NULL,
+    lastname VARCHAR (25) NOT NULL,
+    username VARCHAR (16) NOT NULL,
+    email VARCHAR (35),
+    joined DATE NOT NULL
+) PARTITION BY KEY(joined) PARTITIONS 6;
+
+--echo
+--echo # Should not show deprecation warnings for table partitioned by range.
+CREATE TABLE testdb.m2 (
+    firstname VARCHAR (25) NOT NULL,
+    lastname VARCHAR (25) NOT NULL,
+    username VARCHAR (16) NOT NULL,
+    email VARCHAR (35),
+    joined DATE NOT NULL
+) PARTITION BY RANGE(YEAR(joined)) (
+    PARTITION p0 VALUES LESS THAN (1960),
+    PARTITION p1 VALUES LESS THAN (1970),
+    PARTITION p2 VALUES LESS THAN (1980),
+    PARTITION p3 VALUES LESS THAN (1990),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+
+--echo
+--echo # Should not show deprecation warnings for table with a prefix key
+--echo # partitioned by range
+CREATE TABLE testdb.m3 (
+    firstname VARCHAR (25) NOT NULL,
+    lastname VARCHAR (25) NOT NULL,
+    username VARCHAR (16) NOT NULL,
+    email VARCHAR (35),
+    joined DATE NOT NULL,
+    PRIMARY KEY(firstname(5),joined)
+) PARTITION BY RANGE(YEAR(joined)) (
+    PARTITION p0 VALUES LESS THAN (1960),
+    PARTITION p1 VALUES LESS THAN (1970),
+    PARTITION p2 VALUES LESS THAN (1980),
+    PARTITION p3 VALUES LESS THAN (1990),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+
+--echo
+--echo # Should show deprecation warnings for combinations of column type
+--echo # CHAR|VARCHAR|BINARY|VARBINARY, [LINEAR] KEY, and ALGORITHM=1|2
+
+--echo
+CREATE TABLE testdb.t_char_linear_alg1 (
+    prefix_col CHAR (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY LINEAR KEY ALGORITHM=1 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_varchar_linear_alg1 (
+    prefix_col VARCHAR (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY LINEAR KEY ALGORITHM=1 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_binary_linear_alg1 (
+    prefix_col BINARY (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY LINEAR KEY ALGORITHM=1 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_varbinary_linear_alg1 (
+    prefix_col VARBINARY (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY LINEAR KEY ALGORITHM=1 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_char_nonlinear_alg1 (
+    prefix_col CHAR (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY KEY ALGORITHM=1 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_varchar_nonlinear_alg1 (
+    prefix_col VARCHAR (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY KEY ALGORITHM=1 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_binary_nonlinear_alg1 (
+    prefix_col BINARY (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY KEY ALGORITHM=1 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_varbinary_nonlinear_alg1 (
+    prefix_col VARBINARY (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY KEY ALGORITHM=1 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_char_linear_alg2 (
+    prefix_col CHAR (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY LINEAR KEY ALGORITHM=2 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_varchar_linear_alg2 (
+    prefix_col VARCHAR (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY LINEAR KEY ALGORITHM=2 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_binary_linear_alg2 (
+    prefix_col BINARY (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY LINEAR KEY ALGORITHM=2 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_varbinary_linear_alg2 (
+    prefix_col VARBINARY (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY LINEAR KEY ALGORITHM=2 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_char_nonlinear_alg2 (
+    prefix_col CHAR (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY KEY ALGORITHM=2 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_varchar_nonlinear_alg2 (
+    prefix_col VARCHAR (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY KEY ALGORITHM=2 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_binary_nonlinear_alg2 (
+    prefix_col BINARY (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY KEY ALGORITHM=2 () PARTITIONS 3;
+
+--echo
+CREATE TABLE testdb.t_varbinary_nonlinear_alg2 (
+    prefix_col VARBINARY (100),
+    other_col VARCHAR (5),
+    PRIMARY KEY (prefix_col(10), other_col)
+) PARTITION BY KEY ALGORITHM=2 () PARTITIONS 3;
+
+--echo
+--echo # Cleanup.
+
+--echo
+DROP SCHEMA testdb;
+
+
+--echo
+--echo # WL#14064 Deprecate INFORMATION_SCHEMA.TABLESPACES
+--echo
+--echo # Should show a deprecation warning in all cases.
+SELECT * FROM INFORMATION_SCHEMA.TABLESPACES;
+SELECT * FROM INFORMATION_SCHEMA.tablespaces;
+--skip_if_hypergraph  # The warning is repeated a different amount of times.
+SELECT * FROM INFORMATION_SCHEMA.TABLES JOIN INFORMATION_SCHEMA.TABLESPACES;
+--skip_if_hypergraph  # The warning is repeated a different amount of times.
+SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME IN (SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLESPACES);

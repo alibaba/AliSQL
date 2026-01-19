@@ -1,31 +1,56 @@
-# Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2009, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA 
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA 
 
 # cmake -DWITH_EDITLINE=system|bundled
 # bundled is the default
 
+FUNCTION(WARN_MISSING_SYSTEM_EDITLINE OUTPUT_WARNING)
+  IF(NOT EDITLINE_FOUND AND WITH_EDITLINE STREQUAL "system")
+    MESSAGE(WARNING "Cannot find EDITLINE development libraries. "
+      "You need to install the required packages:\n"
+      "  Debian/Ubuntu:              apt install libedit-dev\n"
+      "  RedHat/Fedora/Oracle Linux: yum install libedit-devel\n"
+      "  SuSE:                       zypper install libedit-devel\n"
+      )
+    SET(${OUTPUT_WARNING} 1 PARENT_SCOPE)
+  ENDIF()
+ENDFUNCTION()
+
+MACRO(RESET_EDITLINE_VARIABLES)
+  UNSET(EDITLINE_INCLUDE_DIR)
+  UNSET(EDITLINE_INCLUDE_DIR CACHE)
+  UNSET(EDITLINE_LIBRARY)
+  UNSET(EDITLINE_LIBRARY CACHE)
+  UNSET(FOUND_EDITLINE_READLINE)
+  UNSET(FOUND_EDITLINE_READLINE CACHE)
+ENDMACRO()
+
 MACRO (MYSQL_CHECK_MULTIBYTE)
-  CHECK_INCLUDE_FILE(wctype.h HAVE_WCTYPE_H)
-  CHECK_INCLUDE_FILE(wchar.h HAVE_WCHAR_H)
-  IF(HAVE_WCHAR_H)
-    SET(CMAKE_EXTRA_INCLUDE_FILES wchar.h)
-    CHECK_TYPE_SIZE(mbstate_t SIZEOF_MBSTATE_T)
-    SET(CMAKE_EXTRA_INCLUDE_FILES)
-    IF(SIZEOF_MBSTATE_T)
-      SET(HAVE_MBSTATE_T 1)
-    ENDIF()
+  SET(CMAKE_EXTRA_INCLUDE_FILES wchar.h)
+  CHECK_TYPE_SIZE(mbstate_t SIZEOF_MBSTATE_T)
+  SET(CMAKE_EXTRA_INCLUDE_FILES)
+  IF(SIZEOF_MBSTATE_T)
+    SET(HAVE_MBSTATE_T 1)
   ENDIF()
 
   CHECK_C_SOURCE_COMPILES("
@@ -37,20 +62,7 @@ MACRO (MYSQL_CHECK_MULTIBYTE)
   }"
   HAVE_LANGINFO_CODESET)
   
-  CHECK_FUNCTION_EXISTS(mbrlen HAVE_MBRLEN)
-  CHECK_FUNCTION_EXISTS(mbscmp HAVE_MBSCMP)
-  CHECK_FUNCTION_EXISTS(mbsrtowcs HAVE_MBSRTOWCS)
-  CHECK_FUNCTION_EXISTS(wcrtomb HAVE_WCRTOMB)
-  CHECK_FUNCTION_EXISTS(mbrtowc HAVE_MBRTOWC)
-  CHECK_FUNCTION_EXISTS(wcscoll HAVE_WCSCOLL)
   CHECK_FUNCTION_EXISTS(wcsdup HAVE_WCSDUP)
-  CHECK_FUNCTION_EXISTS(wcwidth HAVE_WCWIDTH)
-  CHECK_FUNCTION_EXISTS(wctype HAVE_WCTYPE)
-  CHECK_FUNCTION_EXISTS(iswlower HAVE_ISWLOWER)
-  CHECK_FUNCTION_EXISTS(iswupper HAVE_ISWUPPER)
-  CHECK_FUNCTION_EXISTS(towlower HAVE_TOWLOWER)
-  CHECK_FUNCTION_EXISTS(towupper HAVE_TOWUPPER)
-  CHECK_FUNCTION_EXISTS(iswctype HAVE_ISWCTYPE)
 
   SET(CMAKE_EXTRA_INCLUDE_FILES wchar.h)
   CHECK_TYPE_SIZE(wchar_t SIZEOF_WCHAR_T)
@@ -59,10 +71,6 @@ MACRO (MYSQL_CHECK_MULTIBYTE)
   ENDIF()
 
   SET(CMAKE_EXTRA_INCLUDE_FILES wctype.h)
-  CHECK_TYPE_SIZE(wctype_t SIZEOF_WCTYPE_T)
-  IF(SIZEOF_WCTYPE_T)
-    SET(HAVE_WCTYPE_T 1)
-  ENDIF()
   CHECK_TYPE_SIZE(wint_t SIZEOF_WINT_T)
   IF(SIZEOF_WINT_T)
     SET(HAVE_WINT_T 1)
@@ -77,10 +85,10 @@ MACRO (FIND_CURSES)
  IF(NOT CURSES_FOUND)
    SET(ERRORMSG "Curses library not found. Please install appropriate package,
     remove CMakeCache.txt and rerun cmake.")
-   IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
-    SET(ERRORMSG ${ERRORMSG} 
-    "On Debian/Ubuntu, package name is libncurses5-dev, on Redhat and derivates " 
-    "it is ncurses-devel.")
+   IF(LINUX)
+     SET(ERRORMSG ${ERRORMSG} 
+       "On Debian/Ubuntu, package name is libncurses5-dev, on Redhat and derivates " 
+       "it is ncurses-devel.")
    ENDIF()
    MESSAGE(FATAL_ERROR ${ERRORMSG})
  ENDIF()
@@ -90,24 +98,8 @@ MACRO (FIND_CURSES)
  ELSEIF(CURSES_HAVE_NCURSES_H)
    SET(HAVE_NCURSES_H 1 CACHE INTERNAL "")
  ENDIF()
- IF(CMAKE_SYSTEM_NAME MATCHES "HP")
-   # CMake uses full path to library /lib/libcurses.sl 
-   # On Itanium, it results into architecture mismatch+
-   # the library is for  PA-RISC
-   SET(CURSES_LIBRARY "curses" CACHE INTERNAL "" FORCE)
-   SET(CURSES_CURSES_LIBRARY "curses" CACHE INTERNAL "" FORCE)
- ENDIF()
- IF(CMAKE_SYSTEM_NAME MATCHES "SunOS")
-   # CMake generates /lib/64/libcurses.so -R/lib/64
-   # The result is we cannot find
-   # /opt/studio12u2/lib/stlport4/v9/libstlport.so.1
-   # at runtime
-   SET(CURSES_LIBRARY "curses" CACHE INTERNAL "" FORCE)
-   SET(CURSES_CURSES_LIBRARY "curses" CACHE INTERNAL "" FORCE)
-   MESSAGE(STATUS "CURSES_LIBRARY ${CURSES_LIBRARY}")
- ENDIF()
 
- IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
+ IF(LINUX)
    # -Wl,--as-needed breaks linking with -lcurses, e.g on Fedora 
    # Lower-level libcurses calls are exposed by libtinfo
    CHECK_LIBRARY_EXISTS(${CURSES_LIBRARY} tputs "" HAVE_TPUTS_IN_CURSES)
@@ -120,13 +112,20 @@ MACRO (FIND_CURSES)
  ENDIF()
 ENDMACRO()
 
+SET(CURRENT_LIBEDIT_DIRECTORY "extra/libedit/libedit-20240808-3.1")
+
 MACRO (MYSQL_USE_BUNDLED_EDITLINE)
+  SET(WITH_EDITLINE "bundled" CACHE STRING "By default use bundled editline")
   SET(USE_LIBEDIT_INTERFACE 1)
   SET(HAVE_HIST_ENTRY 1)
-  SET(EDITLINE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/cmd-line-utils/libedit/editline)
+  SET(EDITLINE_HAVE_COMPLETION_CHAR 1 CACHE INTERNAL "")
+  SET(USE_NEW_EDITLINE_INTERFACE 1 CACHE INTERNAL "")
+  SET(EDITLINE_INCLUDE_DIR
+    ${CMAKE_SOURCE_DIR}/${CURRENT_LIBEDIT_DIRECTORY}/src/editline)
+  INCLUDE_DIRECTORIES(BEFORE SYSTEM ${EDITLINE_INCLUDE_DIR})
   SET(EDITLINE_LIBRARY edit)
   FIND_CURSES()
-  ADD_SUBDIRECTORY(${CMAKE_SOURCE_DIR}/cmd-line-utils/libedit)
+  ADD_SUBDIRECTORY(${CMAKE_SOURCE_DIR}/${CURRENT_LIBEDIT_DIRECTORY}/src)
 ENDMACRO()
 
 MACRO (FIND_SYSTEM_EDITLINE)
@@ -156,8 +155,11 @@ MACRO (FIND_SYSTEM_EDITLINE)
 
   INCLUDE(CheckCXXSourceCompiles)
   IF(EDITLINE_LIBRARY AND EDITLINE_INCLUDE_DIR)
+    CMAKE_PUSH_CHECK_STATE()
+
     SET(CMAKE_REQUIRED_INCLUDES ${EDITLINE_INCLUDE_DIR})
-    SET(CMAKE_REQUIRED_LIBRARIES ${EDITLINE_LIBRARY})
+    INCLUDE_DIRECTORIES(SYSTEM ${EDITLINE_INCLUDE_DIR})
+    LIST(APPEND CMAKE_REQUIRED_LIBRARIES ${EDITLINE_LIBRARY})
     CHECK_CXX_SOURCE_COMPILES("
     #include <stdio.h>
     #include <readline.h>
@@ -179,13 +181,30 @@ MACRO (FIND_SYSTEM_EDITLINE)
       completion_matches(0,0);
       return res;
     }"
-    EDITLINE_HAVE_COMPLETION)
+    EDITLINE_HAVE_COMPLETION_INT)
 
-    IF(EDITLINE_HAVE_COMPLETION)
+    CHECK_CXX_SOURCE_COMPILES("
+    #include <stdio.h>
+    #include <readline.h>
+    int main(int argc, char **argv)
+    {
+      typedef char* MYFunction(const char*, int);
+      MYFunction* myf= rl_completion_entry_function;
+      char *res= (myf)(NULL, 0);
+      completion_matches(0,0);
+      return res != NULL;
+    }"
+    EDITLINE_HAVE_COMPLETION_CHAR)
+
+    IF(EDITLINE_HAVE_COMPLETION_INT OR EDITLINE_HAVE_COMPLETION_CHAR)
       SET(HAVE_HIST_ENTRY ${EDITLINE_HAVE_HIST_ENTRY})
       SET(USE_LIBEDIT_INTERFACE 1)
       SET(EDITLINE_FOUND 1)
+      IF(EDITLINE_HAVE_COMPLETION_CHAR)
+        SET(USE_NEW_EDITLINE_INTERFACE 1)
+      ENDIF()
     ENDIF()
+    CMAKE_POP_CHECK_STATE()
   ENDIF()
 ENDMACRO()
 
@@ -203,7 +222,7 @@ MACRO (MYSQL_CHECK_EDITLINE)
     ELSEIF(WITH_EDITLINE STREQUAL "system")
       FIND_SYSTEM_EDITLINE()
       IF(NOT EDITLINE_FOUND)
-        MESSAGE(FATAL_ERROR "Cannot find system editline libraries.") 
+        RESET_EDITLINE_VARIABLES()
       ENDIF()
     ELSE()
       MESSAGE(FATAL_ERROR "WITH_EDITLINE must be bundled or system")

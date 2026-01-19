@@ -8,12 +8,8 @@
 # 2008-06-04 mleich Create this script based on older scripts and new code.
 #
 
---source include/have_ucs2.inc
-
-# This test cannot be used for the embedded server because privileges
-# are expected within result sets.
---source include/not_embedded.inc
-
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
 let $engine_type= MyISAM;
 SET @@session.sql_mode = 'NO_ENGINE_SUBSTITUTION';
 USE test;

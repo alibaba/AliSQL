@@ -22,7 +22,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/have_innodb.inc
 
 SET @start_global_value = @@global.innodb_file_per_table;
 SELECT @start_global_value;
@@ -58,17 +57,21 @@ SELECT @@global.innodb_file_per_table;
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 
+--disable_warnings
 SELECT IF(@@GLOBAL.innodb_file_per_table,'ON','OFF') = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_file_per_table';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.innodb_file_per_table);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='innodb_file_per_table';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -102,7 +105,7 @@ SELECT COUNT(@@GLOBAL.innodb_file_per_table);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_file_per_table = @@SESSION.innodb_file_per_table;
+SELECT innodb_file_per_table;
 
 #
 # Cleanup

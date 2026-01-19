@@ -1,6 +1,9 @@
+--source include/no_valgrind_without_big.inc
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
+
+SET @big_tables_save=@@big_tables;
 
 create table t1(n1 int, n2 int, s char(20), vs varchar(20), t text);
 insert into t1 values (1,11, 'one','eleven', 'eleven'),
@@ -16,30 +19,39 @@ insert into t1 values (1,11, 'one','eleven', 'eleven'),
  (2,13, 'two',NULL, 'bar'),
  (2,13, 'two','thirteen', NULL);
 
+--sorted_result
 select distinct n1 from t1;
 select count(distinct n1) from t1;
 
+--sorted_result
 select distinct n2 from t1;
 select count(distinct n2) from t1;
 
+--sorted_result
 select distinct s from t1;
 select count(distinct s) from t1;
 
+--sorted_result
 select distinct vs from t1;
 select count(distinct vs) from t1;
 
+--sorted_result
 select distinct t from t1;
 select count(distinct t) from t1;
 
+--sorted_result
 select distinct n1,n2 from t1;
 select count(distinct n1,n2) from t1;
 
+--sorted_result
 select distinct n1,s from t1;
 select count(distinct n1,s) from t1;
 
+--sorted_result
 select distinct s,n1,vs from t1;
 select count(distinct s,n1,vs) from t1;
 
+--sorted_result
 select distinct s,t from t1;
 select count(distinct s,t) from t1;
 
@@ -65,6 +77,7 @@ show status like 'Created_tmp_disk_tables';
 drop table t1;
 
 # Test use of MyISAM tmp tables
+SET SESSION big_tables=1;
 create table t1 (s text);
 let $1=5000;
 disable_query_log;
@@ -78,5 +91,6 @@ flush status;
 select count(distinct s) from t1;
 show status like 'Created_tmp_disk_tables';
 drop table t1;
+SET SESSION big_tables=@big_tables_save;
 
 # End of 4.1 tests

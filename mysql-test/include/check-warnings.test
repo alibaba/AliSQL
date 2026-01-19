@@ -1,4 +1,6 @@
 #
+# Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+#
 # This test is executed once after each test to check the servers
 # for unexpected warnings found in the servers error log
 #
@@ -9,56 +11,53 @@
 --disable_query_log
 
 # Don't write these queries to binlog
-set SQL_LOG_BIN=0;
+SET SQL_LOG_BIN = 0;
 
 # Turn off any debug crashes, allow the variable to be
 # non existent in release builds
 --error 0,1193
-set debug="";
+SET DEBUG = "";
 
-use mtr;
-# Allow this session to read-write even if server is started
-# with --transaction-read-only
-set session transaction read write;
+USE mtr;
 
-create temporary table error_log (
-  row int auto_increment primary key,
-  suspicious int default 1,
-  file_name varchar(255),
-  line varchar(1024) default null
-) engine=myisam;
+# Allow this session to read-write even if server is started with
+# --transaction-read-only. And set autocommit mode for the session
+# irrespective of server --autocommit setting.
+SET SESSION TRANSACTION READ WRITE;
 
-# Get the name of servers error log
-let $log_error= $MTR_LOG_ERROR;
-let $log_warning= $log_error.warnings;
+# Due to the lack of WL#7828 / WL#8003 now, we might have a pending
+# Data Dictionary read-only transaction at this point. Even though
+# DD-RO-transactions are usually committed in the end, there are cases
+# when it does not happen. It will be changed when WL#7828 / WL#8003
+# are merged in.
+#
+# Until that happens, we do 'SET SESSION AUTOCOMMIT = 1' here in order
+# to commit that DD-RO-transaction that might be pending. Otherwise,
+# the following statements will fail. By turning autocommit ON we
+# achieve two effects:
+#   1. Ensure there is no loose DD-RO-transaction (i.e. the effect of
+#      COMMIT statement);
+#   2. Make sure all future DD-RO-transactions that might happen below
+#      will be properly committed.
+#
+# We set session variable to not affect other tests. 
+SET SESSION AUTOCOMMIT = 1;
 
-# Try tload the warnings into a temporary table,
-# it might fail with error saying "The MySQL server is
-# running with the --secure-file-priv" in which case
-# an attempt to load the file using LOAD DATA LOCAL is made
---error 0,1290
-eval load data infile '$log_warning' into table error_log
-  fields terminated by 'xykls37' escaped by ''
-  ignore 1 lines
-  (line)
-  set file_name='$log_error';
+# The name of the file where mtr has written filtered-in lines from
+# the server error log.
+--let $error_log_filename = $MTR_LOG_ERROR.warnings
 
-if ($mysql_errno)
-{
-  # Try LOAD DATA LOCAL
-  eval load data local infile '$log_warning' into table error_log
-    fields terminated by 'xykls37' escaped by ''
-    ignore 1 lines
-    (line)
-    set file_name='$log_error';
-}
+# Create a temporary table and load error messages into it.
+--let $ignore_line_count = 1
+--source include/load_error_log.inc
 
-# Call check_warnings to filter out any warning in
-# the error_log table
-call mtr.check_warnings(@result);
-if (`select @result = 0`){
-  skip OK;
-}
+# Call check_warnings to filter out any warning in the error_log table.
+CALL mtr.check_warnings(@result);
 --enable_query_log
-echo ^ Found warnings in $log_error;
-exit;
+
+if (`SELECT @result = 0`) {
+  --skip OK
+}
+
+--echo ^ Found warnings in $MTR_LOG_ERROR
+--exit

@@ -68,13 +68,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`f_int1`)
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -526,12 +526,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1)
 PARTITIONS 5 */
 
@@ -992,13 +992,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST ((`f_int1` % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -1463,13 +1463,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -1926,14 +1926,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1 DIV 2)
-SUBPARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE ((`f_int1` DIV 2))
+SUBPARTITION BY HASH (`f_int1`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -2397,13 +2397,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int1)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -2871,14 +2871,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int1 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int1` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -3345,13 +3345,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int1)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -3808,14 +3808,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`f_int1`)
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -3826,7 +3826,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -4302,13 +4302,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1)
 PARTITIONS 5 */
 
@@ -4320,7 +4320,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -4804,14 +4804,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST ((`f_int1` % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -4829,7 +4829,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -5311,14 +5311,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -5334,7 +5334,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -5810,15 +5810,15 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1 DIV 2)
-SUBPARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE ((`f_int1` DIV 2))
+SUBPARTITION BY HASH (`f_int1`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -5833,7 +5833,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -6317,14 +6317,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int1)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -6347,7 +6347,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -6827,15 +6827,15 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int1 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int1` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -6857,7 +6857,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -7337,14 +7337,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int1)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -7359,7 +7359,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -7836,14 +7836,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`f_int1`)
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -7854,7 +7854,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -8330,13 +8330,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1)
 PARTITIONS 5 */
 
@@ -8348,7 +8348,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -8832,14 +8832,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST ((`f_int1` % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -8857,7 +8857,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -9339,14 +9339,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -9362,7 +9362,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -9838,15 +9838,15 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1 DIV 2)
-SUBPARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE ((`f_int1` DIV 2))
+SUBPARTITION BY HASH (`f_int1`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -9861,7 +9861,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -10345,14 +10345,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int1)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -10375,7 +10375,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -10855,15 +10855,15 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int1 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int1` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -10885,7 +10885,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -11365,14 +11365,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` mediumint(9) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` mediumint NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   PRIMARY KEY (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int1)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -11387,7 +11387,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '2-2' for key 't1.PRIMARY'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -11865,14 +11865,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`f_int1`)
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -11883,7 +11883,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -12375,13 +12375,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1)
 PARTITIONS 5 */
 
@@ -12393,7 +12393,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -12893,14 +12893,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST ((`f_int1` % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -12918,7 +12918,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -13416,14 +13416,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -13439,7 +13439,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -13931,15 +13931,15 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1 DIV 2)
-SUBPARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE ((`f_int1` DIV 2))
+SUBPARTITION BY HASH (`f_int1`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -13954,7 +13954,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -14454,14 +14454,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int1)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -14484,7 +14484,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -14980,15 +14980,15 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int1 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int1` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -15010,7 +15010,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -15506,14 +15506,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int1`,`f_int2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int1)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -15528,7 +15528,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -16021,14 +16021,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`f_int1`)
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -16039,7 +16039,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -16531,13 +16531,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1)
 PARTITIONS 5 */
 
@@ -16549,7 +16549,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -17049,14 +17049,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST ((`f_int1` % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -17074,7 +17074,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -17572,14 +17572,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -17595,7 +17595,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -18087,15 +18087,15 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1 DIV 2)
-SUBPARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE ((`f_int1` DIV 2))
+SUBPARTITION BY HASH (`f_int1`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -18110,7 +18110,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -18610,14 +18610,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int1)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -18640,7 +18640,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -19136,15 +19136,15 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int1 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int1` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -19166,7 +19166,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
@@ -19662,14 +19662,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` mediumint(9) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` mediumint DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL,
   UNIQUE KEY `uidx1` (`f_int2`,`f_int1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int1)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -19684,7 +19684,7 @@ INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'delete me' FROM t0_template
 WHERE f_int1 IN (2,3);
-ERROR 23000: Duplicate entry '2-2' for key 'uidx1'
+ERROR 23000: Duplicate entry '2-2' for key 't1.uidx1'
 # check prerequisites-3 success:    1
 # INFO: f_int1 AND/OR f_int2 AND/OR (f_int1,f_int2) is UNIQUE
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)

@@ -1,17 +1,25 @@
-# Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #
 
 # Avoid system checks on Windows by pre-caching  results. Most of the system checks
@@ -35,15 +43,17 @@ SET(HAVE_EPOLL_CREATE CACHE INTERNAL "")
 SET(HAVE_MEMALIGN CACHE INTERNAL "")
 SET(HAVE_SYSCONF CACHE INTERNAL "")
 SET(HAVE_DIRECTIO CACHE INTERNAL "")
-SET(HAVE_ATOMIC_SWAP32 CACHE INTERNAL "")
+SET(HAVE_ATOMIC_SWAP_32 CACHE INTERNAL "")
 SET(HAVE_MLOCK CACHE INTERNAL "")
 SET(HAVE_FFS CACHE INTERNAL "")
 SET(HAVE_PTHREAD_MUTEXATTR_INIT CACHE INTERNAL "")
 SET(HAVE_PTHREAD_MUTEXATTR_SETTYPE CACHE INTERNAL "")
 SET(HAVE_PTHREAD_SETSCHEDPARAM CACHE INTERNAL "")
-SET(HAVE_SUN_PREFETCH_H CACHE INTERNAL "")
 SET(HAVE___BUILTIN_FFS CACHE INTERNAL "")
+SET(HAVE___BUILTIN_CTZ CACHE INTERNAL "")
+SET(HAVE___BUILTIN_CLZ CACHE INTERNAL "")
 SET(HAVE__BITSCANFORWARD 1 CACHE INTERNAL "")
+SET(HAVE__BITSCANREVERSE 1 CACHE INTERNAL "")
 SET(HAVE_LINUX_SCHEDULING CACHE INTERNAL "")
 SET(HAVE_SOLARIS_AFFINITY CACHE INTERNAL "")
 SET(HAVE_LINUX_FUTEX CACHE INTERNAL "")

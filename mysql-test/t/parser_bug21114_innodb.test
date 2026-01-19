@@ -1,4 +1,4 @@
--- source include/have_innodb.inc
+--source include/no_valgrind_without_big.inc
 
 let $engine_type=InnoDb;
 
@@ -237,7 +237,7 @@ let $FCT=maketime;
 -- source include/parser_bug21114.inc
 let $FCT=make_set;
 -- source include/parser_bug21114.inc
-let $FCT=master_pos_wait;
+let $FCT=source_pos_wait;
 -- source include/parser_bug21114.inc
 let $FCT=mbrcontains;
 -- source include/parser_bug21114.inc
@@ -419,4 +419,3 @@ let $FCT=y;
 -- source include/parser_bug21114.inc
 let $FCT=yearweek;
 -- source include/parser_bug21114.inc
-

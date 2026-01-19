@@ -8,6 +8,7 @@
 
 # Includes
 -- source include/have_binlog_format_row.inc
+-- source include/set_privilege_checks_user_as_system_user.inc
 -- source include/master-slave.inc
 
 -- disable_query_log
@@ -63,7 +64,7 @@ while ($1)
 {
   CALL test.p2();
   let $wait_condition= SELECT COUNT(*) = @wait_count FROM test.t3;
-  --source include/wait_condition.inc
+  --source include/wait_condition_or_abort.inc
   --disable_query_log
   SET @wait_count = @wait_count + 1;
   dec $1;
@@ -111,6 +112,11 @@ DROP TABLE test.t3;
 # will leave dump files in $MYSQLTEST_VARDIR/tmp
 
 diff_files $MYSQLTEST_VARDIR/tmp/trig001_master.sql $MYSQLTEST_VARDIR/tmp/trig001_slave.sql;
+
+# Cleanup
+--remove_file $MYSQLTEST_VARDIR/tmp/trig001_master.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/trig001_slave.sql
+--enable_warnings
 
 # End of 5.0 test case
 --source include/rpl_end.inc

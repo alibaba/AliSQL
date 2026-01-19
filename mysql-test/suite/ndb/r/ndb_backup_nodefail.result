@@ -1,0 +1,46 @@
+Setup error insert to interleave DEFINE_BACKUP_REQ replies with NODE_FAILREP
+
+Start backup, that will fail due to node failure
+Wait for cluster to come up again
+Node 143: STARTED
+Node 144: STARTED
+Setup error insert to interleave START_BACKUP_REQ replies with NODE_FAILREP
+
+Start backup, that will fail due to node failure
+Wait for cluster to come up again
+Node 143: STARTED
+Node 144: STARTED
+Setup error insert to interleave STOP_BACKUP_REQ replies with NODE_FAILREP
+
+Start backup, that will fail due to node failure
+Wait for cluster to come up again
+Node 143: STARTED
+Node 144: STARTED
+Setup error insert so that backup fails in a controlled way
+
+Start backup, that will fail due to node failure
+Check that node failure was controlled (e.g. node recovers)
+Node 143: STARTED
+Node 144: STARTED
+Node recovered, ok
+Clear error
+
+Check backup ok
+Setup error insert so that backup fails due to illegal signal
+a) Error insert causes Backup 1 to set (restrict) signal scope
+b) Backup 1 is run (succesfully) setting signal scope for BACKUP_REQ
+c) Backup 2 is run subject to signal scope, and causes crash
+in master data node when BACKUP_REQ is received from MGMD.
+The expectation is:
+- The master node will fail
+- Other nodes will be unaffected
+
+Run a backup (and set up error insert)
+Start backup again, that will fail due to node failure
+Check that node failure was controlled (e.g. node recovers)
+Node 143: STARTED
+Node 144: STARTED
+Node recovered, ok
+Clear error
+
+Check backup ok

@@ -1,0 +1,26 @@
+#
+# Bug# 37559598 - Unexpected incorrect syntax reported for statement in init file
+#
+# Create the bootstrap file.
+# Create a test user.
+CREATE USER 'test'@'localhost';
+# restart
+# There should be no syntax error during the execution of init-file
+#     You have an error in your SQL syntax - found 0 times.
+# 'foo' schema must exist.
+SHOW DATABASES;
+Database
+foo
+information_schema
+mtr
+mysql
+performance_schema
+sys
+test
+# 'test'@'localhost' user should be able to log in using new password
+SELECT USER();
+USER()
+test@localhost
+# Clean up
+DROP DATABASE foo;
+DROP USER 'test'@'localhost';

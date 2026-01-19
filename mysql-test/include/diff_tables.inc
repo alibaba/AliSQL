@@ -10,6 +10,7 @@
 # --let $diff_tables= [con1:][db1.]t1, [con2:][db2.]t2, ... , [conN:][dbN.]tN
 # [--let $rpl_debug= 1]
 # [--let $diff_tables_silent= 1]
+# [--let $mask_column_list= c1, .. cn]
 # --source include/diff_tables.inc
 #
 # Parameters:
@@ -85,6 +86,13 @@ if (`SELECT LOCATE(',', '$diff_tables') = 0`)
 
 # Trim off whitespace
 --let $_dt_tables= `SELECT REPLACE('$diff_tables', ' ', '')`
+--let $mask_column_list= `SELECT REPLACE('$mask_column_list', ' ', '')`
+
+# Add quotes to column names which will be masked.
+--let $mask_column_list= `SELECT REPLACE('$mask_column_list', ',', '","')`
+if ($mask_column_list) {
+  --let $mask_column_clause= AND column_name NOT IN ("$mask_column_list")
+}
 
 # Iterate over all tables
 --let $_dt_outfile=
@@ -136,8 +144,11 @@ while ($_dt_tables)
 
   # Compute length of ORDER BY clause.
   let $_dt_order_by_length=
-    `SELECT SUM(LENGTH(column_name) + 3) FROM information_schema.columns
-            WHERE table_schema = '$_dt_database' AND table_name = '$_dt_table'`;
+    `SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ SUM(LENGTH(column_name) + 3) FROM information_schema.columns
+            WHERE table_schema = '$_dt_database' AND
+                  table_name = '$_dt_table' AND
+                  column_type != 'JSON'
+                  $mask_column_clause`;
   if (!$_dt_order_by_length)
   {
     --echo ERROR IN TEST: table $_dt_database.$_dt_table not found in INFORMATION_SCHEMA.COLUMNS. Did you misspell it?
@@ -158,9 +169,12 @@ while ($_dt_tables)
   # It would be better to do GROUP_CONCAT(CONCAT('`', column_name, '`')) but
   # BUG#58087 prevents us from returning strings that begin with backticks.
   let $_dt_column_list=
-    `SELECT GROUP_CONCAT(column_name ORDER BY ORDINAL_POSITION SEPARATOR '`,`')
+    `SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ GROUP_CONCAT(column_name ORDER BY ORDINAL_POSITION SEPARATOR '`,`')
             FROM information_schema.columns
-            WHERE table_schema = '$_dt_database' AND table_name = '$_dt_table'`;
+            WHERE table_schema = '$_dt_database' AND
+                  table_name = '$_dt_table' AND
+                  column_type != 'json'
+                  $mask_column_clause`;
   # Restore group_concat_max_len.
   if ($_dt_old_group_concat_max_len)
   {
@@ -175,7 +189,24 @@ while ($_dt_tables)
   # the table to a file.
   --let $_dt_outfile= `SELECT @@datadir`
   --let $_dt_outfile= $_dt_outfile/diff_table-$_dt_connection-$_dt_database-$_dt_table
-  eval SELECT * FROM $_dt_database.$_dt_table ORDER BY `$_dt_column_list` INTO OUTFILE '$_dt_outfile';
+
+  # Certain columns which contain current timestamps can be masked out.
+  # $mask_column_list can be set in the test. If it is not defined,
+  # all the columns can be written to the file.
+  if ($mask_column_list) {
+    --let $statement = SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ `$_dt_column_list` FROM $_dt_database.$_dt_table ORDER BY `$_dt_column_list` INTO OUTFILE '$_dt_outfile';
+  }
+  if (!$mask_column_list) {
+    --let $statement = SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ * FROM $_dt_database.$_dt_table ORDER BY `$_dt_column_list` INTO OUTFILE '$_dt_outfile';
+  }
+  if ($rpl_debug)
+  {
+    --echo $statement
+  }
+  set @save_sbs = @@sort_buffer_size;
+  set @@sort_buffer_size = 1048576;
+  --eval $statement
+  set @@sort_buffer_size = @save_sbs;
 
   # Compare files.
   if ($_dt_prev_outfile)

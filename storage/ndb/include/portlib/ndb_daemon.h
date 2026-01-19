@@ -1,25 +1,30 @@
-/* Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2009, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 #ifndef NDB_DAEMON_H
 #define NDB_DAEMON_H
 
-C_MODE_START
-
-
-typedef int (*ndb_daemon_run_t)(int, char**);
+typedef int (*ndb_daemon_run_t)(int, char **);
 typedef void (*ndb_daemon_stop_t)(void);
 
 /*
@@ -31,9 +36,9 @@ typedef void (*ndb_daemon_stop_t)(void);
   with argc/argv
 
 */
-int ndb_daemon_init(int argc, char** argv,
-                    ndb_daemon_run_t run, ndb_daemon_stop_t stop,
-                    const char* name, const char* display_name);
+int ndb_daemon_init(int argc, char **argv, ndb_daemon_run_t run,
+                    ndb_daemon_stop_t stop, const char *name,
+                    const char *display_name);
 
 /*
   To be called at the point where an application needs to daemonize
@@ -44,16 +49,14 @@ int ndb_daemon_init(int argc, char** argv,
 
   On windows, only create pidfile and redirect.
 */
-int ndb_daemonize(const char* pidfile_name, const char *logfile_name);
-
+int ndb_daemonize(const char *pidfile_name, const char *logfile_name);
 
 /*
   To be called when application should exit.
 
   Performs an ordered shutdown of service if running as a serevice.
  */
-void ndb_daemon_exit(int status);
-
+[[noreturn]] void ndb_daemon_exit(int status);
 
 /*
    if any of the functions in ndb_daemon return non-zero (failure)
@@ -65,7 +68,7 @@ extern char ndb_daemon_error[];
 /*
   Print the additional arguments available for service
 */
-void ndb_service_print_options(const char* name);
+void ndb_service_print_options(const char *name);
 
 /*
   Utility function to make the program wait for debugger at
@@ -73,7 +76,5 @@ void ndb_service_print_options(const char* name);
   started as a service.
 */
 void ndb_service_wait_for_debugger(int timeout_sec);
-
-C_MODE_END
 
 #endif

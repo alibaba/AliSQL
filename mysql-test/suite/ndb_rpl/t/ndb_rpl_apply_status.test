@@ -1,20 +1,3 @@
-
-#
-# BUG#36123 Selecting from mysql.ndb_apply_status leads to failure
-#
-# Load the mysql.ndb_apply_status table into table def cache
-#
-
-# The table might already have been created by mysqld -> ignore error
---error 0,1
-copy_file $MYSQL_TEST_DIR/suite/ndb_rpl/t/ndb_apply_status.frm $MYSQLTEST_VARDIR/master-data/mysql/ndb_apply_status.frm;
---disable_result_log
---disable_abort_on_error
-select * from mysql.ndb_apply_status;
---enable_abort_on_error
---enable_result_log
-
-
 -- source include/have_ndb.inc
 -- source include/have_binlog_format_mixed_or_row.inc
 -- source suite/ndb_rpl/ndb_master-slave.inc
@@ -36,10 +19,171 @@ echo *** on master it should be empty ***;
 select * from mysql.ndb_apply_status where server_id <> 0;
 
 sync_slave_with_master;
+
+--echo #
+--echo # Bug#14139386 DDL APPLY SET MYSQL.NDB_APPLY_STATUS EPOCH=0
+--echo #  - check that ndb_apply_status.epoch is not set to 0 by DDL
+--echo #
+# ***
+connection slave;
+select epoch from mysql.ndb_apply_status into @epoch_before_alter;
+
+connection master;
+alter table t1 add key k(b);
+
+sync_slave_with_master;
+select epoch=@epoch_before_alter from mysql.ndb_apply_status;
+
+--echo # Check again with copying alter table
+--source include/rpl_connection_master.inc
+alter table t1 modify b varchar(255);
+
+sync_slave_with_master;
+select epoch=@epoch_before_alter from mysql.ndb_apply_status;
+
+--echo # Check copying alter without any row in ndb_apply_status -> should insert
+--echo # row for source server_id with epoch 0
+--source include/rpl_connection_slave.inc
+stop replica;
+reset replica;
+select count(*) from mysql.ndb_apply_status;
+
+--source include/rpl_connection_master.inc
+reset master;
+alter table t1 modify b varchar(255);
+
+--source include/rpl_connection_slave.inc
+start replica;
+
+--source include/rpl_connection_master.inc
+sync_slave_with_master;
+select server_id, epoch, log_name from mysql.ndb_apply_status;
+
+# ***
+--echo # End of test for Bug#14139386
+
 echo *** on slave there should be one row ***;
 select count(*) from mysql.ndb_apply_status;
 
 connection master;
 drop table t1;
 sync_slave_with_master;
+
+connection master;
+--echo *** Test reset slave clearing ndb_apply_status ***
+create table test.t1 (a int primary key) engine=ndb;
+
+insert into test.t1 values (1);
+
+sync_slave_with_master;
+
+connection slave;
+
+--echo Add a dummy entry
+insert into mysql.ndb_apply_status values (999, 9677, 'CaramelLog', 1977, 2015);
+
+select count(1) from mysql.ndb_apply_status;
+
+--echo *** Standard reset slave should clear ndb_apply_status ***
+stop slave;
+reset slave;
+
+select count(1) from mysql.ndb_apply_status;
+
+--connection master
+reset master;
+--source include/rpl_start_slaves.inc
+
+--echo *** Test reset slave all ***
+
+insert into test.t1 values (2);
+
+sync_slave_with_master;
+
+connection slave;
+--echo Add a dummy entry
+insert into mysql.ndb_apply_status values (999, 9677, 'CaramelLog', 1977, 2015);
+
+select count(1) from mysql.ndb_apply_status;
+
+--echo *** Reset slave all should clear ndb_apply_status ***
+stop slave;
+reset slave all;
+
+select count(1) from mysql.ndb_apply_status;
+
+--connection master
+reset master;
+--echo RESET SLAVE ALL zapped Master info - re-set it.
+--let $rpl_unconditional_change_master=1
+--source include/rpl_change_topology.inc
+--source include/rpl_start_slaves.inc
+
+--connection slave
+
+--echo *** Test effect of ndb_clear_apply_status = 0 ***
+
+set global ndb_clear_apply_status=0;
+
+--connection master
+insert into test.t1 values (3);
+
+sync_slave_with_master;
+
+connection slave;
+
+--echo Add a dummy entry
+insert into mysql.ndb_apply_status values (999, 9677, 'CaramelLog', 1977, 2015);
+
+select count(1) from mysql.ndb_apply_status;
+
+--echo *** Standard reset slave should NOT clear ndb_apply_status ***
+stop slave;
+reset slave;
+
+select count(1) from mysql.ndb_apply_status;
+
+delete from mysql.ndb_apply_status;
+
+--connection master
+reset master;
+--source include/rpl_start_slaves.inc
+
+--connection master
+
+--echo *** Test reset slave all ***
+
+insert into test.t1 values (4);
+
+sync_slave_with_master;
+
+connection slave;
+
+--echo Add a dummy entry
+insert into mysql.ndb_apply_status values (999, 9677, 'CaramelLog', 1977, 2015);
+
+select count(1) from mysql.ndb_apply_status;
+
+--echo *** Reset slave all should NOT clear ndb_apply_status ***
+stop slave;
+reset slave all;
+
+select count(1) from mysql.ndb_apply_status;
+
+--connection master
+reset master;
+--echo RESET SLAVE ALL zapped Master info - re-set it.
+--let $rpl_unconditional_change_master=1
+--source include/rpl_change_topology.inc
+--source include/rpl_start_slaves.inc
+
+--connection slave
+set global ndb_clear_apply_status=1;
+
+--connection master
+drop table test.t1;
+
+sync_slave_with_master;
+
+
 --source include/rpl_end.inc

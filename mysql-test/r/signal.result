@@ -572,6 +572,8 @@ drop procedure if exists test_resignal;
 drop table if exists t_warn;
 drop table if exists t_cursor;
 create table t_warn(a integer(2));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t_cursor(a integer);
 #
 # SIGNAL can also appear in a query
@@ -831,7 +833,7 @@ begin
 DECLARE foo CONDITION FOR SQLSTATE '77777';
 SIGNAL foo SET
 MESSAGE_TEXT = "",
-MYSQL_ERRNO=5678;
+MYSQL_ERRNO=45678;
 end $$
 call test_signal() $$
 ERROR 77777: 
@@ -876,8 +878,11 @@ begin
 DECLARE something CONDITION FOR SQLSTATE "01000";
 SIGNAL something SET MESSAGE_TEXT = _utf8 "This is a UTF8 text";
 end $$
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 call test_signal() $$
 Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 Warning	1642	This is a UTF8 text
 drop procedure test_signal $$
 create procedure test_signal()
@@ -1035,7 +1040,7 @@ call test_signal("Parameter string", NULL) $$
 ERROR 42000: Variable 'MYSQL_ERRNO' can't be set to the value of 'NULL'
 call test_signal(NULL, 1234) $$
 ERROR 42000: Variable 'MESSAGE_TEXT' can't be set to the value of 'NULL'
-call test_signal("Parameter string", 5678) $$
+call test_signal("Parameter string", 45678) $$
 ERROR 12345: Parameter string
 drop procedure test_signal $$
 create procedure test_signal()
@@ -1061,7 +1066,7 @@ SIGNAL something SET
 MESSAGE_TEXT = @message_text := 'illegal',
 MYSQL_ERRNO = @sqlcode := 1234;
 end $$
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ':= 'illegal',
 MYSQL_ERRNO = @sqlcode := 1234;
 end' at line 5
 create procedure test_signal()
@@ -1116,6 +1121,7 @@ end $$
 call test_signal() $$
 ERROR 42000: Variable 'MYSQL_ERRNO' can't be set to the value of '999999999999999999999999999999999999999999999999999'
 drop procedure test_signal $$
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create procedure test_signal()
 begin
 DECLARE aaax VARCHAR(65);
@@ -1175,6 +1181,8 @@ Warning	1647	Data truncated for condition item 'CURSOR_NAME'
 Warning	1647	Data truncated for condition item 'MESSAGE_TEXT'
 Warning	10000	11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111112222222222222222222288888888
 drop procedure test_signal $$
+SET sql_mode = default;
+# Test that HANDLER can catch conditions raised by SIGNAL
 create procedure test_signal()
 begin
 DECLARE warn CONDITION FOR SQLSTATE "01234";
@@ -1439,19 +1447,16 @@ begin
 DECLARE warn CONDITION FOR SQLSTATE "01234";
 DECLARE CONTINUE HANDLER for 1012
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL;
-select "after RESIGNAL";
 end;
 SIGNAL warn SET
 MESSAGE_TEXT = "Raising a warning",
 MYSQL_ERRNO = 1012;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
 Warning	1012	Raising a warning
 drop procedure test_resignal $$
@@ -1491,24 +1496,23 @@ before RESIGNAL
 before RESIGNAL
 ERROR 55555: Raising an error
 drop procedure test_resignal $$
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create procedure test_resignal()
 begin
 DECLARE CONTINUE HANDLER for sqlwarning
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL;
-select "after RESIGNAL";
 end;
 insert into t_warn set a= 9999999999999999;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
 Warning	1264	Out of range value for column 'a' at row 1
 drop procedure test_resignal $$
+SET sql_mode = default;
 create procedure test_resignal()
 begin
 DECLARE x integer;
@@ -1548,23 +1552,20 @@ begin
 DECLARE warn CONDITION FOR SQLSTATE "01234";
 DECLARE CONTINUE HANDLER for 1012
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL SET
 MESSAGE_TEXT = "RESIGNAL of a warning",
-MYSQL_ERRNO = 5555 ;
-select "after RESIGNAL";
+MYSQL_ERRNO = 55555 ;
 end;
 SIGNAL warn SET
 MESSAGE_TEXT = "Raising a warning",
 MYSQL_ERRNO = 1012;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
-Warning	5555	RESIGNAL of a warning
+Warning	55555	RESIGNAL of a warning
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1574,7 +1575,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SET
 MESSAGE_TEXT = "RESIGNAL of a not found",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 SIGNAL not_found SET
@@ -1594,7 +1595,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SET
 MESSAGE_TEXT = "RESIGNAL of an error",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 SIGNAL error SET
@@ -1606,26 +1607,25 @@ before RESIGNAL
 before RESIGNAL
 ERROR 33333: RESIGNAL of an error
 drop procedure test_resignal $$
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create procedure test_resignal()
 begin
 DECLARE CONTINUE HANDLER for sqlwarning
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL SET
 MESSAGE_TEXT = "RESIGNAL of a warning",
-MYSQL_ERRNO = 5555 ;
-select "after RESIGNAL";
+MYSQL_ERRNO = 55555 ;
 end;
 insert into t_warn set a= 9999999999999999;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
-Warning	5555	RESIGNAL of a warning
+Warning	55555	RESIGNAL of a warning
 drop procedure test_resignal $$
+SET sql_mode = default;
 create procedure test_resignal()
 begin
 DECLARE x integer;
@@ -1635,7 +1635,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SET
 MESSAGE_TEXT = "RESIGNAL of not found",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 open c;
@@ -1654,7 +1654,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SET
 MESSAGE_TEXT = "RESIGNAL of an error",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 drop table no_such_table;
@@ -1669,24 +1669,21 @@ begin
 DECLARE warn CONDITION FOR SQLSTATE "01111";
 DECLARE CONTINUE HANDLER for 1012
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL SQLSTATE "01222" SET
 MESSAGE_TEXT = "RESIGNAL to warning",
-MYSQL_ERRNO = 5555 ;
-select "after RESIGNAL";
+MYSQL_ERRNO = 55555 ;
 end;
 SIGNAL warn SET
 MESSAGE_TEXT = "Raising a warning",
 MYSQL_ERRNO = 1012;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
 Warning	1012	Raising a warning
-Warning	5555	RESIGNAL to warning
+Warning	55555	RESIGNAL to warning
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1696,7 +1693,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "02222" SET
 MESSAGE_TEXT = "RESIGNAL to not found",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 SIGNAL warn SET
@@ -1710,7 +1707,7 @@ ERROR 02222: RESIGNAL to not found
 show warnings $$
 Level	Code	Message
 Warning	1012	Raising a warning
-Error	5555	RESIGNAL to not found
+Error	55555	RESIGNAL to not found
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1720,7 +1717,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "33333" SET
 MESSAGE_TEXT = "RESIGNAL to error",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 SIGNAL warn SET
@@ -1734,31 +1731,28 @@ ERROR 33333: RESIGNAL to error
 show warnings $$
 Level	Code	Message
 Warning	1012	Raising a warning
-Error	5555	RESIGNAL to error
+Error	55555	RESIGNAL to error
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
 DECLARE not_found CONDITION FOR SQLSTATE "02ABC";
 DECLARE CONTINUE HANDLER for 1012
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL SQLSTATE "01222" SET
 MESSAGE_TEXT = "RESIGNAL to warning",
-MYSQL_ERRNO = 5555 ;
-select "after RESIGNAL";
+MYSQL_ERRNO = 55555 ;
 end;
 SIGNAL not_found SET
 MESSAGE_TEXT = "Raising a not found",
 MYSQL_ERRNO = 1012;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
 Error	1012	Raising a not found
-Warning	5555	RESIGNAL to warning
+Warning	55555	RESIGNAL to warning
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1768,7 +1762,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "02222" SET
 MESSAGE_TEXT = "RESIGNAL to not found",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 SIGNAL not_found SET
@@ -1782,7 +1776,7 @@ ERROR 02222: RESIGNAL to not found
 show warnings $$
 Level	Code	Message
 Error	1012	Raising a not found
-Error	5555	RESIGNAL to not found
+Error	55555	RESIGNAL to not found
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1792,7 +1786,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "33333" SET
 MESSAGE_TEXT = "RESIGNAL to error",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 SIGNAL not_found SET
@@ -1806,31 +1800,28 @@ ERROR 33333: RESIGNAL to error
 show warnings $$
 Level	Code	Message
 Error	1012	Raising a not found
-Error	5555	RESIGNAL to error
+Error	55555	RESIGNAL to error
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
 DECLARE error CONDITION FOR SQLSTATE "AAAAA";
 DECLARE CONTINUE HANDLER for 1012
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL SQLSTATE "01222" SET
 MESSAGE_TEXT = "RESIGNAL to warning",
-MYSQL_ERRNO = 5555 ;
-select "after RESIGNAL";
+MYSQL_ERRNO = 55555 ;
 end;
 SIGNAL error SET
 MESSAGE_TEXT = "Raising an error",
 MYSQL_ERRNO = 1012;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
 Error	1012	Raising an error
-Warning	5555	RESIGNAL to warning
+Warning	55555	RESIGNAL to warning
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1840,7 +1831,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "02222" SET
 MESSAGE_TEXT = "RESIGNAL to not found",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 SIGNAL error SET
@@ -1854,7 +1845,7 @@ ERROR 02222: RESIGNAL to not found
 show warnings $$
 Level	Code	Message
 Error	1012	Raising an error
-Error	5555	RESIGNAL to not found
+Error	55555	RESIGNAL to not found
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1864,7 +1855,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "33333" SET
 MESSAGE_TEXT = "RESIGNAL to error",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 SIGNAL error SET
@@ -1878,28 +1869,26 @@ ERROR 33333: RESIGNAL to error
 show warnings $$
 Level	Code	Message
 Error	1012	Raising an error
-Error	5555	RESIGNAL to error
+Error	55555	RESIGNAL to error
 drop procedure test_resignal $$
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create procedure test_resignal()
 begin
 DECLARE CONTINUE HANDLER for sqlwarning
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL SQLSTATE "01111" SET
 MESSAGE_TEXT = "RESIGNAL to a warning",
-MYSQL_ERRNO = 5555 ;
-select "after RESIGNAL";
+MYSQL_ERRNO = 55555 ;
 end;
 insert into t_warn set a= 9999999999999999;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
 Warning	1264	Out of range value for column 'a' at row 1
-Warning	5555	RESIGNAL to a warning
+Warning	55555	RESIGNAL to a warning
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1908,7 +1897,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "02444" SET
 MESSAGE_TEXT = "RESIGNAL to a not found",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 insert into t_warn set a= 9999999999999999;
@@ -1920,7 +1909,7 @@ ERROR 02444: RESIGNAL to a not found
 show warnings $$
 Level	Code	Message
 Warning	1264	Out of range value for column 'a' at row 1
-Error	5555	RESIGNAL to a not found
+Error	55555	RESIGNAL to a not found
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1929,7 +1918,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "44444" SET
 MESSAGE_TEXT = "RESIGNAL to an error",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 insert into t_warn set a= 9999999999999999;
@@ -1941,32 +1930,35 @@ ERROR 44444: RESIGNAL to an error
 show warnings $$
 Level	Code	Message
 Warning	1264	Out of range value for column 'a' at row 1
-Error	5555	RESIGNAL to an error
+Error	55555	RESIGNAL to an error
 drop procedure test_resignal $$
+SET sql_mode = default;
+# 3 tests:
+# {not found}
+# --> RESIGNAL SQLSTATE {warning, not found, error} SET ...
 create procedure test_resignal()
 begin
 DECLARE x integer;
 DECLARE c cursor for select * from t_cursor;
 DECLARE CONTINUE HANDLER for not found
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL SQLSTATE "01111" SET
 MESSAGE_TEXT = "RESIGNAL to a warning",
-MYSQL_ERRNO = 5555 ;
-select "after RESIGNAL";
+MYSQL_ERRNO = 55555 ;
 end;
 open c;
 fetch c into x;
-close c;
+# We don't explicitly close for once, but rely on the end-of-scope clean-up
+# because we don't want for CLOSE to reset the diagnostics area ...
+# close c;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
 Error	1329	No data - zero rows fetched, selected, or processed
-Warning	5555	RESIGNAL to a warning
+Warning	55555	RESIGNAL to a warning
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -1977,7 +1969,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "02444" SET
 MESSAGE_TEXT = "RESIGNAL to a not found",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 open c;
@@ -1991,7 +1983,7 @@ ERROR 02444: RESIGNAL to a not found
 show warnings $$
 Level	Code	Message
 Error	1329	No data - zero rows fetched, selected, or processed
-Error	5555	RESIGNAL to a not found
+Error	55555	RESIGNAL to a not found
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -2002,7 +1994,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "44444" SET
 MESSAGE_TEXT = "RESIGNAL to an error",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 open c;
@@ -2016,28 +2008,25 @@ ERROR 44444: RESIGNAL to an error
 show warnings $$
 Level	Code	Message
 Error	1329	No data - zero rows fetched, selected, or processed
-Error	5555	RESIGNAL to an error
+Error	55555	RESIGNAL to an error
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
 DECLARE CONTINUE HANDLER for sqlexception
 begin
-select "before RESIGNAL";
+select "handler called";
 RESIGNAL SQLSTATE "01111" SET
 MESSAGE_TEXT = "RESIGNAL to a warning",
-MYSQL_ERRNO = 5555 ;
-select "after RESIGNAL";
+MYSQL_ERRNO = 55555 ;
 end;
 drop table no_such_table;
 end $$
 call test_resignal() $$
-before RESIGNAL
-before RESIGNAL
-after RESIGNAL
-after RESIGNAL
+handler called
+handler called
 Warnings:
 Error	1051	Unknown table 'test.no_such_table'
-Warning	5555	RESIGNAL to a warning
+Warning	55555	RESIGNAL to a warning
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -2046,7 +2035,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "02444" SET
 MESSAGE_TEXT = "RESIGNAL to a not found",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 drop table no_such_table;
@@ -2058,7 +2047,7 @@ ERROR 02444: RESIGNAL to a not found
 show warnings $$
 Level	Code	Message
 Error	1051	Unknown table 'test.no_such_table'
-Error	5555	RESIGNAL to a not found
+Error	55555	RESIGNAL to a not found
 drop procedure test_resignal $$
 create procedure test_resignal()
 begin
@@ -2067,7 +2056,7 @@ begin
 select "before RESIGNAL";
 RESIGNAL SQLSTATE "44444" SET
 MESSAGE_TEXT = "RESIGNAL to an error",
-MYSQL_ERRNO = 5555 ;
+MYSQL_ERRNO = 55555 ;
 select "after RESIGNAL";
 end;
 drop table no_such_table;
@@ -2079,7 +2068,7 @@ ERROR 44444: RESIGNAL to an error
 show warnings $$
 Level	Code	Message
 Error	1051	Unknown table 'test.no_such_table'
-Error	5555	RESIGNAL to an error
+Error	55555	RESIGNAL to an error
 drop procedure test_resignal $$
 #
 # More complex cases
@@ -2133,14 +2122,12 @@ BEGIN
 DECLARE x CONDITION FOR SQLSTATE '42000';
 DECLARE EXIT HANDLER FOR x
 BEGIN
-SELECT '2';
 SHOW WARNINGS;
 RESIGNAL x SET MYSQL_ERRNO = 9999;
 END;
 BEGIN
 DECLARE EXIT HANDLER FOR x
 BEGIN
-SELECT '1';
 SHOW WARNINGS;
 RESIGNAL x SET
 SCHEMA_NAME = 'test',
@@ -2156,7 +2143,6 @@ BEGIN
 DECLARE x CONDITION for SQLSTATE '42000';
 DECLARE EXIT HANDLER FOR x
 BEGIN
-SELECT '3';
 SHOW WARNINGS;
 RESIGNAL x SET
 MESSAGE_TEXT = 'Hi, I am a useless error message',
@@ -2166,17 +2152,11 @@ CALL peter_p1();
 END
 $$
 CALL peter_p2() $$
-1
-1
 Level	Code	Message
 Error	1231	Variable 'sql_mode' can't be set to the value of 'NULL'
-2
-2
 Level	Code	Message
 Error	1231	Variable 'sql_mode' can't be set to the value of 'NULL'
 Error	1232	Variable 'sql_mode' can't be set to the value of 'NULL'
-3
-3
 Level	Code	Message
 Error	1231	Variable 'sql_mode' can't be set to the value of 'NULL'
 Error	1232	Variable 'sql_mode' can't be set to the value of 'NULL'
@@ -2342,22 +2322,23 @@ begin
 DECLARE céèçà foo CONDITION FOR SQLSTATE '12345';
 SIGNAL céèçà SET MYSQL_ERRNO = 1000;
 end $$
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '�èçà foo CONDITION FOR SQLSTATE '12345';
-SIGNAL céèçà SET ' at line 3
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'foo CONDITION FOR SQLSTATE '12345';
+SIGNAL céèçà SET MYSQL_ERRNO = 1000;
+end' at line 3
 create procedure test_signal()
 begin
 DECLARE "céèçà" CONDITION FOR SQLSTATE '12345';
 SIGNAL "céèçà" SET MYSQL_ERRNO = 1000;
 end $$
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '"céèçà" CONDITION FOR SQLSTATE '12345';
-SIGNAL "céèçà" S' at line 3
+SIGNAL "céèçà" SET MYSQL_ERRNO =' at line 3
 create procedure test_signal()
 begin
 DECLARE 'céèçà' CONDITION FOR SQLSTATE '12345';
 SIGNAL 'céèçà' SET MYSQL_ERRNO = 1000;
 end $$
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''céèçà' CONDITION FOR SQLSTATE '12345';
-SIGNAL 'céèçà' S' at line 3
+SIGNAL 'céèçà' SET MYSQL_ERRNO =' at line 3
 create procedure test_signal()
 begin
 DECLARE `céèçà` CONDITION FOR SQLSTATE '12345';
@@ -2371,3 +2352,386 @@ begin
 SIGNAL SQLSTATE '77777' SET MYSQL_ERRNO = 1000, MESSAGE_TEXT='ÁÂÃÅÄ';
 end $$
 drop procedure test_signal $$
+#
+# WL#6406 Stacked diagnostic areas
+#
+# Double RESIGNAL of warning
+#
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+BEGIN
+RESIGNAL;
+RESIGNAL;
+END;
+SELECT 10 + 'a';
+END $$
+CALL p1();
+10 + 'a'
+10
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'a'
+DROP PROCEDURE p1;
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+BEGIN
+RESIGNAL SET MESSAGE_TEXT= '1st resignal';
+RESIGNAL SET MESSAGE_TEXT= '2nd resignal';
+END;
+SELECT 10 + 'a';
+END $$
+CALL p1();
+10 + 'a'
+10
+Warnings:
+Warning	1292	2nd resignal
+DROP PROCEDURE p1;
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+BEGIN
+RESIGNAL SQLSTATE '01000' SET MESSAGE_TEXT= '1st resignal';
+RESIGNAL SQLSTATE '01000' SET MESSAGE_TEXT= '2nd resignal';
+END;
+SELECT 10 + 'a';
+END $$
+CALL p1();
+10 + 'a'
+10
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'a'
+Warning	1642	1st resignal
+Warning	1642	2nd resignal
+DROP PROCEDURE p1;
+# RESIGNAL warning + RESIGNAL error
+#
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+BEGIN
+RESIGNAL SQLSTATE '01000' SET MESSAGE_TEXT= '1st resignal';
+RESIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT= '2nd resignal';
+END;
+SELECT 10 + 'a';
+END $$
+CALL p1();
+10 + 'a'
+10
+ERROR HY000: 2nd resignal
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1292	Truncated incorrect DOUBLE value: 'a'
+Warning	1642	1st resignal
+Error	1644	2nd resignal
+DROP PROCEDURE p1;
+# Unhandled errors raised in nested handlers
+#
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE CONTINUE HANDLER FOR 1051
+BEGIN
+DROP DATABASE none;  # Error 1008
+END;
+DROP TABLE none;  # Error 1051
+END $$
+CALL p1();
+ERROR HY000: Can't drop database 'none'; database doesn't exist
+SHOW WARNINGS;
+Level	Code	Message
+Error	1008	Can't drop database 'none'; database doesn't exist
+DROP PROCEDURE p1;
+# RESIGNAL of warning which fails
+#
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL SET MESSAGE_TEXT = asdf;
+SELECT 10 + 'a';
+END $$
+CREATE PROCEDURE p2()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL SET MESSAGE_TEXT = asdf;
+SELECT 10 + 'a';
+END;
+END $$
+CREATE PROCEDURE p3()
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL SET MESSAGE_TEXT = asdf;
+SELECT 10 + 'a';
+END;
+END $$
+CREATE PROCEDURE p4()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+SELECT 10 + 'a';
+END $$
+CREATE PROCEDURE p5()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+SELECT 10 + 'a';
+END;
+END $$
+CREATE PROCEDURE p6()
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+SELECT 10 + 'a';
+END;
+END $$
+CALL p1();
+10 + 'a'
+10
+ERROR 42S22: Unknown column 'asdf' in 'field list'
+CALL p2();
+10 + 'a'
+10
+Msg
+handled
+CALL p3();
+10 + 'a'
+10
+Msg
+handled
+CALL p4();
+10 + 'a'
+10
+ERROR 42S22: Unknown column 'asdf' in 'field list'
+CALL p5();
+10 + 'a'
+10
+Msg
+handled
+CALL p6();
+10 + 'a'
+10
+Msg
+handled
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP PROCEDURE p3;
+DROP PROCEDURE p4;
+DROP PROCEDURE p5;
+DROP PROCEDURE p6;
+# RESIGNAL of error which fails
+#
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL SET MESSAGE_TEXT = asdf;
+DROP TABLE none;
+END $$
+CREATE PROCEDURE p2()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL SET MESSAGE_TEXT = asdf;
+DROP TABLE none;
+END;
+END $$
+CREATE PROCEDURE p3()
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL SET MESSAGE_TEXT = asdf;
+DROP TABLE none;
+END;
+END $$
+CREATE PROCEDURE p4()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+DROP TABLE none;
+END $$
+CREATE PROCEDURE p5()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+DROP TABLE none;
+END;
+END $$
+CREATE PROCEDURE p6()
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+DROP TABLE none;
+END;
+END $$
+CALL p1();
+ERROR 42S22: Unknown column 'asdf' in 'field list'
+CALL p2();
+Msg
+handled
+CALL p3();
+Msg
+handled
+CALL p4();
+ERROR 42S22: Unknown column 'asdf' in 'field list'
+CALL p5();
+Msg
+handled
+CALL p6();
+Msg
+handled
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP PROCEDURE p3;
+DROP PROCEDURE p4;
+DROP PROCEDURE p5;
+DROP PROCEDURE p6;
+# Error condition originating from a DA which has been destroyed
+# when the condition is handled.
+#
+CREATE FUNCTION f1() RETURNS INTEGER
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION RESIGNAL;
+INSERT INTO none VALUES (NULL);
+RETURN 1;
+END|
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION RESIGNAL;
+SELECT f1();
+END|
+CALL p1();
+f1()
+ERROR 42S02: Table 'test.none' doesn't exist
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+# RESIGNAL with max_error_count = 0
+#
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL;
+SIGNAL SQLSTATE 'HY000';
+END|
+CREATE PROCEDURE p2()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL;
+SIGNAL SQLSTATE '01000';
+END|
+CREATE PROCEDURE p3()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+RESIGNAL SET MESSAGE_TEXT= 'custom error msg';
+SIGNAL SQLSTATE 'HY000';
+END|
+CREATE PROCEDURE p4()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+RESIGNAL SET MESSAGE_TEXT= 'custom warning msg';
+SIGNAL SQLSTATE '01000';
+END|
+CREATE PROCEDURE p5()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT= 'custom error msg';
+SIGNAL SQLSTATE 'HY000';
+END|
+CREATE PROCEDURE p6()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT= 'custom warning msg';
+SIGNAL SQLSTATE '01000';
+END|
+CREATE PROCEDURE p7()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' AS Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL;
+SIGNAL SQLSTATE 'HY000';
+END;
+END|
+CREATE PROCEDURE p8()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING SELECT 'handled' AS Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL;
+SIGNAL SQLSTATE '01000';
+END;
+END|
+CREATE PROCEDURE p9()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' AS Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+RESIGNAL SET MESSAGE_TEXT= 'custom error msg';
+SIGNAL SQLSTATE 'HY000';
+END;
+END|
+CREATE PROCEDURE p10()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING SELECT 'handled' AS Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+RESIGNAL SET MESSAGE_TEXT= 'custom warning msg';
+SIGNAL SQLSTATE '01000';
+END;
+END|
+CREATE PROCEDURE p11()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' AS Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT= 'custom error msg';
+SIGNAL SQLSTATE 'HY000';
+END;
+END|
+CREATE PROCEDURE p12()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' AS Msg;
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLWARNING
+RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT= 'custom warning msg';
+SIGNAL SQLSTATE '01000';
+END;
+END|
+SET max_error_count= 0;
+CALL p1();
+ERROR HY000: Unhandled user-defined exception condition
+CALL p2();
+CALL p3();
+ERROR HY000: custom error msg
+CALL p4();
+CALL p5();
+ERROR 45000: custom error msg
+CALL p6();
+CALL p7();
+Msg
+handled
+CALL p8();
+CALL p9();
+Msg
+handled
+CALL p10();
+CALL p11();
+Msg
+handled
+CALL p12();
+SET max_error_count= DEFAULT;
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP PROCEDURE p3;
+DROP PROCEDURE p4;
+DROP PROCEDURE p5;
+DROP PROCEDURE p6;
+DROP PROCEDURE p7;
+DROP PROCEDURE p8;
+DROP PROCEDURE p9;
+DROP PROCEDURE p10;
+DROP PROCEDURE p11;
+DROP PROCEDURE p12;
+SET sql_mode = default;

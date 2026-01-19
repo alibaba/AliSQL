@@ -1,0 +1,114 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>execution::bulk_execute</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="execution__blocking_t__possibly_t/value.html" title="execution::blocking_t::possibly_t::value">
+<link rel="next" href="execution__bulk_guarantee.html" title="execution::bulk_guarantee">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="execution__blocking_t__possibly_t/value.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="execution__bulk_guarantee.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.execution__bulk_execute"></a><a class="link" href="execution__bulk_execute.html" title="execution::bulk_execute">execution::bulk_execute</a>
+</h3></div></div></div>
+<p>
+        <a class="indexterm" name="boost_asio.indexterm.execution__bulk_execute"></a> 
+A customisation
+        point that creates a bulk sender.
+      </p>
+<pre class="programlisting">constexpr unspecified bulk_execute = unspecified;
+</pre>
+<p>
+        The name <code class="computeroutput">execution::bulk_execute</code> denotes a customisation point
+        object. If <code class="computeroutput">is_convertible_v&lt;N, size_t&gt;</code> is true, then the
+        expression <code class="computeroutput">execution::bulk_execute(S, F, N)</code> for some subexpressions
+        <code class="computeroutput">S</code>, <code class="computeroutput">F</code>, and <code class="computeroutput">N</code> is expression-equivalent
+        to:
+      </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+            <code class="computeroutput">S.bulk_execute(F, N)</code>, if that expression is valid. If the
+            function selected does not execute <code class="computeroutput">N</code> invocations of the
+            function object <code class="computeroutput">F</code> on the executor <code class="computeroutput">S</code> in bulk
+            with forward progress guarantee <code class="computeroutput">boost::asio::query(S, execution::bulk_guarantee)</code>,
+            and the result of that function does not model <code class="computeroutput">sender&lt;void&gt;</code>,
+            the program is ill-formed with no diagnostic required.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">bulk_execute(S, F, N)</code>, if that expression is
+            valid, with overload resolution performed in a context that includes
+            the declaration <code class="computeroutput">void bulk_execute();</code> and that does not include
+            a declaration of <code class="computeroutput">execution::bulk_execute</code>. If the function
+            selected by overload resolution does not execute <code class="computeroutput">N</code> invocations
+            of the function object <code class="computeroutput">F</code> on the executor <code class="computeroutput">S</code>
+            in bulk with forward progress guarantee <code class="computeroutput">boost::asio::query(E, execution::bulk_guarantee)</code>,
+            and the result of that function does not model <code class="computeroutput">sender&lt;void&gt;</code>,
+            the program is ill-formed with no diagnostic required.
+          </li>
+<li class="listitem">
+            Otherwise, if the types <code class="computeroutput">F</code> and <code class="computeroutput">executor_index_t&lt;remove_cvref_t&lt;S&gt;&gt;</code>
+            model <code class="computeroutput">invocable</code> and if <code class="computeroutput">boost::asio::query(S, execution::bulk_guarantee)</code>
+            equals <code class="computeroutput">execution::bulk_guarantee.unsequenced</code>, then
+          </li>
+<li class="listitem">
+            Evaluates <code class="computeroutput">DECAY_COPY(std::forward&lt;decltype(F)&gt;(F))</code>
+            on the calling thread to create a function object <code class="computeroutput">cf</code>. [Note:
+            Additional copies of <code class="computeroutput">cf</code> may subsequently be created. --end
+            note.]
+          </li>
+<li class="listitem">
+            For each value of <code class="computeroutput">i</code> in <code class="computeroutput">N</code>, <code class="computeroutput">cf(i)</code>
+            (or copy of <code class="computeroutput">cf</code>)) will be invoked at most once by an execution
+            agent that is unique for each value of <code class="computeroutput">i</code>.
+          </li>
+<li class="listitem">
+            May block pending completion of one or more invocations of <code class="computeroutput">cf</code>.
+          </li>
+<li class="listitem">
+            Synchronizes with (C++Std [intro.multithread]) the invocations of <code class="computeroutput">cf</code>.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">execution::bulk_execute(S, F, N)</code> is ill-formed.
+          </li>
+</ul></div>
+<h5>
+<a name="boost_asio.reference.execution__bulk_execute.h0"></a>
+        <span class="phrase"><a name="boost_asio.reference.execution__bulk_execute.requirements"></a></span><a class="link" href="execution__bulk_execute.html#boost_asio.reference.execution__bulk_execute.requirements">Requirements</a>
+      </h5>
+<p>
+        <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/execution/bulk_execute.hpp</code>
+      </p>
+<p>
+        <span class="emphasis"><em>Convenience header: </em></span><code class="literal">boost/asio/execution.hpp</code>
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="execution__blocking_t__possibly_t/value.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="execution__bulk_guarantee.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

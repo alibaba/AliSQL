@@ -1,6 +1,7 @@
 # Testing of "strict" mode
 
--- source include/have_innodb.inc
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
 
 set @org_mode=@@sql_mode;
 set @@sql_mode='ansi,traditional';
@@ -46,6 +47,7 @@ set @@sql_mode='STRICT_ALL_TABLES,NO_ZERO_IN_DATE';
 INSERT INTO t1 VALUES('2004-0-30');
 --error 1292
 INSERT INTO t1 VALUES('2004-01-04'),('2004-0-31'),('2004-01-05');
+
 INSERT INTO t1 VALUES('0000-00-00');
 INSERT IGNORE INTO t1 VALUES('2004-0-29');
 set @@sql_mode='STRICT_ALL_TABLES,NO_ZERO_DATE';
@@ -169,7 +171,7 @@ INSERT INTO t1 VALUES('2004-10-0 15:30:00');
 INSERT INTO t1 VALUES('2004-10-32 15:30:00');
 --error 1292
 INSERT INTO t1 VALUES('2004-02-30 15:30:04');
-INSERT INTO t1 VALUES('0000-00-00 00:00:00');
+INSERT IGNORE INTO t1 VALUES('0000-00-00 00:00:00');
 set @@sql_mode='STRICT_ALL_TABLES,NO_ZERO_IN_DATE';
 INSERT INTO t1 VALUES('0000-00-00 00:00:00');
 set @@sql_mode='STRICT_ALL_TABLES,NO_ZERO_DATE';
@@ -198,11 +200,11 @@ INSERT INTO t1 (col1) VALUES(STR_TO_DATE('31.10.0000 15.30','%d.%m.%Y %H.%i'));
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('31.0.2004 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('0.10.2004 15.30','%d.%m.%Y %H.%i'));
---error 1292
+--error 1411
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('31.9.2004 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('32.10.2004 15.30','%d.%m.%Y %H.%i'));
---error 1292
+--error 1411
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('29.02.2003 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('15.13.2004 15.30','%d.%m.%Y %H.%i'));
@@ -219,11 +221,11 @@ INSERT INTO t1 (col2) VALUES(STR_TO_DATE('31.10.0000 15.30','%d.%m.%Y %H.%i'));
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('31.0.2004 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('0.10.2004 15.30','%d.%m.%Y %H.%i'));
---error 1292
+--error 1411
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('31.9.2004 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('32.10.2004 15.30','%d.%m.%Y %H.%i'));
---error 1292
+--error 1411
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('29.02.2003 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('15.13.2004 15.30','%d.%m.%Y %H.%i'));
@@ -240,11 +242,11 @@ INSERT INTO t1 (col3) VALUES(STR_TO_DATE('31.10.0000 15.30','%d.%m.%Y %H.%i'));
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('31.0.2004 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('0.10.2004 15.30','%d.%m.%Y %H.%i'));
---error 1292
+--error 1411
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('31.9.2004 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('32.10.2004 15.30','%d.%m.%Y %H.%i'));
---error 1292
+--error 1411
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('29.02.2003 15.30','%d.%m.%Y %H.%i'));
 --error 1411
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('15.13.2004 15.30','%d.%m.%Y %H.%i'));
@@ -471,6 +473,8 @@ INSERT INTO t1 (col2) VALUES(256.0);
 SELECT MOD(col1,0) FROM t1 WHERE col1 > 0 LIMIT 1;
 --error 1264
 UPDATE t1 SET col1 = col1 - 50 WHERE col1 < 0;
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 3/
 --error 1264
 UPDATE t1 SET col2=col2 + 50 WHERE col2 > 0;
 --error 1365
@@ -529,6 +533,8 @@ INSERT INTO t1 (col2) VALUES(-1.0);
 INSERT INTO t1 (col2) VALUES(65536.0);
 --error 1264
 UPDATE t1 SET col1 = col1 - 50 WHERE col1 < 0;
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 3/
 --error 1264
 UPDATE t1 SET col2 = col2 + 50 WHERE col2 > 0;
 --error 1365
@@ -582,6 +588,8 @@ INSERT INTO t1 (col2) VALUES(16777216.0);
 
 --error 1264
 UPDATE t1 SET col1 = col1 - 50 WHERE col1 < 0;
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 3/
 --error 1264
 UPDATE t1 SET col2 = col2 + 50 WHERE col2 > 0;
 --error 1365
@@ -635,6 +643,8 @@ INSERT INTO t1 (col2) VALUES(4294967296.0);
 
 --error 1264
 UPDATE t1 SET col1 = col1 - 50 WHERE col1 < 0;
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 3/
 --error 1264
 UPDATE t1 SET col2 =col2 + 50 WHERE col2 > 0;
 --error 1365
@@ -750,6 +760,8 @@ INSERT INTO t1 VALUES ('-1010.55');
 INSERT INTO t1 VALUES ('-100E+1');
 --error 1366
 INSERT INTO t1 VALUES ('-100E');
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 6/
 --error 1264
 UPDATE t1 SET col1 =col1 * 50000 WHERE col1 =11;
 --error 1365
@@ -788,6 +800,8 @@ INSERT INTO t1 (col2) VALUES (-1.1E-3);
 INSERT INTO t1 (col1) VALUES ('+3.4E+39');
 --error 1264
 INSERT INTO t1 (col2) VALUES ('-1.1E-3');
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 2/
 --error 1264
 UPDATE t1 SET col1 =col1 * 5000 WHERE col1 > 0;
 --error 1365
@@ -812,7 +826,7 @@ DROP TABLE t1;
 CREATE TABLE t1 (col1 DOUBLE PRECISION, col2 DOUBLE PRECISION UNSIGNED);
 INSERT INTO t1 VALUES (-2.2E-307,0),(2E-307,0),(+1.7E+308,+1.7E+308);
 INSERT INTO t1 VALUES ('-2.2E-307',0),('-2E-307',0),('+1.7E+308','+1.7E+308');
-# We don't give warnings for underflow
+# We do not give warnings for underflow
 INSERT INTO t1 (col1) VALUES (-2.2E-330);
 --error 1367,1264
 INSERT INTO t1 (col1) VALUES (+1.7E+309);
@@ -853,11 +867,17 @@ INSERT INTO t1 (col1) VALUES ('hellobob');
 --error 1406
 INSERT INTO t1 (col2) VALUES ('hellobob');
 INSERT INTO t1 (col2) VALUES ('hello  ');
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 2/
 --error 1406
 UPDATE t1 SET col1 ='hellobob' WHERE col1 ='he';
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 2/
 --error 1406
 UPDATE t1 SET col2 ='hellobob' WHERE col2 ='he';
 INSERT IGNORE INTO t1 VALUES ('hellobob', 'hellobob');
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 2/
 UPDATE IGNORE t1 SET col2 ='hellotrudy' WHERE col2 ='he';
 SELECT * FROM t1;
 DROP TABLE t1;
@@ -872,9 +892,13 @@ INSERT INTO t1 (col1) VALUES ('yellow');
 INSERT INTO t1 (col1) VALUES ('redd');
 --error 1265
 INSERT INTO t1 VALUES ('');
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 3/
 --error 1265
 UPDATE t1 SET col1 ='yellow' WHERE col1 ='green';
 INSERT IGNORE INTO t1 VALUES ('yellow');
+# Different row number with the hypergraph optimizer.
+--replace_regex /at row 1$/at row 2/
 UPDATE IGNORE t1 SET col1 ='yellow' WHERE col1 ='blue';
 SELECT * FROM t1;
 DROP TABLE t1;
@@ -1016,7 +1040,7 @@ insert into t1 (col1) values (convert('0000-00-00',date));
 --error 1292
 insert into t1 (col1) values (cast('0000-00-00' as date));
 
-set sql_mode='no_zero_date';
+set sql_mode='NO_ZERO_DATE';
 insert into t1 values (0,0,0);
 insert into t1 values (0.0,0.0,0.0);
 drop table t1;
@@ -1031,7 +1055,12 @@ insert ignore into t1 (col1) values (cast('0000-00-00' as date));
 insert into t1 select * from t1;
 --error 1292
 alter table t1 modify col1 datetime;
-alter ignore table t1 modify col1 datetime;
+select * from t1;
+drop table t1;
+create table t1 (col1 datetime);
+insert ignore into t1 values ('0000-00-00 00:00:00'),
+                             ('0000-00-00 00:00:00'),
+                             (NULL);
 --error 1292
 insert into t1 select * from t1;
 select * from t1;
@@ -1096,7 +1125,7 @@ DROP TABLE t1;
 
 set @@sql_mode='traditional';
 --error 1074
-create table t1(a varchar(65537));
+create table t1(a varchar(65537)) charset latin1;
 --error 1074
 create table t1(a varbinary(65537));
 
@@ -1233,6 +1262,7 @@ i int comment
  123456789*123456789*123456789*123456789*
  123456789*123456789*123456789*123456789*');
 set @@sql_mode= @org_mode;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1
 (i int comment
  '123456789*123456789*123456789*123456789*
@@ -1262,7 +1292,7 @@ create table t1
   123456789*123456789*123456789*123456789*
   123456789*123456789*123456789*123456789*
   123456789*123456789*123456789*123456789*');
-
+SET sql_mode = default;
 select column_name, column_comment from information_schema.columns where
 table_schema = 'test' and table_name = 't1';
 drop table t1;
@@ -1358,7 +1388,7 @@ drop table t1;
 --echo #
 
 --echo #
---echo # STR_TO_DATE with NO_ZERO_DATE did not return NULL (with warning)
+--echo # STR_TO_DATE  with NO_ZERO_DATE did not return NULL (with warning)
 --echo # in get_date(). Only did in val_str() and val_int().
 SET sql_mode='NO_ZERO_DATE';
 SELECT
@@ -1369,3 +1399,289 @@ SELECT
 --echo #
 --echo # End of 5.6 tests
 --echo #
+
+--echo #
+--echo # WL#7467 : Deprecate ERROR_FOR_DIVISION_BY_ZERO, NO_ZERO_DATE,
+--echo #             NO_ZERO_IN_DATE SQL MODES and make their
+--echo #             functionality part of STRICT MODE
+--echo #
+--echo # Insertion of ZERO dates gives error if STRICT MODE
+--echo # is enabled with NO_ZERO_DATE and NO_ZERO_IN_DATE modes. Also Division
+--echo # by Zero would cause the statement to fail if STRICT MODE was enabled
+--echo # with ERROR_FOR_DIVISION_BY_ZERO mode.
+--echo #
+SET @@sql_mode = 'ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES';
+CREATE TABLE t1 (a DATE);
+
+--error ER_TRUNCATED_WRONG_VALUE
+INSERT INTO t1 VALUES('0000-00-00');
+INSERT IGNORE INTO t1 VALUES('0000-00-00');
+SELECT * FROM t1;
+
+--error ER_TRUNCATED_WRONG_VALUE
+INSERT INTO t1 VALUES('2004-0-30');
+INSERT IGNORE INTO t1 VALUES('2004-0-30');
+SELECT * FROM t1;
+
+--error ER_TRUNCATED_WRONG_VALUE
+UPDATE t1 SET a = '0000-00-00';
+UPDATE IGNORE t1 SET a = '0000-00-00';
+SELECT * FROM t1;
+
+--error ER_TRUNCATED_WRONG_VALUE
+UPDATE t1 SET a = '2004-0-30';
+UPDATE IGNORE t1 SET a = '2004-0-30';
+SELECT * FROM t1;
+
+--error ER_TRUNCATED_WRONG_VALUE
+INSERT INTO t1 SELECT * FROM t1;
+INSERT IGNORE INTO t1 SELECT * FROM t1;
+SELECT * FROM t1;
+
+--error ER_TRUNCATED_WRONG_VALUE
+CREATE TABLE t2(b DATE) SELECT a FROM t1;
+CREATE TABLE t2 (b DATE) IGNORE SELECT a FROM t1;
+SELECT * FROM t2;
+DROP TABLE t2;
+
+--error ER_DIVISION_BY_ZERO
+INSERT INTO t1 VALUES(1/0);
+INSERT IGNORE INTO t1 VALUES(1/0);
+SELECT * FROM t1;
+
+--error ER_DIVISION_BY_ZERO
+UPDATE t1 SET a = (1/0);
+UPDATE IGNORE t1 SET a = (1/0);
+
+--error ER_DIVISION_BY_ZERO
+CREATE TABLE t2(b DATE) SELECT (1/0) FROM t1;
+CREATE TABLE t2 (b DATE) IGNORE SELECT (1/0) FROM t1;
+SELECT * FROM t2;
+
+--echo # Clean-up
+DROP TABLE t1,t2;
+
+SET @@sql_mode = 'STRICT_ALL_TABLES,ALLOW_INVALID_DATES';
+CREATE TABLE t1 (a1 INT, a2 DATETIME);
+UPDATE t1 SET a2={d '1789-07-14'} WHERE a1=0;
+--echo # Clean-up
+DROP TABLE t1;
+
+SET sql_mode=@org_mode;
+
+--echo #
+--echo # BUG 11756690 - ERROR 22012 DIVISION BY 0 HANDLED BY HANDLER FOR SQLSTATE 23000 (ER_DUP_ENTRY)
+--echo #
+
+SET sql_mode = 'ERROR_FOR_DIVISION_BY_ZERO,STRICT_ALL_TABLES';
+
+DELIMITER |;
+
+CREATE TABLE t1 (
+Id INTEGER NOT NULL AUTO_INCREMENT,
+PRIMARY KEY(Id),
+c1 INTEGER NOT NULL,
+c2 INTEGER NOT NULL
+)|
+
+CREATE PROCEDURE p1()
+BEGIN
+UPDATE t1 SET c1 = c1 / c2;
+END|
+
+CREATE PROCEDURE p2()
+BEGIN
+DECLARE EXIT HANDLER
+FOR SQLSTATE '23000' # (ER_DUP_ENTRY)
+BEGIN
+SELECT 'Duplication handled!';
+END;
+
+CALL p1();
+END|
+
+DELIMITER ;|
+
+INSERT INTO t1 (Id, c1, c2) VALUES (1, 1, 0);
+
+--error ER_DIVISION_BY_ZERO
+CALL p1();
+
+--error ER_DIVISION_BY_ZERO
+CALL p2();
+
+--echo # Clean-up
+DROP TABLE t1;
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+--echo #
+--echo # Restore mode
+--echo #
+SET sql_mode=@org_mode;
+
+--echo #
+--echo # BUG#11744940 - TRADITIONAL MODE: CAST ALLOWS INVALID VALUE
+--echo #
+SET sql_mode='traditional';
+CREATE TABLE t1 (col1 char(3));
+--error ER_DATA_TOO_LONG
+INSERT INTO t1 VALUES(1000);
+SELECT * FROM t1;
+--error ER_DATA_TOO_LONG
+INSERT INTO t1 VALUES(cast(1000 as char(4)));
+SELECT * FROM t1;
+--error ER_TRUNCATED_WRONG_VALUE
+INSERT INTO t1 VALUES(cast(1000 as char(3)));
+SELECT * FROM t1;
+--echo # Clean-up
+DROP TABLE t1;
+--echo #
+--echo # Restore mode
+--echo #
+SET sql_mode=@org_mode;
+
+--echo #
+--echo # BUG#11744941 - TRADITIONAL MODE: BIGINT RANGE NOT CORRECTLY DELIMITED 
+--echo #
+SET sql_mode='traditional';
+CREATE TABLE t1 (col1 bigint) engine=innodb;
+INSERT INTO t1 values(-9223372036854775808);
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES(-9223372036854775809);
+SELECT * FROM t1;
+INSERT INTO t1 VALUES(9223372036854775807);
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES(9223372036854775808);
+SELECT * FROM t1;
+CREATE TABLE t2 (col1 bigint unsigned);
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES(9223372036854775808);
+--echo # Clean-up
+DROP TABLE t1;
+DROP TABLE t2;
+--echo # Restore mode
+SET sql_mode=@org_mode;
+
+--echo #
+--echo # WL#6891- Test Coverage for ER_WARN_TOO_FEW_RECORDS in STRICT MODE
+--echo #
+CREATE TABLE t1( a INT);
+CREATE TABLE t2( a INT, b INT);
+INSERT INTO t1 VALUES (1), (2), (3), (4);
+SET sql_mode= STRICT_ALL_TABLES;
+--let $fields=*
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT $fields INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/wl6614.txt' FROM t1
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT LOAD_FILE('$MYSQLTEST_VARDIR/tmp/wl6614.txt')
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_WARN_TOO_FEW_RECORDS
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/wl6614.txt' INTO TABLE t2
+SELECT * FROM t2;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/wl6614.txt' IGNORE INTO TABLE t2
+--eval SELECT $fields FROM t2
+--remove_file $MYSQLTEST_VARDIR/tmp/wl6614.txt
+--echo # Clean-up
+DROP TABLE t1;
+DROP TABLE t2;
+--echo # Restore mode
+SET sql_mode=@org_mode;
+
+--echo #
+--echo # BUG#11751889 - TRIGGERS OVERRIDE STRICT SQL_MODE 
+--echo # Fixed by WL#6891
+--echo #
+SET sql_mode='STRICT_ALL_TABLES';
+CREATE TABLE t1 (
+   id TINYINT UNSIGNED NOT NULL DEFAULT 0
+  ) ENGINE=MyISAM;
+
+CREATE TRIGGER t1_BI BEFORE INSERT ON t1
+FOR EACH ROW
+  SET NEW.id := -1;
+
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (18);
+--echo # Clean-up
+DROP trigger t1_BI;
+DROP TABLE t1;
+--echo # Restore mode
+SET sql_mode=@org_mode;
+
+--echo #
+--echo # BUG#16976939 - FIX ERROR MESSAGE ON DUPLICATE INDEX CREATION AND STRICT MODE
+--echo # Fixed by WL#6891
+--echo #
+SET sql_mode='STRICT_ALL_TABLES';
+CREATE TABLE t1(c1 varchar(50)) engine=InnoDB;
+ALTER TABLE t1 ADD KEY in_c1(c1);
+--echo # Previously this statement was giving error ER_DUP_INDEX in STRICT MODE
+--echo # In WL#6891, ER_DUP_INDEX is removed from being affected by STRICT MODE
+--echo # So the below statement will give warning only for ER_DUP_INDEX
+ALTER TABLE t1 ADD KEY in_c2(c1); 
+SHOW WARNINGS;
+--echo # Clean-up
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#18090591: STR_TO_DATE IN TRADITIONAL SQL_MODE FAILS TO PARSE
+--echo # TIME-ONLY FIELD
+--echo #
+
+CREATE TABLE t1 ( a datetime(2) );
+CREATE TABLE t2 ( a timestamp(2) );
+
+SELECT str_to_date('09:22', '%H:%i');
+SELECT str_to_date('09:22:23.33', '%H:%i:%s.%f');
+
+INSERT INTO t1 VALUES( str_to_date('09:22', '%H:%i') );
+INSERT INTO t1 VALUES( str_to_date('09:22:23.33', '%H:%i:%s.%f') );
+--echo # We do this to get the test deterministic. The above INSERT's
+--echo # will insert the *current* date with the time added.
+SELECT timediff( a, cast(CURRENT_DATE AS datetime) ) FROM t1;
+DELETE FROM t1;
+INSERT INTO t1 VALUES( str_to_date('2019-12-31', '%Y-%m-%d') );
+
+SELECT * FROM t1;
+
+INSERT INTO t2 VALUES( str_to_date('09:22', '%H:%i') );
+INSERT INTO t2 VALUES( str_to_date('09:22:23.33', '%H:%i:%s.%f') );
+--echo # We do this to get the test deterministic. The above INSERT's
+--echo # will insert the *current* date with the time added.
+SELECT timediff( a, cast(CURRENT_DATE AS datetime) ) FROM t2;
+DELETE FROM t2;
+INSERT INTO t2 VALUES( str_to_date('2019-12-31', '%Y-%m-%d') );
+
+CREATE TABLE t3 SELECT str_to_date('09:22:23.33', '%H:%i:%s.%f');
+SHOW CREATE TABLE t3;
+
+SELECT * FROM t2;
+
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug#34704094: Mysql str_to_date can correct convert for '2022-11-30'
+--echo #
+
+SET sql_mode='NO_ZERO_DATE';
+select str_to_date('0000-00-00', '%Y-%m-%d');
+--echo # Not compliant with how CAST works
+select str_to_date('0000-01-00', '%Y-%m-%d');
+--echo # Not compliant with how CAST works
+select str_to_date('0000-00-01', '%Y-%m-%d');
+select str_to_date('2023-02-31', '%Y-%m-%d');
+
+SET sql_mode='NO_ZERO_IN_DATE';
+select str_to_date('0000-00-00', '%Y-%m-%d');
+select str_to_date('0000-01-00', '%Y-%m-%d');
+select str_to_date('0000-00-01', '%Y-%m-%d');
+select str_to_date('2023-02-31', '%Y-%m-%d');
+
+SET sql_mode='ALLOW_INVALID_DATES';
+select str_to_date('0000-00-00', '%Y-%m-%d');
+select str_to_date('0000-01-00', '%Y-%m-%d');
+select str_to_date('0000-00-01', '%Y-%m-%d');
+select str_to_date('2023-02-31', '%Y-%m-%d');
+
+SET sql_mode=@org_mode;

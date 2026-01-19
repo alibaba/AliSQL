@@ -1,9 +1,12 @@
 CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.");
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "granting/revoking privileges in databases.");
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "storing table level and column level grants "
-                         "in the privilege tables.");
+CALL mtr.add_suppression("REVOKE/GRANT failed while storing table level "
+                         "and column level grants in the privilege "
+                         "tables. An incident event has been written to "
+                         "the binary log which will stop the slaves.");
+CALL mtr.add_suppression("REVOKE/GRANT failed while granting/revoking "
+                         "privileges in databases. An incident event "
+                         "has been written to the binary log which "
+                         "will stop the slaves.");
 drop table if exists t1,t2,t3;
 drop database if exists mysqltest;
 drop view if exists v1;
@@ -85,21 +88,30 @@ CREATE TABLE t1 (
 id int(11) NOT NULL default '0',
 name varchar(10) default NULL,
 PRIMARY KEY  (id)
-) ENGINE=MyISAM;
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,'aaa'),(2,'aaa'),(3,'aaa');
 CREATE TABLE t2 (
 id int(11) NOT NULL default '0',
 name varchar(10) default NULL,
 PRIMARY KEY  (id)
-) ENGINE=MyISAM;
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES (2,'bbb'),(3,'bbb'),(4,'bbb');
 CREATE TABLE t3 (
 id int(11) NOT NULL default '0',
 mydate datetime default NULL,
 PRIMARY KEY  (id)
-) ENGINE=MyISAM;
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t3 VALUES (1,'2002-02-04 00:00:00'),(3,'2002-05-12 00:00:00'),(5,'2002-05-12 00:00:00'),(6,'2002-06-22
 00:00:00'),(7,'2002-07-22 00:00:00');
+Warnings:
+Warning	4095	Delimiter '\n' in position 10 in datetime value '2002-06-22
+00:00:00' at row 4 is deprecated. Prefer the standard ' '.
 delete t1,t2,t3 from t1,t2,t3 where to_days(now())-to_days(t3.mydate)>=30 and t3.id=t1.id and t3.id=t2.id;
 select * from t3;
 id	mydate
@@ -113,7 +125,9 @@ CREATE TABLE IF NOT EXISTS `t1` (
 `tst` text,
 `tst1` text,
 PRIMARY KEY  (`id`)
-) ENGINE=MyISAM;
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE TABLE IF NOT EXISTS `t2` (
 `ID` int(11) NOT NULL auto_increment,
 `ParId` int(11) default NULL,
@@ -122,7 +136,10 @@ CREATE TABLE IF NOT EXISTS `t2` (
 PRIMARY KEY  (`ID`),
 KEY `IX_ParId_t2` (`ParId`),
 FOREIGN KEY (`ParId`) REFERENCES `t1` (`id`)
-) ENGINE=MyISAM;
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1(tst,tst1) VALUES("MySQL","MySQL AB"), ("MSSQL","Microsoft"), ("ORACLE","ORACLE");
 INSERT INTO t2(ParId) VALUES(1), (2), (3);
 select * from t2;
@@ -136,7 +153,7 @@ ID	ParId	tst	tst1
 1	1	MySQL	MySQL AB
 2	2	MSSQL	Microsoft
 3	3	ORACLE	ORACLE
-drop table t1, t2 ;
+drop table t2, t1 ;
 create table t1 (n numeric(10));
 create table t2 (n numeric(10));
 insert into t2 values (1),(2),(4),(8),(16),(32);
@@ -153,7 +170,13 @@ select * from t2 left outer join t1  using (n);
 n
 drop table t1,t2 ;
 create table t1 (n int(10) not null primary key, d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (n int(10) not null primary key, d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values(1,1);
 insert into t2 values(1,10),(2,20);
 LOCK TABLES t1 write, t2 read;
@@ -178,18 +201,30 @@ unlock tables;
 drop table t1,t2;
 set sql_safe_updates=1;
 create table t1 (n int(10), d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (n int(10), d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values(1,1);
 insert into t2 values(1,10),(2,20);
 UPDATE t1,t2 SET t1.d=t2.d WHERE t1.n=t2.n;
-ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
 set sql_safe_updates=0;
 drop table t1,t2;
 set timestamp=1038401397;
 create table t1 (n int(10) not null primary key, d int(10), t timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (n int(10) not null primary key, d int(10), t timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
-insert into t1 values(1,1,NULL);
-insert into t2 values(1,10,NULL),(2,20,NULL);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+insert into t1(n,d) values(1,1);
+insert into t2(n,d) values(1,10),(2,20);
 set timestamp=1038000000;
 UPDATE t1,t2 SET t1.d=t2.d WHERE t1.n=t2.n;
 select n,d,unix_timestamp(t) from t1;
@@ -205,7 +240,13 @@ drop table t1,t2;
 set timestamp=0;
 set sql_safe_updates=0;
 create table t1 (n int(10) not null primary key, d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (n int(10) not null primary key, d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values(1,1), (3,3);
 insert into t2 values(1,10),(2,20);
 UPDATE t2 left outer join t1 on t1.n=t2.n  SET t1.d=t2.d;
@@ -219,7 +260,13 @@ n	d
 2	20
 drop table t1,t2;
 create table t1 (n int(10), d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (n int(10), d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values(1,1),(1,2);
 insert into t2 values(1,10),(2,20);
 UPDATE t1,t2 SET t1.d=t2.d,t2.d=30 WHERE t1.n=t2.n;
@@ -233,7 +280,13 @@ n	d
 2	20
 drop table t1,t2;
 create table t1 (n int(10), d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (n int(10), d int(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values(1,1),(3,2);
 insert into t2 values(1,10),(1,20);
 UPDATE t1,t2 SET t1.d=t2.d,t2.d=30 WHERE t1.n=t2.n;
@@ -261,11 +314,17 @@ n	d
 select * from t2;
 n	d
 drop table t1,t2;
-CREATE TABLE t1 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj)) ENGINE=MyISAM;
+CREATE TABLE t1 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,'jedan'),(2,'dva'),(3,'tri'),(4,'xxxxxxxxxx'),(5,'a'),(10,''),(11,''),(12,''),(13,'');
-CREATE TABLE t2 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj)) ENGINE=MyISAM;
+CREATE TABLE t2 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES (1,'jedan'),(2,'dva'),(3,'tri'),(4,'xxxxxxxxxx'),(5,'a');
-CREATE TABLE t3 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj)) ENGINE=MyISAM;
+CREATE TABLE t3 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t3 VALUES (1,'jedan'),(2,'dva');
 update t1,t2 set t1.naziv="aaaa" where t1.broj=t2.broj;
 update t1,t2,t3 set t1.naziv="bbbb", t2.naziv="aaaa" where t1.broj=t2.broj and t2.broj=t3.broj;
@@ -289,7 +348,6 @@ a	b
 update t1,t2 set t1.a=t1.a+100 where t1.a=101;
 select * from t1;
 a	b
-201	1
 102	2
 103	3
 104	4
@@ -298,10 +356,10 @@ a	b
 107	7
 108	8
 109	9
+201	1
 update t1,t2 set t1.b=t1.b+10 where t1.b=2;
 select * from t1;
 a	b
-201	1
 102	12
 103	3
 104	4
@@ -310,10 +368,10 @@ a	b
 107	7
 108	8
 109	9
+201	1
 update t1,t2 set t1.b=t1.b+2,t2.b=t1.b+10 where t1.b between 3 and 5 and t2.a=t1.a-100;
 select * from t1;
 a	b
-201	1
 102	12
 103	5
 104	6
@@ -322,6 +380,7 @@ a	b
 107	7
 108	8
 109	9
+201	1
 select * from t2;
 a	b
 1	1
@@ -335,7 +394,9 @@ a	b
 9	9
 update t1,t2 set t1.b=t2.b, t1.a=t2.a where t1.a=t2.a and not exists (select * from t2 where t2.a > 10);
 drop table t1,t2;
-CREATE TABLE t3 (  KEY1 varchar(50) NOT NULL default '',  PARAM_CORR_DISTANCE_RUSH double default NULL,  PARAM_CORR_DISTANCE_GEM double default NULL,  PARAM_AVG_TARE double default NULL,  PARAM_AVG_NB_DAYS double default NULL,  PARAM_DEFAULT_PROP_GEM_SRVC varchar(50) default NULL,  PARAM_DEFAULT_PROP_GEM_NO_ETIK varchar(50) default NULL,  PARAM_SCENARIO_COSTS varchar(50) default NULL,  PARAM_DEFAULT_WAGON_COST double default NULL,  tmp int(11) default NULL,  PRIMARY KEY  (KEY1)) ENGINE=MyISAM;
+CREATE TABLE t3 (  KEY1 varchar(50) NOT NULL default '',  PARAM_CORR_DISTANCE_RUSH double default NULL,  PARAM_CORR_DISTANCE_GEM double default NULL,  PARAM_AVG_TARE double default NULL,  PARAM_AVG_NB_DAYS double default NULL,  PARAM_DEFAULT_PROP_GEM_SRVC varchar(50) default NULL,  PARAM_DEFAULT_PROP_GEM_NO_ETIK varchar(50) default NULL,  PARAM_SCENARIO_COSTS varchar(50) default NULL,  PARAM_DEFAULT_WAGON_COST double default NULL,  tmp int(11) default NULL,  PRIMARY KEY  (KEY1));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t3 VALUES ('A',1,1,22,3.2,'R','R','BASE2',0.24,NULL);
 create table t1 (A varchar(1));
 insert into t1 values  ("A") ,("B"),("C"),("D");
@@ -363,7 +424,11 @@ a	b
 4	5
 drop table t1;
 create table t1(id1 smallint(5), field char(5));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2(id2 smallint(5), field char(5));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values (1, 'a'), (2, 'aa');
 insert into t2 values (1, 'b'), (2, 'bb');
 select * from t1;
@@ -410,7 +475,14 @@ a
 2
 DROP TABLE t1,t2;
 create table `t1` (`p_id` int(10) unsigned NOT NULL auto_increment, `p_code` varchar(20) NOT NULL default '', `p_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`p_id`) );
-create table `t2` (`c2_id` int(10) unsigned NULL auto_increment, `c2_p_id` int(10) unsigned NOT NULL default '0', `c2_note` text NOT NULL, `c2_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`c2_id`), KEY `c2_p_id` (`c2_p_id`) );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+create table `t2` (`c2_id` int(10) unsigned NOT NULL auto_increment, `c2_p_id` int(10) unsigned NOT NULL default '0', `c2_note` text NOT NULL, `c2_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`c2_id`), KEY `c2_p_id` (`c2_p_id`) );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values (0,'A01-Comp',1);
 insert into t1 values (0,'B01-Comp',1);
 insert into t2 values (0,1,'A Note',1);
@@ -427,6 +499,7 @@ create database mysqltest;
 create table mysqltest.t1 (a int, b int, primary key (a));
 create table mysqltest.t2 (a int, b int, primary key (a));
 create table mysqltest.t3 (a int, b int, primary key (a));
+create user mysqltest_1@localhost;
 grant select on mysqltest.* to mysqltest_1@localhost;
 grant update on mysqltest.t1 to mysqltest_1@localhost;
 update t1, t2 set t1.b=1 where t1.a=t2.a;
@@ -587,64 +660,22 @@ id	c1	c2
 2	test t	ppc
 9	abc	ppc
 drop table t1, t2;
-CREATE TABLE `t1` (
-`a` int(11) NOT NULL auto_increment,
-`b` int(11) default NULL,
-PRIMARY KEY  (`a`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 ;
-CREATE TABLE `t2` (
-`a` int(11) NOT NULL auto_increment,
-`b` int(11) default NULL,
-PRIMARY KEY  (`a`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 ;
-set @sav_binlog_format=  @@session.binlog_format;
-set @@session.binlog_format= mixed;
-insert into t1 values (1,1),(2,2);
-insert into t2 values (1,1),(4,4);
-reset master;
-UPDATE t2,t1 SET t2.a=t1.a+2;
-ERROR 23000: Duplicate entry '3' for key 'PRIMARY'
-select * from t2 /* must be (3,1), (4,4) */;
-a	b
-3	1
-4	4
-include/show_binlog_events.inc
-Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000001	#	Query	#	#	BEGIN
-master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
-master-bin.000001	#	Update_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	COMMIT
-delete from t1;
-delete from t2;
-insert into t1 values (1,2),(3,4),(4,4);
-insert into t2 values (1,2),(3,4),(4,4);
-reset master;
-UPDATE t2,t1  SET t2.a=t2.b where t2.a=t1.a;
-ERROR 23000: Duplicate entry '4' for key 'PRIMARY'
-include/show_binlog_events.inc
-Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000001	#	Query	#	#	BEGIN
-master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
-master-bin.000001	#	Update_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	COMMIT
-drop table t1, t2;
-set @@session.binlog_format= @sav_binlog_format;
 drop table if exists t1, t2, t3;
 CREATE TABLE t1 (a int, PRIMARY KEY (a));
 CREATE TABLE t2 (a int, PRIMARY KEY (a));
-CREATE TABLE t3 (a int, PRIMARY KEY (a)) ENGINE=MyISAM;
+CREATE TABLE t3 (a int, PRIMARY KEY (a));
 create trigger trg_del_t3 before  delete on t3 for each row insert into t1 values (1);
 insert into t2 values (1),(2);
 insert into t3 values (1),(2);
 reset master;
 delete t3.* from t2,t3 where t2.a=t3.a;
-ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
-select count(*) from t1 /* must be 1 */;
+ERROR 23000: Duplicate entry '1' for key 't1.PRIMARY'
+select count(*) from t1 /* must be 0 */;
 count(*)
-1
-select count(*) from t3 /* must be 1 */;
+0
+select count(*) from t3 /* must be 2 */;
 count(*)
-1
+2
 drop table t1, t2, t3;
 #
 # Bug#49534: multitable IGNORE update with sql_safe_updates error
@@ -655,12 +686,14 @@ INSERT INTO t1 VALUES (1), (2), (3);
 SET SESSION sql_safe_updates = 1;
 # Must not cause failed assertion
 UPDATE IGNORE t1, t1 t1a SET t1.a = 1 WHERE t1a.a = 1;
-ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
 DROP TABLE t1;
 #
 # Bug#54543: update ignore with incorrect subquery leads to assertion
 # failure: inited==INDEX
 #
+set @optimizer_switch_saved=@@optimizer_switch;
+set optimizer_switch='derived_merge=off';
 SET SESSION sql_safe_updates = 0;
 CREATE TABLE t1 ( a INT );
 INSERT INTO t1 VALUES (1), (2);
@@ -672,76 +705,24 @@ INSERT INTO t3 VALUES (1), (2);
 UPDATE IGNORE
 ( SELECT ( SELECT COUNT(*) FROM t1 GROUP BY a, @v ) a FROM t2 ) x, t3
 SET t3.a = 0;
-Warnings:
-Error	1242	Subquery returns more than 1 row
-Error	1242	Subquery returns more than 1 row
 DROP TABLE t1, t2, t3;
 SET SESSION sql_safe_updates = DEFAULT;
+set @@optimizer_switch=@optimizer_switch_saved;
 #
 # Bug#52157 various crashes and assertions with multi-table update, stored function
 #
-CREATE FUNCTION f1 () RETURNS BLOB RETURN 1;
+set @optimizer_switch_saved=@@optimizer_switch;
+set optimizer_switch='derived_merge=off';
+CREATE FUNCTION f1 () RETURNS BLOB RETURN '2011-01-01';
 CREATE TABLE t1 (f1 DATE);
 INSERT INTO t1 VALUES('2001-01-01');
-UPDATE (SELECT 1 FROM t1 WHERE f1 = (SELECT f1() FROM t1)) x, t1 SET f1 = 1;
-Warnings:
-Warning	1292	Truncated incorrect datetime value: '1'
+UPDATE IGNORE (SELECT 1 FROM t1 WHERE f1 = (SELECT f1() FROM t1)) x, t1 SET f1 = '2011-01-01';
 DROP FUNCTION f1;
 DROP TABLE t1;
-#
-# BUG#57373: Multi update+InnoDB reports ER_KEY_NOT_FOUND if a
-#            table is updated twice
-#
-CREATE TABLE t1(
-pk INT,
-a INT,
-PRIMARY KEY (pk)
-) ENGINE=MyISAM;
-INSERT INTO t1 VALUES (0,0);
-UPDATE t1 AS A, t1 AS B SET A.pk = 1, B.a = 2;
-
-# Should be (1,2)
-SELECT * FROM t1;
-pk	a
-1	2
+CREATE TABLE t1(a TEXT, FULLTEXT(a)) engine = blackhole;
+UPDATE IGNORE (SELECT 1 FROM t1 WHERE(MATCH(a) AGAINST(''))) `x`,`t1` SET a = 1;
 DROP TABLE t1;
-#
-# BUG#11882110: UPDATE REPORTS ER_KEY_NOT_FOUND IF TABLE IS 
-#               UPDATED TWICE
-#
-CREATE TABLE t1 ( 
-col_int_key int, 
-pk int, 
-col_int int, 
-key(col_int_key), 
-primary key (pk)
-) ENGINE=MyISAM;
-INSERT INTO t1 VALUES (1,2,3);
-
-CREATE TABLE t2 ( 
-col_int_key int, 
-pk_1 int, 
-pk_2 int, 
-col_int int, 
-key(col_int_key), 
-primary key (pk_1,pk_2)
-) ENGINE=MyISAM;
-INSERT INTO t2 VALUES (1,2,3,4);
-
-UPDATE t1 AS A NATURAL JOIN t1 B SET A.pk=5,B.pk=7;
-
-SELECT * FROM t1;
-col_int_key	pk	col_int
-1	7	3
-
-UPDATE t2 AS A NATURAL JOIN t2 B SET A.pk_1=5,B.pk_1=7;
-
-UPDATE t2 AS A NATURAL JOIN t2 B SET A.pk_2=10,B.pk_2=11;
-
-SELECT * FROM t2;
-col_int_key	pk_1	pk_2	col_int
-1	7	11	4
-DROP TABLE t1,t2;
+set @@optimizer_switch=@optimizer_switch_saved;
 # Bug#13256831 - ERROR 1032 (HY000): CAN'T FIND RECORD
 CREATE TABLE t1 (f1 INT PRIMARY KEY, f2 INT) ENGINE=InnoDB;
 CREATE TABLE t2 (f1 INT PRIMARY KEY, f2 INT) ENGINE=InnoDB;
@@ -768,7 +749,9 @@ CREATE TABLE t1 (id INT PRIMARY KEY);
 INSERT INTO t1 VALUES (1), (2);
 UPDATE IGNORE t1, (SELECT 1 AS duplicate_id) AS t2 SET t1.id=t2.duplicate_id;
 affected rows: 0
-info: Rows matched: 2  Changed: 0  Warnings: 0
+info: Rows matched: 2  Changed: 0  Warnings: 1
+Warnings:
+Warning	1062	Duplicate entry '1' for key 't1.PRIMARY'
 # Check that no rows changed.
 SELECT * FROM t1;
 id
@@ -776,21 +759,152 @@ id
 2
 DROP TABLE t1;
 #
-#Bug 11757486 - 49539: NON-DESCRIPTIVE ERR (ERROR 0 FROM STORAGE ENGINE)
-#                      WITH MULTI-TABLE UPDATE
+# Bug #18352634 	"UPDATE ORDER BY" OF MULTI-TABLE VIEW DOES NOT WORK
 #
-CREATE TABLE table_11757486 (field1 tinyint) ENGINE=MYISAM;
-INSERT INTO table_11757486 VALUES (0),(0);
-SET SESSION SQL_MODE='STRICT_ALL_TABLES';
-UPDATE IGNORE (SELECT 128 as col1) x, table_11757486 SET field1=x.col1;
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+CREATE VIEW v AS SELECT t1.a FROM t1,t1 q;
+UPDATE v SET a=1 ORDER BY a;
+Got one of the listed errors
+UPDATE v SET a=1 LIMIT 3;
+Got one of the listed errors
+DROP TABLE t1;
+DROP VIEW v;
+#
+# WL#5275: Multi-table update, view with subquery in CHECK OPTION
+#
+CREATE TABLE t1 (f1 INTEGER PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE t2 (f1 INTEGER PRIMARY KEY, f2 INTEGER) ENGINE=InnoDB;
+CREATE TABLE t3 (f1 INTEGER) ENGINE=INNODB;
+INSERT INTO t1 VALUES (1), (2);
+INSERT INTO t2 VALUES (1, 1), (2, 2);
+INSERT INTO t3 VALUES (1), (2);
+CREATE VIEW v2 AS 
+SELECT * FROM t2 WHERE f2 IN (SELECT f1 FROM t3)
+WITH CHECK OPTION;
+SELECT * FROM t1 JOIN v2 ON t1.f1=v2.f1;
+f1	f1	f2
+1	1	1
+2	2	2
+UPDATE t1 JOIN v2 ON t1.f1=v2.f1
+SET f2 = f2 + 1
+WHERE t1.f1=1;
+UPDATE t1 JOIN v2 ON t1.f1=v2.f1
+SET f2 = f2 + 1
+WHERE t1.f1=2;
+ERROR HY000: CHECK OPTION failed 'test.v2'
+SELECT * FROM t1 JOIN v2 ON t1.f1=v2.f1;
+f1	f1	f2
+1	1	2
+2	2	2
+DROP VIEW v2;
+DROP TABLE t1, t2, t3;
+#
+# Bug 18449085: WRONG VALUE AFTER MULTI UPDATE
+#
+CREATE TABLE t1 (c1 INTEGER, c2 INTEGER, KEY(c1));
+CREATE TABLE t2 (c1 INTEGER, c2 INTEGER);
+CREATE TABLE t3 (c1 INTEGER, c2 INTEGER);
+INSERT INTO t1 VALUES(1,1),(2,2),(3,3),(4,4),(5,5);
+INSERT INTO t2 VALUES(11,1),(12,1),(13,1),(14,2),(15,6);
+INSERT INTO t3 VALUES(21,11),(22,11),(23,13),(24,14),(25,15);
+ANALYZE TABLE t1, t2, t3;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+UPDATE t2 straight_join t3 straight_join t1 SET t1.c2 = 30, t2.c2 = 40, t3.c2=50
+WHERE t1.c1=t2.c2 AND t2.c1=t3.c2;
+EXPLAIN UPDATE t2 straight_join t3 straight_join t1 SET t1.c2 = 30, t2.c2 = 40, t3.c2=50
+WHERE t1.c1=t2.c2 AND t2.c1=t3.c2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t2	NULL	ALL	NULL	NULL	NULL	NULL	5	100.00	Using where
+1	UPDATE	t3	NULL	ALL	NULL	NULL	NULL	NULL	5	20.00	Using where
+1	UPDATE	t1	NULL	ref	c1	c1	5	test.t2.c2	1	100.00	NULL
 Warnings:
-Warning	1264	Out of range value for column 'field1' at row 1
-Warning	1264	Out of range value for column 'field1' at row 2
-UPDATE (SELECT 128 as col1) x, table_11757486 SET field1=x.col1;
-ERROR 22003: Out of range value for column 'field1' at row 1
-SET SESSION SQL_MODE='';
-UPDATE IGNORE (SELECT 128 as col1) x, table_11757486 SET field1=x.col1;
+Note	1003	update `test`.`t2` straight_join `test`.`t3` straight_join `test`.`t1` set `test`.`t1`.`c2` = 30,`test`.`t2`.`c2` = 40,`test`.`t3`.`c2` = 50 where ((`test`.`t3`.`c2` = `test`.`t2`.`c1`) and (`test`.`t1`.`c1` = `test`.`t2`.`c2`))
+SELECT * FROM t3 ORDER BY c1;
+c1	c2
+21	50
+22	50
+23	50
+24	50
+25	15
+DROP TABLE t1, t2, t3;
+#
+# Bug#98692 multi-table UPDATE has problem when updating a table in Performance Schema
+#
+SELECT enabled FROM performance_schema.setup_instruments
+WHERE name = 'wait/lock/metadata/sql/mdl';
+enabled
+YES
+EXPLAIN UPDATE performance_schema.setup_instruments, (SELECT 1) AS dt
+SET enabled = 'NO' WHERE name = 'wait/lock/metadata/sql/mdl';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	system	NULL	NULL	NULL	NULL	1	100.00	NULL
+1	UPDATE	setup_instruments	NULL	const	PRIMARY	PRIMARY	514	const	1	100.00	NULL
+2	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
-Warning	1264	Out of range value for column 'field1' at row 1
-Warning	1264	Out of range value for column 'field1' at row 2
-DROP TABLE table_11757486;
+Note	1003	update `performance_schema`.`setup_instruments` join (/* select#2 */ select 1 AS `1`) `dt` set `performance_schema`.`setup_instruments`.`ENABLED` = 'NO' where true
+UPDATE performance_schema.setup_instruments, (SELECT 1) AS dt
+SET enabled = 'NO' WHERE name = 'wait/lock/metadata/sql/mdl';
+SELECT enabled FROM performance_schema.setup_instruments
+WHERE name = 'wait/lock/metadata/sql/mdl';
+enabled
+NO
+EXPLAIN UPDATE (VALUES ROW(1),ROW(2)) AS dt(a)
+LEFT JOIN performance_schema.setup_instruments ON dt.a=enabled
+SET enabled = 'YES' WHERE name = 'wait/lock/metadata/sql/mdl';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	setup_instruments	NULL	const	PRIMARY	PRIMARY	514	const	1	100.00	NULL
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	8	const	1	100.00	Using where; Using index
+2	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	update (values row(1),row(2)) `dt` (`a`) join `performance_schema`.`setup_instruments` set `performance_schema`.`setup_instruments`.`ENABLED` = 'YES' where ((`dt`.`a` = `performance_schema`.`setup_instruments`.`ENABLED`))
+UPDATE (VALUES ROW(1),ROW(2)) AS dt(a)
+LEFT JOIN performance_schema.setup_instruments ON dt.a=enabled
+SET enabled = 'YES' WHERE name = 'wait/lock/metadata/sql/mdl';
+SELECT enabled FROM performance_schema.setup_instruments
+WHERE name = 'wait/lock/metadata/sql/mdl';
+enabled
+YES
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+INSERT INTO t1 VALUES(1,1);
+EXPLAIN UPDATE t1 STRAIGHT_JOIN performance_schema.setup_instruments
+SET t1.b = 2 WHERE t1.a = 1 AND name = 'wait/lock/metadata/sql/mdl';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+1	SIMPLE	setup_instruments	NULL	const	PRIMARY	PRIMARY	514	const	1	100.00	NULL
+Warnings:
+Note	1003	update `test`.`t1` straight_join `performance_schema`.`setup_instruments` set `test`.`t1`.`b` = 2 where true
+UPDATE t1 STRAIGHT_JOIN performance_schema.setup_instruments
+SET t1.b = 2 WHERE t1.a = 1 AND name = 'wait/lock/metadata/sql/mdl';
+SELECT * FROM t1;
+a	b
+1	2
+EXPLAIN UPDATE performance_schema.setup_instruments STRAIGHT_JOIN t1
+SET t1.b = 3 WHERE t1.a = 1 AND name = 'wait/lock/metadata/sql/mdl';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	setup_instruments	NULL	const	PRIMARY	PRIMARY	514	const	1	100.00	NULL
+1	UPDATE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+Warnings:
+Note	1003	update `performance_schema`.`setup_instruments` straight_join `test`.`t1` set `test`.`t1`.`b` = 3 where true
+UPDATE performance_schema.setup_instruments STRAIGHT_JOIN t1
+SET t1.b = 3 WHERE t1.a = 1 AND name = 'wait/lock/metadata/sql/mdl';
+SELECT * FROM t1;
+a	b
+1	3
+DROP TABLE t1;
+# Bug#31640267: Assertion `trans_safe || updated_rows == 0 || thd->get_transaction()
+CREATE TABLE t1(pk INTEGER PRIMARY KEY, a INTEGER);
+INSERT INTO t1 VALUES(1, 10), (2, 20);
+PREPARE s FROM 'UPDATE t1, (SELECT 1 FROM DUAL) AS dt SET a=a+1';
+EXECUTE s;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+EXECUTE s;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+DEALLOCATE PREPARE s;
+DROP TABLE t1;

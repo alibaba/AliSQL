@@ -13,7 +13,7 @@ COUNT(@@GLOBAL.system_time_zone)
 1 Expected
 '#---------------------BS_STVARS_050_03----------------------#'
 SELECT @@GLOBAL.system_time_zone = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='system_time_zone';
 @@GLOBAL.system_time_zone = VARIABLE_VALUE
 1
@@ -23,7 +23,7 @@ COUNT(@@GLOBAL.system_time_zone)
 1
 1 Expected
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='system_time_zone';
 COUNT(VARIABLE_VALUE)
 1
@@ -48,6 +48,6 @@ SELECT COUNT(@@GLOBAL.system_time_zone);
 COUNT(@@GLOBAL.system_time_zone)
 1
 1 Expected
-SELECT system_time_zone = @@SESSION.system_time_zone;
+SELECT system_time_zone;
 ERROR 42S22: Unknown column 'system_time_zone' in 'field list'
-Expected error 'Readonly variable'
+Expected error 'Unknown column'

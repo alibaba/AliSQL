@@ -22,7 +22,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/have_innodb.inc
 
 --echo '#---------------------BS_STVARS_024_01----------------------#'
 ####################################################################
@@ -52,17 +51,21 @@ SELECT COUNT(@@GLOBAL.innodb_data_file_path);
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 
+--disable_warnings
 SELECT @@GLOBAL.innodb_data_file_path = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_data_file_path';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.innodb_data_file_path);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='innodb_data_file_path';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -96,7 +99,19 @@ SELECT COUNT(@@GLOBAL.innodb_data_file_path);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_data_file_path = @@SESSION.innodb_data_file_path;
---echo Expected error 'Readonly variable'
+SELECT innodb_data_file_path;
+--echo Expected error 'Unknown column'
 
 
+--echo #
+--echo # Bug #28590014 INNODB_DATA_FILE_PATH HAS A BAD DEFAULT VALUE
+--echo #
+
+SET PERSIST_ONLY innodb_data_file_path = DEFAULT;
+
+let $restart_parameters=;
+--source include/restart_mysqld.inc
+
+SELECT @@innodb_data_file_path;
+
+RESET PERSIST;

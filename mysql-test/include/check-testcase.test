@@ -1,41 +1,64 @@
+#
+# Copyright (c) 2013, 2025, Oracle and/or its affiliates.
+#
+
 # ==== Purpose ====
 #
 # This test is executed twice for each test case. Before every
 # testcase it is run with mysqltest in record mode and will thus
 # produce an output file that can be compared to output from after the
-# tescase.  In that way, it is possible to check that a testcase does
+# tescase. In that way, it is possible to check that a testcase does
 # not have any unwanted side affects.
 
 --disable_query_log
+--let $_server_id = `SELECT @@server_id`
+# There should be no expect file before nor after the test, because
+# existence of this file means author expects the server to be off,
+# while it is an assumption that the server is up and running at
+# the start and end of the test (in particular this script queries it).
+# Unfortunately, we can't verify this on Windows, because there the
+# unlink($expect_file) sometimes fails due to Permission Denied
+# despite numerous retries. In such case the test runner leaves the
+# file around, in hope it will be cleaned up later or not cause too
+# much trouble to the next test case. The trade-off here is that if
+# we insist on checking this on Windows, it will fail a lot without
+# revealing any real problem in how the test script is written, and
+# inceasing number of retries makes whole test suite time out, as this
+# happens quite frequently during whole test suite. Verifying on Linux
+# is enough to catch bugs in how the test scenario is writen.
+--source include/check_windows.inc
+if (!$have_windows)
+{
+  --list_files $MYSQLTEST_VARDIR/tmp mysqld.$_server_id.expect
+}
 
-# We want to ensure all slave configuration is restored.  But SHOW
-# SLAVE STATUS returns nothing for servers not configured as slaves,
+# We want to ensure all slave configuration is restored. But SHOW
+# REPLICA STATUS returns nothing for servers not configured as slaves,
 # and (after BUG#28796 was fixed) there is no way to de-configure a
-# slave.  Hence, it's impossible to clean up the replication state at
-# the end.  But we want to check that the slave is stopped, there is
-# no error, and a few other invariants.  So we issue SHOW SLAVE
+# slave. Hence, it is impossible to clean up the replication state at
+# the end. But we want to check that the slave is stopped, there is
+# no error, and a few other invariants. So we issue SHOW REPLICA
 # STATUS, and if it returns no rows we fake the result.
 --let $tmp= 0
-if (`SELECT @@server_id <> 0`)
-{
-  --let $tmp= query_get_value(SHOW SLAVE STATUS, Slave_IO_Running, 1)
+if ($_server_id) {
+  --let $tmp= query_get_value(SHOW REPLICA STATUS, Replica_IO_Running, 1)
   --let $tmp= `SELECT '$tmp' = 'No such row'`
 }
-if ($tmp)
-{
+
+if ($tmp) {
   # Note: after WL#5177, fields 13-18 shall not be filtered-out.
-  --echo Slave_IO_State	
-  --echo Master_Host	127.0.0.1
-  --echo Master_User	root
-  --echo Master_Port	#
+  --echo Replica_IO_State	
+  --echo Source_Host	127.0.0.1
+  --echo Source_User	root
+  --echo Source_Port	#
   --echo Connect_Retry	#
-  --echo Master_Log_File	#
-  --echo Read_Master_Log_Pos	#
+  --echo Source_Log_File	#
+  --echo Read_Source_Log_Pos	#
   --echo Relay_Log_File	#
   --echo Relay_Log_Pos	#
-  --echo Relay_Master_Log_File	#
-  --echo Slave_IO_Running	No
-  --echo Slave_SQL_Running	No
+  --echo Relay_Source_Log_File	#
+  --echo Replica_IO_Running	No
+  --echo Replica_SQL_Running	No
   --echo Replicate_Do_DB	#
   --echo Replicate_Ignore_DB	#
   --echo Replicate_Do_Table	#
@@ -45,47 +68,225 @@ if ($tmp)
   --echo Last_Errno	0
   --echo Last_Error	
   --echo Skip_Counter	0
-  --echo Exec_Master_Log_Pos	#
+  --echo Exec_Source_Log_Pos	#
   --echo Relay_Log_Space	#
   --echo Until_Condition	#
   --echo Until_Log_File	#
   --echo Until_Log_Pos	#
-  --echo Master_SSL_Allowed	No
-  --echo Master_SSL_CA_File	
-  --echo Master_SSL_CA_Path	
-  --echo Master_SSL_Cert	
-  --echo Master_SSL_Cipher	
-  --echo Master_SSL_Key	
-  --echo Seconds_Behind_Master	NULL
-  --echo Master_SSL_Verify_Server_Cert	No
+  --echo Source_SSL_Allowed	No
+  --echo Source_SSL_CA_File	
+  --echo Source_SSL_CA_Path	
+  --echo Source_SSL_Cert	
+  --echo Source_SSL_Cipher	
+  --echo Source_SSL_Key	
+  --echo Seconds_Behind_Source	NULL
+  --echo Source_SSL_Verify_Server_Cert	No
   --echo Last_IO_Errno	0
   --echo Last_IO_Error	
   --echo Last_SQL_Errno	0
   --echo Last_SQL_Error	
   --echo Replicate_Ignore_Server_Ids	
-  --echo Master_Server_Id	#
-  --echo Master_UUID	#
-  --echo Master_Info_File	#
+  --echo Source_Server_Id	#
+  --echo Source_UUID	#
+  --echo Source_Info_File	#
   --echo SQL_Delay	0
   --echo SQL_Remaining_Delay	NULL
-  --echo Slave_SQL_Running_State	
-  --echo Master_Retry_Count	#
-  --echo Master_Bind	
+  --echo Replica_SQL_Running_State	
+  --echo Source_Retry_Count	#
+  --echo Source_Bind	
   --echo Last_IO_Error_Timestamp	
   --echo Last_SQL_Error_Timestamp	
-  --echo Master_SSL_Crl	
-  --echo Master_SSL_Crlpath	
+  --echo Source_SSL_Crl	
+  --echo Source_SSL_Crlpath	
   --echo Retrieved_Gtid_Set	#
   --echo Executed_Gtid_Set	#
   --echo Auto_Position	0
+  --echo Replicate_Rewrite_DB	#
+  --echo Channel_Name	#
+  --echo Source_TLS_Version	
+  --echo Source_public_key_path	
+  --echo Get_Source_public_key	0
+  --echo Network_Namespace	
 }
+
 if (!$tmp) {
   # Note: after WL#5177, fields 13-18 shall not be filtered-out.
-  --replace_column 4 # 5 # 6 # 7 # 8 # 9 # 10 # 13 # 14 # 15 # 16 # 17 # 18 # 22 # 23 # 24 # 25 # 26 # 40 # 41 # 42 # 46 # 52 # 53 #
+  --replace_column 4 # 5 # 6 # 7 # 8 # 9 # 10 # 13 # 14 # 15 # 16 # 17 # 18 # 22 # 23 # 24 # 25 # 26 # 40 # 41 # 42 # 46 # 52 # 53 # 55 # 56 #
   query_vertical
-  SHOW SLAVE STATUS;
+  SHOW REPLICA STATUS;
 }
 
-call mtr.check_testcase();
+# Check that the backup directory used for ndb tests have been
+# removed by test(and also that it does not exist before test).
+if ($NDB_BACKUP_DIR)
+{
+  #Include backup_restore_cleanup.inc at the end of test case
+  #to remove the backup directory inside test case.
+  let $backup_dir = $NDB_BACKUP_DIR/BACKUP;
+  echo Checking that $backup_dir directory does not exist;
+  --error 1
+  file_exists $backup_dir;
+}
+if (`SELECT COUNT(*) = 1 FROM INFORMATION_SCHEMA.ENGINES
+       WHERE engine = 'ndbcluster' AND
+                    support IN ('YES', 'DEFAULT', 'ENABLED')`)
+{
+  echo Check that same data nodes are up and have same node group assignment.;
+  error 0, ER_GET_ERRMSG;
+  SELECT node_id, group_id FROM ndbinfo.ndb$membership ORDER BY node_id, group_id;
+
+  # Check that there are no left over error injections still active.
+  # To allow test with ndbcluster but without any data nodes allow error
+  # ER_GET_ERRMSG.
+  error 0, ER_GET_ERRMSG;
+  SELECT * FROM ndbinfo.ndb$threadblock_details;
+}
+
+# There might be more than one server used by a test and check-testcase.test
+# will be run for each server. The file lists for each server needs to be
+# uniquely identified. This can be achieved by appending the @@server_id with
+# the filename.
+--let $infile = `SELECT CONCAT('$MYSQLTEST_VARDIR_ABS/file_list_', @@server_id, '.flist')`
+
+# There may be restrictions on paths usable for import/export operations
+# on a server due to the --secure-file-priv setting.
+#
+# Example 1: sys_vars.secure_file_priv2.test
+#    - The server gets started with --secure_file_priv=$SECURE_LOAD_PATH
+#      --> LOAD DATA INFILE '$MYSQLTEST_VARDIR_ABS/...' gets rejected in this case
+#          if $SECURE_LOAD_PATH <> $MYSQLTEST_VARDIR_ABS
+# Hence, we do not run check-testcase in this case.
+#
+# Example 2: auth_sec.secure_file_priv_null.test
+#    - The server gets started with --secure_file_priv=null
+# Hence, we do not run check-testcase in this case.
+#
+# Example 3: sys_vars.secure_file_priv.test
+#    - The server gets started with --secure_file_priv=''
+# Default location for import/export operation is $MYSQLTEST_VARDIR_ABS
+# Note: $MYSQLTEST_VARDIR_ABS returns the absolute path of the vardir in-case
+# symbolic links are used (e.g --mem) option.
+
+# There might be a problem with "--innodb-force-recovery > 0"
+# When --innodb-force-recovery ranges between [1,3], it prevents all
+# INSERT, UPDATE or DELETE
+# When --innodb-force-recovery=4 (or greater), it places InnoDB in
+# READONLY mode
+# Example: innodb-force-recovery-4.test
+# Hence, check-testcase will not work in these cases.
+
+--let $secure_file_priv = `SELECT @@global.secure_file_priv`
+--let $proceed_with_check_of_files = `SELECT @@global.innodb_force_recovery = 0 AND '$secure_file_priv' = '$MYSQLTEST_VARDIR_ABS/'`
+if ($proceed_with_check_of_files) {
+  # Ensure that we have no impact on the content of the binary log.
+  #
+  # Some (CREATE TABLE, ...) statements within the current routine would
+  # be usually written into the binary log. This must be avoided.
+  # Otherwise tests processing the content of the binary log like
+  # "rpl.rpl_extra_row_data" will fail.
+  SET @sql_log_bin_save = @@sql_log_bin;
+  SET SESSION sql_log_bin = 0;
+  # Checking needs to create temporary tables without primary key
+  SET SESSION sql_require_primary_key = 0;
+  SET SESSION sql_generate_invisible_primary_key = 0;
+
+  USE test;
+
+  # Set $mysql_errno value to 0 (i.e no error) initially.
+  --let $mysql_errno = 0
+
+  # It is not possible to create a temporary table if Innodb engine is disabled.
+  --error 0, ER_DISABLED_STORAGE_ENGINE
+  CREATE TEMPORARY TABLE file_tbl (filename varchar(1024));
+
+  if ($mysql_errno == 0) {
+
+# A failed test may leave $infile behind, which makes the write_file below fail.
+# To prevent an avalanche of subsequent failures, remove the file first.
+--error 0,1
+--remove_file $infile
+
+--write_file $infile
+# These are the files, directory etc. found in some important directories.
+EOF
+#
+
+--append_file $infile
+#---------------- MYSQLTEST_VARDIR ----------------
+EOF
+--list_files_append_file $infile $MYSQLTEST_VARDIR *
+#
+
+# MYSQLTEST_VARDIR/log contains
+#   bootstrap.log
+#   current_test
+#   <testcase>.log
+#   timer
+# We do not list the content of this directory because
+# - the name of the testcase is currently not available
+# - it is rather unusual to create files there via a test script
+#
+
+--append_file $infile
+#-------------- MYSQLTEST_VARDIR/run --------------
+EOF
+--list_files_append_file $infile $MYSQLTEST_VARDIR/run *
+#
+
+--append_file $infile
+#-------------- MYSQLTEST_VARDIR/tmp --------------
+EOF
+--list_files_append_file $infile $MYSQLTEST_VARDIR/tmp *
+#
+if ($MTR_PARALLEL > 1) {
+  --append_file $infile
+#---------------- MYSQL_TMP_DIR --------------------
+EOF
+--list_files_append_file $infile $MYSQL_TMP_DIR *
+}
+--append_file $infile
+#------------- MYSQLTEST_VARDIR/std_data ------------
+EOF
+--list_files_append_file $infile $MYSQLTEST_VARDIR/std_data *
+#
+
+    # In case of binlog_killed_simulate the LOAD DATA fails with "query got an
+    # interrupt". Important characteristics of binlog_killed_simulate is the
+    # server system variable "debug" with a content <> "". On the other hand
+    # it is quite thinkable that LOAD DATA fails because of a non foreseen
+    # weakness of the current routine.
+    # Conclusion:
+    #   - use disable abort on error
+    #   - automatic abort of the test if LOAD DATA fails and "debug" = 0
+    #   - ignoring errors if LOAD DATA fails and "debug" <> 0
+    --let $debug_condition = query_get_value(SHOW VARIABLES LIKE 'debug', Value, 1)
+    --let $debug_condition_check = `SELECT '$debug_condition' <> ''`
+
+    if ($debug_condition_check == 1) {
+      --disable_abort_on_error
+    }
+
+    --eval LOAD DATA INFILE '$infile' INTO TABLE file_tbl
+
+    if ($debug_condition_check == 1) {
+      --enable_abort_on_error
+    }
+
+    SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ filename FROM file_tbl
+      WHERE filename NOT LIKE 'check-mysqld_%'
+      AND filename NOT LIKE 'mysql%.sock%'
+      AND filename NOT LIKE 'file_list_%.flist'
+      AND filename NOT LIKE 'mysqld%.expect'
+      AND filename NOT LIKE 'bootstrap.log'
+      AND filename NOT LIKE 'test_%.log';
+
+    DROP TABLE test.file_tbl;
+    --remove_file $infile
+  }
+
+  SET @@sql_log_bin = @sql_log_bin_save;
+}
+
 --enable_query_log
 
+CALL mtr.check_testcase();

@@ -1,0 +1,78 @@
+!include include/default_mysqld.cnf
+!include include/default_ndbd.cnf
+
+[cluster_config.1]
+ndbd=,
+ndb_mgmd=
+mysqld=,
+ndbapi=,,,,,,
+DefaultOperationRedoProblemAction=queue
+
+# NdbAPI nodes intended for use by MySQL server(s).
+# Node id must explicitly be requested either by --ndb-nodeid or
+# --ndb-cluster-connection-pool-nodeids.
+
+[cluster_config.mysqld.1.1]
+NodeId=11
+Dedicated=1
+
+[cluster_config.mysqld.2.1]
+NodeId=12
+Dedicated=1
+
+[cluster_config.ndbapi.1.1]
+NodeId=13
+Dedicated=1
+
+[cluster_config.ndbapi.2.1]
+NodeId=14
+Dedicated=1
+
+[cluster_config.ndbapi.3.1]
+NodeId=15
+Dedicated=1
+
+[cluster_config.ndbapi.4.1]
+NodeId=16
+Dedicated=1
+
+# NdbAPI nodes free for use by any NdbAPI connection.
+
+[cluster_config.ndbapi.5.1]
+NodeId=17
+
+[cluster_config.ndbapi.6.1]
+NodeId=18
+
+[cluster_config.ndbapi.7.1]
+NodeId=19
+
+[mysqld]
+# Make all mysqlds use cluster
+ndbcluster
+ndb-wait-connected=30
+ndb-wait-setup=120
+ndb-cluster-connection-pool=3
+ndb-extra-logging=99
+ndb-log-bin=1
+binlog-format=row
+# Enable load data local functionality
+local-infile=true
+
+[mysqld.1.1]
+# Specify which nodeids the connection pool on first mysqld should use
+ndb-cluster-connection-pool-nodeids=11,13,14
+skip-log-replica-updates
+
+[mysqld.2.1]
+# Specify which nodeids the connection pool on second mysqld should use
+ndb-cluster-connection-pool-nodeids=12,15,16
+skip-log-replica-updates
+
+[ENV]
+NDB_CONNECTSTRING=             @mysql_cluster.1.ndb_connectstring
+MASTER_MYSOCK=                 @mysqld.1.1.socket
+MASTER_MYPORT=                 @mysqld.1.1.port
+MASTER_MYPORT1=                @mysqld.2.1.port
+
+NDB_BACKUP_DIR=                @cluster_config.ndbd.1.1.BackupDataDir

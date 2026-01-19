@@ -1,0 +1,540 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Examples</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../stl_interfaces.html" title="Chapter 39. Boost.STLInterfaces">
+<link rel="prev" href="tutorial___reverse_iterator_.html" title="Tutorial: reverse_iterator">
+<link rel="next" href="../stl_interfaces/compiler_support.html" title="Compiler Support">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial___reverse_iterator_.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="../stl_interfaces/compiler_support.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_stlinterfaces.examples"></a><a class="link" href="examples.html" title="Examples">Examples</a>
+</h2></div></div></div>
+<div class="toc"><dl class="toc">
+<dt><span class="section"><a href="examples.html#boost_stlinterfaces.examples.random_access_iterator">Random
+      Access Iterator</a></span></dt>
+<dt><span class="section"><a href="examples.html#boost_stlinterfaces.examples.mutable_and_constant_iterator_interoperability">Mutable
+      and Constant Iterator Interoperability</a></span></dt>
+<dt><span class="section"><a href="examples.html#boost_stlinterfaces.examples.zip_iterator___proxy_iterator">Zip
+      Iterator / Proxy Iterator</a></span></dt>
+<dt><span class="section"><a href="examples.html#boost_stlinterfaces.examples.reimplementing__back_insert_iterator_">Reimplementing
+      <code class="computeroutput"><span class="identifier">back_insert_iterator</span></code></a></span></dt>
+<dt><span class="section"><a href="examples.html#boost_stlinterfaces.examples.reimplementing__reverse_iterator_">Reimplementing
+      <code class="computeroutput"><span class="identifier">reverse_iterator</span></code></a></span></dt>
+</dl></div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_stlinterfaces.examples.random_access_iterator"></a><a class="link" href="examples.html#boost_stlinterfaces.examples.random_access_iterator" title="Random Access Iterator">Random
+      Access Iterator</a>
+</h3></div></div></div>
+<p>
+</p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">stl_interfaces</span><span class="special">/</span><span class="identifier">iterator_interface</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">algorithm</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">array</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">cassert</span><span class="special">&gt;</span>
+
+
+<span class="comment">// This is a minimal random access iterator.  It uses default template</span>
+<span class="comment">// parameters for most stl_interfaces template parameters.</span>
+<span class="keyword">struct</span> <span class="identifier">simple_random_access_iterator</span>
+    <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">iterator_interface</span><span class="special">&lt;</span>
+          <span class="identifier">simple_random_access_iterator</span><span class="special">,</span>
+          <span class="identifier">std</span><span class="special">::</span><span class="identifier">random_access_iterator_tag</span><span class="special">,</span>
+          <span class="keyword">int</span><span class="special">&gt;</span>
+<span class="special">{</span>
+    <span class="comment">// This default constructor does not initialize it_, since that's how int *</span>
+    <span class="comment">// works as well.  This allows optimum performance in code paths where</span>
+    <span class="comment">// initializing a single pointer may be measurable.  It is also a</span>
+    <span class="comment">// reasonable choice to initialize with nullptr.</span>
+    <span class="identifier">simple_random_access_iterator</span><span class="special">()</span> <span class="keyword">noexcept</span> <span class="special">{}</span>
+    <span class="identifier">simple_random_access_iterator</span><span class="special">(</span><span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it</span><span class="special">)</span> <span class="keyword">noexcept</span> <span class="special">:</span> <span class="identifier">it_</span><span class="special">(</span><span class="identifier">it</span><span class="special">)</span> <span class="special">{}</span>
+
+    <span class="keyword">int</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">*()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="special">*</span><span class="identifier">it_</span><span class="special">;</span> <span class="special">}</span>
+    <span class="identifier">simple_random_access_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">+=(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">ptrdiff_t</span> <span class="identifier">i</span><span class="special">)</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="identifier">it_</span> <span class="special">+=</span> <span class="identifier">i</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="keyword">auto</span> <span class="keyword">operator</span><span class="special">-(</span><span class="identifier">simple_random_access_iterator</span> <span class="identifier">other</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="keyword">return</span> <span class="identifier">it_</span> <span class="special">-</span> <span class="identifier">other</span><span class="special">.</span><span class="identifier">it_</span><span class="special">;</span>
+    <span class="special">}</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it_</span><span class="special">;</span>
+<span class="special">};</span>
+
+
+<span class="keyword">int</span> <span class="identifier">main</span><span class="special">()</span>
+<span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">10</span><span class="special">&gt;</span> <span class="identifier">ints</span> <span class="special">=</span> <span class="special">{{</span><span class="number">0</span><span class="special">,</span> <span class="number">2</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">7</span><span class="special">,</span> <span class="number">6</span><span class="special">,</span> <span class="number">8</span><span class="special">,</span> <span class="number">9</span><span class="special">}};</span>
+
+    <span class="identifier">simple_random_access_iterator</span> <span class="identifier">first</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">());</span>
+    <span class="identifier">simple_random_access_iterator</span> <span class="identifier">last</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">sort</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">);</span>
+    <span class="identifier">assert</span><span class="special">(</span><span class="identifier">ints</span> <span class="special">==</span> <span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">10</span><span class="special">&gt;{{</span><span class="number">0</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">2</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">6</span><span class="special">,</span> <span class="number">7</span><span class="special">,</span> <span class="number">8</span><span class="special">,</span> <span class="number">9</span><span class="special">}}));</span>
+<span class="special">}</span>
+</pre>
+<p>
+      </p>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_stlinterfaces.examples.mutable_and_constant_iterator_interoperability"></a><a class="link" href="examples.html#boost_stlinterfaces.examples.mutable_and_constant_iterator_interoperability" title="Mutable and Constant Iterator Interoperability">Mutable
+      and Constant Iterator Interoperability</a>
+</h3></div></div></div>
+<p>
+</p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">stl_interfaces</span><span class="special">/</span><span class="identifier">iterator_interface</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">algorithm</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">array</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">numeric</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">cassert</span><span class="special">&gt;</span>
+
+
+<span class="comment">// This is a random access iterator templated on a value type.  The ValueType</span>
+<span class="comment">// template parameter allows us easily to define const and non-const iterators</span>
+<span class="comment">// from the same template.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">ValueType</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">random_access_iterator</span> <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">iterator_interface</span><span class="special">&lt;</span>
+                                    <span class="identifier">random_access_iterator</span><span class="special">&lt;</span><span class="identifier">ValueType</span><span class="special">&gt;,</span>
+                                    <span class="identifier">std</span><span class="special">::</span><span class="identifier">random_access_iterator_tag</span><span class="special">,</span>
+                                    <span class="identifier">ValueType</span><span class="special">&gt;</span>
+<span class="special">{</span>
+    <span class="keyword">static_assert</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">is_object</span><span class="special">&lt;</span><span class="identifier">ValueType</span><span class="special">&gt;::</span><span class="identifier">value</span><span class="special">,</span> <span class="string">""</span><span class="special">);</span>
+
+    <span class="comment">// Default constructor.</span>
+    <span class="keyword">constexpr</span> <span class="identifier">random_access_iterator</span><span class="special">()</span> <span class="keyword">noexcept</span> <span class="special">{}</span>
+
+    <span class="comment">// Construction from an underlying pointer.</span>
+    <span class="keyword">constexpr</span> <span class="identifier">random_access_iterator</span><span class="special">(</span><span class="identifier">ValueType</span> <span class="special">*</span> <span class="identifier">it</span><span class="special">)</span> <span class="keyword">noexcept</span> <span class="special">:</span> <span class="identifier">it_</span><span class="special">(</span><span class="identifier">it</span><span class="special">)</span> <span class="special">{}</span>
+
+    <span class="comment">// Implicit conversion from an existing random_access_iterator with a</span>
+    <span class="comment">// possibly different value type.  The enable_if logic here just enforces</span>
+    <span class="comment">// that this constructor only participates in overload resolution when the</span>
+    <span class="comment">// expression it_ = other.it_ is well-formed.</span>
+    <span class="keyword">template</span><span class="special">&lt;</span>
+        <span class="keyword">typename</span> <span class="identifier">ValueType2</span><span class="special">,</span>
+        <span class="keyword">typename</span> <span class="identifier">E</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">enable_if_t</span><span class="special">&lt;</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">is_convertible</span><span class="special">&lt;</span><span class="identifier">ValueType2</span> <span class="special">*,</span> <span class="identifier">ValueType</span> <span class="special">*&gt;::</span><span class="identifier">value</span><span class="special">&gt;&gt;</span>
+    <span class="keyword">constexpr</span> <span class="identifier">random_access_iterator</span><span class="special">(</span>
+        <span class="identifier">random_access_iterator</span><span class="special">&lt;</span><span class="identifier">ValueType2</span><span class="special">&gt;</span> <span class="identifier">other</span><span class="special">)</span> <span class="keyword">noexcept</span> <span class="special">:</span>
+        <span class="identifier">it_</span><span class="special">(</span><span class="identifier">other</span><span class="special">.</span><span class="identifier">it_</span><span class="special">)</span>
+    <span class="special">{}</span>
+
+    <span class="keyword">constexpr</span> <span class="identifier">ValueType</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">*()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="special">*</span><span class="identifier">it_</span><span class="special">;</span> <span class="special">}</span>
+    <span class="keyword">constexpr</span> <span class="identifier">random_access_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">+=(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">ptrdiff_t</span> <span class="identifier">i</span><span class="special">)</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="identifier">it_</span> <span class="special">+=</span> <span class="identifier">i</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="keyword">constexpr</span> <span class="keyword">auto</span> <span class="keyword">operator</span><span class="special">-(</span><span class="identifier">random_access_iterator</span> <span class="identifier">other</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="keyword">return</span> <span class="identifier">it_</span> <span class="special">-</span> <span class="identifier">other</span><span class="special">.</span><span class="identifier">it_</span><span class="special">;</span>
+    <span class="special">}</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="identifier">ValueType</span> <span class="special">*</span> <span class="identifier">it_</span><span class="special">;</span>
+
+    <span class="comment">// This friendship is necessary to enable the implicit conversion</span>
+    <span class="comment">// constructor above to work.</span>
+    <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">ValueType2</span><span class="special">&gt;</span>
+    <span class="keyword">friend</span> <span class="keyword">struct</span> <span class="identifier">random_access_iterator</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="keyword">using</span> <span class="identifier">iterator</span> <span class="special">=</span> <span class="identifier">random_access_iterator</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;;</span>
+<span class="keyword">using</span> <span class="identifier">const_iterator</span> <span class="special">=</span> <span class="identifier">random_access_iterator</span><span class="special">&lt;</span><span class="keyword">int</span> <span class="keyword">const</span><span class="special">&gt;;</span>
+
+<span class="keyword">int</span> <span class="identifier">main</span><span class="special">()</span>
+<span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">10</span><span class="special">&gt;</span> <span class="identifier">ints</span> <span class="special">=</span> <span class="special">{{</span><span class="number">0</span><span class="special">,</span> <span class="number">2</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">7</span><span class="special">,</span> <span class="number">6</span><span class="special">,</span> <span class="number">8</span><span class="special">,</span> <span class="number">9</span><span class="special">}};</span>
+
+    <span class="comment">// Create and use two mutable iterators.</span>
+    <span class="identifier">iterator</span> <span class="identifier">first</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">());</span>
+    <span class="identifier">iterator</span> <span class="identifier">last</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">sort</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">);</span>
+    <span class="identifier">assert</span><span class="special">(</span><span class="identifier">ints</span> <span class="special">==</span> <span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">10</span><span class="special">&gt;{{</span><span class="number">0</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">2</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">6</span><span class="special">,</span> <span class="number">7</span><span class="special">,</span> <span class="number">8</span><span class="special">,</span> <span class="number">9</span><span class="special">}}));</span>
+
+    <span class="comment">// Create and use two constant iterators, one from an existing mutable</span>
+    <span class="comment">// iterator.</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">10</span><span class="special">&gt;</span> <span class="identifier">int_sums</span><span class="special">;</span>
+    <span class="identifier">const_iterator</span> <span class="identifier">cfirst</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">());</span>
+    <span class="identifier">const_iterator</span> <span class="identifier">clast</span> <span class="special">=</span> <span class="identifier">last</span><span class="special">;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">partial_sum</span><span class="special">(</span><span class="identifier">cfirst</span><span class="special">,</span> <span class="identifier">clast</span><span class="special">,</span> <span class="identifier">int_sums</span><span class="special">.</span><span class="identifier">begin</span><span class="special">());</span>
+    <span class="identifier">assert</span><span class="special">(</span><span class="identifier">int_sums</span> <span class="special">==</span> <span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">10</span><span class="special">&gt;{{</span><span class="number">0</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">6</span><span class="special">,</span> <span class="number">10</span><span class="special">,</span> <span class="number">15</span><span class="special">,</span> <span class="number">21</span><span class="special">,</span> <span class="number">28</span><span class="special">,</span> <span class="number">36</span><span class="special">,</span> <span class="number">45</span><span class="special">}}));</span>
+<span class="special">}</span>
+</pre>
+<p>
+      </p>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_stlinterfaces.examples.zip_iterator___proxy_iterator"></a><a class="link" href="examples.html#boost_stlinterfaces.examples.zip_iterator___proxy_iterator" title="Zip Iterator / Proxy Iterator">Zip
+      Iterator / Proxy Iterator</a>
+</h3></div></div></div>
+<p>
+</p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">stl_interfaces</span><span class="special">/</span><span class="identifier">iterator_interface</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">algorithm</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">array</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">tuple</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">cassert</span><span class="special">&gt;</span>
+
+
+<span class="comment">// This is a zip iterator, meaning that it iterates over a notional sequence</span>
+<span class="comment">// of pairs that is formed from two actual sequences of scalars.  To make this</span>
+<span class="comment">// iterator writable, it needs to have a reference type that is not actually a</span>
+<span class="comment">// reference -- the reference type is a pair of references, std::tuple&lt;int &amp;,</span>
+<span class="comment">// int &amp;&gt;.</span>
+<span class="keyword">struct</span> <span class="identifier">zip_iterator</span> <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">proxy_iterator_interface</span><span class="special">&lt;</span>
+                      <span class="identifier">zip_iterator</span><span class="special">,</span>
+                      <span class="identifier">std</span><span class="special">::</span><span class="identifier">random_access_iterator_tag</span><span class="special">,</span>
+                      <span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">&gt;,</span>
+                      <span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&lt;</span><span class="keyword">int</span> <span class="special">&amp;,</span> <span class="keyword">int</span> <span class="special">&amp;&gt;&gt;</span>
+<span class="special">{</span>
+    <span class="keyword">constexpr</span> <span class="identifier">zip_iterator</span><span class="special">()</span> <span class="keyword">noexcept</span> <span class="special">:</span> <span class="identifier">it1_</span><span class="special">(),</span> <span class="identifier">it2_</span><span class="special">()</span> <span class="special">{}</span>
+    <span class="keyword">constexpr</span> <span class="identifier">zip_iterator</span><span class="special">(</span><span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it1</span><span class="special">,</span> <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it2</span><span class="special">)</span> <span class="keyword">noexcept</span> <span class="special">:</span> <span class="identifier">it1_</span><span class="special">(</span><span class="identifier">it1</span><span class="special">),</span> <span class="identifier">it2_</span><span class="special">(</span><span class="identifier">it2</span><span class="special">)</span>
+    <span class="special">{}</span>
+
+    <span class="keyword">constexpr</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&lt;</span><span class="keyword">int</span> <span class="special">&amp;,</span> <span class="keyword">int</span> <span class="special">&amp;&gt;</span> <span class="keyword">operator</span><span class="special">*()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="keyword">return</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&lt;</span><span class="keyword">int</span> <span class="special">&amp;,</span> <span class="keyword">int</span> <span class="special">&amp;&gt;{*</span><span class="identifier">it1_</span><span class="special">,</span> <span class="special">*</span><span class="identifier">it2_</span><span class="special">};</span>
+    <span class="special">}</span>
+    <span class="keyword">constexpr</span> <span class="identifier">zip_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span> <span class="special">+=</span> <span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">ptrdiff_t</span> <span class="identifier">i</span><span class="special">)</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="identifier">it1_</span> <span class="special">+=</span> <span class="identifier">i</span><span class="special">;</span>
+        <span class="identifier">it2_</span> <span class="special">+=</span> <span class="identifier">i</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="keyword">constexpr</span> <span class="keyword">auto</span> <span class="keyword">operator</span><span class="special">-(</span><span class="identifier">zip_iterator</span> <span class="identifier">other</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="keyword">return</span> <span class="identifier">it1_</span> <span class="special">-</span> <span class="identifier">other</span><span class="special">.</span><span class="identifier">it1_</span><span class="special">;</span>
+    <span class="special">}</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it1_</span><span class="special">;</span>
+    <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it2_</span><span class="special">;</span>
+<span class="special">};</span>
+
+
+<span class="keyword">namespace</span> <span class="identifier">std</span> <span class="special">{</span>
+    <span class="comment">// Required for std::sort to work with zip_iterator.  Without this</span>
+    <span class="comment">// overload, std::sort eventually tries to call std::swap(*it1, *it2),</span>
+    <span class="comment">// *it1 and *it2 are rvalues, and std::swap() takes mutable lvalue</span>
+    <span class="comment">// references.  That makes std::swap(*it1, *it2) ill-formed.</span>
+    <span class="comment">//</span>
+    <span class="comment">// Note that this overload does not conflict with any other swap()</span>
+    <span class="comment">// overloads, since this one takes rvalue reference parameters.</span>
+    <span class="comment">//</span>
+    <span class="comment">// Also note that this overload has to be in namespace std only because</span>
+    <span class="comment">// ADL cannot find it anywhere else.  If</span>
+    <span class="comment">// zip_iterator::reference/std::tuple's template parameters were not</span>
+    <span class="comment">// builtins, this overload could be in whatever namespace those template</span>
+    <span class="comment">// parameters were declared in.</span>
+    <span class="keyword">void</span> <span class="identifier">swap</span><span class="special">(</span><span class="identifier">zip_iterator</span><span class="special">::</span><span class="identifier">reference</span> <span class="special">&amp;&amp;</span> <span class="identifier">lhs</span><span class="special">,</span> <span class="identifier">zip_iterator</span><span class="special">::</span><span class="identifier">reference</span> <span class="special">&amp;&amp;</span> <span class="identifier">rhs</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">using</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">swap</span><span class="special">;</span>
+        <span class="identifier">swap</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">get</span><span class="special">&lt;</span><span class="number">0</span><span class="special">&gt;(</span><span class="identifier">lhs</span><span class="special">),</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">get</span><span class="special">&lt;</span><span class="number">0</span><span class="special">&gt;(</span><span class="identifier">rhs</span><span class="special">));</span>
+        <span class="identifier">swap</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">get</span><span class="special">&lt;</span><span class="number">1</span><span class="special">&gt;(</span><span class="identifier">lhs</span><span class="special">),</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">get</span><span class="special">&lt;</span><span class="number">1</span><span class="special">&gt;(</span><span class="identifier">rhs</span><span class="special">));</span>
+    <span class="special">}</span>
+<span class="special">}</span>
+
+
+<span class="keyword">int</span> <span class="identifier">main</span><span class="special">()</span>
+<span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">10</span><span class="special">&gt;</span> <span class="identifier">ints</span> <span class="special">=</span> <span class="special">{{</span><span class="number">2</span><span class="special">,</span> <span class="number">0</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">6</span><span class="special">,</span> <span class="number">8</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">9</span><span class="special">,</span> <span class="number">7</span><span class="special">}};</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">10</span><span class="special">&gt;</span> <span class="identifier">ones</span> <span class="special">=</span> <span class="special">{{</span><span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">}};</span>
+
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">&gt;,</span> <span class="number">10</span><span class="special">&gt;</span> <span class="keyword">const</span> <span class="identifier">result</span> <span class="special">=</span> <span class="special">{{</span>
+            <span class="special">{</span><span class="number">2</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">0</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">5</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">3</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">6</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">8</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">4</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">9</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">7</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+        <span class="special">}};</span>
+
+        <span class="identifier">zip_iterator</span> <span class="identifier">first</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">(),</span> <span class="identifier">ones</span><span class="special">.</span><span class="identifier">data</span><span class="special">());</span>
+        <span class="identifier">zip_iterator</span> <span class="identifier">last</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">size</span><span class="special">(),</span> <span class="identifier">ones</span><span class="special">.</span><span class="identifier">data</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">ones</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+        <span class="identifier">assert</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">equal</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">,</span> <span class="identifier">result</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">result</span><span class="special">.</span><span class="identifier">end</span><span class="special">()));</span>
+    <span class="special">}</span>
+
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">&gt;,</span> <span class="number">10</span><span class="special">&gt;</span> <span class="keyword">const</span> <span class="identifier">result</span> <span class="special">=</span> <span class="special">{{</span>
+            <span class="special">{</span><span class="number">0</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">1</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">2</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">3</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">4</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">5</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">6</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">7</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">8</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+            <span class="special">{</span><span class="number">9</span><span class="special">,</span> <span class="number">1</span><span class="special">},</span>
+        <span class="special">}};</span>
+        <span class="identifier">zip_iterator</span> <span class="identifier">first</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">(),</span> <span class="identifier">ones</span><span class="special">.</span><span class="identifier">data</span><span class="special">());</span>
+        <span class="identifier">zip_iterator</span> <span class="identifier">last</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">size</span><span class="special">(),</span> <span class="identifier">ones</span><span class="special">.</span><span class="identifier">data</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">ones</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+        <span class="identifier">assert</span><span class="special">(!</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">equal</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">,</span> <span class="identifier">result</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">result</span><span class="special">.</span><span class="identifier">end</span><span class="special">()));</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">sort</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">);</span>
+        <span class="identifier">assert</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">equal</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">,</span> <span class="identifier">result</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">result</span><span class="special">.</span><span class="identifier">end</span><span class="special">()));</span>
+    <span class="special">}</span>
+<span class="special">}</span>
+</pre>
+<p>
+      </p>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_stlinterfaces.examples.reimplementing__back_insert_iterator_"></a><a class="link" href="examples.html#boost_stlinterfaces.examples.reimplementing__back_insert_iterator_" title="Reimplementing back_insert_iterator">Reimplementing
+      <code class="computeroutput"><span class="identifier">back_insert_iterator</span></code></a>
+</h3></div></div></div>
+<p>
+</p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">stl_interfaces</span><span class="special">/</span><span class="identifier">iterator_interface</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">algorithm</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">vector</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">cassert</span><span class="special">&gt;</span>
+
+
+<span class="comment">// This is an output iterator that holds a reference to a container, and calls</span>
+<span class="comment">// push_back() on that container when it is written to, just like</span>
+<span class="comment">// std::back_insert_iterator.  This is not a lot less code to write than the</span>
+<span class="comment">// implementation of std::back_insert_iterator, but it demonstrates that</span>
+<span class="comment">// iterator_interface is flexible enough to handle this odd kind of iterator.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Container</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">back_insert_iterator</span> <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">iterator_interface</span><span class="special">&lt;</span>
+                                  <span class="identifier">back_insert_iterator</span><span class="special">&lt;</span><span class="identifier">Container</span><span class="special">&gt;,</span>
+                                  <span class="identifier">std</span><span class="special">::</span><span class="identifier">output_iterator_tag</span><span class="special">,</span>
+                                  <span class="keyword">typename</span> <span class="identifier">Container</span><span class="special">::</span><span class="identifier">value_type</span><span class="special">,</span>
+                                  <span class="identifier">back_insert_iterator</span><span class="special">&lt;</span><span class="identifier">Container</span><span class="special">&gt;</span> <span class="special">&amp;&gt;</span>
+<span class="special">{</span>
+    <span class="comment">// For concept requirements.</span>
+    <span class="identifier">back_insert_iterator</span><span class="special">()</span> <span class="special">:</span> <span class="identifier">c_</span><span class="special">(</span><span class="keyword">nullptr</span><span class="special">)</span> <span class="special">{}</span>
+
+    <span class="comment">// Construct from a container.</span>
+    <span class="keyword">explicit</span> <span class="identifier">back_insert_iterator</span><span class="special">(</span><span class="identifier">Container</span> <span class="special">&amp;</span> <span class="identifier">c</span><span class="special">)</span> <span class="special">:</span> <span class="identifier">c_</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">addressof</span><span class="special">(</span><span class="identifier">c</span><span class="special">))</span> <span class="special">{}</span>
+
+    <span class="comment">// When writing to *this, copy v into the container via push_back().</span>
+    <span class="identifier">back_insert_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">=(</span><span class="keyword">typename</span> <span class="identifier">Container</span><span class="special">::</span><span class="identifier">value_type</span> <span class="keyword">const</span> <span class="special">&amp;</span> <span class="identifier">v</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="identifier">c_</span><span class="special">-&gt;</span><span class="identifier">push_back</span><span class="special">(</span><span class="identifier">v</span><span class="special">);</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="comment">// When writing to *this, move v into the container via push_back().</span>
+    <span class="identifier">back_insert_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">=(</span><span class="keyword">typename</span> <span class="identifier">Container</span><span class="special">::</span><span class="identifier">value_type</span> <span class="special">&amp;&amp;</span> <span class="identifier">v</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="identifier">c_</span><span class="special">-&gt;</span><span class="identifier">push_back</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">v</span><span class="special">));</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+
+    <span class="comment">// Dereferencing *this just returns a reference to *this, so that the</span>
+    <span class="comment">// expression *it = value uses the operator=() overloads above.</span>
+    <span class="identifier">back_insert_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">*()</span> <span class="special">{</span> <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span> <span class="special">}</span>
+    <span class="comment">// There is no underlying sequence over which we are iterating, so there's</span>
+    <span class="comment">// nowhere to go in next().  Do nothing.</span>
+    <span class="identifier">back_insert_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">++()</span> <span class="special">{</span> <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span> <span class="special">}</span>
+
+    <span class="keyword">using</span> <span class="identifier">base_type</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">iterator_interface</span><span class="special">&lt;</span>
+        <span class="identifier">back_insert_iterator</span><span class="special">&lt;</span><span class="identifier">Container</span><span class="special">&gt;,</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">output_iterator_tag</span><span class="special">,</span>
+        <span class="keyword">typename</span> <span class="identifier">Container</span><span class="special">::</span><span class="identifier">value_type</span><span class="special">,</span>
+        <span class="identifier">back_insert_iterator</span><span class="special">&lt;</span><span class="identifier">Container</span><span class="special">&gt;</span> <span class="special">&amp;&gt;;</span>
+    <span class="keyword">using</span> <span class="identifier">base_type</span><span class="special">::</span><span class="keyword">operator</span><span class="special">++;</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="identifier">Container</span> <span class="special">*</span> <span class="identifier">c_</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="comment">// A convenience function that creates a back_insert_iterator&lt;Container&gt;.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Container</span><span class="special">&gt;</span>
+<span class="identifier">back_insert_iterator</span><span class="special">&lt;</span><span class="identifier">Container</span><span class="special">&gt;</span> <span class="identifier">back_inserter</span><span class="special">(</span><span class="identifier">Container</span> <span class="special">&amp;</span> <span class="identifier">c</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">back_insert_iterator</span><span class="special">&lt;</span><span class="identifier">Container</span><span class="special">&gt;(</span><span class="identifier">c</span><span class="special">);</span>
+<span class="special">}</span>
+
+
+<span class="keyword">int</span> <span class="identifier">main</span><span class="special">()</span>
+<span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="identifier">ints</span> <span class="special">=</span> <span class="special">{{</span><span class="number">0</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">2</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">6</span><span class="special">,</span> <span class="number">7</span><span class="special">,</span> <span class="number">8</span><span class="special">,</span> <span class="number">9</span><span class="special">}};</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="identifier">ints_copy</span><span class="special">;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">end</span><span class="special">(),</span> <span class="special">::</span><span class="identifier">back_inserter</span><span class="special">(</span><span class="identifier">ints_copy</span><span class="special">));</span>
+    <span class="identifier">assert</span><span class="special">(</span><span class="identifier">ints_copy</span> <span class="special">==</span> <span class="identifier">ints</span><span class="special">);</span>
+<span class="special">}</span>
+</pre>
+<p>
+      </p>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_stlinterfaces.examples.reimplementing__reverse_iterator_"></a><a class="link" href="examples.html#boost_stlinterfaces.examples.reimplementing__reverse_iterator_" title="Reimplementing reverse_iterator">Reimplementing
+      <code class="computeroutput"><span class="identifier">reverse_iterator</span></code></a>
+</h3></div></div></div>
+<p>
+</p>
+<pre class="programlisting"><span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">stl_interfaces</span><span class="special">/</span><span class="identifier">iterator_interface</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">algorithm</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">list</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">vector</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">cassert</span><span class="special">&gt;</span>
+
+
+<span class="comment">// In all the previous examples, we only had to implement a subset of the six</span>
+<span class="comment">// possible user-defined basis operations that was needed for one particular</span>
+<span class="comment">// iterator concept.  For reverse_iterator, we want to support bidirectional,</span>
+<span class="comment">// random access, and contiguous iterators.  We therefore need to provide all</span>
+<span class="comment">// the basis operations that might be needed.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">BidiIter</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">reverse_iterator</span>
+    <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">iterator_interface</span><span class="special">&lt;</span>
+          <span class="identifier">reverse_iterator</span><span class="special">&lt;</span><span class="identifier">BidiIter</span><span class="special">&gt;,</span>
+<span class="preprocessor">#if</span> <span class="number">201703L</span> <span class="special">&lt;</span> <span class="identifier">__cplusplus</span> <span class="special">&amp;&amp;</span> <span class="identifier">defined</span><span class="special">(</span><span class="identifier">__cpp_lib_ranges</span><span class="special">)</span>
+          <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">v2</span><span class="special">::</span><span class="identifier">v2_dtl</span><span class="special">::</span><span class="identifier">iter_concept_t</span><span class="special">&lt;</span><span class="identifier">BidiIter</span><span class="special">&gt;,</span>
+<span class="preprocessor">#else</span>
+          <span class="keyword">typename</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">iterator_traits</span><span class="special">&lt;</span><span class="identifier">BidiIter</span><span class="special">&gt;::</span><span class="identifier">iterator_category</span><span class="special">,</span>
+<span class="preprocessor">#endif</span>
+          <span class="keyword">typename</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">iterator_traits</span><span class="special">&lt;</span><span class="identifier">BidiIter</span><span class="special">&gt;::</span><span class="identifier">value_type</span><span class="special">&gt;</span>
+<span class="special">{</span>
+    <span class="identifier">reverse_iterator</span><span class="special">()</span> <span class="special">:</span> <span class="identifier">it_</span><span class="special">()</span> <span class="special">{}</span>
+    <span class="identifier">reverse_iterator</span><span class="special">(</span><span class="identifier">BidiIter</span> <span class="identifier">it</span><span class="special">)</span> <span class="special">:</span> <span class="identifier">it_</span><span class="special">(</span><span class="identifier">it</span><span class="special">)</span> <span class="special">{}</span>
+
+    <span class="keyword">using</span> <span class="identifier">ref_t</span> <span class="special">=</span> <span class="keyword">typename</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">iterator_traits</span><span class="special">&lt;</span><span class="identifier">BidiIter</span><span class="special">&gt;::</span><span class="identifier">reference</span><span class="special">;</span>
+    <span class="keyword">using</span> <span class="identifier">diff_t</span> <span class="special">=</span> <span class="keyword">typename</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">iterator_traits</span><span class="special">&lt;</span><span class="identifier">BidiIter</span><span class="special">&gt;::</span><span class="identifier">difference_type</span><span class="special">;</span>
+
+    <span class="identifier">ref_t</span> <span class="keyword">operator</span><span class="special">*()</span> <span class="keyword">const</span> <span class="special">{</span> <span class="keyword">return</span> <span class="special">*</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">prev</span><span class="special">(</span><span class="identifier">it_</span><span class="special">);</span> <span class="special">}</span>
+
+    <span class="comment">// These three are used only when BidiIter::iterator_category is</span>
+    <span class="comment">// std::bidirectional_iterator_tag.</span>
+    <span class="keyword">bool</span> <span class="keyword">operator</span><span class="special">==(</span><span class="identifier">reverse_iterator</span> <span class="identifier">other</span><span class="special">)</span> <span class="keyword">const</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">it_</span> <span class="special">==</span> <span class="identifier">other</span><span class="special">.</span><span class="identifier">it_</span><span class="special">;</span> <span class="special">}</span>
+
+    <span class="comment">// Even though iterator_interface-derived bidirectional iterators are</span>
+    <span class="comment">// usually given operator++() and operator--() members, it turns out that</span>
+    <span class="comment">// operator+=() below amounts to the same thing.  That's good, since</span>
+    <span class="comment">// having operator++() and operator+=() in this class would have lead to</span>
+    <span class="comment">// ambiguities in iterator_interface.</span>
+
+    <span class="comment">// These two are only used when BidiIter::iterator_category is</span>
+    <span class="comment">// std::random_access_iterator_tag or std::contiguous_iterator_tag.  Even</span>
+    <span class="comment">// so, they need to compile even when BidiIter::iterator_category is</span>
+    <span class="comment">// std::bidirectional_iterator_tag.  That means we have to use</span>
+    <span class="comment">// std::distance() and std::advance() instead of operator-() and</span>
+    <span class="comment">// operator+=().</span>
+    <span class="comment">//</span>
+    <span class="comment">// Don't worry, the O(n) bidirectional implementations of std::distance()</span>
+    <span class="comment">// and std::advance() are dead code, because compare() and advance() are</span>
+    <span class="comment">// never even called when BidiIter::iterator_category is</span>
+    <span class="comment">// std::bidirectional_iterator_tag.</span>
+    <span class="identifier">diff_t</span> <span class="keyword">operator</span><span class="special">-(</span><span class="identifier">reverse_iterator</span> <span class="identifier">other</span><span class="special">)</span> <span class="keyword">const</span>
+    <span class="special">{</span>
+        <span class="keyword">return</span> <span class="special">-</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">distance</span><span class="special">(</span><span class="identifier">other</span><span class="special">.</span><span class="identifier">it_</span><span class="special">,</span> <span class="identifier">it_</span><span class="special">);</span>
+    <span class="special">}</span>
+    <span class="identifier">reverse_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">+=(</span><span class="identifier">diff_t</span> <span class="identifier">n</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">advance</span><span class="special">(</span><span class="identifier">it_</span><span class="special">,</span> <span class="special">-</span><span class="identifier">n</span><span class="special">);</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+
+    <span class="comment">// No need for a using declaration to make</span>
+    <span class="comment">// iterator_interface::operator++(int) visible, because we're not defining</span>
+    <span class="comment">// operator++() in this template.</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="identifier">BidiIter</span> <span class="identifier">it_</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="keyword">using</span> <span class="identifier">rev_bidi_iter</span> <span class="special">=</span> <span class="identifier">reverse_iterator</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">list</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;::</span><span class="identifier">iterator</span><span class="special">&gt;;</span>
+<span class="keyword">using</span> <span class="identifier">rev_ra_iter</span> <span class="special">=</span> <span class="identifier">reverse_iterator</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;::</span><span class="identifier">iterator</span><span class="special">&gt;;</span>
+
+
+<span class="keyword">int</span> <span class="identifier">main</span><span class="special">()</span>
+<span class="special">{</span>
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">list</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="identifier">ints</span> <span class="special">=</span> <span class="special">{</span><span class="number">4</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">2</span><span class="special">};</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">list</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="identifier">ints_copy</span><span class="special">;</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span>
+            <span class="identifier">rev_bidi_iter</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">end</span><span class="special">()),</span>
+            <span class="identifier">rev_bidi_iter</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()),</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">back_inserter</span><span class="special">(</span><span class="identifier">ints_copy</span><span class="special">));</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">reverse</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">end</span><span class="special">());</span>
+        <span class="identifier">assert</span><span class="special">(</span><span class="identifier">ints_copy</span> <span class="special">==</span> <span class="identifier">ints</span><span class="special">);</span>
+    <span class="special">}</span>
+
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="identifier">ints</span> <span class="special">=</span> <span class="special">{</span><span class="number">4</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">2</span><span class="special">};</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="identifier">ints_copy</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span>
+            <span class="identifier">rev_ra_iter</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">end</span><span class="special">()),</span>
+            <span class="identifier">rev_ra_iter</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()),</span>
+            <span class="identifier">ints_copy</span><span class="special">.</span><span class="identifier">begin</span><span class="special">());</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">reverse</span><span class="special">(</span><span class="identifier">ints</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">end</span><span class="special">());</span>
+        <span class="identifier">assert</span><span class="special">(</span><span class="identifier">ints_copy</span> <span class="special">==</span> <span class="identifier">ints</span><span class="special">);</span>
+    <span class="special">}</span>
+
+    <span class="special">{</span>
+        <span class="keyword">using</span> <span class="identifier">rev_ptr_iter</span> <span class="special">=</span> <span class="identifier">reverse_iterator</span><span class="special">&lt;</span><span class="keyword">int</span> <span class="special">*&gt;;</span>
+
+        <span class="keyword">int</span> <span class="identifier">ints</span><span class="special">[</span><span class="number">3</span><span class="special">]</span> <span class="special">=</span> <span class="special">{</span><span class="number">4</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">2</span><span class="special">};</span>
+        <span class="keyword">int</span> <span class="identifier">ints_copy</span><span class="special">[</span><span class="number">3</span><span class="special">];</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span>
+            <span class="identifier">rev_ptr_iter</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">end</span><span class="special">(</span><span class="identifier">ints</span><span class="special">)),</span>
+            <span class="identifier">rev_ptr_iter</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">begin</span><span class="special">(</span><span class="identifier">ints</span><span class="special">)),</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">begin</span><span class="special">(</span><span class="identifier">ints_copy</span><span class="special">));</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">reverse</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">begin</span><span class="special">(</span><span class="identifier">ints</span><span class="special">),</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">end</span><span class="special">(</span><span class="identifier">ints</span><span class="special">));</span>
+        <span class="identifier">assert</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">equal</span><span class="special">(</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">begin</span><span class="special">(</span><span class="identifier">ints_copy</span><span class="special">),</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">end</span><span class="special">(</span><span class="identifier">ints_copy</span><span class="special">),</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">begin</span><span class="special">(</span><span class="identifier">ints</span><span class="special">),</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">end</span><span class="special">(</span><span class="identifier">ints</span><span class="special">)));</span>
+    <span class="special">}</span>
+<span class="special">}</span>
+</pre>
+<p>
+      </p>
+</div>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2019 T. Zachary Laine<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial___reverse_iterator_.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="../stl_interfaces/compiler_support.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

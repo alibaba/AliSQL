@@ -1,4 +1,3 @@
---source include/have_utf16.inc
 
 #
 # Bug #32391  	Character sets: crash with --character-set-server

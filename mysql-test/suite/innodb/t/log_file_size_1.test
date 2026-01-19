@@ -1,0 +1,78 @@
+--echo # Test resizing the InnoDB redo log.
+
+--source include/have_debug.inc
+
+--source ../include/redo_log_error_patterns.inc
+
+SET GLOBAL innodb_checkpoint_disabled = 1;
+SET GLOBAL innodb_fast_shutdown = 2;
+
+CREATE TABLE t1(id INT PRIMARY KEY,bfield BLOB) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1,repeat('a',2000)),(2,repeat('b',2000)),
+(3,repeat('c',2000));
+START TRANSACTION;
+INSERT INTO t1 VALUES (11,repeat('a',2000)),(12,repeat('b',2000)),
+(13,repeat('c',2000));
+SAVEPOINT A;
+INSERT INTO t1 VALUES (21,repeat('a',2000)),(22,repeat('b',2000)),
+(23,repeat('c',2000));
+SAVEPOINT B;
+SELECT id,LEFT(bfield,20) FROM t1;
+ROLLBACK TO A;
+COMMIT;
+SELECT id,LEFT(bfield,20) FROM t1;
+
+--echo
+--echo # Restart with different redo log size (20M)
+--let $MYSQLD_LOG_1= $MYSQLTEST_VARDIR/log/log_file_size-1.log
+--let $restart_parameters = "restart: --innodb-redo-log-capacity=20M --log-error=$MYSQLD_LOG_1"
+--replace_result $MYSQLD_LOG_1 MYSQLD_LOG
+--source include/restart_mysqld.inc
+
+SET GLOBAL innodb_checkpoint_disabled = 1;
+SET GLOBAL innodb_fast_shutdown = 2;
+
+let SEARCH_FILE= $MYSQLD_LOG_1;
+let SEARCH_PATTERN= $PATTERN_STARTING_CRASH_RECOVERY;
+--source include/search_pattern.inc
+
+SELECT id,LEFT(bfield,20) FROM t1;
+
+--ERROR ER_DUP_ENTRY
+INSERT INTO t1 VALUES (1,repeat('a',2000)),(2,repeat('b',2000)),
+(3,repeat('c',2000));
+INSERT INTO t1 VALUES (21,repeat('a',2000)),(22,repeat('b',2000)),
+(23,repeat('c',2000));
+SELECT id,LEFT(bfield,20) FROM t1;
+
+--echo
+--echo # Restart with different redo log size (8M)
+--let $MYSQLD_LOG_2= $MYSQLTEST_VARDIR/log/log_file_size-2.log
+--let $restart_parameters = "restart: --innodb-redo-log-capacity=8M --log-error=$MYSQLD_LOG_2"
+--replace_result $MYSQLD_LOG_2 MYSQLD_LOG
+--source include/restart_mysqld.inc
+
+SET GLOBAL innodb_checkpoint_disabled = 1;
+SET GLOBAL innodb_fast_shutdown = 2;
+
+let SEARCH_FILE= $MYSQLD_LOG_2;
+let SEARCH_PATTERN= $PATTERN_STARTING_CRASH_RECOVERY;
+--source include/search_pattern.inc
+
+--ERROR ER_DUP_ENTRY
+INSERT INTO t1 VALUES (21,repeat('a',2000));
+INSERT INTO t1 VALUES (24,repeat('a',2000)),(25,repeat('b',2000));
+SELECT id,LEFT(bfield,20) FROM t1;
+
+--echo
+--echo # Restart with default parameters
+let $restart_parameters=restart:;
+--source include/restart_mysqld.inc
+
+--echo
+--echo # Cleanup
+DROP TABLE t1;
+
+# It might be useful to comment out code below, when debugging test failures
+--remove_file $MYSQLD_LOG_1
+--remove_file $MYSQLD_LOG_2

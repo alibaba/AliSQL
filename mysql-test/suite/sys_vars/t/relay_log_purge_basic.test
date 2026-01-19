@@ -23,7 +23,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/not_embedded.inc
 --source include/load_sysvars.inc
 
 ##################################################################### 
@@ -123,9 +122,11 @@ SELECT @@session.relay_log_purge;
 # Check if the value in GLOBAL  Tables matches values in variable   #
 #####################################################################
 
+--disable_warnings
 SELECT IF(@@global.relay_log_purge, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='relay_log_purge';
+--enable_warnings
 
 --echo '#---------------------FN_DYNVARS_141_07----------------------#'
 ###############################################################################
@@ -148,7 +149,9 @@ SET global.relay_log_purge = 1;
 --Error ER_UNKNOWN_TABLE
 SELECT global.relay_log_purge;
 --Error ER_BAD_FIELD_ERROR
-SELECT relay_log_purge = @@session.relay_log_purge;
+SELECT relay_log_purge;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.relay_log_purge;
 
 
 ##############################  

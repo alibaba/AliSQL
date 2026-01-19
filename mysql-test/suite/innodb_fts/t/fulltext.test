@@ -1,3 +1,5 @@
+--source include/no_valgrind_without_big.inc
+
 #
 # Test of fulltext index
 #
@@ -6,7 +8,7 @@
 drop table if exists t1,t2,t3;
 --enable_warnings
 
-CREATE TABLE t1 (a VARCHAR(200), b TEXT, FULLTEXT (a,b)) ENGINE = InnoDB;
+CREATE TABLE t1 (a VARCHAR(200), b TEXT, FULLTEXT (a,b)) ENGINE = InnoDB charset utf8mb4;
 INSERT INTO t1 VALUES('MySQL has now support', 'for full-text search'),
                        ('Full-text indexes', 'are called collections'),
                           ('Only MyISAM tables','support collections'),
@@ -20,19 +22,23 @@ SHOW INDEX FROM t1;
 # nl search
 
 select * from t1 where MATCH(a,b) AGAINST ("collections");
-explain extended select * from t1 where MATCH(a,b) AGAINST ("collections");
+explain select * from t1 where MATCH(a,b) AGAINST ("collections");
 select * from t1 where MATCH(a,b) AGAINST ("indexes");
 select * from t1 where MATCH(a,b) AGAINST ("indexes collections");
 select * from t1 where MATCH(a,b) AGAINST ("only");
 
 # query expansion
 
+--sorted_result
 select * from t1 where MATCH(a,b) AGAINST ("collections" WITH QUERY EXPANSION);
+--sorted_result
 select * from t1 where MATCH(a,b) AGAINST ("indexes" WITH QUERY EXPANSION);
+--sorted_result
 select * from t1 where MATCH(a,b) AGAINST ("indexes collections" WITH QUERY EXPANSION);
 
 # IN NATURAL LANGUAGE MODE
 select * from t1 where MATCH(a,b) AGAINST ("indexes" IN NATURAL LANGUAGE MODE);
+--sorted_result
 select * from t1 where MATCH(a,b) AGAINST ("indexes" IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION);
 --error 1064
 select * from t1 where MATCH(a,b) AGAINST ("indexes" IN BOOLEAN MODE WITH QUERY EXPANSION);
@@ -53,12 +59,15 @@ explain select * from t1 where MATCH(a,b) AGAINST ("collections")>0 and a like '
 # boolean search
 
 select * from t1 where MATCH(a,b) AGAINST("support -collections" IN BOOLEAN MODE);
-explain extended select * from t1 where MATCH(a,b) AGAINST("support -collections" IN BOOLEAN MODE);
+explain select * from t1 where MATCH(a,b) AGAINST("support -collections" IN BOOLEAN MODE);
+--sorted_result
 select * from t1 where MATCH(a,b) AGAINST("support  collections" IN BOOLEAN MODE);
+--sorted_result
 select * from t1 where MATCH(a,b) AGAINST("support +collections" IN BOOLEAN MODE);
 select * from t1 where MATCH(a,b) AGAINST("sear*" IN BOOLEAN MODE);
 select * from t1 where MATCH(a,b) AGAINST("+support +collections" IN BOOLEAN MODE);
 select * from t1 where MATCH(a,b) AGAINST("+search" IN BOOLEAN MODE);
+--sorted_result
 select * from t1 where MATCH(a,b) AGAINST("+search +(support vector)" IN BOOLEAN MODE);
 select * from t1 where MATCH(a,b) AGAINST("+search -(support vector)" IN BOOLEAN MODE);
 select *, MATCH(a,b) AGAINST("support collections" IN BOOLEAN MODE) as x from t1;
@@ -125,7 +134,7 @@ CREATE TABLE t1 (
   ticket int(11),
   KEY ti (id),
   KEY tit (ticket)
-) ENGINE = InnoDB;
+) charset utf8mb4 ENGINE = InnoDB;
 INSERT INTO t1 VALUES (2,3),(1,2);
 
 CREATE TABLE t2 (
@@ -133,7 +142,7 @@ CREATE TABLE t2 (
   inhalt text,
   KEY tig (ticket),
   fulltext index tix (inhalt)
-) ENGINE = InnoDB;
+) charset utf8mb4 ENGINE = InnoDB;
 INSERT INTO t2 VALUES (1,'foo'),(2,'bar'),(3,'foobar');
 
 #select t1.id FROM t2 as ttxt,t1,t1 as ticket2
@@ -157,6 +166,7 @@ WHERE ticket2.id = ticket2.ticket and
 
 # Check that we get 'fulltext' index in SHOW CREATE
 
+ANALYZE TABLE t2;
 show keys from t2;
 show create table t2;
 
@@ -300,9 +310,11 @@ drop table t1;
 # UTF8
 # INNODB_FTS: Charset Support (FIX)
 SET NAMES latin1;
-CREATE TABLE t1 (t text character set utf8 not null, fulltext(t)) ENGINE = InnoDB;
+--character_set latin1
+CREATE TABLE t1 (t text character set utf8mb4 not null, fulltext(t)) ENGINE = InnoDB;
 INSERT t1 VALUES ('Mit freundlichem GrЭъ'), ('aus OsnabrЭck');
 SET NAMES koi8r;
+--character_set koi8r
 INSERT t1 VALUES ("Это мы - опилки"),("Отлезь, гнида!"),
                 ("Не влезай, убьет!"),("и будет прав!");
 SELECT t, collation(t) FROM t1 WHERE MATCH t AGAINST ('ОПИЛКИ');
@@ -322,10 +334,12 @@ DROP TABLE t1;
 #
 # bug#3964
 #
-
+--character_set latin1
 CREATE TABLE t1 (s varchar(255), FULLTEXT (s)) ENGINE = InnoDB DEFAULT CHARSET=utf8;
 insert into t1 (s) values ('pДra para para'),('para para para');
+--sorted_result
 select * from t1 where match(s) against('para' in boolean mode);
+--sorted_result
 select * from t1 where match(s) against('par*' in boolean mode);
 DROP TABLE t1;
 
@@ -403,7 +417,7 @@ DROP TABLE t1;
 # BUG#13835: max key length is 1000 bytes when trying to create
 #            a fulltext index
 #
-CREATE TABLE t1 (a VARCHAR(10000), FULLTEXT(a)) ENGINE = InnoDB;
+CREATE TABLE t1 (a VARCHAR(10000), FULLTEXT(a)) charset utf8mb4 ENGINE = InnoDB;
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
 
@@ -418,7 +432,9 @@ ANALYZE TABLE t1;
 -- enable_result_log
 PREPARE stmt from "SELECT a, FORMAT(MATCH(a) AGAINST('test1 test'),6) FROM t1 WHERE MATCH(a) AGAINST('test1 test')";
 
+--sorted_result
 EXECUTE stmt;
+--sorted_result
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
@@ -576,7 +592,7 @@ INSERT INTO t3 VALUES (1,1), (2,1);
 EXPLAIN
 SELECT count(*) FROM t1 WHERE 
   not exists(
-   SELECT 1 FROM t2, t3
+   SELECT /*+ NO_SEMIJOIN() */ 1 FROM t2, t3
    WHERE t3.a=t1.a AND MATCH(b2) AGAINST('scargill' IN BOOLEAN MODE)
   );
 
@@ -584,14 +600,14 @@ SELECT count(*) FROM t1 WHERE
 --echo # should return 0
 SELECT count(*) FROM t1 WHERE 
   not exists(
-   SELECT 1 FROM t2, t3
+   SELECT /*+ NO_SEMIJOIN() */ 1 FROM t2, t3
    WHERE t3.a=t1.a AND MATCH(b2) AGAINST('scargill' IN BOOLEAN MODE)
   );
 
 --error ER_FT_MATCHING_KEY_NOT_FOUND
 SELECT count(*) FROM t1 WHERE 
   not exists(
-   SELECT 1 FROM t2 IGNORE INDEX (b2), t3
+   SELECT /*+ NO_SEMIJOIN() */ 1 FROM t2 IGNORE INDEX (b2), t3
    WHERE t3.a=t1.a AND MATCH(b2) AGAINST('scargill' IN BOOLEAN MODE)
   );
 
@@ -620,7 +636,7 @@ SELECT COUNT(*) FROM t1 WHERE MATCH(a) AGAINST("+awrd bwrd* +cwrd*" IN BOOLEAN M
 DROP TABLE t1;
 
 --echo #
---echo # Bug #49445: Assertion failed: 0, file .\item_row.cc, line 55 with 
+--echo # Bug #49445: Assertion failed: 0, file item_row.cc, line 55 with 
 --echo #   fulltext search and row op
 --echo #
 
@@ -677,3 +693,19 @@ DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
 
 --echo End of 5.1 tests
+
+--echo #
+--echo # Bug#33041720: REDUNDANT CALL TO INIT_FTFUNCS() IN MULTI-TABLE DELETE
+--echo #
+
+# This test case does not show a problem. It just adds test coverage
+# of multi-table DELETE statements that use full-text search.
+
+CREATE TABLE t1 (id INTEGER);
+CREATE TABLE t2 (id INTEGER, x VARCHAR(10), FULLTEXT(x));
+INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
+INSERT INTO t2 VALUES (1, 'abc'), (2, 'xyz'), (3, 'abc def'), (4, NULL);
+DELETE t1 FROM t1, t2 WHERE t1.id = t2.id AND MATCH (t2.x) AGAINST ('abc');
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1, t2;

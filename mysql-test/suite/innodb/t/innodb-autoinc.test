@@ -1,7 +1,3 @@
--- source include/have_innodb.inc
-# embedded server ignores 'delayed', so skip this
--- source include/not_embedded.inc
-
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
@@ -217,11 +213,11 @@ SET @@INSERT_ID=1;
 SHOW VARIABLES LIKE "%auto_inc%";
 DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (c1 INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(c1)) ENGINE=InnoDB;
-INSERT INTO t1 VALUES(-1);
+INSERT IGNORE INTO t1 VALUES(-1);
 SELECT * FROM t1;
 SET @@SESSION.AUTO_INCREMENT_INCREMENT=100, @@SESSION.AUTO_INCREMENT_OFFSET=10;
 SHOW VARIABLES LIKE "%auto_inc%";
-INSERT INTO t1 VALUES (-2);
+INSERT IGNORE INTO t1 VALUES (-2);
 INSERT INTO t1 VALUES (NULL);
 INSERT INTO t1 VALUES (2);
 INSERT INTO t1 VALUES (NULL);
@@ -243,11 +239,11 @@ SET @@INSERT_ID=1;
 SHOW VARIABLES LIKE "%auto_inc%";
 DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (c1 INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(c1)) ENGINE=InnoDB;
-INSERT INTO t1 VALUES(-1);
+INSERT IGNORE INTO t1 VALUES(-1);
 SELECT * FROM t1;
 SET @@SESSION.AUTO_INCREMENT_INCREMENT=100, @@SESSION.AUTO_INCREMENT_OFFSET=10;
 SHOW VARIABLES LIKE "%auto_inc%";
-INSERT INTO t1 VALUES (-2),(NULL),(2),(NULL);
+INSERT IGNORE INTO t1 VALUES (-2),(NULL),(2),(NULL);
 INSERT INTO t1 VALUES (250),(NULL);
 SELECT * FROM t1;
 INSERT INTO t1 VALUES (1000);
@@ -435,8 +431,10 @@ INSERT INTO t1 VALUES (NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(N
 CREATE TABLE t2(
     c1 TINYINT(3) UNSIGNED NOT NULL AUTO_INCREMENT
     PRIMARY KEY) ENGINE=InnoDB;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 -- error ER_DUP_ENTRY,1062
 INSERT INTO t2 SELECT c1 FROM t1;
+SET sql_mode = default;
 -- error ER_DUP_ENTRY,1467
 INSERT INTO t2 SELECT NULL FROM t1;
 DROP TABLE t1;
@@ -458,8 +456,8 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (c1 TINYINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
-INSERT INTO t1 VALUES (-127, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-127, 'innodb');
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 SELECT * FROM t1;
@@ -478,8 +476,8 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (c1 SMALLINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
-INSERT INTO t1 VALUES (-32757, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-32757, 'innodb');
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 SELECT * FROM t1;
@@ -498,8 +496,8 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (c1 MEDIUMINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
-INSERT INTO t1 VALUES (-8388607, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-8388607, 'innodb');
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 SELECT * FROM t1;
@@ -518,8 +516,8 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (c1 INT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
-INSERT INTO t1 VALUES (-2147483647, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-2147483647, 'innodb');
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 SELECT * FROM t1;
@@ -538,8 +536,8 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (c1 BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
-INSERT INTO t1 VALUES (-9223372036854775807, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-9223372036854775807, 'innodb');
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 SELECT * FROM t1;
@@ -659,12 +657,15 @@ CREATE TABLE t1 (c1 INT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENG
 INSERT INTO t1 VALUES (2147483648, 'a');
 SHOW CREATE TABLE t1;
 SELECT * FROM t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 ALTER TABLE t1 CHANGE c1 c1 INT;
 SHOW CREATE TABLE t1;
 INSERT INTO t1(c2) VALUES('b');
 SELECT * FROM t1;
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
+SET sql_mode = default;
+
 
 CREATE TABLE t1 (c1 INT AUTO_INCREMENT PRIMARY KEY, c2 INT) ENGINE = MyISAM;
 INSERT INTO t1 (c1) VALUES (NULL), (-290783232), (NULL);
@@ -673,7 +674,6 @@ SELECT * FROM t1;
 ALTER TABLE t1 ENGINE = InnoDB;
 SELECT * FROM t1;
 SHOW CREATE TABLE t1;
---error ER_AUTOINC_READ_FAILED
 REPLACE INTO t1 (c2 ) VALUES (0);
 SELECT * FROM t1;
 DROP TABLE t1;
@@ -700,75 +700,93 @@ SELECT * FROM t;
 SHOW CREATE TABLE t;
 DROP TABLE t;
 
-#
-# Test  innodb_autoinc_persistent
-#
+--echo #
+--echo # Bug#15851528 DUPLICATE KEY ERROR ON AUTO-INC PK WITH MIXED AUTO_INCREMENT_INCREMENT CLIENTS
+--echo #
+--echo # This test shows that the next record to be inserted is not affected
+--echo # by a change in auto_increment_increment.
+--echo # In addition, current value of auto_increment_increment by the client
+--echo # that uses the existing autoinc value with be used to set next autoinc
+--echo # value, which will be used by next client reguardless of its own session
+--echo # setting for auto_increment_increment.
+--echo #
 
-# Reset the AUTOINC session variables
-SET @@SESSION.AUTO_INCREMENT_INCREMENT=1, @@SESSION.AUTO_INCREMENT_OFFSET=1;
-SET @@INSERT_ID=1;
-SHOW VARIABLES LIKE "%auto_inc%";
-DROP TABLE IF EXISTS t1;
-CREATE TABLE t1 (c1 INT AUTO_INCREMENT, PRIMARY KEY(c1)) ENGINE=InnoDB;
-INSERT INTO t1 VALUES(null);
-INSERT INTO t1 VALUES(null);
-SELECT * FROM t1;
+--connection default
+--echo # Client 1: Insert a record with auto_increment_increment=2
+CREATE TABLE t(
+  a SERIAL PRIMARY KEY,
+  b VARCHAR(200)) ENGINE=InnoDB;
+SET SESSION auto_increment_increment=2;
+SHOW CREATE TABLE t;
+INSERT INTO t(b) VALUES('S1');
+SELECT a,b FROM t;
+--connect(con1,localhost,root,,)
+
+--connection con1
+--echo # Client 2: Insert records with auto_increment_increment 2,1
+SET SESSION auto_increment_increment=2;
+SHOW CREATE TABLE t;
+INSERT INTO t(b) VALUES('S2');
+SELECT a,b FROM t;
+SET SESSION auto_increment_increment=1;
+SHOW CREATE TABLE t;
+INSERT INTO t(b) VALUES('S2');
+SELECT a,b FROM t;
+disconnect con1;
+
+--connection default
+--echo # Client 1: Insert a record with auto_increment_increment=1
+SET SESSION auto_increment_increment=1;
+SHOW CREATE TABLE t;
+INSERT INTO t(b) VALUES('S1');
+SELECT a,b FROM t;
+DROP TABLE t;
+
+--echo # Autoincrement behaviour with mixed insert.
+CREATE TABLE t(
+  a TINYINT AUTO_INCREMENT PRIMARY KEY,
+  b VARCHAR(200)) ENGINE=InnoDB;
+SET SESSION auto_increment_increment=100;
+SHOW CREATE TABLE t;
+INSERT INTO t(b) VALUES('S0'),('S1');
+SELECT a,b FROM t;
+SHOW CREATE TABLE t;
+INSERT INTO t(a,b) VALUES(28,'S2');
+SELECT a,b FROM t;
+SET SESSION auto_increment_increment=1;
+SHOW CREATE TABLE t;
+INSERT INTO t(b) VALUES('S3');
+SELECT a,b FROM t;
+SHOW CREATE TABLE t;
+-- error ER_DUP_ENTRY
+INSERT INTO t(b) VALUES('S4');
+DROP TABLE t;
+
+--echo #
+--echo # Bug 26906787 - INCORRECT AUTO_INCREMENT IDS ISSUED WHEN CLOSE TO ULLONG_MAX
+--echo #
+
+SET auto_increment_increment = 300;
+CREATE TABLE t1 (a BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, b CHAR(8))
+ENGINE=innodb;
+INSERT INTO t1 VALUES (18446744073709551613, 'a');
 SHOW CREATE TABLE t1;
-
-
---echo # restart: --innodb_autoinc_persistent=on
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
---source include/wait_until_disconnected.inc
-# Do something while server is down
---enable_reconnect
-# Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: --innodb_autoinc_persistent=on" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---source include/wait_until_connected_again.inc
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, 'b');
 SHOW CREATE TABLE t1;
-INSERT INTO t1 VALUES(null);
-INSERT INTO t1 VALUES(null);
-SELECT * FROM t1;
-DELETE FROM t1 WHERE c1 in(3,4);
-SELECT * FROM t1;
+DROP TABLE t1;
 
---echo # restart: --innodb_autoinc_persistent=on
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
---source include/wait_until_disconnected.inc
-# Do something while server is down
---enable_reconnect
-# Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: --innodb_autoinc_persistent=on" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---source include/wait_until_connected_again.inc
+CREATE TABLE t1 (
+    a BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    b CHAR(8)
+) ENGINE=innodb
+PARTITION BY RANGE (a) (
+    PARTITION p0 VALUES LESS THAN (6),
+    PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO t1 VALUES (18446744073709551613, 'a');
 SHOW CREATE TABLE t1;
-
-update t1 set c1=1000 where c1=1;
-select * from t1;
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, 'b');
 SHOW CREATE TABLE t1;
-
---echo # restart: --innodb_autoinc_persistent=on --innodb_autoinc_persistent_interval=10
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
---source include/wait_until_disconnected.inc
-# Do something while server is down
---enable_reconnect
-# Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: --innodb_autoinc_persistent=on --innodb_autoinc_persistent_interval=10" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---source include/wait_until_connected_again.inc
-SHOW CREATE TABLE t1;
-insert into t1 values(null),(null),(null),(null),(null),(null),(null),(null),(null),(null),(null),(null);
-select * from t1;
-
---echo # restart: --innodb_autoinc_persistent=on innodb_autoinc_persistent_interval=10
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
---source include/wait_until_disconnected.inc
-# Do something while server is down
---enable_reconnect
-# Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: --innodb_autoinc_persistent=on --innodb_autoinc_persistent_interval=10" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---source include/wait_until_connected_again.inc
-SHOW CREATE TABLE t1;
-
 DROP TABLE t1;

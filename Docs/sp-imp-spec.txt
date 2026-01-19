@@ -1,3 +1,25 @@
+Copyright (c) 2003, 2025, Oracle and/or its affiliates.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
               Implementation specification for Stored Procedures
               ==================================================
@@ -5,11 +27,11 @@
 
 - How parsing and execution of queries work
 
-  In order to execute a query, the function sql_parse.cc:mysql_parse() is
-  called, which in turn calls the parser (yyparse()) with an updated Lex
-  structure as the result. mysql_parse() then calls mysql_execute_command()
-  which dispatches on the command code (in Lex) to the corresponding code for
-  executing that particular query.
+  In order to execute a query, the function sql_parse.cc:dispatch_sql_command()
+  is called, which in turn calls the parser (yyparse()) with an updated Lex
+  structure as the result. dispatch_sql_command() then calls
+  mysql_execute_command() which dispatches on the command code (in Lex) to the
+  corresponding code for executing that particular query.
 
   There are three structures involved in the execution of a query which are of
   interest to the stored procedure implementation:
@@ -243,7 +265,7 @@
        in the caller's frame is set in the new context as well.
     4) For each instruction, call its execute() method.
        The result is a pointer to the next instruction to execute (or NULL)
-       if an error occured.
+       if an error occurred.
     5) On success, set the new values of the OUT and INOUT parameters in
        the caller's frame.
 
@@ -603,7 +625,7 @@
         enum enum_field_types type;
         sp_param_mode_t mode;
         uint offset;                    // Offset in current frame
-        my_bool isset;
+        bool isset;
       } sp_pvar_t;
 
       typedef struct sp_cond_type
@@ -634,7 +656,7 @@
 
         // Mark the i:th variable to "set" (i.e. having a value) with
         // 'val' true.
-        void set_isset(uint i, my_bool val);
+        void set_isset(uint i, bool val);
 
         // Push the variable 'name' to the frame.
         void push_var(LEX_STRING *name,
@@ -680,7 +702,7 @@
         void push_cursor(LEX_STRING *name);
 
 	// Find a cursor
-	my_bool find_cursor(LEX_STRING *name, uint *poff);
+	bool find_cursor(LEX_STRING *name, uint *poff);
 
 	// Pop 'num' cursors
 	void pop_cursor(uint num);
@@ -853,7 +875,7 @@
           // '*nextp' will be set to the index of the next instruction
           // to execute. (For most instruction this will be the
           // instruction following this one.)
-          // Returns 0 on success, non-zero if some error occured.
+          // Returns 0 on success, non-zero if some error occurred.
           virtual int execute(THD *, uint *nextp)
         }
 

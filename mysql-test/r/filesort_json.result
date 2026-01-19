@@ -1,0 +1,38 @@
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+SET @@SESSION.sort_buffer_size=32768;
+SELECT
+table3 . `col_varchar_255_utf8_key` AS field1 ,
+table2 . `col_varchar_255_latin1_key` AS field3 ,
+table3 . `col_varchar_255_latin1` AS field4 ,
+JSON_EXTRACT(JSON_ARRAY(table3. `col_date_key`), CONCAT('$[',0,']' )) AS field5
+FROM  H AS table1
+LEFT JOIN  H AS table2
+LEFT OUTER JOIN F AS table3
+ON  table2 . `pk` <  table3 . `col_int_key`
+ON  table1 . `pk` =  table3 . `pk`
+WHERE    table1.`col_varchar_255_utf8_key` >= table3.`col_varchar_10_utf8`
+GROUP BY
+field1, field3, field4, field5;
+SET @@SESSION.sort_buffer_size=default;
+DROP TABLE F, H;
+CREATE TABLE t1 (
+pk INTEGER,
+j JSON
+);
+EXPLAIN FORMAT=tree SELECT j FROM t1 ORDER BY pk;
+EXPLAIN
+-> Sort: t1.pk
+    -> Table scan on t1
+
+DROP TABLE t1;

@@ -71,19 +71,114 @@ c28 TEXT,
 primary key (pk)
 ) ENGINE=InnoDB
 ;
+INSERT INTO t1 VALUES (REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), 1, REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096));
+INSERT INTO t1 VALUES (REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), 2, REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096));
+INSERT INTO t1 VALUES (REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), 3, REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096));
 CALL mtr.add_suppression("Out of sort memory");
+SET SESSION sort_buffer_size=32768;
 DELETE IGNORE FROM t1 ORDER BY c26,c7,c23,c4,c25,c5,c20,
 c19,c21,c8,c1,c27,c28,c3,c9,c22,c24,c6,c2,pk LIMIT 2;
 ERROR HY001: Out of sort memory, consider increasing server sort buffer size
 SHOW WARNINGS;
 Level	Code	Message
 Error	1038	Out of sort memory, consider increasing server sort buffer size
-Error	1028	Sort aborted: Out of sort memory, consider increasing server sort buffer size
 DELETE FROM t1 ORDER BY c26,c7,c23,c4,c25,c5,c20,
 c19,c21,c8,c1,c27,c28,c3,c9,c22,c24,c6,c2,pk LIMIT 2;
 ERROR HY001: Out of sort memory, consider increasing server sort buffer size
 SHOW WARNINGS;
 Level	Code	Message
 Error	1038	Out of sort memory, consider increasing server sort buffer size
-Error	1028	Sort aborted: Out of sort memory, consider increasing server sort buffer size
+SET SESSION sort_buffer_size=DEFAULT;
+DROP TABLE t1;
+#
+# Bug#21611270 ASSERTION IN FILESORT::MAKE_SORTORDER()
+#
+CREATE TABLE g(b INT NOT NULL, UNIQUE(b)) ENGINE=INNODB;
+CREATE TABLE t(a int, c int) ENGINE=INNODB;
+INSERT INTO t VALUES(1,1);
+SELECT 1
+FROM t
+GROUP BY a
+HAVING (SELECT a
+FROM g
+GROUP BY b, a);
+1
+DROP TABLE t, g;
+#
+# Bug #22200984 ASSERTION IN FILESORT::MAKE_SORTORDER()
+#
+SET sql_mode="";
+CREATE TABLE t1(a_t1 INT, c INT, d INT) ENGINE=INNODB;
+CREATE TABLE t2(a_t2 INT NOT NULL, UNIQUE KEY (a_t2)) ENGINE=INNODB;
+INSERT INTO t1 VALUES();
+SELECT (SELECT 1 FROM t2 GROUP BY d, a_t2 HAVING c) FROM t1 GROUP BY (1=2);
+(SELECT 1 FROM t2 GROUP BY d, a_t2 HAVING c)
+NULL
+DROP TABLE t1, t2;
+SET sql_mode=default;
+#
+# Bug #27041420: ASSERTION `LENGTH == 3' FAILED.
+#
+CREATE TABLE t1(a DATE);
+INSERT INTO t1 VALUES('1000-01-01'), ('2017-10-31');
+SELECT HEX(WEIGHT_STRING(a)) FROM t1;
+HEX(WEIGHT_STRING(a))
+8CB2420000000000
+999DFE0000000000
+SELECT HEX(WEIGHT_STRING(a COLLATE utf8mb4_0900_ai_ci, 3, 3, 0xC0)) FROM t1;
+HEX(WEIGHT_STRING(a COLLATE utf8mb4_0900_ai_ci, 3, 3, 0xC0))
+1C3E1C
+1C3F1C
+SELECT HEX(WEIGHT_STRING(a COLLATE utf8mb4_0900_ai_ci, 4, 3, 0xC0)) FROM t1;
+HEX(WEIGHT_STRING(a COLLATE utf8mb4_0900_ai_ci, 4, 3, 0xC0))
+1C3E1C3D
+1C3F1C3D
+DROP TABLE t1;
+#
+# Bug #27041543: ASSERTION `MAX_LENGTH >= LENGTH' FAILED.
+#
+SET NAMES utf8,@@character_set_results=NULL;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+CREATE TEMPORARY TABLE t1(a INT);
+INSERT INTO t1 VALUES(1);
+SELECT 1 FROM t1 ORDER BY @x:=makedate(a,a);
+1
+1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+DROP TABLE t1;
+CREATE TABLE t1 AS SELECT 1 AS a WHERE false;
+CREATE TABLE t2 AS SELECT @x:=makedate(a,a) FROM t1;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `@x:=makedate(a,a)` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t2;
+CREATE TABLE t2 AS SELECT @a:=@b:=@x:=makedate(a,a) FROM t1;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `@a:=@b:=@x:=makedate(a,a)` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t2;
 DROP TABLE t1;

@@ -1,15 +1,23 @@
-#!/bin/sh
+#!/bin/bash
 
-# Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2007, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -50,6 +58,8 @@ verbose=0
 do_clone=yes
 build=yes
 
+patch0=
+patch1=
 tag0=
 tag1=
 conf=
@@ -82,6 +92,9 @@ do
 	        --tag0=*) tag0=`echo $1 | sed s/--tag0=//`;;
 	        --tag1=*) tag1=`echo $1 | sed s/--tag1=//`;;
 	        --clonename=*) clonename=`echo $1 | sed s/--clonename=//`;;
+	        --patch=*) patch=`echo $1 | sed s/--patch=//` ; patch0="$patch0$patch " ; patch1="$patch1$patch " ;;
+	        --patch0=*) patch=`echo $1 | sed s/--patch0=//` ; patch0="$patch0$patch " ;;
+	        --patch1=*) patch=`echo $1 | sed s/--patch1=//` ; patch1="$patch1$patch " ;;
 	        --*) echo "Unknown arg: $1";;
                 *) RUN="$RUN $1";;
         esac
@@ -116,7 +129,7 @@ fi
 # Validate that all interesting
 #   variables where set in conf
 ###############################
-vars="src_clone_base install_dir build_dir bzr_src_base"
+vars="install_dir build_dir git_remote_repo git_local_repo"
 for i in $vars
 do
   t=`echo echo \\$$i`
@@ -140,10 +153,6 @@ fi
 # Setup the lock file name and path#
 # Setup the clone source location  #
 ####################################
-
-#src_clone=${src_clone_base}/${clone}
-src_clone0=${bzr_src_base}/${clone0}
-src_clone1=${bzr_src_base}/${clone1}
 
 if [ -z "$clone1" ]
 then
@@ -176,10 +185,7 @@ echo "$DATE $RUN" > $LOCK
 # trap them, and remove the #
 # Lock file before exit     #
 #############################
-if [ `uname -s` != "SunOS" ]
-then
-	trap "rm -f $LOCK" ERR
-fi
+trap "rm -f $LOCK" EXIT
 
 # You can add more to this path#
 ################################
@@ -190,7 +196,7 @@ then
 else
     dst_place0=${build_dir}/clone-$tag0-$DATE.$$
     extra_args="$extra_args --clone0=$tag0"
-    extra_clone0="-r$tag0"
+    extra_clone0=""
 fi
 
 if [ -z "$tag1" ]
@@ -199,7 +205,7 @@ then
 else
     dst_place1=${build_dir}/clone1-$tag1-$DATE.$$
     extra_args="$extra_args --clone1=$tag1"
-    extra_clone1="-r$tag1"
+    extra_clone1=""
 fi
 
 if [ "$clonename" ]
@@ -224,14 +230,47 @@ then
 			echo "Copying $clone_dir/$clone0 to $dst_place0"
 			cp -r $clone_dir/$clone0 $dst_place0
 		fi
+		if [ -d "$clone_dir/$clone1" ]
+		then
+			echo "Copying $clone_dir/$clone1 to $dst_place1"
+			cp -r $clone_dir/$clone1 $dst_place1
+		fi
 	else
-		bzr export $dst_place0 $extra_clone0 $src_clone0    
-	fi
+# Comment out the next line if using git of version < 2.0
+# and ensure that the local repo is up to date.
+                git -C ${git_local_repo} fetch ${git_remote_repo}
 
-	if [ "$clone1" ]
-	then
-	    rm -rf $dst_place1
-	    bzr export $dst_place1 $extra_clone1 $src_clone1
+                if [ -z "$clone0" ]
+                then
+                  git clone ${git_local_repo} ${dst_place0}
+                else
+                  git clone -b${clone0} ${git_local_repo} ${dst_place0}
+                fi
+                [ ! -n "${tag0}" ] || git -C ${dst_place0} reset --hard ${tag0}
+		for patch in $patch0 ; do
+			( cd $dst_place0 && patch -p0 ) < $patch
+		done
+                {
+# Comment out the next line if using git of version < 2.0 and replace with:
+#                 cd ${dst_place0}
+#                 git log -1
+                  git -C ${dst_place0} log -1
+	          if [ $patch0 ] ; then echo patches: $patch0 ; cat $patch0 ; fi
+                } > $dst_place0/code0.txt
+
+                if [ "$clone1" ]
+	       	then
+	                rm -rf $dst_place1
+                        git clone -b${clone1} ${git_local_repo} ${dst_place1}
+                        [ ! -n "${tag1}" ] || git -C ${dst_place1} reset --hard ${tag1}
+	                for patch in $patch1 ; do
+		                ( cd $dst_place1 && patch -p0 ) < $patch
+	                done
+                        {
+                          git -C ${dst_place1} log -1
+	                  if [ $patch1 ] ; then echo patches: $patch1 ; cat $patch1 ; fi
+                        } > $dst_place1/code1.txt
+                fi
 	fi
 fi
 
@@ -239,6 +278,18 @@ fi
 # Build the source, make installs, and   #
 # create the database to be rsynced	 #
 ##########################################
+
+function build_cluster()
+{
+    mkdir build_dir
+    cd build_dir
+    if grep -qc autotest ../storage/ndb/compile-cluster 2>/dev/null
+    then
+        ../storage/ndb/compile-cluster --autotest $*
+    else
+        BUILD/compile-ndb-autotest $*
+    fi
+}
 
 if [ "$build" ]
 then
@@ -255,17 +306,20 @@ then
             cmd /c devenv.com MySql.sln /Build RelWithDebInfo
             cmd /c devenv.com MySql.sln /Project INSTALL /Build
         else
-	    BUILD/compile-ndb-autotest --prefix=$install_dir0
+	    build_cluster --prefix=$install_dir0
 	    make install
+	    [ ! -f code0.txt ] || cp code0.txt $install_dir0/
         fi
     else
 	cd $dst_place0
-	BUILD/compile-ndb-autotest --prefix=$install_dir0
+	build_cluster --prefix=$install_dir0
 	make install
+	[ ! -f code0.txt ] || cp code0.txt $install_dir0/
 	
 	cd $dst_place1
-	BUILD/compile-ndb-autotest --prefix=$install_dir1
+	build_cluster --prefix=$install_dir1
 	make install
+	[ ! -f code1.txt ] || cp code1.txt $install_dir1/
     fi
     cd $p
 fi
@@ -278,7 +332,7 @@ fi
 script=$install_dir0/mysql-test/ndb/autotest-run.sh
 for R in $RUN
 do
-    sh -x $script $save_args --conf=$conf --run-dir=$install_dir --install-dir0=$install_dir0 --install-dir1=$install_dir1 --suite=$R --nolock $extra_args
+    bash -x $script $save_args --conf=$conf --run-dir=$install_dir --install-dir0=$install_dir0 --install-dir1=$install_dir1 --suite=$R --nolock $extra_args
 done
 
 if [ "$build" ]
@@ -290,5 +344,3 @@ then
 	rm -rf $dst_place1
     fi
 fi
-
-rm -f $LOCK

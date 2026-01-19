@@ -8,11 +8,14 @@ b
 select count(a) as b from t1 where a=0 having b >=0;
 b
 0
-explain extended select count(a) as b from t1 where a=0 having b >=0;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+explain select count(a) as b from t1 where a=0 having b >=0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where
 Warnings:
-Note	1003	/* select#1 */ select count(NULL) AS `b` from dual where 0 having (`b` >= 0)
+Note	1003	/* select#1 */ select count(`test`.`t1`.`a`) AS `b` from `test`.`t1` where (`test`.`t1`.`a` = 0) having (`b` >= 0)
 drop table t1;
 CREATE TABLE t1 (
 raw_id int(10) NOT NULL default '0',
@@ -22,6 +25,13 @@ raw_start int(10) NOT NULL default '0',
 raw_end int(10) NOT NULL default '0',
 raw_ori int(2) NOT NULL default '0'
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (469713,1,164123,1,164123,1),(317330,164124,317193,101,153170,1),(469434,317194,375620,101,58527,1),(591816,375621,484273,1,108653,1),(591807,484274,534671,91,50488,1),(318885,534672,649362,101,114791,1),(318728,649363,775520,102,126259,1),(336829,775521,813997,101,38577,1),(317740,813998,953227,101,139330,1),(1,813998,953227,101,139330,1);
 CREATE TABLE t2 (
 id int(10) unsigned NOT NULL default '0',
@@ -31,6 +41,12 @@ seq_end int(10) NOT NULL default '0',
 strand tinyint(2) NOT NULL default '0',
 KEY id (id)
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES (133195,469713,61327,61384,1),(133196,469713,64113,64387,1),(133197,1,1,1,0),(133197,1,1,1,-2);
 SELECT e.id,
 MIN( IF(sgp.raw_ori=1,
@@ -50,6 +66,9 @@ id	start	end	chr_strand
 133197	813898	813898	-1.0000
 drop table t1,t2;
 CREATE TABLE t1 (Fld1 int(11) default NULL,Fld2 int(11) default NULL);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,10),(1,20),(2,NULL),(2,NULL),(3,50);
 select Fld1, max(Fld2) as q from t1 group by Fld1 having q is not null;
 Fld1	q
@@ -90,17 +109,24 @@ drop table t1;
 CREATE TABLE t1 (
 `id` bigint(20) NOT NULL default '0',
 `description` text
-) ENGINE=MyISAM;
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE TABLE t2 (
 `id` bigint(20) NOT NULL default '0',
 `description` varchar(20)
-) ENGINE=MyISAM;
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1  VALUES (1, 'test');
 INSERT INTO t2 VALUES (1, 'test');
 CREATE TABLE t3 (
 `id`       bigint(20) NOT NULL default '0',
 `order_id` bigint(20) NOT NULL default '0'
-) ENGINE=MyISAM;
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 select
 a.id, a.description,
 count(b.id) as c 
@@ -133,13 +159,13 @@ INSERT INTO t1 VALUES (3), (4), (1), (3), (1);
 SELECT SUM(a) FROM t1 GROUP BY a HAVING SUM(a)>0;
 SUM(a)
 2
-6
 4
+6
 SELECT SUM(a) FROM t1 GROUP BY a HAVING SUM(a);
 SUM(a)
 2
-6
 4
+6
 DROP TABLE t1;
 CREATE TABLE t1 (a int);
 INSERT INTO t1 VALUES (1), (2), (1), (3), (2), (1);
@@ -151,12 +177,19 @@ SELECT a FROM t1 GROUP BY a HAVING 1 != 1 AND a > 1;
 a
 SELECT 0 AS x, a FROM t1 GROUP BY x,a HAVING x=1 AND a > 1;
 x	a
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 EXPLAIN SELECT a FROM t1 GROUP BY a HAVING 1 != 1 AND a > 1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` group by `test`.`t1`.`a` having false
 EXPLAIN SELECT 0 AS x, a FROM t1 GROUP BY x,a HAVING x=1 AND a > 1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING
+Warnings:
+Note	1003	/* select#1 */ select 0 AS `x`,`test`.`t1`.`a` AS `a` from `test`.`t1` group by `x`,`test`.`t1`.`a` having false
 DROP table t1;
 CREATE TABLE t1 (a int PRIMARY KEY);
 CREATE TABLE t2 (b int PRIMARY KEY, a int);
@@ -276,15 +309,6 @@ col1
 10
 10
 10
-select t1.col1 as tmp_col from t1
-where t1.col2 in 
-(select t2.col2 from t2 
-group by t2.col1, t2.col2 having tmp_col <= 10);
-tmp_col
-10
-10
-10
-10
 select t1.col1 from t1
 where t1.col2 in 
 (select t2.col2 from t2 
@@ -369,14 +393,16 @@ count(s1)
 select * from t1 a, t1 b group by a.s1 having s1 is null;
 ERROR 23000: Column 's1' in having clause is ambiguous
 drop table t1;
+set names latin1;
 create table t1 (s1 char character set latin1 collate latin1_german1_ci);
-insert into t1 values ('ü'),('y');
+insert ignore into t1 values ('ü'),('y');
 Warnings:
 Warning	1265	Data truncated for column 's1' at row 1
 select s1,count(s1) from t1
 group by s1 collate latin1_swedish_ci having s1 = 'y';
 s1	count(s1)
 y	1
+set names utf8mb4;
 drop table t1;
 DROP SCHEMA IF EXISTS HU;
 CREATE SCHEMA HU ;
@@ -419,7 +445,7 @@ select f1 from t1 group by f1 having max(f1)=f1;
 f1
 set session sql_mode='ONLY_FULL_GROUP_BY';
 select f1 from t1 having max(f1)=f1;
-ERROR 42000: Non-grouping field 'f1' is used in HAVING clause
+ERROR 42000: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'test.t1.f1'; this is incompatible with sql_mode=only_full_group_by
 select f1 from t1 group by f1 having max(f1)=f1;
 f1
 set session sql_mode='';
@@ -462,28 +488,28 @@ WHERE table2.f1 = 2
 GROUP BY table1.f1, table2.f2
 HAVING (table2.f2 = 8 AND table1.f1 >= 6);
 f1	f2
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT table1.f1, table2.f2
 FROM t1 AS table1
 JOIN t1 AS table2 ON table1.f3 = table2.f3
 WHERE table2.f1 = 2
 GROUP BY table1.f1, table2.f2
 HAVING (table2.f2 = 8 AND table1.f1 >= 6);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING noticed after reading const tables
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING noticed after reading const tables
 Warnings:
-Note	1003	/* select#1 */ select `test`.`table1`.`f1` AS `f1`,'7' AS `f2` from `test`.`t1` `table1` join `test`.`t1` `table2` where ((`test`.`table1`.`f3` = '9')) group by `test`.`table1`.`f1`,'7' having 0
-EXPLAIN EXTENDED
+Note	1003	/* select#1 */ select `test`.`table1`.`f1` AS `f1`,'7' AS `f2` from `test`.`t1` `table1` join `test`.`t1` `table2` where ((`test`.`table1`.`f3` = '9')) group by `test`.`table1`.`f1`,'7' having false
+EXPLAIN
 SELECT table1.f1, table2.f2
 FROM t1 AS table1
 JOIN t1 AS table2 ON table1.f3 = table2.f3
 WHERE table2.f1 = 2
 GROUP BY table1.f1, table2.f2
 HAVING (table2.f2 = 8);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING noticed after reading const tables
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING noticed after reading const tables
 Warnings:
-Note	1003	/* select#1 */ select `test`.`table1`.`f1` AS `f1`,'7' AS `f2` from `test`.`t1` `table1` join `test`.`t1` `table2` where ((`test`.`table1`.`f3` = '9')) group by `test`.`table1`.`f1`,'7' having 0
+Note	1003	/* select#1 */ select `test`.`table1`.`f1` AS `f1`,'7' AS `f2` from `test`.`t1` `table1` join `test`.`t1` `table2` where ((`test`.`table1`.`f3` = '9')) group by `test`.`table1`.`f1`,'7' having false
 DROP TABLE t1;
 #
 # Bug#52336 Segfault / crash in 5.1 copy_fields (param=0x9872980) at sql_select.cc:15355
@@ -529,15 +555,19 @@ ORDER BY t1.f2;
 MAX(t2.f2)
 NULL
 Warnings:
-Warning	1292	Truncated incorrect INTEGER value: 'd'
+Warning	1292	Truncated incorrect DOUBLE value: 'd'
 DROP TABLE t1,t2;
 End of 5.0 tests
 #
 # Bug#54416 MAX from JOIN with HAVING returning NULL with 5.1 and Empty set
 #
 CREATE TABLE t1 (f1 INT(11), f2 VARCHAR(1), PRIMARY KEY (f1));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,'f');
 CREATE TABLE t2 (f1 INT(11), f2 VARCHAR(1));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES (2,'m');
 INSERT INTO t2 VALUES (3,'m');
 INSERT INTO t2 VALUES (11,NULL);
@@ -571,25 +601,6 @@ f1
 DROP TABLE t1,t2;
 End of 5.1 tests
 #
-# BUG#46077 "wrong result: HAVING + ORDER BY + MyISAM + ICP
-# returns extra rows"
-#
-CREATE TABLE `t1` (
-`pk` int(11) NOT NULL AUTO_INCREMENT,
-`int_key` int(11) NOT NULL,
-PRIMARY KEY (`pk`),
-KEY `int_key` (`int_key`)
-) AUTO_INCREMENT=3 DEFAULT CHARSET=latin1;
-INSERT INTO `t1` VALUES (1,7),(2,9);
-SELECT `pk`, `int_key` field1
-FROM t1 WHERE  `pk`  <  3
-HAVING  field1  <  8
-ORDER  BY field1;
-pk	field1
-1	7
-drop table `t1`;
-End of 5.5 tests
-#
 # Bug#12402590 ASSERT AT PROTOCOL::END_STATEMENT ON MYSQL-TRUNK
 #              RUNNING RQG_OPT_SUBQUERY TEST
 #
@@ -613,27 +624,6 @@ ORDER BY t1.f1;
 f1
 DROP TABLE t1, t2;
 #
-# Bug#13406172: HAVING CLAUSE ON AGGREGATED COLUMN RETURNS
-#               WRONG RESULT WITH MYISAM
-#
-CREATE TABLE ot (i int) ENGINE=MyISAM;
-INSERT INTO ot VALUES (1);
-CREATE TABLE it (i int) ENGINE=MyISAM;
-INSERT INTO it VALUES (7), (8);
-SELECT COUNT(i) AS x 
-FROM ot 
-WHERE (i) IN (SELECT i FROM it WHERE it.i <= 4) OR i IS NULL 
-HAVING x > 1;
-x
-CREATE FUNCTION f(a INTEGER) RETURNS INTEGER DETERMINISTIC RETURN a*a;
-SELECT BIT_AND(i) AS x
-FROM ot
-WHERE f(2) < 2
-HAVING x < 2;
-x
-DROP TABLE it,ot;
-DROP FUNCTION f;
-#
 # Bug#11760517: MIN/MAX FAILS TO EVALUATE HAVING CONDITION, 
 #               RETURNS INCORRECT NULL RESULT
 #
@@ -653,6 +643,73 @@ HAVING min_pk <= 10;
 MIN(table1.i4)	min_pk
 
 DROP TABLE t1;
+End of 5.6 tests
+
+ONLY_FULL_GROUP_BY now allows using an alias in HAVING
+SET @old_sql_mode = @@sql_mode;
+SET @@sql_mode='ONLY_FULL_GROUP_BY';
+CREATE TABLE t1 (a INT, b INT);
+insert into t1 values(1,10),(2,20),(3,30);
+select a from t1 having a=3;
+a
+3
+select a as x from t1 having x=3;
+x
+3
+select avg(a) as x from t1 having x=2;
+x
+2.0000
+select a as foo, sum(b) as bar from t1 group by a having foo<10;
+foo	bar
+1	10
+2	20
+3	30
+select a as foo, sum(b) as bar from t1
+group by a
+having bar>10
+order by foo+10;
+foo	bar
+2	20
+3	30
+select a as foo,
+(select t1_inner.b from t1 as t1_inner where
+t1_inner.a=t1_outer.a+1)
+as bar from t1 as t1_outer
+group by a
+having bar<30
+order by bar+5;
+foo	bar
+1	20
+select a as foo,
+(select t1_inner.b from t1 as t1_inner where
+t1_inner.a=t1_outer.a+1)
+as bar from t1 as t1_outer
+group by foo
+having bar<30
+order by bar+5;
+foo	bar
+1	20
+DROP TABLE t1;
+set sql_mode='';
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+SELECT a FROM (SELECT 1 FROM t1 AS From1) AS From2 
+NATURAL RIGHT OUTER JOIN t1 AS Outjoin3 
+GROUP BY 1 HAVING (
+SELECT 1 FROM t1 AS Grouphaving4 GROUP BY 1 HAVING a);
+a
+SELECT a FROM (SELECT 1 FROM t1 AS From1) AS From2
+NATURAL RIGHT OUTER JOIN t1 AS Outjoin3
+GROUP BY 1 HAVING
+sin((SELECT 1 FROM t1 AS Grouphaving4 GROUP BY 1 HAVING a));
+a
+CREATE TABLE t2 (a INT) ENGINE=INNODB;
+SELECT Outjoin3.a FROM (SELECT 1 FROM t1 AS From1) AS From2 
+NATURAL RIGHT OUTER JOIN t2 AS Outjoin3 
+GROUP BY 1 HAVING (
+SELECT 1 FROM t1 AS GroupHaving4 GROUP BY 1 HAVING a);
+a
+DROP TABLE t1, t2;
+SET @@sql_mode = @old_sql_mode;
 #
 # Bug#17055185: WRONG RESULTS WHEN RUNNING A SELECT THAT INCLUDE
 #               A HAVING BASED ON A FUNCTION.
@@ -660,12 +717,19 @@ DROP TABLE t1;
 CREATE TABLE series (
 val INT(10) UNSIGNED NOT NULL
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO series VALUES(1);
+CREATE TABLE seq_calls (
+c INT
+);
+INSERT INTO seq_calls VALUES(0);
 CREATE FUNCTION next_seq_value() RETURNS INT
 BEGIN
 DECLARE next_val INT;
 SELECT val INTO next_val FROM series;
 UPDATE series SET val=mod(val + 1, 2);
+UPDATE seq_calls SET c=c+1;
 RETURN next_val;
 END;
 |
@@ -675,6 +739,9 @@ INSERT INTO t1 VALUES(10, 10), (11, 11), (12, 12), (12, 13),(14, 15), (15, 16),
 ANALYZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+SELECT * FROM series, seq_calls;
+val	c
+1	0
 SELECT t, next_seq_value() r FROM t1 FORCE INDEX(t)
 GROUP BY t HAVING r = 1  ORDER BY t1.u;
 t	r
@@ -682,10 +749,13 @@ t	r
 12	1
 15	1
 17	1
+SELECT * FROM series, seq_calls;
+val	c
+0	7
+UPDATE series set val=0;
 SELECT DISTINCT t1.t, next_seq_value() r  FROM t1, t1 P
 WHERE P.t = t1.t HAVING r = 1 ORDER BY t1.u;
 t	r
-10	0
 11	0
 12	0
 14	0
@@ -695,33 +765,37 @@ t	r
 PREPARE STMT FROM 'SELECT t, next_seq_value() r FROM t1 FORCE INDEX(t)
               GROUP BY t HAVING (SELECT 1 FROM t1 WHERE r = 1 LIMIT 1)
               ORDER BY t1.u';
+SELECT * FROM series, seq_calls;
+val	c
+1	22
+UPDATE series set val=0;
 EXECUTE stmt;
 t	r
-10	0
-11	0
-12	0
-14	0
-15	0
-16	0
-17	0
+11	1
+14	1
+16	1
+SELECT * FROM series, seq_calls;
+val	c
+1	29
+UPDATE series set val=1;
 EXECUTE stmt;
 t	r
-10	0
-11	0
-12	0
-14	0
-15	0
-16	0
-17	0
+10	1
+12	1
+15	1
+17	1
 DEALLOCATE PREPARE stmt;
 INSERT INTO t1 SELECT * FROM t1;
 ALTER TABLE t1 ADD KEY(t, u);
 ANALYZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+SELECT * FROM series, seq_calls;
+val	c
+0	36
+UPDATE series set val=0;
 SELECT next_seq_value() r, MIN(u) FROM t1 GROUP BY t HAVING r = 1;
 r	MIN(u)
-0	10
 0	11
 0	12
 0	15
@@ -730,5 +804,177 @@ r	MIN(u)
 0	18
 DROP TABLE t1;
 DROP FUNCTION next_seq_value;
-DROP TABLE series;
-End of 5.6 tests
+DROP TABLE series, seq_calls;
+#
+#  Bug#21243772: NOT IN SUBQUERY RETURNS INCORRECT RESULTS WHEN INNER
+#                QUERY HAS COUNT DISTINCT.
+#
+CREATE TABLE t1 (t TEXT NOT NULL, u TEXT);
+INSERT INTO t1 VALUES('2', '1'), ('3', '1'), ('4', '1');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SELECT * FROM t1 WHERE (t, u) in (SELECT a.t,  COUNT(DISTINCT a.u)
+FROM t1 a, t1 b
+GROUP BY a.t);
+t	u
+2	1
+3	1
+4	1
+SELECT * FROM t1 WHERE (t, u) not in (SELECT a.t,  COUNT(DISTINCT a.u)
+FROM t1 a, t1 b
+GROUP BY a.t);
+t	u
+DROP TABLE t1;
+#
+#  Bug#21507072: SIG 11 IN TABLE_LIST::MAP AT SQL/TABLE.H:2463.
+#
+CREATE TABLE t1 (col_varchar_key varchar(1) DEFAULT NULL,
+KEY col_varchar_key (col_varchar_key));
+INSERT INTO t1 VALUES ('a'), ('b'), ('c'), ('h'), ('i'), ('i'), ('j');
+SELECT SQL_BUFFER_RESULT col_varchar_key AS field1
+FROM t1 AS table1
+GROUP BY field1
+HAVING field1 = 'a';
+field1
+a
+DROP TABLE t1;
+# Bug#21613422: Assertion failed: !thd->is_error() in ::prepare()
+CREATE TABLE a(f INTEGER, g INTEGER) engine=innodb;
+SELECT (SELECT 1 FROM a HAVING g)
+FROM (SELECT 1) AS e
+JOIN a AS t on TRUE
+JOIN a USING (f)
+JOIN a AS h on TRUE;
+ERROR 23000: Column 'g' in having clause is ambiguous
+DROP TABLE a;
+#
+# Bug #22655856: COLUMN NAME IN HAVING, WHICH IS CONTAINED IN SELECT
+#                LIST '*', PRODUCES ERROR
+#
+CREATE TABLE t1(c1 INT) ENGINE=INNODB;
+CREATE TABLE t2(c2 INT) ENGINE=INNODB;
+EXPLAIN SELECT c1 FROM t1 WHERE EXISTS(SELECT * FROM t2 HAVING c2>0);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+2	SUBQUERY	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1` from `test`.`t1` where false
+SELECT c1 FROM t1 WHERE EXISTS(SELECT * FROM t2 HAVING c2>0);
+c1
+INSERT INTO t1 VALUES(1);
+INSERT INTO t2 VALUES(2);
+SELECT c1 FROM t1 WHERE EXISTS(SELECT * FROM t2 HAVING c2>0);
+c1
+1
+DROP TABLE t1, t2;
+#
+# BUG#26781725 INCORRECT RESULTS FOR QUERY(MAX FUNC+HAVING CLAUSE) WHEN USED INSIDE VIEW
+#
+CREATE TABLE CC (
+pk int(11) NOT NULL AUTO_INCREMENT,
+col_varchar_key varchar(1) NOT NULL,
+col_varchar varchar(1) NOT NULL,
+PRIMARY KEY (pk),
+KEY col_varchar_key (col_varchar_key)
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO CC VALUES
+(10,'v','v'),(18,'a','a'),(19,'v','v'),(20,'u','u'),(21,'s','s'),(22,'y','y'),
+(23,'z','z'),(28,'y','y');
+SELECT MAX(col_varchar_key) AS field1 FROM CC AS alias1
+HAVING field1 <> 5;
+field1
+z
+CREATE OR REPLACE VIEW v1 AS SELECT MAX(col_varchar_key) AS field1 FROM CC AS alias1
+HAVING field1 <> 5;
+SELECT * FROM v1;
+field1
+z
+DROP TABLE CC;
+DROP VIEW v1;
+# Bug#28934388: LIMIT is applied before HAVING when you have a subquery
+CREATE TABLE t (id INT PRIMARY KEY, value INT);
+INSERT INTO t VALUES (1, 99), (2,98), (3, 97);
+CREATE TABLE o(c INTEGER);
+INSERT INTO o(c) VALUES(1), (2);
+SELECT t1.id, (SELECT t2.value FROM t t2 WHERE t1.id = t2.id) AS sub_value
+FROM t t1
+HAVING sub_value = 99
+ORDER BY value
+LIMIT 1;
+id	sub_value
+1	99
+SELECT t1.id, (SELECT t2.value FROM t t2 WHERE t1.id = t2.id) AS sub_value
+FROM t t1
+HAVING sub_value = 99 AND RAND() >= 0.0E0
+ORDER BY value
+LIMIT 1;
+id	sub_value
+1	99
+SELECT (SELECT (SELECT t2.value+o.c FROM t t2 WHERE t1.id = t2.id) AS sub_value
+FROM t t1
+HAVING sub_value = 99
+ORDER BY value
+LIMIT 1) AS sub_value
+FROM o;
+sub_value
+99
+99
+DROP TABLE t, o;
+# Bug#31429865: Assertion `table_share->tmp_table != NO_TMP_TABLE ||
+#                m_lock_type == 1' failed.
+CREATE TABLE t(a INTEGER);
+INSERT INTO t VALUES(1),(2);
+CREATE VIEW v AS SELECT a FROM t HAVING 0<>1;
+DELETE FROM v LIMIT 1;
+ERROR HY000: The target table v of the DELETE is not updatable
+DROP VIEW v;
+DROP TABLE t;
+# Bug#32239484: Item_sum_json::val_json: assertion `!m_wrapper->empty()'
+SELECT 1 HAVING COUNT(*) = 1;
+1
+1
+SELECT 1 WHERE TRUE HAVING COUNT(*) = 1;
+1
+1
+SELECT 1 WHERE FALSE HAVING COUNT(*) = 0;
+1
+1
+SELECT 1 HAVING json_objectagg(utc_date(), 1416) <> 0;
+1
+1
+#
+# Bug #33152269: No result set returned when using HAVING COUNT(DISTINCT ...)
+#
+CREATE TABLE t1 (a INTEGER);
+INSERT INTO t1 VALUES (1), (2);
+SELECT DISTINCT
+COUNT(DISTINCT t1.a) AS da
+FROM
+t1
+JOIN t1 AS t2 ON t1.a = t2.a
+GROUP BY t1.a
+HAVING COUNT(DISTINCT t1.a) = 1;
+da
+1
+DROP TABLE t1;
+#
+# Bug #30617496: BAD ITEM REF FROM CORRELATED SUBQUERY TO OUTER DISTINCT TABLE
+#
+CREATE TABLE t1 (f1 INT, f2 TEXT, f3 INT, PRIMARY KEY(f1));
+CREATE TABLE t2 LIKE t1;
+SELECT DISTINCT f3 FROM t1 HAVING (SELECT 1 FROM t2 HAVING f2 LIMIT 1) ORDER BY f3;
+ERROR 42S22: Unknown column 'f2' in 'having clause'
+DROP TABLE t1;
+DROP TABLE t2;
+# Bug#34923792: Mysqld assert - JOIN::add_having_as_tmp_table_cond
+CREATE TABLE t1 (f1 INTEGER);
+SELECT SUM(t1.f1)+1 AS field1
+FROM t1 JOIN t1 AS t2
+GROUP BY t1.f1
+HAVING field1 < 7
+ORDER BY field1;
+field1
+DROP TABLE t1;

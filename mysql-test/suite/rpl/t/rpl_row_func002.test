@@ -16,6 +16,7 @@
 
 # Includes
 -- source include/have_binlog_format_row.inc
+-- source include/set_privilege_checks_user_as_system_user.inc
 -- source include/master-slave.inc
 
 
@@ -30,9 +31,10 @@ DROP TABLE IF EXISTS test.t2;
 --enable_warnings
 
 # Section 1 test from Peter G. This test changes uses a stored function to update rows and return the timestamp. We change the value of the time stamp on the master to see what is replicated.
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE test.t1 (a INT NOT NULL AUTO_INCREMENT, t TIMESTAMP, t2 TIMESTAMP, PRIMARY KEY(a));
 CREATE TABLE test.t2 (a INT NOT NULL AUTO_INCREMENT, t TIMESTAMP, t2 TIMESTAMP, PRIMARY KEY(a));
+SET sql_mode = default;
 
 delimiter //;
 create function test.f1() RETURNS TIMESTAMP 
@@ -100,6 +102,7 @@ DROP TABLE test.t2;
 
 diff_files $MYSQLTEST_VARDIR/tmp/func002_master.sql $MYSQLTEST_VARDIR/tmp/func002_slave.sql;
 
-# End of 5.0 test case
-
+--remove_file $MYSQLTEST_VARDIR/tmp/func002_master.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/func002_slave.sql
 --source include/rpl_end.inc
+# End of 5.0 test case

@@ -1,0 +1,16 @@
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
+# Adding debug point 'error_unique_log_filename' to @@GLOBAL.debug
+FLUSH LOGS;
+ERROR HY000: Can't generate a unique log-filename binlog.(1-999)
+
+# restart
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
+# Adding debug point 'error_unique_log_filename' to @@GLOBAL.debug
+RESET MASTER;
+ERROR HY000: Can't generate a unique log-filename binlog.(1-999)
+
+# Removing debug point 'error_unique_log_filename' from @@GLOBAL.debug
+RESET MASTER;
+ERROR HY000: Target log not found in binlog index
+SET GLOBAL binlog_error_action= ABORT_SERVER;
+FLUSH LOGS;

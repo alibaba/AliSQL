@@ -16,6 +16,7 @@
 #  BUG#33413 show binlog events fails if binlog has event size of close
 #            to max_allowed_packet
 
+--source include/not_group_replication_plugin.inc
 source include/have_binlog_format_statement.inc;
 source include/master-slave.inc;
 
@@ -54,7 +55,9 @@ eval load data infile '$MYSQLTEST_VARDIR/tmp/bug30435_5k.txt' into table t2;
 select count(*) from t2 /* 5 000 */;
 
 # the binlog will show fragmented Append_block events
+--let $mask_binlog_commit_events= 1
 source include/show_binlog_events.inc;
+--let $mask_binlog_commit_events= 0
 
 
 --echo ==== Verify results on slave ====

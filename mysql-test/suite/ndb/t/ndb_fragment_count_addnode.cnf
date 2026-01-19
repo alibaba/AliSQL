@@ -1,0 +1,63 @@
+!include include/default_mysqld.cnf
+!include include/default_ndbd.cnf
+
+[cluster_config.1]
+ThreadConfig=main,rep,recv,ldm={count=4}
+NoOfReplicas=                  2
+TimeBetweenGlobalCheckpoints=  200
+ndbd=,,,,,
+ndb_mgmd=
+mysqld=,
+ndbapi=,,,,,,,,,,,
+
+[mysqld]
+# Make all mysqlds use cluster
+ndbcluster
+ndb-wait-connected=20
+ndb-wait-setup=60
+ndb-cluster-connection-pool=3
+ndb-extra-logging=99
+
+[cluster_config.mysqld.1.1]
+NodeId=8
+Dedicated=1
+
+[cluster_config.mysqld.2.1]
+NodeId=9
+Dedicated=1
+
+[cluster_config.ndbapi.1.1]
+NodeId=10
+Dedicated=1
+
+[cluster_config.ndbapi.2.1]
+NodeId=11
+Dedicated=1
+
+[cluster_config.ndbapi.3.1]
+NodeId=12
+Dedicated=1
+
+[cluster_config.ndbapi.4.1]
+NodeId=13
+Dedicated=1
+
+[mysqld.1.1]
+ndb-cluster-connection-pool-nodeids=8,10,12
+
+[mysqld.2.1]
+ndb-cluster-connection-pool-nodeids=9,11,13
+
+[cluster_config.ndbd.5.1]
+Nodegroup=65536
+
+[cluster_config.ndbd.6.1]
+Nodegroup=65536
+
+[ENV]
+NDB_CONNECTSTRING=             @mysql_cluster.1.ndb_connectstring
+MASTER_MYPORT=                 @mysqld.1.1.port
+MASTER_MYPORT1=                @mysqld.2.1.port
+
+NDB_BACKUP_DIR=                @cluster_config.ndbd.1.1.BackupDataDir
+

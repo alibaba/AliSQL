@@ -1,0 +1,366 @@
+/*
+ * Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License, version 2.0,
+ * as published by the Free Software Foundation.
+ *
+ * This program is designed to work with certain software (including
+ * but not limited to OpenSSL) that is licensed under separate terms,
+ * as designated in a particular file or component or in included license
+ * documentation.  The authors of MySQL hereby grant you an additional
+ * permission to link the program and your derivative works with the
+ * separately licensed software that they have either included with
+ * the program or referenced in the documentation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License, version 2.0, for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+
+/** @page mysqlx_protocol_lifecycle Life Cycle
+
+ Topics in this section:
+
+ - @ref lifecycle_Connection
+ - @ref lifecycle_Session
+ - @ref lifecycle_Stages_of_Session_Setup
+ - @ref lifecycle_Authentication
+ - @ref lifecycle_Pipelining
+ - @ref lifecycle_Extensions
+
+The following list describes some of the terms introduced in this
+section:
+
+@par Transport
+    Transport layer that exchanges data: TCP sockets, Unix Sockets,
+    TLS, and so on.
+
+@par Connection
+    A lower-level connection between two Endpoints.
+
+@par Session
+    The session maintains the state. User-Variables, Temporary Tables,
+    and so on.
+
+@par Messages
+    @ref mysqlx_protocol_messages "Messages" are exchanged between
+    Endpoints. On a higher level they build a sequence of Messages with
+    a initial and final Message.
+
+@par Endpoints
+    A client or a server.
+
+Connection {#lifecycle_Connection}
+==========
+
+A default connection supports:
+
+-  supports connection capability negotiation via
+   @ref Mysqlx::Connection::CapabilitiesGet
+   and
+   @ref Mysqlx::Connection::CapabilitiesSet
+
+-  must support at least one of the following:
+
+   -  @ref lifecycle_TLS_Extension "TLS Extension"
+      and PLAIN
+      @ref mysqlx_protocol_authentication "Authentication"
+      or
+
+   -  MYSQL41
+      @ref mysqlx_protocol_authentication "Authentication"
+      or another challenge response authentication mechanism
+      or
+
+   -  SHA256_MEMORY
+      @ref mysqlx_protocol_authentication "Authentication"
+
+Session {#lifecycle_Session}
+=======
+
+A session owns state like:
+
+-  current schema
+
+-  current character set
+
+-  temporary tables
+
+-  user variables
+
+-  open transactions
+
+A session is used by the server and the protocol to manage state.
+
+Sessions are:
+
+-  opened with
+   @ref Mysqlx::Session::AuthenticateStart
+
+-  reset session state with @ref Mysqlx::Session::Reset
+
+-  re-authenticate session with @ref Mysqlx::Session::Reset
+
+-  closed with @ref Mysqlx::Session::Close
+
+Closing a session releases all session related data.
+
+
+
+Stages of Session Setup {#lifecycle_Stages_of_Session_Setup}
+=======================
+
+After a client connects to the server it:
+
+-  may ask for the servers capabilities with
+   @ref Mysqlx::Connection::CapabilitiesGet
+
+-  may ask the server to use optional protocol features with
+   @ref Mysqlx::Connection::CapabilitiesSet
+
+-  MUST authenticate
+
+-  may send commands
+
+@startuml "Stages of Session Setup"
+== Negotiation ==
+Client -> Server: CapabilitiesGet()
+Server --> Client: { "tls": 0, ... }
+
+Client -> Server: CapabilitiesSet({"tls" : 1})
+Server --> Client: Ok
+
+== Authentication ==
+Client -> Server: AuthenticateStart(mech="MYSQL41", ...)
+Server --> Client: AuthenticateContinue(auth_data="...")
+Client -> Server: AuthenticateContinue(auth_data="...")
+Server --> Client: AuthenticateOk()
+
+== Commands ==
+...
+@enduml
+
+In the **Negotiation** step the client checks which features the server
+supports on the protocol side.
+
+After a successful finish of the **Authentication** step the previous
+Session is discarded and a new Session is created.
+
+Further **Command** Messages run within a Session.
+
+
+
+Authentication {#lifecycle_Authentication}
+==============
+
+@ref mysqlx_protocol_authentication "Authentication"
+supports several authentication mechanisms that can be discovered with
+@ref Mysqlx::Connection::CapabilitiesGet.
+
+``authentication.mechanisms``
+
+Server-side supported SASL mechanism:
+
+-  before TLS connection established: ``["MYSQL41", "SHA256_MEMORY"]``
+
+-  after TLS connection established: ``["PLAIN", "SHA256_MEMORY", "MYSQL41"]``
+
+Required mechanisms:
+
+-  PLAIN (over SSL) RFC; [RFC 4616](https://tools.ietf.org/html/rfc4616.html)
+   (required)
+
+Other known mechanisms:
+
+-  MYSQL41 (MySQL 4.1 auth mechanism)
+
+-  SHA256_MEMORY
+
+@startuml Authentication
+Client -> Server: AuthenticateStart()
+loop
+Server --> Client: AuthenticateContinue()
+Client -> Server: AuthenticateContinue()
+end
+alt
+Server --> Client: Error()
+else
+Server --> Client: AuthenticateOk()
+end
+@enduml
+
+
+Pipelining {#lifecycle_Pipelining}
+==========
+
+The messages may be pipelined:
+
+-  the client may send the messages without waiting for a reply first
+
+-  the client should only send messages which safely trigger an Error
+   packet
+
+For the server it is no difference if the messages from client where
+sent in a bulk or if the client waited. The network and send/receive
+buffers of the Operation System will act as queue.
+
+@ref mysqlx_protocol_expectations "Expectations" help to control the
+behavior of following messages if a pipelined message fails.
+
+@par Tip
+    For more information, see @ref mysqlx_protocol_implementation
+    "Implementation Notes".
+
+
+Extensions {#lifecycle_Extensions}
+==========
+
+If the result of
+@ref Mysqlx::Connection::CapabilitiesGet
+contains a extension key from the table below it supports the feature.
+
+| Name                           | Extension                                                                      |Read/Write|Version |
+|--------------------------------|--------------------------------------------------------------------------------|----------|--------|
+| ``tls``                        | @ref lifecycle_TLS_Extension "TLS"                                             | RW       | 5.7    |
+| ``authentication.mechanisms``  | @ref lifecycle_Authentication_mechanisms_Extension "Authentication mechanisms" | R        | 5.7    |
+| ``doc.formats``                | @ref lifecycle_Doc_formats_Extension "Doc formats"                             | R        | 5.7    |
+| ``client.interactive``         | @ref lifecycle_Client_interactive_Extension "Client interactive"               | RW       | 8.0    |
+| ``compression``                | @ref lifecycle_Compression_Extension "Compression"                             | RW       | 8.0.18 |
+| ``node_type``                  | @ref lifecycle_Node_type_Extension "Node type"                                 | R        | 5.7    |
+| ``client.pwd_expire_ok``       | @ref lifecycle_Client_pwd_expire_ok_Extension "Client pwd expire ok"           | RW       | 5.7    |
+
+
+@note
+    More extensions can be added in future iterations as long as they
+    are announced in ``CapabilitiesGet()`` and documented.
+
+
+## TLS Extension {#lifecycle_TLS_Extension}
+
+The client may assume that the server supports a set of features by
+default and skip the @ref Mysqlx::Connection::CapabilitiesGet
+step:
+
+-  if the TLS extension isn't supported, then the
+   @ref Mysqlx::Connection::CapabilitiesSet will
+   fail
+
+-  if it is supported, then it will succeed
+
+@code{cucumber}
+    Feature: extensions
+      Scenario: connecting with TLS, fast path
+        Given a client side X.509 certificate is provided with user name "foo"
+        And client certificate is valid
+        When connecting with TLS established
+        Then handshake should be single-step
+@endcode
+
+@startuml "TLS extension"
+== Negotiation ==
+Client -> Server: CapabilitiesSet({"tls" : 1})
+Server --> Client: Ok
+note over Client, Server: TLS handshake
+
+== Authentication ==
+Client -> Server: AuthenticateStart(mech="EXTERNAL")
+Server --> Client: AuthenticateOk()
+
+== Commands ==
+...
+@enduml
+
+@ref Mysqlx::Connection::CapabilitiesGet
+    -  ``0``: supported, not in use
+
+    -  ``1``: supported, in use
+
+@ref Mysqlx::Connection::CapabilitiesSet
+    -  ``1``: switch to TLS connection after server-side Ok
+
+    If the server doesn't support the capability, then it will return an
+    error.
+
+@note
+    Disabling TLS on a connection may not be supported by the server
+    and should result in an error.
+
+##Authentication mechanisms Extension {#lifecycle_Authentication_mechanisms_Extension}
+
+This capability return a list that informs the client,
+which authentication mechanism may be used while authentication
+(AuthenticationStart message).
+
+@note
+This list is combination of what server support (has implemented) and
+current state of the connection. For example, authentication method like
+`PLAIN` is going to be visiable after SSL actication or on SECURE channel:
+
+@startuml
+   client->server: CapabilityGet
+   client<-server: Capabilities(authenticatio.mechanisms=[MYSQL41],...)
+   client->server: CapabilitySet(tls=true)
+   client->server: Ok
+   ... TLS hanshake, and contiue on top of TLS layer...
+   client->server: CapabilityGet
+   client<-server: Capabilities(authenticatio.mechanisms=[MYSQL41, PLAIN],...)
+@enduml
+
+@see @ref mysqlx_protocol_authentication section
+for more detail about differen authentication mechanisms
+
+##Document formats Extension {#lifecycle_Doc_formats_Extension}
+
+This extension informs how document are encoded by the server.
+Currently documents are in text format, still in future it could be changed
+to some binary encoding and user might be able to change the format.
+
+
+##Interactive client Extension {#lifecycle_Client_interactive_Extension}
+
+This extension changes, which timeout-values are used by the server when its
+waiting for first byte of a new request.
+Its enabled by setting ``client.interactive`` capability to ``true``, it changes
+the default of [``mysqlx_wait_timeout``]
+(https://dev.mysql.com/doc/refman/8.0/en/x-plugin-options-system-variables.html#sysvar_mysqlx_wait_timeout)
+variable, which is going to be initialized from [``mysqlx_interactive_timeout``]
+(https://dev.mysql.com/doc/refman/8.0/en/x-plugin-options-system-variables.html#sysvar_mysqlx_interactive_timeout)
+variable.
+
+@note
+Interactive clients, are application which send their requests after user input,
+for example `mysql` or `mysqlsh`. In such case the admin of an server might
+consider to extend the timeout values, and shorten for scripts that do SQL batch
+execution.
+
+
+##Compression Extension {#lifecycle_Compression_Extension}
+
+This extension informs what compression algorithms are permitted for use on
+X Protocol connections. Currently, the Deflate, LZ4, and zstd algorithms are
+supported and permitted by default. To disallow any of the algorithms,
+the user can set [``mysqlx_compression_algorithms``]
+(https://dev.mysql.com/doc/refman/8.0/en/x-plugin-options-system-variables.html#sysvar_mysqlx_compression_algorithms)
+variable to include only the ones permitted.
+
+##Node type Extension {#lifecycle_Node_type_Extension}
+
+This is rather an information to what network node the client connected.
+Currently the capability transfers "mysql" value, which points to MySQL Server,
+still intermediate network elements like MySQL Router might consider changing
+this value to "router".
+
+
+##Client pasword expire ok Extension {#lifecycle_Client_pwd_expire_ok_Extension}
+This extension changes, behavior on server side, where authentication fails
+when expired MySQL Server account is used. Setting ``client.interactive``
+capability to ``true`` waiting for first byte of a new request.
+Its enabled by setting ``client.pwd_expire_oke`` capability to ``true``,
+makes the authentication pass which allows user to change the password.
+*/

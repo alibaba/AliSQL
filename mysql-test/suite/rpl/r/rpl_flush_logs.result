@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 # Test if support 'flush error logs' statement.
 flush error logs;
@@ -56,5 +56,12 @@ flush logs;
 include/sync_slave_io_with_master.inc
 # Check the 'slave-relay-bin.000007' and 'slave-relay-bin.000008'
 # files are created after execute 'flush logs' statement.
+FLUSH SLOW LOGS;
+ERROR HY000: File not found (Errcode: ##)
+FLUSH GENERAL LOGS;
+ERROR HY000: File not found (Errcode: ##)
+include/assert.inc [assert that the above events are not written to binlog]
+include/show_binlog_events.inc
+include/sync_slave_io_with_master.inc
 include/start_slave_sql.inc
 include/rpl_end.inc

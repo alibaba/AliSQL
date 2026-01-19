@@ -1,29 +1,35 @@
 /*
-   Copyright (C) 2003-2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
+    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-
-
 /*********************************************************************
 Name:          NdbSchemaCon.cpp
 Include:
 Link:
 Author:        UABMNST Mona Natterkvist UAB/B/SD
-               EMIKRON Mikael Ronstrom                         
+               EMIKRON Mikael Ronstrom
 Date:          020826
 Version:       3.0
 Description:   Old Interface between application and NDB
@@ -42,130 +48,107 @@ Adjust:  980126  UABMNST   First version.
 #include <NdbSchemaCon.hpp>
 #include <NdbSchemaOp.hpp>
 
-
 /*********************************************************************
 NdbSchemaCon(Ndb* aNdb);
 
-Parameters:    aNdb: Pointers to the Ndb object 
-Remark:        Creates a schemacon object. 
+Parameters:    aNdb: Pointers to the Ndb object
+Remark:        Creates a schemacon object.
 ************************************************************************************************/
-NdbSchemaCon::NdbSchemaCon( Ndb* aNdb ) :
-  theNdb(aNdb),
-  theFirstSchemaOpInList(NULL),
-  theMagicNumber(0x75318642)
-{ 
+NdbSchemaCon::NdbSchemaCon(Ndb *aNdb)
+    : theNdb(aNdb), theFirstSchemaOpInList(NULL), theMagicNumber(0x75318642) {
   theError.code = 0;
-}//NdbSchemaCon::NdbSchemaCon()
+}  // NdbSchemaCon::NdbSchemaCon()
 
 /*********************************************************************
 ~NdbSchemaCon();
 
-Remark:        Deletes the connection object. 
+Remark:        Deletes the connection object.
 ************************************************************************************************/
-NdbSchemaCon::~NdbSchemaCon()
-{
-}//NdbSchemaCon::~NdbSchemaCon()
+NdbSchemaCon::~NdbSchemaCon() {}  // NdbSchemaCon::~NdbSchemaCon()
 
 /*********************************************************************
 NdbSchemaOp* getNdbSchemaOp();
 
-Return Value    Return a pointer to a NdbSchemaOp object if getNdbSchemaOp was sussesful.
-                Return NULL: In all other case. 	
-Parameters:     tableId : Id of the database table beeing deleted.
+Return Value    Return a pointer to a NdbSchemaOp object if getNdbSchemaOp was
+sussesful. Return NULL: In all other case. Parameters:     tableId : Id of the
+database table being deleted.
 ************************************************************************************************/
-NdbSchemaOp*
-NdbSchemaCon::getNdbSchemaOp()
-{ 
-  NdbSchemaOp* tSchemaOp;
+NdbSchemaOp *NdbSchemaCon::getNdbSchemaOp() {
+  NdbSchemaOp *tSchemaOp;
   if (theFirstSchemaOpInList != NULL) {
-    theError.code = 4401;	// Only support one add table per transaction
+    theError.code = 4401;  // Only support one add table per transaction
     return NULL;
-  }//if
+  }  // if
   tSchemaOp = new NdbSchemaOp(theNdb);
-  if ( tSchemaOp == NULL ) {
-    theError.code = 4000;	// Could not allocate schema operation
+  if (tSchemaOp == NULL) {
+    theError.code = 4000;  // Could not allocate schema operation
     return NULL;
-  }//if
+  }  // if
   theFirstSchemaOpInList = tSchemaOp;
   int retValue = tSchemaOp->init(this);
   if (retValue == -1) {
     release();
-    theError.code = 4000;	// Could not allocate buffer in schema operation
+    theError.code = 4000;  // Could not allocate buffer in schema operation
     return NULL;
-  }//if
+  }  // if
   return tSchemaOp;
-}//NdbSchemaCon::getNdbSchemaOp()
+}  // NdbSchemaCon::getNdbSchemaOp()
 
 /*********************************************************************
 int execute();
 
 Return Value:  Return 0 : execute was successful.
-               Return -1: In all other case.  
+               Return -1: In all other case.
 Parameters :   aTypeOfExec: Type of execute.
-Remark:        Initialise connection object for new transaction. 
+Remark:        Initialise connection object for new transaction.
 ************************************************************************************************/
-int 
-NdbSchemaCon::execute()
-{
-  if(theError.code != 0) {
+int NdbSchemaCon::execute() {
+  if (theError.code != 0) {
     return -1;
-  }//if
+  }  // if
 
-  NdbSchemaOp* tSchemaOp;
+  NdbSchemaOp *tSchemaOp;
 
   tSchemaOp = theFirstSchemaOpInList;
   if (tSchemaOp == NULL) {
     theError.code = 4402;
     return -1;
-  }//if
+  }  // if
 
   if ((tSchemaOp->sendRec() == -1) || (theError.code != 0)) {
     // Error Code already set in other place
     return -1;
-  }//if
-  
+  }  // if
+
   return 0;
-}//NdbSchemaCon::execute()
+}  // NdbSchemaCon::execute()
 
 /*********************************************************************
 void release();
 
 Remark:         Release all schemaop.
 ************************************************************************************************/
-void 
-NdbSchemaCon::release()
-{
-  NdbSchemaOp* tSchemaOp;
+void NdbSchemaCon::release() {
+  NdbSchemaOp *tSchemaOp;
   tSchemaOp = theFirstSchemaOpInList;
   if (tSchemaOp != NULL) {
     tSchemaOp->release();
     delete tSchemaOp;
-  }//if
+  }  // if
   theFirstSchemaOpInList = NULL;
   return;
-}//NdbSchemaCon::release()
+}  // NdbSchemaCon::release()
 
 #include <NdbError.hpp>
 
-static void
-update(const NdbError & _err){
-  NdbError & error = (NdbError &) _err;
+static void update(const NdbError &_err) {
+  NdbError &error = (NdbError &)_err;
   ndberror_struct ndberror = (ndberror_struct)error;
   ndberror_update(&ndberror);
   error = NdbError(ndberror);
 }
 
-const 
-NdbError & 
-NdbSchemaCon::getNdbError() const {
+const NdbError &NdbSchemaCon::getNdbError() const {
   update(theError);
   return theError;
 }
-
-
-
-
-            
-
-
-

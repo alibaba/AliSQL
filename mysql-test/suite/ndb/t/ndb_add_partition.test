@@ -1,5 +1,6 @@
---source include/ndb_have_online_alter.inc
---source include/have_ndb.inc
+# This test has not yet been adapted to wl#11968, pending fix to bug#33739957
+
+--source include/have_multi_ndb.inc
 
 --disable_warnings
 DROP TABLE IF EXISTS t1,t2;
@@ -22,7 +23,11 @@ CREATE TABLE t1 (a int unsigned not null,
                  primary key(a,c),
                  unique (b))
 ENGINE = NDB
+COMMENT="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM"
 partition by key(a);
+
+let $ndb_desc_opts= -b -i -d test t1;
+source suite/ndb/include/ndb_desc_print.inc;
 
 CREATE TABLE t2 (a int unsigned not null,
                  b int unsigned not null,
@@ -30,13 +35,74 @@ CREATE TABLE t2 (a int unsigned not null,
                  primary key(a,b),
                  unique (b))
 ENGINE = NDB
+COMMENT="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM"
 STORAGE DISK
 TABLESPACE ts1
 partition by key(a);
 
+let $ndb_desc_opts= -b -i -d test t2;
+source suite/ndb/include/ndb_desc_print.inc;
+
+CREATE TABLE t3 (a int unsigned not null,
+                 b int unsigned not null,
+                 c int unsigned not null,
+                 primary key(a,b),
+                 unique (b))
+MAX_ROWS=50000000
+ENGINE = NDB;
+
+let $ndb_desc_opts= -b -i -d test t3;
+source suite/ndb/include/ndb_desc_print.inc;
+
+CREATE TABLE t4 (a int unsigned not null,
+                 b int unsigned not null,
+                 c int unsigned not null,
+                 primary key(a,b),
+                 unique (b))
+ENGINE = NDB
+COMMENT="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
+
+CREATE TABLE t5 (a int unsigned not null,
+                 b int unsigned not null,
+                 c int unsigned null,
+                 primary key(a,b),
+                 unique (b),
+                 unique (c))
+ENGINE = NDB
+partition by key(a) partitions 3;
+
+# Fragment counts for unique index must be equal to main table
+# if main table is hashmap partitioned
+
+let ndb_database=test;
+let ndb_table=t1;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+let ndb_database=test;
+let ndb_table=t2;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+let ndb_database=test;
+let ndb_table=t3;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+let ndb_database=test;
+let ndb_table=t4;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+let ndb_database=test;
+let ndb_table=t5;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+#
+
 let $t1_part_count_start = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't1', Value, 1);
 
 let $t2_part_count_start = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't2', Value, 1);
+
+let $t3_part_count_start = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't3', Value, 1);
+
+let $t4_part_count_start = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't4', Value, 1);
 
 INSERT INTO t1 VALUES
 (1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5),
@@ -61,8 +127,15 @@ INSERT INTO t1 VALUES
 (96,96,96),(97,97,97),(98,98,98),(99,99,99),(100,100,100);
 
 insert into t2 select * from t1;
+insert into t3 select * from t1;
+insert into t4 select * from t1;
+insert into t5 (a,b,c) select a,b,if(a%2,b,NULL) as c from t1;
+
 select count(*) from t1;
 select count(*) from t2;
+select count(*) from t3;
+select count(*) from t4;
+select count(*) from t5;
 --sorted_result
 select * from t1 where a < 20;
 --sorted_result
@@ -93,38 +166,126 @@ select * from t2 where b = 30;
 select * from t2 where b = 40;
 select * from t2 where b = 50;
 
-alter online table t1 reorganize partition;
-alter online table t2 reorganize partition;
+--sorted_result
+select * from t3 where a < 20;
+--sorted_result
+select * from t3 where a = 20;
+--sorted_result
+select * from t3 where a = 30;
+--sorted_result
+select * from t3 where a = 40;
+--sorted_result
+select * from t3 where a = 50;
+select * from t3 where b = 20;
+select * from t3 where b = 30;
+select * from t3 where b = 40;
+select * from t3 where b = 50;
+
+--sorted_result
+select * from t4 where a < 20;
+--sorted_result
+select * from t4 where a = 20;
+--sorted_result
+select * from t4 where a = 30;
+--sorted_result
+select * from t4 where a = 40;
+--sorted_result
+select * from t4 where a = 50;
+select * from t4 where b = 20;
+select * from t4 where b = 30;
+select * from t4 where b = 40;
+select * from t4 where b = 50;
+
+alter table t1 algorithm=inplace, reorganize partition;
+
+let $ndb_desc_opts= -b -i -d test t1;
+source suite/ndb/include/ndb_desc_print.inc;
+
+alter table t2 algorithm=inplace, reorganize partition;
+let $ndb_desc_opts= -b -i -d test t2;
+source suite/ndb/include/ndb_desc_print.inc;
+
+--echo Cannot use inplace reorganize partition on t3 as it has explicit MAX_ROWS set
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+alter table t3 algorithm=inplace, reorganize partition;
+show warnings;
+
+alter table t3 algorithm=inplace, max_rows=50000000;
+let $ndb_desc_opts= -b -i -d test t3;
+source suite/ndb/include/ndb_desc_print.inc;
+
+alter table t4 algorithm=inplace, reorganize partition;
+
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+alter table t5 algorithm=inplace partition by key() partitions 6;
 
 let $t1_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't1', Value, 1);
 
 let $t2_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't2', Value, 1);
 
+let $t3_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't3', Value, 1);
+
+let $t4_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't4', Value, 1);
+
 --disable_query_log
+--echo Check partitions added, expect 0 in all cases
 --echo partitions added to t1
 eval select $t1_part_count_now - $t1_part_count_start as t1_added;
 --echo partitions added to t2
 eval select $t2_part_count_now - $t2_part_count_start as t2_added;
+--echo partitions added to t3
+eval select $t3_part_count_now - $t3_part_count_start as t3_added;
+--echo partitions added to t4
+eval select $t4_part_count_now - $t4_part_count_start as t4_added;
 --enable_query_log
 
-alter online table t1 add partition partitions 1;
-alter online table t2 add partition partitions 4;
+alter table t1 algorithm=inplace, add partition partitions 1;
+
+let $ndb_desc_opts= -b -i -d test t1;
+source suite/ndb/include/ndb_desc_print.inc;
+
+alter table t2 algorithm=inplace, add partition partitions 4;
+let $ndb_desc_opts= -b -i -d test t2;
+source suite/ndb/include/ndb_desc_print.inc;
+
+alter table t3 algorithm=inplace, max_rows=100000000; # Expansion of max rows
+let $ndb_desc_opts= -b -i -d test t3;
+source suite/ndb/include/ndb_desc_print.inc;
+
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+alter table t4 algorithm=inplace, max_rows=100000000; # Attempted introduction of max rows - fails
 
 let $t1_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't1', Value, 1);
 
 let $t2_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't2', Value, 1);
 
+let $t3_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't3', Value, 1);
+
+let $t4_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't4', Value, 1);
+
 --disable_query_log
---echo partitions added to t1
+--echo partitions added to t1 (expect 1)
 eval select $t1_part_count_now - $t1_part_count_start as t1_added;
---echo partitions added to t2
+--echo partitions added to t2 (expect 4)
 eval select $t2_part_count_now - $t2_part_count_start as t2_added;
+--echo partitions added to t3 (expect 4)
+eval select $t3_part_count_now - $t3_part_count_start as t3_added;
+--echo partitions added to t4 (expect 0)
+eval select $t4_part_count_now - $t4_part_count_start as t4_added;
 --enable_query_log
 
 # reorganize partition not support if not default partitioning
 # and after a add partition it's no longer default
 --error ER_REORG_NO_PARAM_ERROR
-alter online table t1 reorganize partition;
+alter table t1 algorithm=inplace, reorganize partition;
+
+# Following will fail as t3 has an explicit MAX_ROWS set 
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+alter table t3 algorithm=inplace, reorganize partition;
+show warnings;
+
+# t4 reorg will succeed as t4 has no explicit MAX_ROWS
+alter table t4 algorithm=inplace, reorganize partition;
 
 select count(*) from t1;
 select count(*) from t2;
@@ -158,18 +319,68 @@ select * from t2 where b = 30;
 select * from t2 where b = 40;
 select * from t2 where b = 50;
 
-alter online table t1 add partition partitions 2;
-alter online table t2 add partition partitions 1;
+--sorted_result
+select * from t3 where a < 20;
+--sorted_result
+select * from t3 where a = 20;
+--sorted_result
+select * from t3 where a = 30;
+--sorted_result
+select * from t3 where a = 40;
+--sorted_result
+select * from t3 where a = 50;
+select * from t3 where b = 20;
+select * from t3 where b = 30;
+select * from t3 where b = 40;
+select * from t3 where b = 50;
+
+--sorted_result
+select * from t4 where a < 20;
+--sorted_result
+select * from t4 where a = 20;
+--sorted_result
+select * from t4 where a = 30;
+--sorted_result
+select * from t4 where a = 40;
+--sorted_result
+select * from t4 where a = 50;
+select * from t4 where b = 20;
+select * from t4 where b = 30;
+select * from t4 where b = 40;
+select * from t4 where b = 50;
+
+let ndb_database=test;
+let ndb_table=t4;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+drop table t4;
+
+alter table t1 algorithm=inplace, add partition partitions 2;
+let $ndb_desc_opts= -b -i -d test t1;
+source suite/ndb/include/ndb_desc_print.inc;
+
+alter table t2 algorithm=inplace, add partition partitions 1;
+let $ndb_desc_opts= -b -i -d test t2;
+source suite/ndb/include/ndb_desc_print.inc;
+
+alter table t3 algorithm=inplace, max_rows=150000000;
+let $ndb_desc_opts= -b -i -d test t3;
+source suite/ndb/include/ndb_desc_print.inc;
+
 
 let $t1_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't1', Value, 1);
 
 let $t2_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't2', Value, 1);
 
+let $t3_part_count_now = query_get_value(select count(*) as Value from information_schema.partitions where table_schema = 'test' and table_name = 't3', Value, 1);
+
 --disable_query_log
---echo partitions added to t1
+--echo partitions added to t1 (expect 3)
 eval select $t1_part_count_now - $t1_part_count_start as t1_added;
---echo partitions added to t2
+--echo partitions added to t2 (expect 5)
 eval select $t2_part_count_now - $t2_part_count_start as t2_added;
+--echo partitions added to t3 (expect 4)
+eval select $t3_part_count_now - $t3_part_count_start as t3_added;
 --enable_query_log
 
 select count(*) from t1;
@@ -204,7 +415,108 @@ select * from t2 where b = 30;
 select * from t2 where b = 40;
 select * from t2 where b = 50;
 
-drop table t1,t2;
-alter tablespace ts1 drop datafile 'datafile.dat' engine = ndb;
-drop tablespace ts1 engine = ndb;
+--sorted_result
+select * from t3 where a < 20;
+--sorted_result
+select * from t3 where a = 20;
+--sorted_result
+select * from t3 where a = 30;
+--sorted_result
+select * from t3 where a = 40;
+--sorted_result
+select * from t3 where a = 50;
+select * from t3 where b = 20;
+select * from t3 where b = 30;
+select * from t3 where b = 40;
+select * from t3 where b = 50;
+
+# Fragment counts for unique index may now differ from main table
+# since unique index do not reorg
+
+let ndb_database=test;
+let ndb_table=t1;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+let ndb_database=test;
+let ndb_table=t2;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+let ndb_database=test;
+let ndb_table=t3;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+let ndb_database=test;
+let ndb_table=t5;
+--source suite/ndb/include/ndb_check_unique_index.inc
+
+alter table t5 algorithm=inplace, add partition partitions 1;
+let $ndb_desc_opts= -b -i -d test t5;
+source suite/ndb/include/ndb_desc_print.inc;
+
+drop table t1,t2,t3,t5;
+
+--echo Bug 33523991 Ndb online reorg : Scan count verification
+--echo Scan count issue on complete phase of reorg
+
+create table t1 (a int primary key, b int, c int, d int, unique(b), unique(c)) engine=ndb;
+
+--echo Populate some data
+insert into t1 values (1,1,1,1);
+insert into t1 select a+1, b+1, c+1, d+1 from t1;
+insert into t1 select a+2, b+2, c+2, d+2 from t1;
+insert into t1 select a+4, b+4, c+4, d+4 from t1;
+insert into t1 select a+8, b+8, c+8, d+8 from t1;
+insert into t1 select a+16, b+16, c+16, d+16 from t1;
+insert into t1 select a+32, b+32, c+32, d+32 from t1;
+insert into t1 select a+64, b+64, c+64, d+64 from t1;
+insert into t1 select a+128, b+128, c+128, d+128 from t1;
+insert into t1 select a+256, b+256, c+256, d+256 from t1;
+insert into t1 select a+512, b+512, c+512, d+512 from t1;
+insert into t1 select a+1024, b+1024, c+1024, d+1024 from t1;
+insert into t1 select a+2048, b+2048, c+2048, d+2048 from t1;
+
+--connection server2
+
+delimiter %;
+create procedure scans (max_iterations int)
+sp: begin
+  DECLARE sum_d int;
+  set @x=0;
+  repeat
+    select sum(d) into sum_d from t1;
+    set @x = @x + 1;
+    if sum_d = 0
+    then
+      leave sp;
+    end if;
+  until @x=max_iterations
+  end repeat;
+end%
+
+delimiter ;%
+
+--send call scans(20000);
+
+--connection server1
+
+alter table t1 algorithm=inplace, add partition partitions 1;
+
+--echo Alter ok, run again
+
+alter table t1 algorithm=inplace, add partition partitions 1;
+
+--echo Second alter ok, finish scans
+select sum(d) into @sum_d from t1;
+insert into t1 values (20000,20000,20000, 0 - @sum_d);
+
+--connection server2
+--reap
+
+drop procedure scans;
+
+--connection server1
+drop table t1;
+
+alter tablespace ts1 drop datafile 'datafile.dat';
+drop tablespace ts1;
 drop logfile group lg1 engine = ndb;

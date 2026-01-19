@@ -50,17 +50,21 @@ SELECT COUNT(@@GLOBAL.have_ssl);
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 
+--disable_warnings
 SELECT @@GLOBAL.have_ssl = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='have_ssl';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.have_ssl);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='have_ssl';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -94,7 +98,7 @@ SELECT COUNT(@@GLOBAL.have_ssl);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT have_ssl = @@SESSION.have_ssl;
---echo Expected error 'Readonly variable'
+SELECT have_ssl;
+--echo Expected error 'Unknown column'
 
 

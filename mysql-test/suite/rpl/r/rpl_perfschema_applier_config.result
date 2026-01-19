@@ -1,0 +1,57 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+include/assert.inc [On master, the table should return an empty set.]
+
+# Verify that SELECT works and produces an output similar to
+# the corresponding field in SHOW SLAVE STATUS(SSS) in all scenarios.
+
+
+# Verify that output is same as SSS on a fresh slave.
+
+include/assert.inc [Value returned by SSS and PS table for Desired_Delay should be same.]
+
+# Verify that the value of this field is correct after STOP SLAVE.
+
+include/stop_slave.inc
+include/assert.inc [Value returned by SSS and PS table for Desired_Delay should be same.]
+
+# Verify that, when desired delay is set, the value is shown corectly.
+
+CHANGE REPLICATION SOURCE to SOURCE_DELAY= 2;
+include/start_slave.inc
+include/assert.inc [Value returned by SSS and PS table for Desired_Delay should be same.]
+
+# Verify that the value is preserved after STOP SLAVE.
+
+include/stop_slave.inc
+include/assert.inc [Value returned by SSS and PS table for Desired_Delay should be same.]
+
+# Verify that, when desired delay is reset, the value is shown corectly.
+
+CHANGE REPLICATION SOURCE to SOURCE_DELAY= 0;
+include/start_slave.inc
+include/assert.inc [Value returned by SSS and PS table for Desired_Delay should be same.]
+
+# Verify that `privilege_checks_user` is initialized to `NULL`.
+
+include/assert.inc [Value for Privilege_Checks_User is initialized to NULL]
+
+# Verify that `require_row_format` is initialized to `NO`.
+
+include/assert.inc [Value for Require_Row_Format is initialized to NO]
+
+# Verify that `require_table_primary_key_check` is initialized to `STREAM`.
+
+include/assert.inc [Value for Require_Table_Primary_Key_Check  is initialized to STREAM]
+
+# Verify that `assign_gtids_to_anonymous_transactions_type` is initialized to `OFF`.
+
+include/assert.inc [Value for Assign_gtids_to_anonymous_transactions_type is initialized to OFF]
+
+# Verify that `assign_gtids_to_anonymous_transactions_value` is initialized to NULL.
+
+include/assert.inc [Value for Assign_gtids_to_anonymous_transactions_value is initialized to NULL]
+include/rpl_end.inc

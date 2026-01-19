@@ -23,7 +23,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/have_innodb.inc
 --source include/load_sysvars.inc
 
 ######################################################################## 
@@ -38,6 +37,7 @@
 
 SET @global_start_value = @@global.innodb_thread_concurrency;
 SELECT @global_start_value;
+SET @default_innodb_thread_sleep_delay = @@global.innodb_thread_sleep_delay;
 
 
 
@@ -99,9 +99,18 @@ SELECT @@global.innodb_thread_concurrency;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.innodb_thread_concurrency = "Y";
 SELECT @@global.innodb_thread_concurrency;
-
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_thread_concurrency = ' ';
+SELECT @@global.innodb_thread_concurrency;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_thread_concurrency = " ";
+SELECT @@global.innodb_thread_concurrency;
 
 SET @@global.innodb_thread_concurrency = 1001;
+SELECT @@global.innodb_thread_concurrency;
+
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_thread_concurrency = 255.01;
 SELECT @@global.innodb_thread_concurrency;
 
 --echo '#----------------------FN_DYNVARS_046_05------------------------#'
@@ -109,12 +118,16 @@ SELECT @@global.innodb_thread_concurrency;
 #     Check if the value in GLOBAL Table matches value in variable      #
 #########################################################################
 
+--disable_warnings
 SELECT @@global.innodb_thread_concurrency =
- VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+ VARIABLE_VALUE FROM performance_schema.global_variables
   WHERE VARIABLE_NAME='innodb_thread_concurrency';
+--enable_warnings
 SELECT @@global.innodb_thread_concurrency;
-SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+--disable_warnings
+SELECT VARIABLE_VALUE FROM performance_schema.global_variables
  WHERE VARIABLE_NAME='innodb_thread_concurrency';
+--enable_warnings
 
 --echo '#---------------------FN_DYNVARS_046_06-------------------------#'
 ################################################################### 
@@ -145,6 +158,11 @@ SELECT @@global.innodb_thread_concurrency;
 
 SET @@global.innodb_thread_concurrency = @global_start_value;
 SELECT @@global.innodb_thread_concurrency;
+
+# Set innodb_thread_sleep_delay back to the default value
+# because it gets halved when slots are free and there
+# are no waiting threads sleeping.
+SET @@global.innodb_thread_sleep_delay = @default_innodb_thread_sleep_delay;
 
 ###############################################################
 #                    END OF innodb_thread_concurrency TESTS   #

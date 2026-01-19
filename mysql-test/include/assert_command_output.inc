@@ -1,10 +1,29 @@
 # ==== Purpose ====
 #
-# Execute a command and check:
-#  - the exit status is as specified
-#  - the output (stdout) matches a given regex
-
+# Execute a command and verify the following:
+# - the exit status is as specified;
+# - the output (stdout) matches a given regex.
+#
 # ==== Usage ====
+#
+# --let $assert_command= COMMAND
+# --let $assert_regex= REGEX
+# --let $assert_status= EXIT_STATUS
+# [--let $assert_negated= 1]
+#
+# Parameters:
+#
+#   $assert_command
+#     The command line to use.
+#
+#   $assert_regex
+#     Assert that stdout from the command matches this Perl regex.
+#
+#   $assert_status
+#     Assert that the command returns this exit status.
+#
+#   $assert_negated
+#     Assert that stdout does *not* match $assert_regex.
 
 --let $include_filename= assert_command_output.inc
 --source include/begin_include_file.inc
@@ -45,7 +64,6 @@ perl;
   if ((($output =~ m{$regex}ms) ? 1 : 0) != $positive)
   {
     print "ERROR: Command produced wrong output!\n";
-    print "ERROR: Command: '$cmd'\n";
     print "ERROR: Output expected to " . ($positive?'':'not '). "match " .
       "perl regex: '$regex'\n";
     $error= 1;
@@ -59,7 +77,8 @@ perl;
   }
   if ($error || $debug)
   {
-    print "======== BEGIN output ========\n$output\n" .
+    print "Command: '$cmd'\n";
+    print "======== BEGIN OUTPUT ========\n$output\n" .
       "======== END OUTPUT ========\n";
   }
 EOF

@@ -1,37 +1,47 @@
 #ifndef SQL_UDF_INCLUDED
 #define SQL_UDF_INCLUDED
 
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
-
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /* This file defines structures needed by udf functions */
 
-enum Item_udftype {UDFTYPE_FUNCTION=1,UDFTYPE_AGGREGATE};
+#include <stddef.h>
+#include <sys/types.h>
 
-typedef void (*Udf_func_clear)(UDF_INIT *, uchar *, uchar *);
-typedef void (*Udf_func_add)(UDF_INIT *, UDF_ARGS *, uchar *, uchar *);
-typedef void (*Udf_func_deinit)(UDF_INIT*);
-typedef my_bool (*Udf_func_init)(UDF_INIT *, UDF_ARGS *,  char *);
-typedef void (*Udf_func_any)();
-typedef double (*Udf_func_double)(UDF_INIT *, UDF_ARGS *, uchar *, uchar *);
-typedef longlong (*Udf_func_longlong)(UDF_INIT *, UDF_ARGS *, uchar *,
-                                      uchar *);
+#include "lex_string.h"
+#include "my_inttypes.h"
+#include "my_table_map.h"
+#include "mysql/udf_registration_types.h"
 
-typedef struct st_udf_func
-{
+class Item;
+class Item_result_field;
+class String;
+class THD;
+class my_decimal;
+struct CHARSET_INFO;
+
+struct udf_func {
   LEX_STRING name;
   Item_result returns;
   Item_udftype type;
@@ -43,100 +53,101 @@ typedef struct st_udf_func
   Udf_func_clear func_clear;
   Udf_func_add func_add;
   ulong usage_count;
-} udf_func;
-
-class Item_result_field;
-
-class udf_handler :public Sql_alloc
-{
- protected:
-  udf_func *u_d;
-  String *buffers;
-  UDF_ARGS f_args;
-  UDF_INIT initid;
-  char *num_buffer;
-  uchar error, is_null;
-  bool initialized;
-  Item **args;
-
- public:
-  table_map used_tables_cache;
-  bool const_item_cache;
-  bool not_original;
-  udf_handler(udf_func *udf_arg) :u_d(udf_arg), buffers(0), error(0),
-    is_null(0), initialized(0), not_original(0)
-  {}
-  ~udf_handler();
-  const char *name() const { return u_d ? u_d->name.str : "?"; }
-  Item_result result_type () const
-  { return u_d	? u_d->returns : STRING_RESULT;}
-  bool get_arguments();
-  bool fix_fields(THD *thd, Item_result_field *item,
-		  uint arg_count, Item **args);
-  void cleanup();
-  double val(my_bool *null_value)
-  {
-    is_null= 0;
-    if (get_arguments())
-    {
-      *null_value=1;
-      return 0.0;
-    }
-    Udf_func_double func= (Udf_func_double) u_d->func;
-    double tmp=func(&initid, &f_args, &is_null, &error);
-    if (is_null || error)
-    {
-      *null_value=1;
-      return 0.0;
-    }
-    *null_value=0;
-    return tmp;
-  }
-  longlong val_int(my_bool *null_value)
-  {
-    is_null= 0;
-    if (get_arguments())
-    {
-      *null_value=1;
-      return LL(0);
-    }
-    Udf_func_longlong func= (Udf_func_longlong) u_d->func;
-    longlong tmp=func(&initid, &f_args, &is_null, &error);
-    if (is_null || error)
-    {
-      *null_value=1;
-      return LL(0);
-    }
-    *null_value=0;
-    return tmp;
-  }
-  my_decimal *val_decimal(my_bool *null_value, my_decimal *dec_buf);
-  void clear()
-  {
-    is_null= 0;
-    Udf_func_clear func= u_d->func_clear;
-    func(&initid, &is_null, &error);
-  }
-  void add(my_bool *null_value)
-  {
-    if (get_arguments())
-    {
-      *null_value=1;
-      return;
-    }
-    Udf_func_add func= u_d->func_add;
-    func(&initid, &f_args, &is_null, &error);
-    *null_value= (my_bool) (is_null || error);
-  }
-  String *val_str(String *str,String *save_str);
 };
 
+/*
+  A structure of extension attributes for a UDF argument.
+  The extension pointer of UDF_ARGS may point to the object of this
+  structure. There are udf_extension component services to set and get
+  the extension attributes of argument.
+*/
+struct Udf_args_extension {
+  Udf_args_extension() : charset_info(nullptr) {}
+  const CHARSET_INFO **charset_info;
+};
 
-#ifdef HAVE_DLOPEN
-void udf_init(void),udf_free(void);
-udf_func *find_udf(const char *name, uint len=0,bool mark_used=0);
+/*
+  A structure of extension attributes for return value of UDF.
+  The extension pointer of UDF_INIT may point to the object of this
+  structure. There are udf_extension component services to set and get
+  the extension attributes of return value.
+*/
+struct Udf_return_value_extension {
+  Udf_return_value_extension(const CHARSET_INFO *charset_info = nullptr,
+                             Item_result result_type = INVALID_RESULT)
+      : charset_info(charset_info), result_type(result_type) {}
+  const CHARSET_INFO *charset_info;
+  Item_result result_type;
+};
+
+class udf_handler {
+ protected:
+  udf_func *u_d;
+  String *buffers{nullptr};
+  UDF_ARGS f_args;
+  UDF_INIT initid;
+  char *num_buffer{nullptr};
+  uchar error{0};
+  uchar is_null{0};
+  /// True when handler has been initialized and use count incremented
+  bool m_initialized{false};
+  /// True when init function has been called
+  bool m_init_func_called{false};
+  Item **args;
+  Udf_args_extension m_args_extension; /**< A struct that holds the extension
+                                          arguments for each UDF argument */
+  Udf_return_value_extension
+      m_return_value_extension; /**< A struct that holds the extension arguments
+                                   for return value */
+ public:
+  table_map used_tables_cache{0};
+  bool m_original{true};
+
+  udf_handler(udf_func *udf_arg);
+  udf_handler(const udf_handler &) = default;
+  udf_handler(udf_handler &&) = default;
+  udf_handler &operator=(const udf_handler &) = default;
+  udf_handler &operator=(udf_handler &&) = default;
+  // Clean up string buffers
+  void clean_buffers();
+  void free_handler();
+
+  bool is_initialized() const { return m_initialized; }
+
+  const char *name() const { return u_d ? u_d->name.str : "?"; }
+  Item_result result_type() const {
+    return (Item_result)(u_d ? (u_d->returns) : STRING_RESULT);
+  }
+  bool fix_fields(THD *thd, Item_result_field *item, uint arg_count,
+                  Item **args);
+  void cleanup();
+  bool call_init_func();
+  double val_real(bool *null_value);
+  longlong val_int(bool *null_value);
+  my_decimal *val_decimal(bool *null_value, my_decimal *dec_buf);
+  String *val_str(String *str, String *save_str);
+  void clear();
+  void add(bool *null_value);
+
+ private:
+  bool get_arguments();
+  String *result_string(const char *res, size_t res_length, String *str,
+                        String *save_str);
+  void get_string(uint index);
+  bool get_and_convert_string(uint index);
+};
+
+void udf_init_globals();
+void udf_read_functions_table();
+void udf_unload_udfs();
+void udf_deinit_globals();
+udf_func *find_udf(const char *name, size_t len = 0, bool mark_used = false);
 void free_udf(udf_func *udf);
-int mysql_create_function(THD *thd,udf_func *udf);
-int mysql_drop_function(THD *thd,const LEX_STRING *name);
-#endif
+bool mysql_create_function(THD *thd, udf_func *udf, bool if_not_exists);
+bool mysql_drop_function(THD *thd, const LEX_STRING *name);
+ulong udf_hash_size(void);
+void udf_hash_rlock(void);
+void udf_hash_unlock(void);
+typedef void udf_hash_for_each_func_t(udf_func *, void *);
+void udf_hash_for_each(udf_hash_for_each_func_t *func, void *arg);
 #endif /* SQL_UDF_INCLUDED */

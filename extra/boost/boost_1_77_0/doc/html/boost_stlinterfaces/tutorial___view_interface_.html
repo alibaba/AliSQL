@@ -1,0 +1,254 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Tutorial: view_interface</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../stl_interfaces.html" title="Chapter 39. Boost.STLInterfaces">
+<link rel="prev" href="tutorial___iterator_interface_.html" title="Tutorial: iterator_interface">
+<link rel="next" href="tutorial___sequence_container_interface_.html" title="Tutorial: sequence_container_interface">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial___iterator_interface_.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="tutorial___sequence_container_interface_.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_stlinterfaces.tutorial___view_interface_"></a><a class="link" href="tutorial___view_interface_.html" title="Tutorial: view_interface">Tutorial:
+    <code class="computeroutput"><span class="identifier">view_interface</span></code></a>
+</h2></div></div></div>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        All the member functions provided by <code class="computeroutput">view_interface</code> are in your
+        view's base class — <code class="computeroutput">view_interface</code> — and
+        can therefore be hidden if you define a member function with the same name
+        in your derived view. If you don't like the semantics of any <code class="computeroutput">view_interface</code>-provided member
+        function, feel free to replace it.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="boost_stlinterfaces.tutorial___view_interface_.h0"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___view_interface_.the__code__phrase_role__identifier__view_interface__phrase___code__template"></a></span><a class="link" href="tutorial___view_interface_.html#boost_stlinterfaces.tutorial___view_interface_.the__code__phrase_role__identifier__view_interface__phrase___code__template">The
+      <code class="computeroutput"><span class="identifier">view_interface</span></code> Template</a>
+    </h4>
+<p>
+      C++20 contains a <a href="https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern" target="_top">CRTP</a>
+      template, <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">ranges</span><span class="special">::</span><span class="identifier">view_interface</span></code>, which takes a range or view,
+      and adds all the operations that view types have, using only the range's/view's
+      <code class="computeroutput"><span class="identifier">begin</span><span class="special">()</span></code>
+      and <code class="computeroutput"><span class="identifier">end</span><span class="special">()</span></code>.
+      This is a C++14-compatible version of that template.
+    </p>
+<p>
+      As with <code class="computeroutput">iterator_interface</code>, <code class="computeroutput">view_interface</code>
+      makes it possible to write very few operations — only <code class="computeroutput"><span class="identifier">begin</span><span class="special">()</span></code> and
+      <code class="computeroutput"><span class="identifier">end</span><span class="special">()</span></code>
+      are actually used by <code class="computeroutput">view_interface</code> — and get
+      all the other operations that go with view types. The operations added depend
+      on what kinds of iterator and/or sentinel types your derived view type defines.
+    </p>
+<p>
+      Here is the declaration of <code class="computeroutput">view_interface</code>:
+    </p>
+<pre class="programlisting"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Derived</span><span class="special">,</span> <span class="identifier">element_layout</span> <span class="identifier">Contiguity</span> <span class="special">=</span> <span class="identifier">element_layout</span><span class="special">::</span><span class="identifier">discontiguous</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">view_interface</span><span class="special">;</span>
+</pre>
+<p>
+      <code class="computeroutput">view_interface</code>
+      only requires the derived type and an optional non-type template parameter
+      that indicates whether <code class="computeroutput"><span class="identifier">Derived</span></code>'s
+      iterators are contiguous. The non-type parameter is necessary to support pre-C++20
+      code.
+    </p>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        Proxy iterators are inherently discontiguous.
+      </p></td></tr>
+</table></div>
+<p>
+      In this example, we're implementing something very similar to <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">ranges</span><span class="special">::</span><span class="identifier">drop_while_view</span></code>.
+      First, we need helper view types <code class="computeroutput"><span class="identifier">subrange</span></code>
+      and <code class="computeroutput"><span class="identifier">all_view</span></code>, and a function
+      that takes a range and returns a view of the entire range, <code class="computeroutput"><span class="identifier">all</span><span class="special">()</span></code>:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="comment">// A subrange is simply an iterator-sentinel pair.  This one is a bit simpler</span>
+<span class="comment">// than the one in std::ranges; its missing a bunch of constructors, prev(),</span>
+<span class="comment">// next(), and advance().</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Iterator</span><span class="special">,</span> <span class="keyword">typename</span> <span class="identifier">Sentinel</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">subrange</span>
+    <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">view_interface</span><span class="special">&lt;</span><span class="identifier">subrange</span><span class="special">&lt;</span><span class="identifier">Iterator</span><span class="special">,</span> <span class="identifier">Sentinel</span><span class="special">&gt;&gt;</span>
+<span class="special">{</span>
+    <span class="identifier">subrange</span><span class="special">()</span> <span class="special">=</span> <span class="keyword">default</span><span class="special">;</span>
+    <span class="keyword">constexpr</span> <span class="identifier">subrange</span><span class="special">(</span><span class="identifier">Iterator</span> <span class="identifier">it</span><span class="special">,</span> <span class="identifier">Sentinel</span> <span class="identifier">s</span><span class="special">)</span> <span class="special">:</span> <span class="identifier">first_</span><span class="special">(</span><span class="identifier">it</span><span class="special">),</span> <span class="identifier">last_</span><span class="special">(</span><span class="identifier">s</span><span class="special">)</span> <span class="special">{}</span>
+
+    <span class="keyword">constexpr</span> <span class="keyword">auto</span> <span class="identifier">begin</span><span class="special">()</span> <span class="keyword">const</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">first_</span><span class="special">;</span> <span class="special">}</span>
+    <span class="keyword">constexpr</span> <span class="keyword">auto</span> <span class="identifier">end</span><span class="special">()</span> <span class="keyword">const</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">last_</span><span class="special">;</span> <span class="special">}</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="identifier">Iterator</span> <span class="identifier">first_</span><span class="special">;</span>
+    <span class="identifier">Sentinel</span> <span class="identifier">last_</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="comment">// std::view::all() returns one of several types, depending on what you pass</span>
+<span class="comment">// it.  Here, we're keeping it simple; all() always returns a subrange.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Range</span><span class="special">&gt;</span>
+<span class="keyword">auto</span> <span class="identifier">all</span><span class="special">(</span><span class="identifier">Range</span> <span class="special">&amp;&amp;</span> <span class="identifier">range</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">subrange</span><span class="special">&lt;</span><span class="keyword">decltype</span><span class="special">(</span><span class="identifier">range</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()),</span> <span class="keyword">decltype</span><span class="special">(</span><span class="identifier">range</span><span class="special">.</span><span class="identifier">end</span><span class="special">())&gt;(</span>
+        <span class="identifier">range</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">range</span><span class="special">.</span><span class="identifier">end</span><span class="special">());</span>
+<span class="special">}</span>
+
+<span class="comment">// A template alias that denotes the type of all(r) for some Range r.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Range</span><span class="special">&gt;</span>
+<span class="keyword">using</span> <span class="identifier">all_view</span> <span class="special">=</span> <span class="keyword">decltype</span><span class="special">(</span><span class="identifier">all</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">declval</span><span class="special">&lt;</span><span class="identifier">Range</span><span class="special">&gt;()));</span>
+</pre>
+<p>
+    </p>
+<p>
+      Note that <code class="computeroutput"><span class="identifier">subrange</span></code> is derived
+      from <code class="computeroutput">view_interface</code>, so it will have
+      all the view-like operations that are appropriate to its <code class="computeroutput"><span class="identifier">Iterator</span></code>
+      and <code class="computeroutput"><span class="identifier">Sentinel</span></code> types.
+    </p>
+<p>
+      With the helpers available, we can define <code class="computeroutput"><span class="identifier">drop_while_view</span></code>:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="comment">// Perhaps its clear now why we defined subrange, all(), etc. above.</span>
+<span class="comment">// drop_while_view contains a view data member.  If we just took any old range</span>
+<span class="comment">// that was passed to drop_while_view's constructor, we'd copy the range</span>
+<span class="comment">// itself, which may be a std::vector.  So, we want to make a view out of</span>
+<span class="comment">// whatever Range we're given so that this copy of an owning range does not</span>
+<span class="comment">// happen.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Range</span><span class="special">,</span> <span class="keyword">typename</span> <span class="identifier">Pred</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">drop_while_view</span>
+    <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">view_interface</span><span class="special">&lt;</span><span class="identifier">drop_while_view</span><span class="special">&lt;</span><span class="identifier">Range</span><span class="special">,</span> <span class="identifier">Pred</span><span class="special">&gt;&gt;</span>
+<span class="special">{</span>
+    <span class="keyword">using</span> <span class="identifier">base_type</span> <span class="special">=</span> <span class="identifier">all_view</span><span class="special">&lt;</span><span class="identifier">Range</span><span class="special">&gt;;</span>
+
+    <span class="identifier">drop_while_view</span><span class="special">()</span> <span class="special">=</span> <span class="keyword">default</span><span class="special">;</span>
+
+    <span class="keyword">constexpr</span> <span class="identifier">drop_while_view</span><span class="special">(</span><span class="identifier">Range</span> <span class="special">&amp;</span> <span class="identifier">base</span><span class="special">,</span> <span class="identifier">Pred</span> <span class="identifier">pred</span><span class="special">)</span> <span class="special">:</span>
+        <span class="identifier">base_</span><span class="special">(</span><span class="identifier">all</span><span class="special">(</span><span class="identifier">base</span><span class="special">)),</span>
+        <span class="identifier">pred_</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">pred</span><span class="special">))</span>
+    <span class="special">{}</span>
+
+    <span class="keyword">constexpr</span> <span class="identifier">base_type</span> <span class="identifier">base</span><span class="special">()</span> <span class="keyword">const</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">base_</span><span class="special">;</span> <span class="special">}</span>
+    <span class="keyword">constexpr</span> <span class="identifier">Pred</span> <span class="keyword">const</span> <span class="special">&amp;</span> <span class="identifier">pred</span><span class="special">()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">pred_</span><span class="special">;</span> <span class="special">}</span>
+
+    <span class="comment">// A more robust implementation should probably cache the value computed</span>
+    <span class="comment">// by this function, so that subsequent calls can just return the cached</span>
+    <span class="comment">// iterator.</span>
+    <span class="keyword">constexpr</span> <span class="keyword">auto</span> <span class="identifier">begin</span><span class="special">()</span>
+    <span class="special">{</span>
+        <span class="comment">// We're forced to write this out as a raw loop, since no</span>
+        <span class="comment">// std::-namespace algorithms accept a sentinel.</span>
+        <span class="keyword">auto</span> <span class="identifier">first</span> <span class="special">=</span> <span class="identifier">base_</span><span class="special">.</span><span class="identifier">begin</span><span class="special">();</span>
+        <span class="keyword">auto</span> <span class="keyword">const</span> <span class="identifier">last</span> <span class="special">=</span> <span class="identifier">base_</span><span class="special">.</span><span class="identifier">end</span><span class="special">();</span>
+        <span class="keyword">for</span> <span class="special">(;</span> <span class="identifier">first</span> <span class="special">!=</span> <span class="identifier">last</span><span class="special">;</span> <span class="special">++</span><span class="identifier">first</span><span class="special">)</span> <span class="special">{</span>
+            <span class="keyword">if</span> <span class="special">(!</span><span class="identifier">pred_</span><span class="special">(*</span><span class="identifier">first</span><span class="special">))</span>
+                <span class="keyword">break</span><span class="special">;</span>
+        <span class="special">}</span>
+        <span class="keyword">return</span> <span class="identifier">first</span><span class="special">;</span>
+    <span class="special">}</span>
+
+    <span class="keyword">constexpr</span> <span class="keyword">auto</span> <span class="identifier">end</span><span class="special">()</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">base_</span><span class="special">.</span><span class="identifier">end</span><span class="special">();</span> <span class="special">}</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="identifier">base_type</span> <span class="identifier">base_</span><span class="special">;</span>
+    <span class="identifier">Pred</span> <span class="identifier">pred_</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="comment">// Since this is a C++14 and later library, we're not using CTAD; we therefore</span>
+<span class="comment">// need a make-function.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Range</span><span class="special">,</span> <span class="keyword">typename</span> <span class="identifier">Pred</span><span class="special">&gt;</span>
+<span class="keyword">auto</span> <span class="identifier">make_drop_while_view</span><span class="special">(</span><span class="identifier">Range</span> <span class="special">&amp;</span> <span class="identifier">base</span><span class="special">,</span> <span class="identifier">Pred</span> <span class="identifier">pred</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">drop_while_view</span><span class="special">&lt;</span><span class="identifier">Range</span><span class="special">,</span> <span class="identifier">Pred</span><span class="special">&gt;(</span><span class="identifier">base</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">pred</span><span class="special">));</span>
+<span class="special">}</span>
+</pre>
+<p>
+    </p>
+<p>
+      Now, let's look at code using these types, including operations defined by
+      <code class="computeroutput">view_interface</code>
+      that we did not have to write:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="keyword">const</span> <span class="identifier">ints</span> <span class="special">=</span> <span class="special">{</span><span class="number">2</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">6</span><span class="special">};</span>
+
+<span class="comment">// all() returns a subrange, which is a view type containing ints.begin()</span>
+<span class="comment">// and ints.end().</span>
+<span class="keyword">auto</span> <span class="identifier">all_ints</span> <span class="special">=</span> <span class="identifier">all</span><span class="special">(</span><span class="identifier">ints</span><span class="special">);</span>
+
+<span class="comment">// This works using just the used-defined members of subrange: begin() and</span>
+<span class="comment">// end().</span>
+<span class="identifier">assert</span><span class="special">(</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">equal</span><span class="special">(</span><span class="identifier">all_ints</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">all_ints</span><span class="special">.</span><span class="identifier">end</span><span class="special">(),</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">end</span><span class="special">()));</span>
+
+<span class="comment">// These are available because subrange is derived from view_interface.</span>
+<span class="identifier">assert</span><span class="special">(</span><span class="identifier">all_ints</span><span class="special">[</span><span class="number">2</span><span class="special">]</span> <span class="special">==</span> <span class="number">3</span><span class="special">);</span>
+<span class="identifier">assert</span><span class="special">(</span><span class="identifier">all_ints</span><span class="special">.</span><span class="identifier">size</span><span class="special">()</span> <span class="special">==</span> <span class="number">6u</span><span class="special">);</span>
+
+<span class="keyword">auto</span> <span class="identifier">even</span> <span class="special">=</span> <span class="special">[](</span><span class="keyword">int</span> <span class="identifier">x</span><span class="special">)</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">x</span> <span class="special">%</span> <span class="number">2</span> <span class="special">==</span> <span class="number">0</span><span class="special">;</span> <span class="special">};</span>
+<span class="keyword">auto</span> <span class="identifier">ints_after_even_prefix</span> <span class="special">=</span> <span class="identifier">make_drop_while_view</span><span class="special">(</span><span class="identifier">ints</span><span class="special">,</span> <span class="identifier">even</span><span class="special">);</span>
+
+<span class="comment">// Available via begin()/end()...</span>
+<span class="identifier">assert</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">equal</span><span class="special">(</span>
+    <span class="identifier">ints_after_even_prefix</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span>
+    <span class="identifier">ints_after_even_prefix</span><span class="special">.</span><span class="identifier">end</span><span class="special">(),</span>
+    <span class="identifier">ints</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()</span> <span class="special">+</span> <span class="number">2</span><span class="special">,</span>
+    <span class="identifier">ints</span><span class="special">.</span><span class="identifier">end</span><span class="special">()));</span>
+
+<span class="comment">// ... and via view_interface.</span>
+<span class="identifier">assert</span><span class="special">(!</span><span class="identifier">ints_after_even_prefix</span><span class="special">.</span><span class="identifier">empty</span><span class="special">());</span>
+<span class="identifier">assert</span><span class="special">(</span><span class="identifier">ints_after_even_prefix</span><span class="special">[</span><span class="number">2</span><span class="special">]</span> <span class="special">==</span> <span class="number">5</span><span class="special">);</span>
+<span class="identifier">assert</span><span class="special">(</span><span class="identifier">ints_after_even_prefix</span><span class="special">.</span><span class="identifier">back</span><span class="special">()</span> <span class="special">==</span> <span class="number">6</span><span class="special">);</span>
+</pre>
+<p>
+    </p>
+<p>
+      If you want more details on <code class="computeroutput">view_interface</code>, you can find
+      it wherever you usually find reference documentation on the standard library.
+      We won't cover it here for that reason. See <a href="http://eel.is/c++draft/view.interface" target="_top">[view.interface</a>
+      on eel.is] or <a href="https://cppreference.com" target="_top">https://cppreference.com</a>
+      for details.
+    </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2019 T. Zachary Laine<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial___iterator_interface_.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="tutorial___sequence_container_interface_.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

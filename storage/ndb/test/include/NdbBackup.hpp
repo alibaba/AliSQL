@@ -1,15 +1,23 @@
 /*
-   Copyright (C) 2003-2006 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,47 +27,61 @@
 #ifndef NDBT_BACKUP_HPP
 #define NDBT_BACKUP_HPP
 
+#include <string>
+
 #include <mgmapi.h>
+#include <NdbRestarter.hpp>
 #include <Vector.hpp>
 #include "NdbConfig.hpp"
-#include <NdbRestarter.hpp>
 
 class NdbBackup : public NdbConfig {
-public:
-  NdbBackup(int _own_id, const char* _addr = 0) 
-    : NdbConfig(_own_id, _addr) {};
+ public:
+  NdbBackup(const char *_addr = 0)
+      : NdbConfig(_addr), m_default_encryption_password(NULL) {}
 
-  int start(unsigned & _backup_id,
-	    int flags = 2,
-	    unsigned int user_backup_id= 0,
-	    unsigned int logtype= 0);
-  int start() { unsigned unused =0; return start(unused); }
-  int restore(unsigned _backup_id);
+  // if len == -1, then function will use strlen() to get size of pwd
+  int set_default_encryption_password(const char *pwd, int len);
 
-  int NFMaster(NdbRestarter& _restarter);
-  int NFMasterAsSlave(NdbRestarter& _restarter);
-  int NFSlave(NdbRestarter& _restarter);
-  int NF(NdbRestarter& _restarter, int *NFDuringBackup_codes, const int sz, bool onMaster);
+  int start(unsigned &_backup_id, int flags = 2,
+            unsigned int user_backup_id = 0, unsigned int logtype = 0,
+            const char *encryption_password = nullptr,
+            unsigned int password_length = 0);
+  int start() {
+    unsigned unused = 0;
+    return start(unused);
+  }
+  int restore(unsigned _backup_id, bool restore_meta = true,
+              bool restore_data = true, unsigned error_insert = 0,
+              bool restore_epoch = false);
 
-  int FailMaster(NdbRestarter& _restarter);
-  int FailMasterAsSlave(NdbRestarter& _restarter);
-  int FailSlave(NdbRestarter& _restarter);
-  int Fail(NdbRestarter& _restarter, int *Fail_codes, const int sz, bool onMaster);
+  int NFMaster(NdbRestarter &_restarter);
+  int NFMasterAsSlave(NdbRestarter &_restarter);
+  int NFSlave(NdbRestarter &_restarter);
+  int NF(NdbRestarter &_restarter, int *NFDuringBackup_codes, const int sz,
+         bool onMaster);
+
+  int FailMaster(NdbRestarter &_restarter);
+  int FailMasterAsSlave(NdbRestarter &_restarter);
+  int FailSlave(NdbRestarter &_restarter);
+  int Fail(NdbRestarter &_restarter, int *Fail_codes, const int sz,
+           bool onMaster);
   int startLogEvent();
   int checkBackupStatus();
 
   int clearOldBackups();
+  int abort(unsigned _backup_id);
 
-private:
+ private:
+  int execRestore(bool _restore_data, bool _restore_meta, bool _restore_epoch,
+                  int _node_id, unsigned _backup_id, unsigned error_insert = 0,
+                  const char *encryption_password = nullptr,
+                  int password_length = -1);
 
-  int execRestore(bool _restore_data,
-		  bool _restore_meta,
-		  int _node_id,
-		  unsigned _backup_id);
-
-  const char * getBackupDataDirForNode(int _node_id);
+  std::string getBackupDataDirForNode(int node_id);
   NdbLogEventHandle log_handle;
-  
+  BaseString getNdbRestoreBinaryPath();
+  char *m_default_encryption_password;
+  size_t m_default_encryption_password_length;
 };
 
 #endif

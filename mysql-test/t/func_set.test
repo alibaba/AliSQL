@@ -1,9 +1,10 @@
+
 #
 # Testing if SET and similar functions
 #
 
 select interval(55,10,20,30,40,50,60,70,80,90,100),interval(3,1,1+1,1+1+1+1),field("IBM","NCA","ICL","SUN","IBM","DIGITAL"),field("A","B","C"),elt(2,"ONE","TWO","THREE"),interval(0,1,2,3,4),elt(1,1,2,3)|0,elt(1,1.1,1.2,1.3)+0;
-explain extended select INTERVAL(55,10,20,30,40,50,60,70,80,90,100),interval(3,1,1+1,1+1+1+1),field("IBM","NCA","ICL","SUN","IBM","DIGITAL"),field("A","B","C"),elt(2,"ONE","TWO","THREE"),interval(0,1,2,3,4),elt(1,1,2,3)|0,elt(1,1.1,1.2,1.3)+0;
+explain select INTERVAL(55,10,20,30,40,50,60,70,80,90,100),interval(3,1,1+1,1+1+1+1),field("IBM","NCA","ICL","SUN","IBM","DIGITAL"),field("A","B","C"),elt(2,"ONE","TWO","THREE"),interval(0,1,2,3,4),elt(1,1,2,3)|0,elt(1,1.1,1.2,1.3)+0;
 # Test 8 and 9 values (Bug #1561)
 SELECT INTERVAL(13, 7, 14, 21, 28, 35, 42, 49, 56);
 SELECT INTERVAL(13, 7, 14, 21, 28, 35, 42, 49, 56, 77);
@@ -80,8 +81,9 @@ SELECT INTERVAL(0.0, CAST(DATE(NULL) AS DECIMAL), CAST(DATE(NULL) AS DECIMAL),
 drop table if exists t1;
 --enable_warnings
 create table t1 (f1 set('test1','test2','test3') character set utf8 default null)
-engine=myisam default charset=latin1;
+default charset=latin1;
 insert into t1 values (''),(null),(null),(''),(''),('');
+--sorted_result
 select find_in_set(f1,f1) as a from t1,(select find_in_set(f1,f1) as b from t1) a;
 drop table t1;
 #
@@ -90,7 +92,7 @@ drop table t1;
 CREATE TABLE t1( a SET('a', 'b', 'c') );
 CREATE TABLE t2( a SET('a', 'b', 'c') );
 
-INSERT INTO t1 VALUES ('d');
+INSERT IGNORE INTO t1 VALUES ('d');
 INSERT INTO t2 VALUES ('');
 
 SELECT CONVERT( a USING latin1 ) FROM t1;
@@ -161,3 +163,45 @@ trim( both(-8388607)
           )
     )
 ;
+
+--echo # Bug#21547779 Assertion failed: select_lex->leaf_table_count == 0
+
+CREATE TABLE t(a INTEGER) engine=innodb;
+SELECT 1 IN (SELECT MAKE_SET(-1, 1, (SELECT 1 FROM t)) FROM t);
+DROP TABLE t;
+
+--echo #
+--echo # Bug#27751699 UBSAN: MY_STRNNCOLL_MB_BIN ,
+--echo #              NULL POINTER PASSED AS ARGUMENT
+--echo #
+
+select find_in_set(json_unquote(json_set('{}','$','')),1);
+
+--echo # Bug#33635637: Regression in FIND_IN_SET() in 8.0.22
+
+CREATE TABLE t1 (
+    c varchar(40),
+    z varchar(40),
+    s set('alpha','bravo','charlie','delta','echo','foxtrot','golf')
+);
+INSERT INTO t1 VALUES
+  ('foxtrot', 'zulu', 'bravo,delta,foxtrot'),
+  ('foxtrot', 'zulu', 'foxtrot'),
+  ('foxtrot', 'zulu', 'alpha');
+
+SET @a = 'foxtrot';
+SET @z = 'zulu';
+
+SELECT 'using string   ' as param, FIND_IN_SET('foxtrot', s) as f, s FROM t1
+UNION
+SELECT 'using variable', FIND_IN_SET(@a, s), s FROM t1
+UNION
+SELECT 'using column  ', FIND_IN_SET(c, s), s FROM t1;
+
+SELECT 'invalid string   ' as param, FIND_IN_SET('zulu', s) as f, s FROM t1
+UNION
+SELECT 'invalid variable', FIND_IN_SET(@z, s), s FROM t1
+UNION
+SELECT 'invalid column  ', FIND_IN_SET(z, s), s FROM t1;
+
+DROP TABLE t1;

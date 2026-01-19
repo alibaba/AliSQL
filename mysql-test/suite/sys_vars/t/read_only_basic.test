@@ -120,13 +120,15 @@ SELECT @@read_only;
 # Check if the value in GLOBAL & SESSION Tables matches values in variable   #
 ##############################################################################
 
+--disable_warnings
 SELECT IF(@@global.read_only, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='read_only';
 
 SELECT IF(@@read_only, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='read_only';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_139_07----------------------#'
@@ -155,7 +157,9 @@ SET global.read_only = 1;
 --Error ER_UNKNOWN_TABLE
 SELECT global.read_only;
 --Error ER_BAD_FIELD_ERROR
-SELECT read_only = @@session.read_only;
+SELECT read_only;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.read_only;
 
 
 ##############################  

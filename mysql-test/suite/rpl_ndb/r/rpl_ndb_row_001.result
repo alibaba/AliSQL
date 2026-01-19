@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 CREATE TABLE t1 (word CHAR(20) NOT NULL);
 LOAD DATA INFILE 'LOAD_FILE' INTO TABLE t1;
@@ -16,9 +19,13 @@ Aaron
 Ababa
 Ababa
 STOP SLAVE;
-SET PASSWORD FOR root@"localhost" = PASSWORD('foo');
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
+SET PASSWORD FOR root@"localhost" = 'foo';
 START SLAVE;
-SET PASSWORD FOR root@"localhost" = PASSWORD('');
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
+SET PASSWORD FOR root@"localhost" = '';
 CREATE TABLE t3(n INT);
 INSERT INTO t3 VALUES(1),(2);
 SELECT * FROM t3 ORDER BY n;
@@ -31,23 +38,31 @@ SUM(LENGTH(word))
 DROP TABLE t1,t3;
 CREATE TABLE t1 (n INT) ENGINE=NDB;
 RESET MASTER;
-STOP SLAVE;
+include/stop_slave.inc
 RESET SLAVE;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
 SELECT COUNT(*) FROM t1;
 COUNT(*)
 5000
+include/save_master_pos.inc
 RESET MASTER;
 LOCK TABLES t1 READ;
-START SLAVE;
+include/start_slave.inc
+include/sync_slave_io.inc
 UNLOCK TABLES;
+include/sync_slave_sql_with_io.inc
 SELECT COUNT(*) FROM t1;
 COUNT(*)
 5000
 DROP TABLE t1;
 CREATE TABLE t1 (n INT);
 INSERT INTO t1 VALUES(3456);
+include/sync_slave_sql_with_master.inc
 SELECT n FROM t1;
 n
 3456
 DROP TABLE t1;
+# mysql.user table restored to original values.
+include/sync_slave_sql_with_master.inc
 include/rpl_end.inc

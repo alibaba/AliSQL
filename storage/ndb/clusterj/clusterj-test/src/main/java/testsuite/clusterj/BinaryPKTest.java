@@ -1,14 +1,22 @@
 /*
- *  Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ *  Copyright (c) 2011, 2025, Oracle and/or its affiliates.
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
+ *  it under the terms of the GNU General Public License, version 2.0,
+ *  as published by the Free Software Foundation.
+ *
+ *  This program is designed to work with certain software (including
+ *  but not limited to OpenSSL) that is licensed under separate terms,
+ *  as designated in a particular file or component or in included license
+ *  documentation.  The authors of MySQL hereby grant you an additional
+ *  permission to link the program and your derivative works with the
+ *  separately licensed software that they have either included with
+ *  the program or referenced in the documentation.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  GNU General Public License, version 2.0, for more details.
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
@@ -84,7 +92,7 @@ public class BinaryPKTest extends AbstractClusterJTest {
             if (0 == i % 4) {
                 byte[] key = getStoragePK(i);
                 BinaryPK instance = session.find(BinaryPK.class, key);
-                verifyResult("update verify", instance, i, true);
+                verifyResult("update verify ", instance, i, true);
             }
         }
     }
@@ -145,13 +153,13 @@ public class BinaryPKTest extends AbstractClusterJTest {
     }
 
     protected byte[] getStoragePK(int index) {
-        return new byte[] {0, (byte)(index/256), (byte)(index%256)};
+        return new byte[] {0, (byte)((index/256) + 65), (byte)((index%256) + 65)};
     }
 
     protected byte[] getResultPK(int index) {
         byte[] result = new byte[255];
-        result[1] = (byte)(index/256);
-        result[2] = (byte)(index%256);
+        result[1] = (byte)((index/256) + 65);
+        result[2] = (byte)((index%256) + 65);
         return result;
     }
 
@@ -160,28 +168,30 @@ public class BinaryPKTest extends AbstractClusterJTest {
     }
 
     protected void verifyStorage(String where, BinaryPK instance, int index, boolean updated) {
-        errorIfNotEqual(where + "id failed", toString(getStoragePK(index)), toString(instance.getId()));
-        errorIfNotEqual(where + "number failed", index, instance.getNumber());
+        errorIfNotEqual(where + "mismatch on number", index, instance.getNumber());
         if (updated) {
-            errorIfNotEqual(where + "Value failed", getValue(NUMBER_OF_INSTANCES - index), instance.getName());
+            errorIfNotEqual(where + "mismatch on name", getValue(NUMBER_OF_INSTANCES - index), instance.getName());
         } else {
-            errorIfNotEqual(where + "Value failed", getValue(index), instance.getName());
+            errorIfNotEqual(where + "mismatch on name", getValue(index), instance.getName());
 
         }
     }
 
     protected void verifyResult(String where, BinaryPK instance, int index, boolean updated) {
-        errorIfNotEqual(where + "id failed", toString(getResultPK(index)), toString(instance.getId()));
-        errorIfNotEqual("number failed", index, instance.getNumber());
+        errorIfNotEqual(where + "mismatch on id", toString(getResultPK(index)), toString(instance.getId()));
+        errorIfNotEqual("mismatch on number", index, instance.getNumber());
         if (updated) {
-            errorIfNotEqual(where + "Value failed", getValue(NUMBER_OF_INSTANCES - index), instance.getName());
+            errorIfNotEqual(where + "mismatch on name", getValue(NUMBER_OF_INSTANCES - index), instance.getName());
         } else {
-            errorIfNotEqual(where + "Value failed", getValue(index), instance.getName());
+            errorIfNotEqual(where + "mismatch on name", getValue(index), instance.getName());
 
         }
     }
 
     private String toString(byte[] id) {
+        if (id == null) {
+            return "null";
+        }
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < id.length; ++i) {
             builder.append(String.valueOf(id[i]));

@@ -1,0 +1,95 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Receiver concepts</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="ReadHandler.html" title="Read handler requirements">
+<link rel="next" href="ResolveHandler.html" title="Resolve handler requirements">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="ReadHandler.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="ResolveHandler.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.Receiver"></a><a class="link" href="Receiver.html" title="Receiver concepts">Receiver concepts</a>
+</h3></div></div></div>
+<p>
+        A receiver represents the continuation of an asynchronous operation. An asynchronous
+        operation may complete with a (possibly empty) set of values, an error, or
+        it may be cancelled. A receiver has three principal operations corresponding
+        to the three ways an asynchronous operation may complete: <code class="computeroutput">set_value</code>,
+        <code class="computeroutput">set_error</code>, and <code class="computeroutput">set_done</code>. These are collectively
+        known as a receiver’s <span class="emphasis"><em>completion-signal operations</em></span>.
+      </p>
+<pre class="programlisting">template&lt;class T, class E = exception_ptr&gt;
+concept receiver =
+  move_constructible&lt;remove_cvref_t&lt;T&gt;&gt; &amp;&amp;
+  constructible_from&lt;remove_cvref_t&lt;T&gt;, T&gt; &amp;&amp;
+  requires(remove_cvref_t&lt;T&gt;&amp;&amp; t, E&amp;&amp; e) {
+    { execution::set_done(std::move(t)) } noexcept;
+    { execution::set_error(std::move(t), (E&amp;&amp;) e) } noexcept;
+  };
+
+template&lt;class T, class... An&gt;
+concept receiver_of =
+  receiver&lt;T&gt; &amp;&amp;
+  requires(remove_cvref_t&lt;T&gt;&amp;&amp; t, An&amp;&amp;... an) {
+    execution::set_value(std::move(t), (An&amp;&amp;) an...);
+  };
+</pre>
+<p>
+        The receiver’s completion-signal operations have semantic requirements
+        that are collectively known as the <span class="emphasis"><em>receiver contract</em></span>,
+        described below:
+      </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+            None of a receiver’s completion-signal operations shall be invoked
+            before <code class="computeroutput">execution::start</code> has been called on the operation
+            state object that was returned by <code class="computeroutput">execution::connect</code> to
+            connect that receiver to a sender.
+          </li>
+<li class="listitem">
+            Once <code class="computeroutput">execution::start</code> has been called on the operation state
+            object, exactly one of the receiver’s completion-signal operations
+            shall complete non-exceptionally before the receiver is destroyed.
+          </li>
+<li class="listitem">
+            If <code class="computeroutput">execution::set_value</code> exits with an exception, it is still
+            valid to call <code class="computeroutput">execution::set_error</code> or <code class="computeroutput">execution::set_done</code>
+            on the receiver.
+          </li>
+</ul></div>
+<p>
+        Once one of a receiver’s completion-signal operations has completed non-exceptionally,
+        the receiver contract has been satisfied.
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="ReadHandler.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="ResolveHandler.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

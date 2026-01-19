@@ -4,12 +4,20 @@
 
 -- disable_query_log
 -- disable_result_log
+# High values set for sampling scanning, effectively forcing full scan for
+# statistics.
+SET @innodb_stats_transient_sample_pages= @@GLOBAL.innodb_stats_transient_sample_pages;
+SET @@global.innodb_stats_transient_sample_pages=5000000000;
+SET @innodb_stats_persistent_sample_pages= @@GLOBAL.innodb_stats_persistent_sample_pages;
+SET @@global.innodb_stats_persistent_sample_pages=5000000000;
+
 SET GLOBAL innodb_stats_persistent=0;
 -- enable_result_log
 -- enable_query_log
 
 create table t0 (a int);
-insert into t0 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+insert into t0 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),
+                      (10),(12),(14),(16),(18);
 
 # First test simple cases: I20 order, no join buffering.
 
@@ -26,10 +34,20 @@ create table t2 (
 ) engine=innodb;
 insert into t2 select a, a/2 from t0;
 
+# Run analyze to ensure more correct index statistics
+-- disable_query_log
+-- disable_result_log
+ANALYZE TABLE t1,t2;
+-- enable_result_log
+-- enable_query_log
+
 select * from t1;
 select * from t2;
 explain select * from t2 where b in (select a from t1);
 select * from t2 where b in (select a from t1);
+
+truncate table t0;
+insert into t0 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
 
 # Try an InnoDB table with very long rowid
 create table t3 (
@@ -62,10 +80,10 @@ insert into t3 select
   A.a + 10*B.a, A.a + 10*B.a, A.a + 10*B.a, A.a + 10*B.a 
 from t0 A, t0 B where B.a <5;
 
---replace_column 9 #
+--replace_column 10 #
 explain select * from t3 where b in (select a from t0);
 --sorted_result
-select * from t3 where b in (select A.a+B.a from t0 A, t0 B where B.a<5);
+select * from t3 where b in (select a.a+b.a from t0 a, t0 b where b.a<5);
  
 set join_buffer_size= @save_join_buffer_size;
 set max_heap_table_size= @save_max_heap_table_size;
@@ -113,9 +131,9 @@ drop table t1, t2;
 --echo # 
 --echo # BUG#42742: crash in setup_sj_materialization, Copy_field::set
 --echo # 
-create table t3 ( c1 year) engine=innodb;
+create table t3 ( c1 year) charset latin1 engine=innodb;
 insert into t3 values (2135),(2142);
-create table t2 (c1 tinytext,c2 text,c6 timestamp) engine=innodb;
+create table t2 (c1 tinytext,c2 text,c6 timestamp) charset latin1 engine=innodb;
 -- echo # The following must not crash, EXPLAIN should show one SJ strategy, not a mix:
 explain select 1 from t2 where 
   c2 in (select 1 from t3, t2) and
@@ -146,5 +164,7 @@ DROP TABLE t1, t2;
 -- disable_query_log
 -- disable_result_log
 SET GLOBAL innodb_stats_persistent=default;
+SET @@GLOBAL.innodb_stats_transient_sample_pages= @innodb_stats_transient_sample_pages;
+SET @@GLOBAL.innodb_stats_persistent_sample_pages= @innodb_stats_persistent_sample_pages;
 -- enable_result_log
 -- enable_query_log

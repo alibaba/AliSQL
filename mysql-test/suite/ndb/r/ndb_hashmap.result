@@ -1,0 +1,10 @@
+create table t1 (x int primary key) engine=ndbcluster;
+select fq_name from ndbinfo.dict_obj_info
+where type = 24 /* HashMap */ and fq_name like '%HASHMAP%-7%';
+fq_name
+alter table t1 partition by key() partitions 7;
+select fq_name from ndbinfo.dict_obj_info
+where type = 24 /* HashMap */ and fq_name like '%HASHMAP%-7%';
+fq_name
+DEFAULT-HASHMAP-116-7
+drop table t1;

@@ -1,3 +1,11 @@
+# This tests the functionality of the fulltext search of Myisam engine
+# The implementation of the fulltext search is different in InnoDB engine
+# All tests are required to run with Myisam.
+# Hence MTR starts mysqld with MyISAM as default
+
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
+
 #
 # Test for bug from Jean-Cédric COSTA <jean-cedric.costa@ensmp.fr>
 #
@@ -7,8 +15,8 @@ drop table if exists t1, t2;
 --enable_warnings
 
 CREATE TABLE t1 (
-       id           VARCHAR(255) NOT NULL PRIMARY KEY,
-       sujet        VARCHAR(255),
+       id           VARCHAR(80) NOT NULL PRIMARY KEY,
+       sujet        VARCHAR(80),
        motsclefs    TEXT,
        texte        MEDIUMTEXT,
        FULLTEXT(sujet, motsclefs, texte)

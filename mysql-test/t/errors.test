@@ -18,7 +18,7 @@ select count(test.t1.b) from t1;
 select count(not_existing_database.t1) from t1;
 --error 1054
 select count(not_existing_database.t1.a) from t1;
---error 1044,1146
+--error 1044,1049
 select count(not_existing_database.t1.a) from not_existing_database.t1;
 --error 1054
 select 1 from t1 order by 2;
@@ -45,6 +45,7 @@ set sql_mode=default;
 #
 # Bug #27513: mysql 5.0.x + NULL pointer DoS
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a INT);
 SELECT a FROM t1 WHERE a IN(1, (SELECT IF(1=0,1,2/0)));
 INSERT INTO t1 VALUES(1);
@@ -52,7 +53,7 @@ SELECT a FROM t1 WHERE a IN(1, (SELECT IF(1=0,1,2/0)));
 INSERT INTO t1 VALUES(2),(3);
 SELECT a FROM t1 WHERE a IN(1, (SELECT IF(1=0,1,2/0)));
 DROP TABLE t1;
-
+SET sql_mode = default;
 #
 # Bug #28677: SELECT on missing column gives extra error
 #
@@ -188,4 +189,100 @@ INSERT INTO t2 VALUES (1,0) ON DUPLICATE KEY UPDATE
   b=(SELECT '' AS b FROM t1 GROUP BY VALUES(b));
 INSERT INTO t2(a,b) VALUES (1,0) ON DUPLICATE KEY UPDATE
   b=(SELECT VALUES(a)+2 FROM t1);
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#54812: assert in Diagnostics_area::set_ok_status during EXPLAIN
+--echo #
+
+CREATE USER nopriv_user@localhost;
+
+connection default;
+--echo connection: default
+
+--disable_warnings
+DROP TABLE IF EXISTS t1,t2,t3;
+DROP FUNCTION IF EXISTS f;
+--enable_warnings
+
+CREATE TABLE t1 (key1 INT PRIMARY KEY);
+CREATE TABLE t2 (key2 INT);
+INSERT INTO t1 VALUES (1),(2);
+
+CREATE FUNCTION f() RETURNS INT RETURN 1;
+
+GRANT FILE ON *.* TO 'nopriv_user'@'localhost';
+
+FLUSH PRIVILEGES;
+
+connect (con1,localhost,nopriv_user,,);
+connection con1;
+--echo connection: con1
+
+let outfile=$MYSQLTEST_VARDIR/tmp/mytest;
+--error 0,1
+--remove_file $outfile
+--replace_result $outfile <outfile>
+--error ER_PROCACCESS_DENIED_ERROR
+eval SELECT MAX(key1) FROM t1 WHERE f() < 1 INTO OUTFILE '$outfile';
+# A removal of the outfile is necessary, at least today (2010-12-07), because
+# the outfile is created even if the SELECT statement fails.
+# If the server is improved in the future this may not happen.
+# ==> Do not fail if the outfile does not exist.
+--error 0,1
+--remove_file $outfile
+
+--error ER_PROCACCESS_DENIED_ERROR
+INSERT INTO t2 SELECT MAX(key1) FROM t1 WHERE f() < 1;
+
+--error ER_PROCACCESS_DENIED_ERROR
+SELECT MAX(key1) INTO @dummy FROM t1 WHERE f() < 1;
+
+--error ER_PROCACCESS_DENIED_ERROR
+CREATE TABLE t3 (i INT) AS SELECT MAX(key1) FROM t1 WHERE f() < 1;
+
+disconnect con1;
+--source include/wait_until_disconnected.inc
+
+connection default;
+--echo connection: default
+
+DROP TABLE t1,t2;
+DROP FUNCTION f;
+DROP USER nopriv_user@localhost;
+
+--echo #
+--echo # End Bug#54812
+--echo #
+
+--echo #
+--echo # Bug #32162954: REGRESSION: ASSERTION `!THD()->IS_ERROR()' FAILED. IN AGGREGATEITERATOR::READ()
+--echo #
+
+--error ER_DATA_OUT_OF_RANGE
+do count(rand(st_latfromgeohash(st_geohash(point(5920138304254667057,24370),41))));
+--error ER_DATA_OUT_OF_RANGE
+do ((1)between(cot(_hebrew  ' $[  d'))and(var_pop((1))over()));
+--error ER_GIS_INVALID_DATA
+do ((st_isvalid(1))=(std(format(-29867 ,54,'es_DO')) over()));
+
+--echo #
+--echo # Bug #32206756: ASSERTION `!CURRENT_THD->IS_ERROR()' FAILED IN SQL/ITEM_CMPFUNC.CC
+--echo #
+
+CREATE TABLE t1 (a varchar(1), b varchar(1));
+
+CREATE TABLE t2 (pk integer, a varchar(1), b varchar(1), c date, primary key(pk));
+CREATE INDEX idx1 ON t2 (b);
+
+INSERT INTO t1 VALUES ('d','7');
+INSERT INTO t2 VALUES (1,'q','7','1970-01-01');
+INSERT INTO t2 VALUES (2,'l','7','1970-01-01');
+
+--error ER_TRUNCATED_WRONG_VALUE
+CREATE TABLE insert_select AS
+SELECT t2.c AS field3
+FROM t1, t2
+WHERE t1.b = t2.b AND t1.a <> t2.pk;
+
 DROP TABLE t1, t2;

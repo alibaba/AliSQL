@@ -1,0 +1,18 @@
+## Test that verifies flow of CRUD-table execution through X Protocol-prepare-statement
+
+## Preamble
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+## Test starts here
+
+--source ../include/test_flow_resultset_prepexecute_crud_table.inc
+
+CALL recreate_tables();
+
+exec $MYSQLXTEST
+  -ux_root --password=''
+  --schema=xtest
+  --file=$MYSQL_TMP_DIR/resultset.xpl 2>&1;
+
+## Cleanup
+--source ../include/xplugin_cleanup.inc

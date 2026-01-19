@@ -12,10 +12,9 @@ sub ib_normalize_path {
     my ($path) = @_;
 }
 
-sub ib_backup_tablespace {
+sub ib_backup_ibd_file {
     my ($db, $table) = @_;
     my $datadir = $ENV{'MYSQLD_DATADIR'};
-    my $cfg_file = sprintf("%s.cfg", $table);
     my $ibd_file = sprintf("%s.ibd", $table);
     my $tmpd = $ENV{'MYSQLTEST_VARDIR'} . "/tmp";
 
@@ -24,10 +23,39 @@ sub ib_backup_tablespace {
 
     copy(@args) or die "copy @args failed: $!";
 
+    copy(@args) or die "copy @args failed: $!";
+}
+
+sub ib_backup_cfg_file {
+    my ($db, $table) = @_;
+    my $datadir = $ENV{'MYSQLD_DATADIR'};
+    my $cfg_file = sprintf("%s.cfg", $table);
+    my $tmpd = $ENV{'MYSQLTEST_VARDIR'} . "/tmp";
+
     my @args = (File::Spec->catfile($datadir, $db, $cfg_file),
-	        File::Spec->catfile($tmpd, $cfg_file));
+		File::Spec->catfile($tmpd, $cfg_file));
 
     copy(@args) or die "copy @args failed: $!";
+}
+
+sub ib_backup_cfp_file {
+    my ($db, $table) = @_;
+    my $datadir = $ENV{'MYSQLD_DATADIR'};
+    my $cfp_file = sprintf("%s.cfp", $table);
+    my $tmpd = $ENV{'MYSQLTEST_VARDIR'} . "/tmp";
+
+    my @args = (File::Spec->catfile($datadir, $db, $cfp_file),
+	        File::Spec->catfile($tmpd, $cfp_file));
+
+    copy(@args) or die "copy @args failed: $!";
+}
+
+
+sub ib_backup_tablespace {
+    my ($db, $table) = @_;
+
+    ib_backup_ibd_file($db, $table);
+    ib_backup_cfg_file($db, $table);
 }
 
 sub ib_cleanup {
@@ -86,6 +114,21 @@ sub ib_restore_ibd_file {
     copy(@args) or die "copy @args failed: $!";
 }
 
+
+sub ib_restore_cfp_file {
+    my ($db, $table) = @_;
+    my $datadir = $ENV{'MYSQLD_DATADIR'};
+    my $cfp_file = sprintf("%s.cfp", $table);
+    my $tmpd = $ENV{'MYSQLTEST_VARDIR'} . "/tmp";
+
+    my @args = (File::Spec->catfile($tmpd, $cfp_file),
+		File::Spec->catfile($datadir, "$db", $cfp_file));
+
+    copy(@args) or die "copy @args failed: $!";
+}
+
+
+
 sub ib_restore_tablespace {
     my ($db, $table) = @_;
     my $datadir = $ENV{'MYSQLD_DATADIR'};
@@ -125,4 +168,5 @@ sub ib_restore_ibd_files {
         ib_restore_ibd_file($tmpd, $datadir, $db, $table);
     }
 }
+
 EOF

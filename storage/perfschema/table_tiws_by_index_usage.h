@@ -1,13 +1,21 @@
-/* Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -21,14 +29,20 @@
   Table TABLE_IO_WAIT_SUMMARY_BY_INDEX_USAGE (declarations).
 */
 
-#include "pfs_column_types.h"
-#include "pfs_engine_table.h"
-#include "pfs_instr_class.h"
-#include "pfs_instr.h"
-#include "table_helper.h"
+#include <sys/types.h>
+
+#include "my_base.h"
+#include "storage/perfschema/pfs_engine_table.h"
+#include "storage/perfschema/table_helper.h"
+
+class Field;
+class Plugin_table;
+struct PFS_table_share;
+struct TABLE;
+struct THR_LOCK;
 
 /**
-  @addtogroup Performance_schema_tables
+  @addtogroup performance_schema_tables
   @{
 */
 
@@ -36,8 +50,7 @@
   A row of table
   PERFORMANCE_SCHEMA.TABLE_IO_WAIT_SUMMARY_BY_INDEX.
 */
-struct row_tiws_by_index_usage
-{
+struct row_tiws_by_index_usage {
   /** Column OBJECT_TYPE, SCHEMA_NAME, OBJECT_NAME, INDEX_NAME. */
   PFS_index_row m_index;
   /** Columns COUNT/SUM/MIN/AVG/MAX (+_READ, +WRITE). */
@@ -47,76 +60,88 @@ struct row_tiws_by_index_usage
 /**
   Position of a cursor on
   PERFORMANCE_SCHEMA.TABLE_IO_WAIT_SUMMARY_BY_INDEX.
-  Index 1 on table_share_array (0 based)
+  Index 1 on global_table_share_container (0 based)
   Index 2 on index (0 based)
 */
-struct pos_tiws_by_index_usage : public PFS_double_index
-{
-  pos_tiws_by_index_usage()
-    : PFS_double_index(0, 0)
-  {}
+struct pos_tiws_by_index_usage : public PFS_double_index {
+  pos_tiws_by_index_usage() : PFS_double_index(0, 0) {}
 
-  inline void reset(void)
-  {
-    m_index_1= 0;
-    m_index_2= 0;
+  inline void reset() {
+    m_index_1 = 0;
+    m_index_2 = 0;
   }
 
-  inline bool has_more_table(void)
-  {
-    return (m_index_1 < table_share_max);
-  }
-
-  inline void next_table(void)
-  {
+  inline void next_table() {
     m_index_1++;
-    m_index_2= 0;
+    m_index_2 = 0;
   }
 };
 
+class PFS_index_tiws_by_index_usage : public PFS_engine_index {
+ public:
+  PFS_index_tiws_by_index_usage()
+      : PFS_engine_index(&m_key_1, &m_key_2, &m_key_3, &m_key_4),
+        m_key_1("OBJECT_TYPE"),
+        m_key_2("OBJECT_SCHEMA"),
+        m_key_3("OBJECT_NAME"),
+        m_key_4("INDEX_NAME") {}
+
+  ~PFS_index_tiws_by_index_usage() override = default;
+
+  virtual bool match(PFS_table_share *pfs);
+  virtual bool match(PFS_table_share *share, uint index);
+
+ private:
+  PFS_key_object_type m_key_1;
+  PFS_key_object_schema m_key_2;
+  PFS_key_object_name m_key_3;
+  PFS_key_object_name m_key_4; /* index name */
+};
+
 /** Table PERFORMANCE_SCHEMA.TABLE_IO_WAIT_SUMMARY_BY_INDEX. */
-class table_tiws_by_index_usage : public PFS_engine_table
-{
-public:
+class table_tiws_by_index_usage : public PFS_engine_table {
+ public:
   /** Table share */
   static PFS_engine_table_share m_share;
-  static PFS_engine_table* create();
+  static PFS_engine_table *create(PFS_engine_table_share *);
   static int delete_all_rows();
+  static ha_rows get_row_count();
 
-  virtual int rnd_init(bool scan);
-  virtual int rnd_next();
-  virtual int rnd_pos(const void *pos);
-  virtual void reset_position(void);
+  void reset_position() override;
 
-protected:
-  virtual int read_row_values(TABLE *table,
-                              unsigned char *buf,
-                              Field **fields,
-                              bool read_all);
+  int rnd_init(bool scan) override;
+  int rnd_next() override;
+  int rnd_pos(const void *pos) override;
 
+  int index_init(uint idx, bool sorted) override;
+  int index_next() override;
+
+ protected:
+  int read_row_values(TABLE *table, unsigned char *buf, Field **fields,
+                      bool read_all) override;
   table_tiws_by_index_usage();
 
-public:
-  ~table_tiws_by_index_usage()
-  {}
+ public:
+  ~table_tiws_by_index_usage() override = default;
 
-protected:
-  void make_row(PFS_table_share *table_share, uint index);
+ protected:
+  int make_row(PFS_table_share *pfs_share, uint index);
 
-private:
+ private:
   /** Table share lock. */
   static THR_LOCK m_table_lock;
-  /** Fields definition. */
-  static TABLE_FIELD_DEF m_field_def;
+  /** Table definition. */
+  static Plugin_table m_table_def;
 
   /** Current row. */
   row_tiws_by_index_usage m_row;
-  /** True is the current row exists. */
-  bool m_row_exists;
   /** Current position. */
   pos_tiws_by_index_usage m_pos;
   /** Next position. */
   pos_tiws_by_index_usage m_next_pos;
+
+ protected:
+  PFS_index_tiws_by_index_usage *m_opened_index;
 };
 
 /** @} */

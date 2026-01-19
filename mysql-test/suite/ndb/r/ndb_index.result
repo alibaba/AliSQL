@@ -169,7 +169,7 @@ unique (c30), unique (c31), unique (c32), unique (c33), unique (c34), unique (c3
 unique (c40), unique (c41), unique (c42), unique (c43), unique (c44), unique (c45), unique (c46), unique (c47),
 unique (c50), unique (c51), unique (c52), unique (c53), unique (c54), unique (c55), unique (c56), unique (c57),
 unique (c60), unique (c61), unique (c62), unique (c63), unique (c64), unique (c65), unique (c66), unique (c67),
-unique (c60), unique (c71), unique (c72), unique (c73), unique (c74), unique (c75), unique (c76)) engine = ndb;
+unique (c70), unique (c71), unique (c72), unique (c73), unique (c74), unique (c75), unique (c76)) engine = ndb;
 drop table t1;
 CREATE TABLE t1 (
 a INT NOT NULL AUTO_INCREMENT ,
@@ -177,36 +177,53 @@ b INT NOT NULL ,
 c VARCHAR ( 11 ) NOT NULL ,
 PRIMARY KEY ( a ) ,
 INDEX ( b )
-) ENGINE = NDB;
+) ENGINE = NDB
+COMMENT="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 INSERT INTO t1 (a ,b ,c) VALUES 
 (NULL , '1', 'test'), (NULL , '2', 'test'), (NULL , '1', 'test'), 
 (NULL , '2', 'test'), (NULL , '3', 'test'), (NULL , '4', 'test'), 
 (NULL , '5', 'test'), (NULL , '6', 'test'), (NULL , '1', 'test'),
 (NULL , '1', 'test');
 explain select count(a) from t1 group by a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	10	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index	PRIMARY	PRIMARY	4	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select count(`test`.`t1`.`a`) AS `count(a)` from `test`.`t1` group by `test`.`t1`.`a`
 explain select count(a) from t1 FORCE INDEX FOR GROUP BY (PRIMARY) group by a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	10	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index	PRIMARY	PRIMARY	4	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select count(`test`.`t1`.`a`) AS `count(a)` from `test`.`t1` FORCE INDEX FOR GROUP BY (PRIMARY) group by `test`.`t1`.`a`
 explain select count(b) from t1 group by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	10	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index	b	b	4	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select count(`test`.`t1`.`b`) AS `count(b)` from `test`.`t1` group by `test`.`t1`.`b`
 explain select count(b) from t1 FORCE INDEX FOR GROUP BY (b) group by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	10	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index	b	b	4	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select count(`test`.`t1`.`b`) AS `count(b)` from `test`.`t1` FORCE INDEX FOR GROUP BY (`b`) group by `test`.`t1`.`b`
 explain select distinct a from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	10	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ALL	PRIMARY	NULL	NULL	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`a` AS `a` from `test`.`t1`
 explain select distinct a from t1 group by a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	10	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ALL	PRIMARY	NULL	NULL	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` group by `test`.`t1`.`a`
 explain select distinct b from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	10	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index	b	b	4	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`b` AS `b` from `test`.`t1`
 explain select distinct b from t1 group by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	10	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index	b	b	4	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`b` AS `b` from `test`.`t1` group by `test`.`t1`.`b`
 select count(a) from t1 group by a;
 count(a)
 1
@@ -292,91 +309,238 @@ create table t1(vc varchar(16), i int, vc2 varchar(1024)
 , PRIMARY KEY(vc,vc2) USING HASH
 , KEY i1(i)
 , KEY i2(vc)
-)  ENGINE=ndbcluster;
+)  ENGINE=ndbcluster
+CHARACTER SET latin1
+COMMENT="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 insert into t1 values
 ('1',1,'1'), ('2',2,'2'), ('3',3,'3'), ('4',1,'4'), ('5',2,'5'),
 ('6',3,'6'), ('7',1,'7'), ('8',2,'8'), ('9',3,'9'), ('10',1,'10'), 
 ('11',2,'11'), ('12',3,'12'), ('13',1,'13'), ('14',2,'14'), ('15',3,'15'),
 ('16',1,'16'), ('17',2,'17'), ('x',3,'x'), ('y',1,'y'), ('z',2,'z'),
 ('1000',3,'1000'), ('2000',3,'2000'), ('10000',3,'10000');
+insert into t1 select concat(vc, '-0'), i, concat(vc2,'-0') from t1;
+insert into t1 select concat(vc, '-1'), i, concat(vc2,'-1') from t1;
+insert into t1 select concat('#-', vc), 0, concat('2-',vc2) from t1;
+insert into t1 select concat('$-', vc), 0, concat('3-',vc2) from t1;
+insert into t1 select concat('%-', vc), 0, concat('4-',vc2) from t1;
 analyze table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+As testcase for bug#58280, query should 'index_merge i1,i2'
 explain
 select i,vc from t1
 where i>=1 or vc > '0';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index_merge	PRIMARY,i1,i2	i1,i2	5,18	NULL	6	Using sort_union(i1,i2); Using where with pushed condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index_merge	PRIMARY,i1,i2	i1,i2	5,18	NULL	#	#	Using sort_union(i1,i2); Using pushed condition ((`test`.`t1`.`i` >= 1) or (`test`.`t1`.`vc` > '0'))
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i`,`test`.`t1`.`vc` AS `vc` from `test`.`t1` where ((`test`.`t1`.`i` >= 1) or (`test`.`t1`.`vc` > '0'))
 select i,vc from t1
 where i>=1 or vc > '0';
 i	vc
 1	1
+1	1-0
+1	1-0-1
+1	1-1
 1	10
+1	10-0
+1	10-0-1
+1	10-1
 1	13
+1	13-0
+1	13-0-1
+1	13-1
 1	16
+1	16-0
+1	16-0-1
+1	16-1
 1	4
+1	4-0
+1	4-0-1
+1	4-1
 1	7
+1	7-0
+1	7-0-1
+1	7-1
 1	y
+1	y-0
+1	y-0-1
+1	y-1
 2	11
+2	11-0
+2	11-0-1
+2	11-1
 2	14
+2	14-0
+2	14-0-1
+2	14-1
 2	17
+2	17-0
+2	17-0-1
+2	17-1
 2	2
+2	2-0
+2	2-0-1
+2	2-1
 2	5
+2	5-0
+2	5-0-1
+2	5-1
 2	8
+2	8-0
+2	8-0-1
+2	8-1
 2	z
+2	z-0
+2	z-0-1
+2	z-1
 3	1000
+3	1000-0
+3	1000-0-1
+3	1000-1
 3	10000
+3	10000-0
+3	10000-0-1
+3	10000-1
 3	12
+3	12-0
+3	12-0-1
+3	12-1
 3	15
+3	15-0
+3	15-0-1
+3	15-1
 3	2000
+3	2000-0
+3	2000-0-1
+3	2000-1
 3	3
+3	3-0
+3	3-0-1
+3	3-1
 3	6
+3	6-0
+3	6-0-1
+3	6-1
 3	9
+3	9-0
+3	9-0-1
+3	9-1
 3	x
+3	x-0
+3	x-0-1
+3	x-1
 create table t2(vc varchar(16), i int, vc2 varchar(1024)
 , KEY i1(i)
 , KEY i2(vc)
-)  ENGINE=ndbcluster;
-insert into t2 values
-('1',1,'1'), ('2',2,'2'), ('3',3,'3'), ('4',1,'4'), ('5',2,'5'),
-('6',3,'6'), ('7',1,'7'), ('8',2,'8'), ('9',3,'9'), ('10',1,'10'), 
-('11',2,'11'), ('12',3,'12'), ('13',1,'13'), ('14',2,'14'), ('15',3,'15'),
-('16',1,'16'), ('17',2,'17'), ('x',3,'x'), ('y',1,'y'), ('z',2,'z'),
-('1000',3,'1000'), ('2000',3,'2000'), ('10000',3,'10000');
+)  ENGINE=ndbcluster
+COMMENT="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
+insert into t2 select * from t1;
 analyze table t2;
 Table	Op	Msg_type	Msg_text
 test.t2	analyze	status	OK
+As testcase for bug#58280, query should 'index_merge i1,i2'
 explain
 select i,vc from t2
 where i>=1 or vc > '0';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	index_merge	i1,i2	i1,i2	5,19	NULL	6	Using sort_union(i1,i2); Using where with pushed condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	p0,p1,p2,p3,p4,p5,p6,p7	index_merge	i1,i2	i1,i2	5,67	NULL	#	#	Using sort_union(i1,i2); Using pushed condition ((`test`.`t2`.`i` >= 1) or (`test`.`t2`.`vc` > '0'))
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`i` AS `i`,`test`.`t2`.`vc` AS `vc` from `test`.`t2` where ((`test`.`t2`.`i` >= 1) or (`test`.`t2`.`vc` > '0'))
 select i,vc from t2
 where i>=1 or vc > '0';
 i	vc
 1	1
+1	1-0
+1	1-0-1
+1	1-1
 1	10
+1	10-0
+1	10-0-1
+1	10-1
 1	13
+1	13-0
+1	13-0-1
+1	13-1
 1	16
+1	16-0
+1	16-0-1
+1	16-1
 1	4
+1	4-0
+1	4-0-1
+1	4-1
 1	7
+1	7-0
+1	7-0-1
+1	7-1
 1	y
+1	y-0
+1	y-0-1
+1	y-1
 2	11
+2	11-0
+2	11-0-1
+2	11-1
 2	14
+2	14-0
+2	14-0-1
+2	14-1
 2	17
+2	17-0
+2	17-0-1
+2	17-1
 2	2
+2	2-0
+2	2-0-1
+2	2-1
 2	5
+2	5-0
+2	5-0-1
+2	5-1
 2	8
+2	8-0
+2	8-0-1
+2	8-1
 2	z
+2	z-0
+2	z-0-1
+2	z-1
 3	1000
+3	1000-0
+3	1000-0-1
+3	1000-1
 3	10000
+3	10000-0
+3	10000-0-1
+3	10000-1
 3	12
+3	12-0
+3	12-0-1
+3	12-1
 3	15
+3	15-0
+3	15-0-1
+3	15-1
 3	2000
+3	2000-0
+3	2000-0-1
+3	2000-1
 3	3
+3	3-0
+3	3-0-1
+3	3-1
 3	6
+3	6-0
+3	6-0-1
+3	6-1
 3	9
+3	9-0
+3	9-0-1
+3	9-1
 3	x
+3	x-0
+3	x-0-1
+3	x-1
 drop table t1, t2;
 CREATE TABLE inleveroverzicht (
 id int(11) NOT NULL auto_increment,
@@ -387,6 +551,10 @@ PRIMARY KEY  (id),
 KEY klantid (klantid),
 KEY `klantid/productcode` (klantid,productcode)
 ) ENGINE=NDBCLUSTER DEFAULT CHARSET=latin1 AUTO_INCREMENT=34 ;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO inleveroverzicht (id, klantid, productcode, aantal) VALUES 
 (33, 31, '15674', 11),
 (32, 31, '0001256', 1);
@@ -398,3 +566,232 @@ TRUNCATE TABLE inleveroverzicht;
 SELECT * from inleveroverzicht  ORDER BY id;
 id	klantid	productcode	aantal
 DROP TABLE inleveroverzicht;
+CREATE TABLE indexmerge(
+`id` bigint(20) unsigned NOT NULL,
+`similar_id` bigint(20) unsigned NOT NULL,
+`similarity` varchar(512) NOT NULL,
+PRIMARY KEY (`id`,`similar_id`),
+KEY `fk_similar_id` (`similar_id`),
+KEY `ix_id_similarity` (`id`,`similarity`) USING BTREE
+) ENGINE=ndb CHARACTER SET utf8;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+insert into indexmerge values(1, 2, REPEAT("A",512));
+insert into indexmerge values(2, 1, REPEAT("B",512));
+insert into indexmerge values(3, 4, REPEAT("C",512));
+insert into indexmerge values(4, 3, REPEAT("D",512));
+insert into indexmerge values(5, 6, REPEAT("E",512));
+insert into indexmerge values(6, 5, REPEAT("F",512));
+insert into indexmerge values(7, 8, REPEAT("G",512));
+insert into indexmerge values(8, 7, REPEAT("H",512));
+insert into indexmerge values(9, 0, REPEAT("I",512));
+insert into indexmerge values(0, 9, REPEAT("J",512));
+delete quick from indexmerge where id = 2 or similar_id = 2;
+drop table indexmerge;
+CREATE TABLE t1(
+col1 int unsigned not null primary key AUTO_INCREMENT, col2 int unsigned,
+col3 varchar(27), col4 varchar(27), col5 varchar(27), col6 varchar(27),
+col7 char(27), col8 int unsigned, col9 varchar(27), col10 varchar(27),
+col11 varchar(27), col12 varchar(27), col13 varchar(27),
+col14 varchar(27), col15 smallint unsigned, col16 char(27),
+col17 varchar(27), col18 varchar(27), col19 varchar(27),
+col20 varchar(27), col21 char(27), col22 varchar(27),
+col23 mediumint unsigned, col24 varchar(27), col25 varchar(27),
+col26 char(27), col27 varchar(27), col28 varchar(27), col29 varchar(27),
+col30 varchar(27), col31 varchar(27), col32 bigint, col33 varchar(27),
+col34 varchar(27), col35 smallint unsigned, col36 char(27),
+col37 bigint unsigned, col38 varchar(27), col39 varchar(27),
+col40 varchar(27), col41 varchar(27), col42 bigint, col43 varchar(27),
+col44 varchar(27), col45 smallint unsigned, col46 char(27),
+col47 varchar(27), col48 varchar(27), col49 varchar(27),
+col50 varchar(27), col51 varchar(27), col52 bigint unsigned,
+col53 varchar(27), col54 varchar(27), col55 varchar(27),
+col56 tinyint unsigned, col57 varchar(27), col58 varchar(27),
+col59 varchar(27), col60 tinyint unsigned, col61 int unsigned,
+col62 varchar(27), col63 bigint unsigned, col64 int unsigned,
+col65 varchar(27), col66 char(27), col67 varchar(27), col68 varchar(27),
+col69 varchar(27), col70 varchar(27), col71 varchar(27),
+col72 smallint unsigned, col73 varchar(27), col74 varchar(27),
+col75 varchar(27), col76 char(27), col77 bigint unsigned, col78 varchar(27),
+col79 varchar(27), col80 varchar(27), col81 varchar(27), col82 varchar(27),
+col83 varchar(27), col84 varchar(27), col85 varchar(27), col86 char(27),
+col87 varchar(27), col88 int unsigned, col89 varchar(27), col90 int unsigned,
+col91 varchar(27), col92 tinyint unsigned, col93 varchar(27),
+col94 varchar(27), col95 varchar(27), col96 varchar(27), col97 char(27),
+col98 varchar(27), col99 varchar(27)
+) engine=ndbcluster;
+ALTER TABLE t1 ADD UNIQUE KEY col1 (col1);
+ALTER TABLE t1 ADD UNIQUE KEY col2 (col2);
+ALTER TABLE t1 ADD UNIQUE KEY col3 (col3);
+ALTER TABLE t1 ADD UNIQUE KEY col4 (col4);
+ALTER TABLE t1 ADD UNIQUE KEY col5 (col5);
+ALTER TABLE t1 ADD UNIQUE KEY col6 (col6);
+ALTER TABLE t1 ADD UNIQUE KEY col7 (col7);
+ALTER TABLE t1 ADD UNIQUE KEY col8 (col8);
+ALTER TABLE t1 ADD UNIQUE KEY col9 (col9);
+ALTER TABLE t1 ADD UNIQUE KEY col10 (col10);
+ALTER TABLE t1 ADD UNIQUE KEY col11 (col11);
+ALTER TABLE t1 ADD UNIQUE KEY col12 (col12);
+ALTER TABLE t1 ADD UNIQUE KEY col13 (col13);
+ALTER TABLE t1 ADD UNIQUE KEY col14 (col14);
+ALTER TABLE t1 ADD UNIQUE KEY col15 (col15);
+ALTER TABLE t1 ADD UNIQUE KEY col16 (col16);
+ALTER TABLE t1 ADD UNIQUE KEY col17 (col17);
+ALTER TABLE t1 ADD UNIQUE KEY col18 (col18);
+ALTER TABLE t1 ADD UNIQUE KEY col19 (col19);
+ALTER TABLE t1 ADD UNIQUE KEY col20 (col20);
+ALTER TABLE t1 ADD UNIQUE KEY col21 (col21);
+ALTER TABLE t1 ADD UNIQUE KEY col22 (col22);
+ALTER TABLE t1 ADD UNIQUE KEY col23 (col23);
+ALTER TABLE t1 ADD UNIQUE KEY col24 (col24);
+ALTER TABLE t1 ADD UNIQUE KEY col25 (col25);
+ALTER TABLE t1 ADD UNIQUE KEY col26 (col26);
+ALTER TABLE t1 ADD UNIQUE KEY col27 (col27);
+ALTER TABLE t1 ADD UNIQUE KEY col28 (col28);
+ALTER TABLE t1 ADD UNIQUE KEY col29 (col29);
+ALTER TABLE t1 ADD UNIQUE KEY col30 (col30);
+ALTER TABLE t1 ADD UNIQUE KEY col31 (col31);
+ALTER TABLE t1 ADD UNIQUE KEY col32 (col32);
+ALTER TABLE t1 ADD UNIQUE KEY col33 (col33);
+ALTER TABLE t1 ADD UNIQUE KEY col34 (col34);
+ALTER TABLE t1 ADD UNIQUE KEY col35 (col35);
+ALTER TABLE t1 ADD UNIQUE KEY col36 (col36);
+ALTER TABLE t1 ADD UNIQUE KEY col37 (col37);
+ALTER TABLE t1 ADD UNIQUE KEY col38 (col38);
+ALTER TABLE t1 ADD UNIQUE KEY col39 (col39);
+ALTER TABLE t1 ADD UNIQUE KEY col40 (col40);
+ALTER TABLE t1 ADD UNIQUE KEY col41 (col41);
+ALTER TABLE t1 ADD UNIQUE KEY col42 (col42);
+ALTER TABLE t1 ADD UNIQUE KEY col43 (col43);
+ALTER TABLE t1 ADD UNIQUE KEY col44 (col44);
+ALTER TABLE t1 ADD UNIQUE KEY col45 (col45);
+ALTER TABLE t1 ADD UNIQUE KEY col46 (col46);
+ALTER TABLE t1 ADD UNIQUE KEY col47 (col47);
+ALTER TABLE t1 ADD UNIQUE KEY col48 (col48);
+ALTER TABLE t1 ADD UNIQUE KEY col49 (col49);
+ALTER TABLE t1 ADD UNIQUE KEY col50 (col50);
+ALTER TABLE t1 ADD UNIQUE KEY col51 (col51);
+ALTER TABLE t1 ADD UNIQUE KEY col52 (col52);
+ALTER TABLE t1 ADD UNIQUE KEY col53 (col53);
+ALTER TABLE t1 ADD UNIQUE KEY col54 (col54);
+ALTER TABLE t1 ADD UNIQUE KEY col55 (col55);
+ALTER TABLE t1 ADD UNIQUE KEY col56 (col56);
+ALTER TABLE t1 ADD UNIQUE KEY col57 (col57);
+ALTER TABLE t1 ADD UNIQUE KEY col58 (col58);
+ALTER TABLE t1 ADD UNIQUE KEY col59 (col59);
+ALTER TABLE t1 ADD UNIQUE KEY col60 (col60);
+ALTER TABLE t1 ADD UNIQUE KEY col61 (col61);
+ALTER TABLE t1 ADD UNIQUE KEY col62 (col62);
+ALTER TABLE t1 ADD UNIQUE KEY col63 (col63);
+ALTER TABLE t1 ADD UNIQUE KEY col64 (col64);
+ALTER TABLE t1 DROP INDEX col1;
+ALTER TABLE t1 DROP INDEX col2;
+ALTER TABLE t1 DROP INDEX col3;
+ALTER TABLE t1 DROP INDEX col4;
+ALTER TABLE t1 DROP INDEX col5;
+ALTER TABLE t1 DROP INDEX col6;
+ALTER TABLE t1 DROP INDEX col7;
+ALTER TABLE t1 DROP INDEX col8;
+ALTER TABLE t1 DROP INDEX col9;
+ALTER TABLE t1 DROP INDEX col10;
+ALTER TABLE t1 DROP INDEX col11;
+ALTER TABLE t1 DROP INDEX col12;
+ALTER TABLE t1 DROP INDEX col13;
+ALTER TABLE t1 DROP INDEX col14;
+ALTER TABLE t1 DROP INDEX col15;
+ALTER TABLE t1 DROP INDEX col16;
+ALTER TABLE t1 DROP INDEX col17;
+ALTER TABLE t1 DROP INDEX col18;
+ALTER TABLE t1 DROP INDEX col19;
+ALTER TABLE t1 DROP INDEX col20;
+ALTER TABLE t1 DROP INDEX col21;
+ALTER TABLE t1 DROP INDEX col22;
+ALTER TABLE t1 DROP INDEX col23;
+ALTER TABLE t1 DROP INDEX col24;
+ALTER TABLE t1 DROP INDEX col25;
+ALTER TABLE t1 DROP INDEX col26;
+ALTER TABLE t1 DROP INDEX col27;
+ALTER TABLE t1 DROP INDEX col28;
+ALTER TABLE t1 DROP INDEX col29;
+ALTER TABLE t1 DROP INDEX col30;
+ALTER TABLE t1 DROP INDEX col31;
+ALTER TABLE t1 DROP INDEX col32;
+ALTER TABLE t1 DROP INDEX col33;
+ALTER TABLE t1 DROP INDEX col34;
+ALTER TABLE t1 DROP INDEX col35;
+ALTER TABLE t1 DROP INDEX col36;
+ALTER TABLE t1 DROP INDEX col37;
+ALTER TABLE t1 DROP INDEX col38;
+ALTER TABLE t1 DROP INDEX col39;
+ALTER TABLE t1 DROP INDEX col40;
+ALTER TABLE t1 DROP INDEX col41;
+ALTER TABLE t1 DROP INDEX col42;
+ALTER TABLE t1 DROP INDEX col43;
+ALTER TABLE t1 DROP INDEX col44;
+ALTER TABLE t1 DROP INDEX col45;
+ALTER TABLE t1 DROP INDEX col46;
+ALTER TABLE t1 DROP INDEX col47;
+ALTER TABLE t1 DROP INDEX col48;
+ALTER TABLE t1 DROP INDEX col49;
+ALTER TABLE t1 DROP INDEX col50;
+ALTER TABLE t1 DROP INDEX col51;
+ALTER TABLE t1 DROP INDEX col52;
+ALTER TABLE t1 DROP INDEX col53;
+ALTER TABLE t1 DROP INDEX col54;
+ALTER TABLE t1 DROP INDEX col55;
+ALTER TABLE t1 DROP INDEX col56;
+ALTER TABLE t1 DROP INDEX col57;
+ALTER TABLE t1 DROP INDEX col58;
+ALTER TABLE t1 DROP INDEX col59;
+ALTER TABLE t1 DROP INDEX col60;
+ALTER TABLE t1 DROP INDEX col61;
+ALTER TABLE t1 DROP INDEX col62;
+ALTER TABLE t1 DROP INDEX col63;
+ALTER TABLE t1 DROP INDEX col64;
+ALTER TABLE t1 ADD UNIQUE KEY (col24);
+ALTER TABLE t1 ADD UNIQUE KEY (col25);
+ALTER TABLE t1 DROP INDEX col24;
+ALTER TABLE t1 DROP INDEX col25;
+DROP TABLE t1;
+#
+# Bug#31452597 BUILD ATTRID MAP FOR PRIMARY KEY
+#  - test read using primary key where keys are specified in
+#    different order than in the NDB table, thus testing
+#    the NDB_INDEX_DATA::Attrid_map mapping
+CREATE TABLE t1 (
+a int, b int, c int, d int, e int, f int, g int, h int,
+PRIMARY KEY(d,b,c),
+UNIQUE KEY(a)
+) engine = ndb;
+CREATE TABLE t1hash (
+a int, b int, c int, d int, e int, f int, g int, h int,
+PRIMARY KEY(b,d,c) USING HASH,
+UNIQUE KEY(a)
+) engine = ndb;
+CREATE TABLE t2 (
+a int, b int,
+PRIMARY KEY(a)
+) engine = ndb;
+INSERT INTO t1 VALUES
+(1,2,3,4,5,6,7,8),
+(2,2,4,4,5,6,7,9),
+(3,2,5,4,5,6,7,10);
+INSERT INTO t1hash VALUES
+(1,2,3,4,5,6,7,8),
+(2,2,4,4,5,6,7,9),
+(3,2,5,4,5,6,7,10);
+INSERT INTO t2 VALUES
+(1,2);
+SELECT t1.a, t1.h FROM t1, t2
+WHERE t2.a = t1.a /* join with t2 to trigger pushed join */ AND
+t1.b = 2 AND t1.c = 3 AND t1.d = 4 /* use primary key on t1 */;
+a	h
+1	8
+SELECT t1hash.a, t1hash.h FROM t1hash, t2
+WHERE t2.a = t1hash.a /* join with t2 to trigger pushed join */ AND
+t1hash.b = 2 AND t1hash.c = 3 AND t1hash.d = 4 /* use primary key on t1 */;
+a	h
+1	8
+DROP TABLE t1,t1hash,t2;

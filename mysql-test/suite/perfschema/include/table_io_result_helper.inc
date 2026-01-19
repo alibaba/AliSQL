@@ -2,6 +2,7 @@
 
 # Stop table io recording
 update performance_schema.setup_consumers set enabled='NO';
+--skip_if_hypergraph  # Depends on query plan.
 eval select event_name,
   left(source, locate(":", source)) as short_source,
   object_type, object_schema,
@@ -14,7 +15,7 @@ eval select event_name,
   order by thread_id, event_id;
 
 # In case of failures, this will tell if table io are lost.
-show status like 'performance_schema_%';
+show global status like 'performance_schema_%_lost';
 
 # Cleanup
 truncate performance_schema.events_waits_history_long;

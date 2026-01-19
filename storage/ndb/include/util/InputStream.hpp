@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,50 +26,56 @@
 #ifndef INPUT_STREAM_HPP
 #define INPUT_STREAM_HPP
 
-#include <ndb_global.h>
-#include <NdbTCP.h>
-#include <NdbMutex.h>
+#include "ndb_global.h"
+#include "portlib/NdbMutex.h"
+#include "portlib/ndb_socket.h"
+#include "util/NdbSocket.h"
 
 /**
  * Input stream
  */
 class InputStream {
-public:
-  InputStream() { m_mutex= NULL; }
+ public:
+  InputStream() { m_mutex = nullptr; }
   virtual ~InputStream() {}
-  virtual char* gets(char * buf, int bufLen) = 0;
+  virtual char *gets(char *buf, int bufLen) = 0;
   /**
    * Set the mutex to be UNLOCKED when blocking (e.g. select(2))
    */
-  void set_mutex(NdbMutex *m) { m_mutex= m; }
+  void set_mutex(NdbMutex *m) { m_mutex = m; }
   virtual void reset_timeout() {}
-protected:
+
+ protected:
   NdbMutex *m_mutex;
 };
 
 class FileInputStream : public InputStream {
-  FILE * f;
-public:
-  FileInputStream(FILE * file = stdin);
-  virtual ~FileInputStream() {}
-  char* gets(char * buf, int bufLen); 
+  FILE *f;
+
+ public:
+  FileInputStream(FILE *file = stdin);
+  ~FileInputStream() override {}
+  char *gets(char *buf, int bufLen) override;
 };
 
 extern FileInputStream Stdin;
 
 class SocketInputStream : public InputStream {
-  NDB_SOCKET_TYPE m_socket;
+  const NdbSocket &m_socket;
   unsigned m_timeout_ms;
   unsigned m_timeout_remain;
   bool m_startover;
   bool m_timedout;
-public:
-  SocketInputStream(NDB_SOCKET_TYPE socket, unsigned read_timeout_ms = 60000);
-  virtual ~SocketInputStream() {}
-  char* gets(char * buf, int bufLen);
-  bool timedout() { return m_timedout; }
-  void reset_timeout() { m_timedout= false; m_timeout_remain= m_timeout_ms;}
 
+ public:
+  SocketInputStream(const NdbSocket &, unsigned read_timeout_ms = 3000);
+  ~SocketInputStream() override {}
+  char *gets(char *buf, int bufLen) override;
+  bool timedout() { return m_timedout; }
+  void reset_timeout() override {
+    m_timedout = false;
+    m_timeout_remain = m_timeout_ms;
+  }
 };
 
 #endif

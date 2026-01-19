@@ -613,11 +613,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
-  `col1` int(11) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (abs(col1))
+  `colint` int DEFAULT NULL,
+  `col1` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (abs(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -2298,11 +2298,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
-  `col1` int(11) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (mod(col1,10))
+  `colint` int DEFAULT NULL,
+  `col1` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH ((`col1` % 10))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -3636,11 +3636,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (day(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (dayofmonth(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -4141,11 +4141,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (dayofmonth(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (dayofmonth(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -4646,11 +4646,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (dayofweek(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (dayofweek(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -5163,11 +5163,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (dayofyear(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (dayofyear(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -5670,11 +5670,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (extract(month from col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (extract(month from `col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -6177,11 +6177,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` time DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (hour(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (hour(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -6690,11 +6690,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` time DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (microsecond(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (microsecond(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -7189,11 +7189,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` time DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (minute(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (minute(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -7708,11 +7708,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` time DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (second(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (second(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -8227,11 +8227,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (month(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (month(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -8740,11 +8740,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (quarter(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (quarter(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -9251,11 +9251,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` time DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (time_to_sec(col1)-(time_to_sec(col1)-20))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH ((time_to_sec(`col1`) - (time_to_sec(`col1`) - 20)))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -9768,11 +9768,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (weekday(col1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH (weekday(`col1`))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -10277,11 +10277,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (year(col1)-1990)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH ((year(`col1`) - 1990))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,
@@ -10790,11 +10790,11 @@ partition p5 values in (51,52,53,54,55,56,57,58,59,60)
 show create table t55;
 Table	Create Table
 t55	CREATE TABLE `t55` (
-  `colint` int(11) DEFAULT NULL,
+  `colint` int DEFAULT NULL,
   `col1` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (colint)
-SUBPARTITION BY HASH (yearweek(col1)-200600)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`colint`)
+SUBPARTITION BY HASH ((yearweek(`col1`,0) - 200600))
 SUBPARTITIONS 5
 (PARTITION p0 VALUES IN (1,2,3,4,5,6,7,8,9,10) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (11,12,13,14,15,16,17,18,19,20) ENGINE = InnoDB,

@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,78 +27,172 @@
 #define OUTPUT_STREAM_HPP
 
 #include <ndb_global.h>
-#include <NdbTCP.h>
+#include "portlib/ndb_compiler.h"
+#include "portlib/ndb_socket.h"
+#include "util/NdbSocket.h"
 
 /**
  * Output stream
  */
 class OutputStream {
-public:
+ public:
   OutputStream() {}
   virtual ~OutputStream() {}
-  virtual int print(const char * fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3) = 0;
-  virtual int println(const char * fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3) = 0;
-  virtual void flush() {};
-  virtual void reset_timeout() {};
+  virtual int print(const char *fmt, ...) ATTRIBUTE_FORMAT(printf, 2, 3) = 0;
+  virtual int println(const char *fmt, ...) ATTRIBUTE_FORMAT(printf, 2, 3) = 0;
+  virtual int write(const void *buf, size_t len) = 0;
+  virtual void flush() {}
+  virtual void reset_timeout() {}
+};
+
+/**
+ * Strings going to BufferedOutputStream are appended to
+ * a LogBuffer object which are later retrieved by a log
+ * thread and written to the log file.
+ */
+
+class BufferedOutputStream : public OutputStream {
+ public:
+  BufferedOutputStream(class LogBuffer *plogBuf);
+  ~BufferedOutputStream() override {}
+
+  int print(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+  int println(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+  int write(const void *buf, size_t len) override;
+  void flush() override {}
+
+ private:
+  class LogBuffer *logBuf;
 };
 
 class FileOutputStream : public OutputStream {
-  FILE * f;
-public:
-  FileOutputStream(FILE * file = stdout);
-  virtual ~FileOutputStream() {}
+  FILE *f;
+
+ public:
+  FileOutputStream(FILE *file = stdout);
+  ~FileOutputStream() override {}
   FILE *getFile() { return f; }
 
-  int print(const char * fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  int println(const char * fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  void flush() { fflush(f); }
+  int print(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+  int println(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+  int write(const void *buf, size_t len) override;
+  void flush() override { fflush(f); }
 };
 
 class SocketOutputStream : public OutputStream {
-protected:
-  NDB_SOCKET_TYPE m_socket;
+ protected:
+  const NdbSocket &m_socket;
   unsigned m_timeout_ms;
   bool m_timedout;
   unsigned m_timeout_remain;
-public:
-  SocketOutputStream(NDB_SOCKET_TYPE socket, unsigned write_timeout_ms = 1000);
-  virtual ~SocketOutputStream() {}
+
+ public:
+  SocketOutputStream(const NdbSocket &, unsigned write_timeout_ms = 1000);
+  ~SocketOutputStream() override {}
   bool timedout() { return m_timedout; }
-  void reset_timeout() { m_timedout= false; m_timeout_remain= m_timeout_ms;}
+  void reset_timeout() override {
+    m_timedout = false;
+    m_timeout_remain = m_timeout_ms;
+  }
 
-  int print(const char * fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  int println(const char * fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3);
+  int print(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+  int println(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+  int write(const void *buf, size_t len) override;
 };
 
+class BufferSocketOutputStream : public SocketOutputStream {
+ protected:
+  class UtilBuffer &m_buffer;
 
-class BufferedSockOutputStream : public SocketOutputStream {
-  class UtilBuffer& m_buffer;
-public:
-  BufferedSockOutputStream(NDB_SOCKET_TYPE socket,
+ public:
+  BufferSocketOutputStream(const NdbSocket &socket,
                            unsigned write_timeout_ms = 1000);
-  virtual ~BufferedSockOutputStream();
+  ~BufferSocketOutputStream() override;
 
-  int print(const char * fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  int println(const char * fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3);
+  int print(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+  int println(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
 
-  void flush();
+  int write(const void *buf, size_t len) override;
+  void flush() override;
 };
-
 
 class NullOutputStream : public OutputStream {
-public:
+ public:
   NullOutputStream() {}
-  virtual ~NullOutputStream() {}
-  int print(const char * /* unused */, ...) { return 1;}
-  int println(const char * /* unused */, ...) { return 1;}
+  ~NullOutputStream() override {}
+  int print(const char * /* unused */, ...) override { return 1; }
+  int println(const char * /* unused */, ...) override { return 1; }
+  int write(const void * /*buf*/, size_t /*len*/) override { return 1; }
+};
+
+class StaticBuffOutputStream : public OutputStream {
+ private:
+  char *m_buff;
+  const size_t m_size;
+  size_t m_offset;
+
+ public:
+  StaticBuffOutputStream(char *buff, size_t size);
+  ~StaticBuffOutputStream() override;
+
+  int print(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+  int println(const char *fmt, ...) override ATTRIBUTE_FORMAT(printf, 2, 3);
+
+  int write(const void *buf, size_t len) override;
+  void flush() override {}
+
+  const char *getBuff() const { return m_buff; }
+  size_t getLen() const { return m_offset; }
+  void reset() {
+    m_buff[0] = '\n';
+    m_offset = 0;
+  }
+};
+
+/**
+ * Use a byte buffer to circularly buffer strings
+ * 'printed' into the buffer.
+ *
+ * When the head meets the tail, previously buffered
+ * strings are partially overwritten.
+ *
+ * Buffered strings can be iterated in order of
+ * insertion, starting with the oldest.
+ *
+ * The first returned string may be prefix truncated so
+ * that only a suffix remains.
+ *
+ * If a string cannot fit in the buffer at all then
+ * it will be suffix truncated on insertion.
+ */
+class CircularStringBuffer {
+ public:
+  CircularStringBuffer(char *buff, size_t len);
+  ~CircularStringBuffer();
+
+  /* Formatted print into buffer, returns number
+   * of characters added (without truncation),
+   * excluding trailing null
+   */
+  int print(const char *fmt, ...) ATTRIBUTE_FORMAT(printf, 2, 3);
+
+  class Iterator {
+   public:
+    Iterator(const CircularStringBuffer *csb);
+    ~Iterator();
+
+    /* Get next string from buffer, starting with oldest */
+    const char *getNextString(size_t *nextLen = nullptr);
+
+   private:
+    const CircularStringBuffer *m_csb;
+    size_t m_pos;
+  };
+
+ private:
+  char *m_buff;
+  size_t m_len;
+  size_t m_writtenBytes; /* Total bytes */
 };
 
 #endif

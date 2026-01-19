@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,34 +26,29 @@
 #ifndef SOCKET_CLIENT_HPP
 #define SOCKET_CLIENT_HPP
 
-#include <NdbTCP.h>
+#include "portlib/ndb_sockaddr.h"
+#include "portlib/ndb_socket.h"
+#include "util/NdbSocket.h"
+
 class SocketAuthenticator;
 
-class SocketClient
-{
-  struct sockaddr_in m_servaddr;
+class SocketClient {
   unsigned int m_connect_timeout_millisec;
-  unsigned short m_port;
-  char *m_server_name;
+  unsigned short m_last_used_port;
   SocketAuthenticator *m_auth;
-public:
-  SocketClient(const char *server_name, unsigned short port, SocketAuthenticator *sa = 0);
+
+ public:
+  SocketClient(SocketAuthenticator *sa = nullptr);
   ~SocketClient();
-  bool init();
-  void set_port(unsigned short port) {
-    m_port = port;
-    m_servaddr.sin_port = htons(m_port);
-  };
+  bool init(int af);
   void set_connect_timeout(unsigned int timeout_millisec) {
     m_connect_timeout_millisec = timeout_millisec;
   }
-  unsigned short get_port() { return m_port; };
-  char *get_server_name() { return m_server_name; };
-  int bind(const char* toaddress, unsigned short toport);
-  NDB_SOCKET_TYPE connect(const char* toaddress = 0, unsigned short port = 0);
-  bool close();
+  int bind(ndb_sockaddr local);
+  NdbSocket connect(ndb_sockaddr server_addr);
+  int authenticate(const NdbSocket &);
 
-  NDB_SOCKET_TYPE m_sockfd;
+  ndb_socket_t m_sockfd;
 };
 
-#endif // SOCKET_ClIENT_HPP
+#endif  // SOCKET_ClIENT_HPP

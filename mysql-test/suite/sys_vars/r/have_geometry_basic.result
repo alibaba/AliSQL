@@ -13,7 +13,7 @@ COUNT(@@GLOBAL.have_geometry)
 1 Expected
 '#---------------------BS_STVARS_010_03----------------------#'
 SELECT @@GLOBAL.have_geometry = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='have_geometry';
 @@GLOBAL.have_geometry = VARIABLE_VALUE
 1
@@ -23,7 +23,7 @@ COUNT(@@GLOBAL.have_geometry)
 1
 1 Expected
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='have_geometry';
 COUNT(VARIABLE_VALUE)
 1
@@ -48,6 +48,6 @@ SELECT COUNT(@@GLOBAL.have_geometry);
 COUNT(@@GLOBAL.have_geometry)
 1
 1 Expected
-SELECT have_geometry = @@SESSION.have_geometry;
+SELECT have_geometry;
 ERROR 42S22: Unknown column 'have_geometry' in 'field list'
-Expected error 'Readonly variable'
+Expected error 'Unknown column'

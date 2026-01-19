@@ -46,13 +46,15 @@
 # HELPER include/event_aggregate_setup.inc
 # ========================================
 
---source include/not_embedded.inc
---source include/have_perfschema.inc
+# Test requires: sp-protocol/ps-protocol/view-protocol/cursor-protocol disabled
 --source include/no_protocol.inc
 --source ../include/wait_for_pfs_thread_count.inc
 
 --disable_query_log
 
+create user user1@localhost, user2@localhost,
+            user3@localhost, user4@localhost,
+            user5@localhost;
 grant ALL on *.* to user1@localhost;
 grant ALL on *.* to user2@localhost;
 grant ALL on *.* to user3@localhost;
@@ -85,19 +87,19 @@ begin
     where (processlist_user is not null) and (processlist_host is not null)
     order by processlist_user;
 
-  select * from performance_schema.accounts
+  select USER, HOST, CURRENT_CONNECTIONS, TOTAL_CONNECTIONS from performance_schema.accounts
     where (user is not null) and (host is not null)
     order by user, host;
 
-  select * from performance_schema.users
+  select USER, CURRENT_CONNECTIONS, TOTAL_CONNECTIONS from performance_schema.users
     where user is not null
     order by user;
 
-  select * from performance_schema.hosts
+  select HOST, CURRENT_CONNECTIONS, TOTAL_CONNECTIONS from performance_schema.hosts
     where host is not null
     order by host;
 
-  select variable_name, variable_value from information_schema.global_status
+  select variable_name, variable_value from performance_schema.global_status
     where variable_name in ('PERFORMANCE_SCHEMA_ACCOUNTS_LOST',
                             'PERFORMANCE_SCHEMA_USERS_LOST',
                             'PERFORMANCE_SCHEMA_HOSTS_LOST');

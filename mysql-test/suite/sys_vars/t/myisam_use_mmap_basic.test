@@ -54,17 +54,21 @@ SELECT COUNT(@@GLOBAL.myisam_use_mmap);
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 
+--disable_warnings
 SELECT IF(@@GLOBAL.myisam_use_mmap, "ON", "OFF") = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='myisam_use_mmap';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.myisam_use_mmap);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='myisam_use_mmap';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -98,7 +102,7 @@ SELECT COUNT(@@GLOBAL.myisam_use_mmap);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT myisam_use_mmap = @@SESSION.myisam_use_mmap;
---echo Expected error 'Readonly variable'
+SELECT myisam_use_mmap;
+--echo Expected error 'Unknown column'
 
 

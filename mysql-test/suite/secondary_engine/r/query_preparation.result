@@ -1,0 +1,1099 @@
+#
+# Test that query preparation is able to make plans for executing
+# a query on a secondary storage engine.
+#
+CREATE TABLE t1(id INT PRIMARY KEY, x INT, y INT);
+INSERT INTO t1 VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9);
+CREATE INDEX t1_x ON t1(x);
+SELECT * FROM t1;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+CREATE TABLE t2(id INT PRIMARY KEY, z INT);
+INSERT INTO t2 VALUES (1, 2), (3, 4), (5, 6);
+CREATE VIEW v1 AS SELECT t1.id, t1.x, t2.z FROM t1, t2 WHERE t1.id = t2.id;
+SELECT * FROM v1;
+id	x	z
+1	2	2
+CREATE TABLE t_primary_only(id INT PRIMARY KEY, x INT);
+INSERT INTO t_primary_only VALUES (1, 1), (2, 2);
+ALTER TABLE t1 SECONDARY_ENGINE MOCK;
+ALTER TABLE t2 SECONDARY_ENGINE MOCK;
+FLUSH STATUS;
+SELECT * FROM t1;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+PREPARE ps FROM 'SELECT * FROM t1';
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+DROP PREPARE ps;
+FLUSH STATUS;
+ALTER TABLE t1 SECONDARY_LOAD;
+PREPARE ps FROM 'SELECT * FROM t1';
+EXECUTE ps;
+id	x	y
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+ALTER TABLE t1 SECONDARY_UNLOAD;
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+DROP PREPARE ps;
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t2 SECONDARY_LOAD;
+FLUSH STATUS;
+SELECT * FROM t1;
+id	x	y
+PREPARE ps FROM 'SELECT * FROM t1';
+EXECUTE ps;
+id	x	y
+EXECUTE ps;
+id	x	y
+FLUSH TABLES;
+SELECT * FROM t1;
+id	x	y
+FLUSH TABLES;
+EXECUTE ps;
+id	x	y
+DROP PREPARE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	5
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=TREE SELECT * FROM t1;
+EXPLAIN
+-> Table scan on t1 in secondary engine MOCK  (rows=3)
+
+Warnings:
+Note	1003	Query is executed in secondary engine; the actual query plan may diverge from the printed one
+FLUSH STATUS;
+SELECT * FROM t1 JOIN t2 USING (id);
+id	x	y	z
+SELECT * FROM t1 WHERE t1.x IN (SELECT t2.z FROM t2);
+id	x	y
+SELECT SUM(x) FROM t1 GROUP BY y;
+SUM(x)
+SELECT (SELECT MAX(x) FROM t1), (SELECT MIN(z) FROM t2), s FROM
+(SELECT SUM(z) AS s FROM t2) AS dt;
+(SELECT MAX(x) FROM t1)	(SELECT MIN(z) FROM t2)	s
+NULL	NULL	NULL
+SELECT * FROM v1;
+id	x	z
+SELECT * FROM v1, t2 WHERE v1.id = t2.id;
+id	x	z	id	z
+SELECT SUM(x) FROM v1;
+SUM(x)
+NULL
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	7
+FLUSH STATUS;
+SELECT x FROM t1 FORCE INDEX (t1_x);
+x
+PREPARE ps FROM 'SELECT x FROM t1 FORCE INDEX (t1_x)';
+EXECUTE ps;
+x
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+SET @my_use_secondary_engine = @@use_secondary_engine;
+SET @@use_secondary_engine = FORCED;
+EXECUTE ps;
+x
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	3
+SET @@use_secondary_engine = @my_use_secondary_engine;
+FLUSH STATUS;
+PREPARE ps FROM 'SELECT * FROM t1';
+LOCK TABLES t1 READ;
+SELECT * FROM t1;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+UNLOCK TABLES;
+SELECT * FROM t1;
+id	x	y
+EXECUTE ps;
+id	x	y
+EXECUTE ps;
+id	x	y
+DROP PREPARE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	3
+FLUSH STATUS;
+PREPARE ps FROM 'SELECT * FROM t1';
+BEGIN;
+SELECT * FROM t1;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+COMMIT;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+EXECUTE ps;
+id	x	y
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+FLUSH STATUS;
+START TRANSACTION;
+SELECT * FROM t1;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+COMMIT;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+EXECUTE ps;
+id	x	y
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+FLUSH STATUS;
+SET @@autocommit = 0;
+SELECT * FROM t1;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+SET @@autocommit = 1;
+COMMIT;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+SELECT * FROM t1;
+id	x	y
+EXECUTE ps;
+id	x	y
+DROP PREPARE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+FLUSH STATUS;
+BEGIN;
+PREPARE ps FROM 'SELECT * FROM t1';
+EXECUTE ps;
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+COMMIT;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+EXECUTE ps;
+id	x	y
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+DROP PREPARE ps;
+SELECT * FROM t1, t_primary_only tp WHERE t1.id = tp.id;
+id	x	y	id	x
+1	2	3	1	1
+PREPARE ps FROM 'SELECT * FROM t1, t_primary_only tp WHERE t1.id = tp.id';
+EXECUTE ps;
+id	x	y	id	x
+1	2	3	1	1
+EXECUTE ps;
+id	x	y	id	x
+1	2	3	1	1
+DROP PREPARE ps;
+SELECT * FROM t1, t2, t_primary_only tp WHERE t1.id = t2.id AND t2.id = tp.id;
+id	x	y	id	z	id	x
+1	2	3	1	2	1	1
+FLUSH STATUS;
+SELECT * FROM t1, INFORMATION_SCHEMA.COLUMN_PRIVILEGES t2;
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+CREATE TABLE t_with_autoinc(id INT PRIMARY KEY AUTO_INCREMENT, x INT)
+SECONDARY_ENGINE MOCK;
+INSERT INTO t_with_autoinc(x) VALUES (4), (5), (6);
+ALTER TABLE t_with_autoinc SECONDARY_LOAD;
+SELECT * FROM t_with_autoinc;
+id	x
+DROP TABLE t_with_autoinc;
+CREATE TABLE t_partitioned(id INT PRIMARY KEY, x INT)
+SECONDARY_ENGINE MOCK
+PARTITION BY HASH(id);
+INSERT INTO t_partitioned VALUES (1, 2), (2, 3), (3, 4), (4, 5);
+ALTER TABLE t_partitioned SECONDARY_LOAD;
+SELECT * FROM t_partitioned;
+id	x
+DROP TABLE t_partitioned;
+FLUSH STATUS;
+SELECT * FROM t1;
+PREPARE ps FROM 'SELECT * FROM t1';
+EXECUTE ps;
+SELECT * FROM t1, t_primary_only tp WHERE t1.id = tp.id;
+EXECUTE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+ALTER TABLE t1 SECONDARY_UNLOAD;
+SELECT * FROM t1;
+EXECUTE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+ALTER TABLE t1 SECONDARY_LOAD;
+EXECUTE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+DROP PREPARE ps|
+id	x	y
+id	x	y
+id	x	y	id	x
+1	2	3	1	1
+id	x	y
+Variable_name	Value
+Secondary_engine_execution_count	3
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+Variable_name	Value
+Secondary_engine_execution_count	3
+id	x	y
+Variable_name	Value
+Secondary_engine_execution_count	4
+FLUSH STATUS;
+PREPARE ps FROM 'SELECT x FROM t1 WHERE id = ?';
+SET @a=1;
+EXECUTE ps USING @a;
+x
+EXECUTE ps USING @a;
+x
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+ALTER TABLE t1 SECONDARY_UNLOAD;
+EXECUTE ps USING @a;
+x
+2
+EXECUTE ps USING @a;
+x
+2
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+ALTER TABLE t1 SECONDARY_LOAD;
+EXECUTE ps USING @a;
+x
+EXECUTE ps USING @a;
+x
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	4
+DROP PREPARE ps;
+FLUSH STATUS;
+SELECT JSON_EXTRACT(j, '$') FROM
+(SELECT '[]' AS j FROM DUAL UNION ALL SELECT '{}' FROM DUAL) AS dt
+LEFT JOIN t1 ON (TRUE);
+JSON_EXTRACT(j, '$')
+[]
+{}
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+FLUSH STATUS;
+SELECT JSON_EXTRACT(j, '$') FROM
+(SELECT '[]' AS j FROM DUAL UNION ALL SELECT 'not-json' FROM DUAL) AS dt
+LEFT JOIN t1 ON (TRUE);
+ERROR 22032: Invalid JSON text in argument 1 to function json_extract: "Invalid value." at position 1.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+FLUSH STATUS;
+PREPARE ps FROM "SELECT JSON_EXTRACT(j, '$') FROM
+(SELECT '[]' AS j FROM DUAL UNION ALL SELECT 'not-json' FROM DUAL) AS dt
+LEFT JOIN t1 ON (TRUE)";
+EXECUTE ps;
+ERROR 22032: Invalid JSON text in argument 1 to function json_extract: "Invalid value." at position 1.
+EXECUTE ps;
+ERROR 22032: Invalid JSON text in argument 1 to function json_extract: "Invalid value." at position 1.
+DROP PREPARE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+FLUSH STATUS;
+CREATE PROCEDURE p1() SELECT COUNT(*) FROM t1;
+CALL p1();
+COUNT(*)
+3
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+PREPARE ps1 FROM 'SELECT * FROM t1';
+EXECUTE ps1;
+id	x	y
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+CREATE PROCEDURE p2() EXECUTE ps1;
+CREATE PROCEDURE p3() PREPARE ps2 FROM 'SELECT * FROM t1';
+FLUSH STATUS;
+CALL p2();
+id	x	y
+1	2	3
+4	5	6
+7	8	9
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+CALL p3();
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+EXECUTE ps1;
+id	x	y
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+EXECUTE ps2;
+id	x	y
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+DROP PREPARE ps1;
+DROP PREPARE ps2;
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP PROCEDURE p3;
+FLUSH STATUS;
+CREATE TABLE t_with_trigger(x INT);
+CREATE TRIGGER tr AFTER INSERT ON t_with_trigger
+FOR EACH ROW SELECT COUNT(*) FROM t1 INTO @a;
+INSERT INTO t_with_trigger VALUES (1);
+SELECT @a;
+@a
+3
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+DROP TABLE t_with_trigger;
+CREATE TABLE t_nonexistent(x INT) SECONDARY_ENGINE NONEXISTENT;
+INSERT INTO t_nonexistent VALUES (1);
+FLUSH STATUS;
+SELECT * FROM t_nonexistent;
+x
+1
+SELECT * FROM t1 a, t_nonexistent b WHERE a.id = b.x;
+id	x	y	x
+1	2	3	1
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+DROP TABLE t_nonexistent;
+CREATE TABLE t_case1(x INT) SECONDARY_ENGINE 'MOCK';
+CREATE TABLE t_case2(y INT) SECONDARY_ENGINE 'mock ';
+CREATE TABLE t_case3(z INT) SECONDARY_ENGINE 'MoCk  ';
+INSERT INTO t_case1 VALUES (1);
+INSERT INTO t_case2 VALUES (2);
+INSERT INTO t_case3 VALUES (3);
+ALTER TABLE t_case1 SECONDARY_LOAD;
+ALTER TABLE t_case2 SECONDARY_LOAD;
+ALTER TABLE t_case3 SECONDARY_LOAD;
+FLUSH STATUS;
+SELECT * FROM t_case1, t_case2, t_case3;
+x	y	z
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+DROP TABLE t_case1, t_case2, t_case3;
+CREATE TABLE tf(x INT) SECONDARY_ENGINE MOCK;
+INSERT INTO tf VALUES (123);
+ALTER TABLE tf SECONDARY_LOAD;
+CREATE FUNCTION f1() RETURNS INT DETERMINISTIC
+BEGIN
+DECLARE i INT;
+SELECT x INTO i FROM tf;
+RETURN i;
+END|
+CREATE FUNCTION f2() RETURNS INT DETERMINISTIC
+BEGIN
+INSERT INTO tf VALUES (234);
+RETURN 1;
+END|
+FLUSH STATUS;
+SELECT f1();
+f1()
+123
+SELECT f2();
+f2()
+1
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+SELECT * FROM tf;
+x
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+DROP FUNCTION f1;
+DROP FUNCTION f2;
+DROP TABLE tf;
+CREATE TABLE t_dropped (x INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t_dropped SECONDARY_LOAD;
+PREPARE ps FROM 'SELECT * FROM t_dropped';
+EXECUTE ps;
+x
+DROP TABLE t_dropped;
+EXECUTE ps;
+ERROR 42S02: Table 'test.t_dropped' doesn't exist
+DROP PREPARE ps;
+DROP VIEW v1;
+DROP TABLE t1, t2, t_primary_only;
+#
+# Rudimentary tests for use_secondary_engine system variable.
+#
+SET @my_use_secondary_engine = @@use_secondary_engine;
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+INSERT INTO t1 VALUES (1);
+ALTER TABLE t1 SECONDARY_LOAD;
+CREATE TABLE t2 (a INT);
+INSERT INTO t2 VALUES (1);
+FLUSH STATUS;
+# The row shall be returned from the primary storage engine.
+SET @@use_secondary_engine = OFF;
+SELECT * FROM t1;
+a
+1
+INSERT INTO t1 SELECT * FROM t2;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+# The mock storage engine does not return any rows.
+SET @@use_secondary_engine = FORCED;
+SELECT * FROM t1;
+a
+INSERT INTO t1 SELECT * FROM t2;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SET @@use_secondary_engine = ON;
+SELECT * FROM t1;
+a
+INSERT INTO t1 SELECT * FROM t2;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+# An error shall be returned if table is not loaded.
+ALTER TABLE t1 SECONDARY_UNLOAD;
+SET @@use_secondary_engine = FORCED;
+SELECT * FROM t1;
+Got one of the listed errors
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+SET @@use_secondary_engine = ON;
+SELECT * FROM t1;
+a
+1
+1
+1
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+DROP TABLE t1;
+DROP TABLE t2;
+SET @@use_secondary_engine = @my_use_secondary_engine;
+#
+# Queries not referencing any base tables shall be executed without
+# without even if use_secondary_engine is FORCED.
+#
+SET @my_use_secondary_engine = @@use_secondary_engine;
+SET @@use_secondary_engine = FORCED;
+CREATE VIEW v as SELECT 1;
+SELECT * FROM v;
+1
+1
+SELECT 1;
+1
+1
+SELECT COUNT(*) FROM (SELECT 1) AS dt;
+COUNT(*)
+1
+DROP VIEW v;
+SET @@use_secondary_engine = @my_use_secondary_engine;
+#
+# Attempt to force query on secondary engine even if its referenced
+# table has no secondary engine defined.
+#
+SET @my_use_secondary_engine = @@use_secondary_engine;
+SET @@use_secondary_engine = FORCED;
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1);
+FLUSH STATUS;
+SELECT * FROM t1;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+SET @@use_secondary_engine = ON;
+SELECT * FROM t1;
+a
+1
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+DROP TABLE t1;
+SET @@use_secondary_engine = @my_use_secondary_engine;
+#
+# Attempt to force query on secondary engine if one of its referenced
+# table has a secondary engine while another table has none.
+#
+SET @my_use_secondary_engine = @@use_secondary_engine;
+SET @@use_secondary_engine = FORCED;
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 (a INT);
+INSERT INTO t1 VALUES (1);
+INSERT INTO t2 VALUES (2);
+ALTER TABLE t1 SECONDARY_LOAD;
+FLUSH STATUS;
+SELECT * FROM t1;
+a
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SELECT * FROM t2;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SELECT * FROM t1,t2;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+ALTER TABLE t1 SECONDARY_UNLOAD;
+SELECT * FROM t1,t2;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+DROP TABLE t1,t2;
+SET @@use_secondary_engine = @my_use_secondary_engine;
+#
+# Attempt to force query referencing temporary table on secondary engine.
+#
+SET @my_use_secondary_engine = @@use_secondary_engine;
+SET @@use_secondary_engine = FORCED;
+CREATE TEMPORARY TABLE t1 (a INT);
+FLUSH STATUS;
+SELECT * FROM t1;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+DROP TABLE t1;
+SET @@use_secondary_engine = @my_use_secondary_engine;
+#
+# Change use_secondary_engine across execution of prepared statements.
+#
+SET @my_use_secondary_engine = @@use_secondary_engine;
+SET @@use_secondary_engine = FORCED;
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+FLUSH STATUS;
+PREPARE ps FROM "SELECT * FROM t1";
+ERROR HY000: Table has not been loaded
+SET @@use_secondary_engine = OFF;
+PREPARE ps FROM "SELECT * FROM t1";
+EXECUTE ps;
+a
+# Load table into secondary engine.
+ALTER TABLE t1 SECONDARY_LOAD;
+EXECUTE ps;
+a
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+SET @@use_secondary_engine = ON;
+EXECUTE ps;
+a
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SET @@use_secondary_engine = FORCED;
+EXECUTE ps;
+a
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+# Unload table from secondary engine.
+ALTER TABLE t1 SECONDARY_UNLOAD;
+SET @@use_secondary_engine = ON;
+EXECUTE ps;
+a
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+SET @@use_secondary_engine = FORCED;
+EXECUTE ps;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+DROP PREPARE ps;
+DROP TABLE t1;
+SET @@use_secondary_engine = @my_use_secondary_engine;
+#
+# Set use_secondary_engine as a hint.
+#
+SET @my_use_secondary_engine = @@use_secondary_engine;
+SET @@use_secondary_engine = OFF;
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+INSERT INTO t1 VALUES (1);
+FLUSH STATUS;
+SELECT * FROM t1;
+a
+1
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ * FROM t1;
+Got one of the listed errors
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+ALTER TABLE t1 SECONDARY_LOAD;
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ * FROM t1;
+a
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SELECT /*+ SET_VAR(use_secondary_engine = ON) */ * FROM t1;
+a
+SET @@use_secondary_engine = @my_use_secondary_engine;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+SELECT /*+ SET_VAR(use_secondary_engine = OFF) */ * FROM t1;
+a
+1
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+DROP TABLE t1;
+SET @@use_secondary_engine = @my_use_secondary_engine;
+#
+# Bug#28311801: THE GLOBAL VALUE OF SECONDARY_ENGINE_EXECUTION_COUNT
+#               IS ALWAYS ZERO
+#
+CREATE TABLE t (x INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t SECONDARY_LOAD;
+SELECT * FROM t;
+x
+FLUSH STATUS;
+SELECT 1;
+1
+1
+DROP TABLE t;
+#
+# Load only a subset of columns into secondary engine.
+#
+SET @my_use_secondary_engine = @@use_secondary_engine;
+CREATE TABLE t1 (
+pk INT PRIMARY KEY AUTO_INCREMENT,
+a INT,
+b INT NOT SECONDARY,
+c INT,
+d INT NOT SECONDARY
+) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 (
+pk INT PRIMARY KEY AUTO_INCREMENT,
+e INT,
+f INT NOT SECONDARY,
+g INT,
+h INT NOT SECONDARY
+) SECONDARY_ENGINE MOCK;
+INSERT INTO t1 (a, b, c, d) VALUES (1,1,1,1), (1,1,1,1), (2,2,2,2);
+INSERT INTO t2 (e, f, g, h) VALUES (2,2,2,2), (2,2,2,2), (3,3,3,3);
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t2 SECONDARY_LOAD;
+# Statements which should be sent to primary engine since not all columns
+# are in secondary engine.
+CREATE VIEW v1 as SELECT * FROM t1;
+CREATE VIEW v2 as SELECT t1.a, t2.f FROM t1, t2;
+SELECT * FROM t1;
+pk	a	b	c	d
+1	1	1	1	1
+2	1	1	1	1
+3	2	2	2	2
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ * FROM t1;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SELECT 1 FROM t1 WHERE b=1;
+1
+1
+1
+SELECT 1 FROM t1 GROUP BY b;
+1
+1
+1
+SELECT 1 FROM t1 ORDER BY b;
+1
+1
+1
+1
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ 1 FROM t1 WHERE b=1;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ 1 FROM t1 GROUP BY b;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ 1 FROM t1 ORDER BY b;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SELECT * FROM v1;
+pk	a	b	c	d
+1	1	1	1	1
+2	1	1	1	1
+3	2	2	2	2
+SELECT SUM(b) FROM v1;
+SUM(b)
+4
+SELECT 1 FROM v1 WHERE b=1;
+1
+1
+1
+SELECT 1 FROM v1 GROUP BY b;
+1
+1
+1
+SELECT 1 FROM v1 ORDER BY b;
+1
+1
+1
+1
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ * FROM v1;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ SUM(b) FROM v1;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ 1 FROM v1 WHERE b=1;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ 1 FROM v1 GROUP BY b;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ 1 FROM v1 ORDER BY b;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+SELECT t1.a, t2.f FROM t1, t2;
+a	f
+1	2
+1	2
+1	2
+1	2
+1	3
+1	3
+2	2
+2	2
+2	3
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ t1.a, t2.f FROM t1, t2;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SELECT * FROM v2;
+a	f
+1	2
+1	2
+1	2
+1	2
+1	3
+1	3
+2	2
+2	2
+2	3
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ * FROM v2;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined for at least one of the query tables.
+# Statements which should be sent to the secondary engine since all
+# columns are in secondary engine.
+SET @@use_secondary_engine = FORCED;
+CREATE VIEW v3 as SELECT a, c FROM t1;
+CREATE VIEW v4 as SELECT t1.a, t1.c, t2.e, t2.g FROM t1, t2;
+SELECT a, c FROM t1;
+a	c
+SELECT 1 FROM t1 WHERE a=1;
+1
+SELECT * FROM v3;
+a	c
+SELECT t1.a, t1.c, t2.e, t2.g FROM t1, t2;
+a	c	e	g
+SELECT * FROM v4;
+a	c	e	g
+DROP VIEW v1, v2, v3, v4;
+DROP TABLE t1, t2;
+SET @@use_secondary_engine = @my_use_secondary_engine;
+#
+# NOT SECONDARY on partitioned table
+#
+CREATE TABLE t1 (a INT PRIMARY KEY NOT SECONDARY, b INT DEFAULT 10)
+PARTITION BY RANGE (a) (
+PARTITION p0 VALUES LESS THAN (1),
+PARTITION p1 VALUES LESS THAN (2),
+PARTITION p2 VALUES LESS THAN (3),
+PARTITION p3 VALUES LESS THAN (4),
+PARTITION p4 VALUES LESS THAN (5),
+PARTITION p5 VALUES LESS THAN (6),
+PARTITION max VALUES LESS THAN MAXVALUE);
+INSERT INTO t1(a) VALUES (-1),(0),(1),(2),(3),(4),(5),(6),(7),(8);
+ALTER TABLE t1 SECONDARY_ENGINE=MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+FLUSH STATUS;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ a FROM t1;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SELECT a FROM t1;
+a
+-1
+0
+1
+2
+3
+4
+5
+6
+7
+8
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+SELECT b FROM t1;
+b
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ b FROM t1;
+b
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+DROP TABLE t1;
+#
+# Use NOT SECONDARY as comment.
+#
+CREATE TABLE t1 (a INT /* NOT SECONDARY */, b INT ) SECONDARY_ENGINE MOCK;
+INSERT INTO t1 VALUES (1,1);
+ALTER TABLE t1 SECONDARY_LOAD;
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ a FROM t1;
+a
+FLUSH STATUS;
+SELECT a FROM t1;
+a
+SELECT * FROM t1;
+a	b
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+DROP TABLE t1;
+#
+# Use NOT SECONDARY with other constraint on column.
+#
+CREATE TABLE t1 (a INT, b INT NOT SECONDARY UNIQUE KEY) SECONDARY_ENGINE MOCK;
+INSERT INTO t1 VALUES (1, 1);
+ALTER TABLE t1 SECONDARY_LOAD;
+FLUSH STATUS;
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ * FROM t1;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SELECT a FROM t1;
+a
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ b FROM t1;
+ERROR HY000: Secondary engine operation failed. use_secondary_engine is FORCED but query could not be executed in secondary engine.
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+DROP TABLE t1;
+# Add NON SECONDARY and do not use SECONDARY_ENGINE AT CREATE
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT);
+INSERT INTO t1 VALUES (1,1);
+SELECT a FROM t1;
+a
+1
+SELECT b FROM t1;
+b
+1
+SELECT * FROM t1;
+a	b
+1	1
+DROP TABLE t1;
+#
+# Bug#28738100: SECONDARY ENGINE RETURNS WRONG RESULT WITH IS NULL CLAUSE
+#
+SET @saved_sql_auto_is_null = @@sql_auto_is_null;
+SET @@sql_auto_is_null = 1;
+CREATE TABLE t(a INT PRIMARY KEY AUTO_INCREMENT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t SECONDARY_LOAD;
+INSERT INTO t VALUES ();
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+EXPLAIN FORMAT=TREE SELECT * FROM t WHERE a IS NULL;
+EXPLAIN
+-> Filter: (t.a = <cache>(last_insert_id()))  (rows=1)
+    -> Table scan on t in secondary engine MOCK  (rows=1)
+
+Warnings:
+Note	1003	Query is executed in secondary engine; the actual query plan may diverge from the printed one
+DROP TABLE t;
+SET @@sql_auto_is_null = @saved_sql_auto_is_null;
+# Bug#29288023: Join condition is substituted with REF access
+CREATE TABLE t1(f1 int, f11 int);
+CREATE TABLE t2(f2 int, f22 int);
+INSERT INTO t1 VALUES(1,1),(2,2),(3,3),(5,5),(9,9),(7,7);
+INSERT INTO t2 VALUES(1,1),(3,3),(2,2),(4,4),(8,8),(6,6);
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+ALTER TABLE t1 SECONDARY_ENGINE=MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t2 SECONDARY_ENGINE=MOCK;
+ALTER TABLE t2 SECONDARY_LOAD;
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+include/assert_grep.inc [Secondary engine does not support indexes on derived tables]
+DROP TABLE t1, t2;
+CREATE TABLE t1(x INT, y INT, z INT, c INT, d INT);
+INSERT INTO t1 VALUES
+(1, 5, 2, 2, 3), (2, 2, 5, 2, 3), (3, 5, 5, 2, 3), (4, 2, 5, 2, 3),
+(2, 3, 4, 2, 3), (7, 6, 5, 2, 3), (8, 9, 5, 2, 3), (9, 6, 5, 2, 3),
+(10, 7, 5, 2, 3), (11, 6, 5, 2, 3), (12, 7, 5, 2, 3), (13, -1, 5, 2, 3),
+(14, 7, 5, 2, 3), (15, 8, 5, 2, 3), (16, 4, 5, 2, 3), (17, 7, 5, 2, 3),
+(18, 7, 5, 2, 3), (19, 17, 5, 2, 3), (20, 17, 5, 2, 3), (21, 5, -1, 2, 3),
+(22, 5, 5, 2, 3);
+ALTER TABLE t1 SECONDARY_ENGINE=MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+include/assert_grep.inc [Secondary engine does not support indexes on derived tables]
+DROP TABLE t1;
+#
+# Bug#29994087: SIG11 AT MATERIALIZEITERATOR::INIT() IN
+#               SQL/COMPOSITE_ITERATORS.CC
+#
+CREATE TABLE t (a INT, b INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t SECONDARY_LOAD;
+SELECT 1 FROM t
+WHERE (1, 2) IN (SELECT 3, 4 UNION SELECT 5, 6) OR b <= 10;
+1
+DROP TABLE t;
+#
+# Bug#29615190: SELECTS ON TABLES OFFLOADED TO SECONDARY ENGINE ARE
+#               WRITTEN TWICE TO THE MYSQLD GENERAL LOG
+#
+CREATE TABLE t(x INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t SECONDARY_LOAD;
+SET @saved_general_log = @@global.general_log;
+SET @saved_log_output = @@global.log_output;
+SET GLOBAL general_log = 1;
+SET GLOBAL log_output = 'table';
+TRUNCATE TABLE mysql.general_log;
+SELECT * FROM t;
+x
+statement_count
+1
+TRUNCATE TABLE mysql.general_log;
+PREPARE ps FROM 'SELECT * FROM t';
+SELECT COUNT(*) FROM mysql.general_log WHERE argument = 'SELECT * FROM t';
+COUNT(*)
+1
+EXECUTE ps;
+x
+SELECT COUNT(*) FROM mysql.general_log WHERE argument = 'SELECT * FROM t';
+COUNT(*)
+2
+DROP PREPARE ps;
+TRUNCATE TABLE mysql.general_log;
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ * FROM t;
+x
+statement_count
+1
+TRUNCATE TABLE mysql.general_log;
+PREPARE ps FROM 'SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ * FROM t';
+SELECT COUNT(*) FROM mysql.general_log WHERE argument LIKE 'SELECT % * FROM t';
+COUNT(*)
+1
+EXECUTE ps;
+x
+SELECT COUNT(*) FROM mysql.general_log WHERE argument LIKE 'SELECT % * FROM t';
+COUNT(*)
+2
+DROP PREPARE ps;
+SET GLOBAL general_log = @saved_general_log;
+SET GLOBAL log_output = @saved_log_output;
+TRUNCATE TABLE mysql.general_log;
+DROP TABLE t;
+#
+# Bug#30391501: ASSERTION FAILURE WHEN RUNNING RAPID.AGG_PROJ_ANY
+#               WITH --PS-PROTOCOL
+#
+CREATE TABLE t(x INT) SECONDARY_ENGINE MOCK;
+INSERT INTO t VALUES (1), (2), (3);
+ALTER TABLE t SECONDARY_LOAD;
+SELECT (SELECT 9 FROM DUAL) AS y FROM t GROUP BY y;
+y
+PREPARE ps FROM 'SELECT (SELECT 9 FROM DUAL) AS y FROM t GROUP BY y';
+EXECUTE ps;
+y
+DROP PREPARE ps;
+DROP TABLE t;

@@ -1,0 +1,127 @@
+# Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+#===========================================================================
+
+# All non-empty non-comment lines are regex patterns using CMake regex
+# syntax. Matching lines will be removed from the error log when writing
+# tofix-all.log. See run_doxygen.cmake for details.
+
+#===========================================================================
+# MAINTAINER:
+#
+# For bugs in the MySQL source code
+#
+# File a bug for each doxygen failure seen during the build:
+# - PRODUCT = MySQL Server (8478)
+# - COMPONENT = SRDOXYGEN
+# - make sure the title contains DOXYGEN
+# and update this file with exceptions using the templates below
+#
+# For bugs in the doxygen tool
+#
+# Indicate which doxygen version is broken,
+# Indicate which doxygen version is fixed, if any,
+# Indicate the doxygen issue number, if known
+#
+#===========================================================================
+
+#===========================================================================
+# << template to remove an entire directory >>
+# BUG#XXXXXXXX - TITLE
+# DATE / BUG REPORT AUTHOR
+# storage/innobase/*
+#===========================================================================
+
+#===========================================================================
+# << template to remove some files >>
+# BUG#XXXXXXXX - TITLE
+# DATE / BUG REPORT AUTHOR
+# include/m_ctype.h:[0-9]+: warning:
+#===========================================================================
+
+# BUG#31354781 - FIX DOXYGEN WARNINGS IN RPL CODE
+# 07-DEC-2020 Erlend Dahl
+sql/rpl_rli_pdb.h:[0-9]+: warning:
+sql/rpl_trx_tracking.h:[0-9]+: warning:
+sql/rpl_utility.h:[0-9]+: warning:
+libbinlogevents/include/binlog_event.h:[0-9]+: warning:
+libbinlogevents/include/codecs/binary.h:[0-9]+: warning:
+libbinlogevents/include/trx_boundary_parser.h:[0-9]+: warning:
+plugin/group_replication/src/applier.cc:[0-9]+: warning:
+sql/log_event.h:[0-9]+: warning:
+sql/rpl_replica.cc:[0-9]+: warning:
+sql/rpl_trx_tracking.h:[0-9]+: warning:
+sql/rpl_utility.h:[0-9]+: warning:
+#
+# BUG#32245629 - FIX DOXYGEN WARNINGS IN THE OPTIMIZER CODE
+# 07-DEC-2020 Erlend Dahl
+sql/join_optimizer/join_optimizer.cc:[0-9]+: warning:
+sql/range_optimizer/range_optimizer.cc:[0-9]+: warning:
+sql/protocol_callback.h:[0-9]+: warning:
+sql/sql_lex.h:[0-9]+: warning:
+sql/sql_optimizer.cc:[0-9]+: warning:
+sql/sql_optimizer_internal.h:[0-9]+: warning:
+sql/sql_prepare.cc:[0-9]+: warning:
+sql/sql_table.cc:[0-9]+: warning:
+sql-common/json_dom.h:[0-9]+: warning:
+sql/handler.cc:[0-9]+: warning:
+sql/handler.h:[0-9]+: warning:
+sql/item_func.h:[0-9]+: warning:
+sql/range_optimizer/index_range_scan_plan.cc:[0-9]+: warning:
+sql/range_optimizer/index_skip_scan_plan.cc:[0-9]+: warning:
+sql/range_optimizer/index_skip_scan_plan.h:[0-9]+: warning:
+sql/range_optimizer/path_helpers.h:[0-9]+: warning:
+sql/range_optimizer/range_analysis.cc:[0-9]+: warning:
+
+#===========================================================================
+# 08-DEC-2020 Marc Alff
+# Doxygen bug in 1.8.18
+# Doxygen is confused by anonymous namespaces,
+# which creates a lot of "warning: no matching class member found for"
+# and "warning: no uniquely matching class member found for"
+#
+# https://github.com/doxygen/doxygen/issues/8413
+#
+sql/join_optimizer/join_optimizer.cc:.*no matching class member found for
+sql/rpl_info_dummy.cc:.*no uniquely matching class member found for
+sql/rpl_info_table.cc:.*no uniquely matching class member found for
+sql/rwlock_scoped_lock.cc:.*no uniquely matching class member found for
+sql/sql_prepare.cc:.*no uniquely matching class member found for
+#===========================================================================
+
+#===========================================================================
+# 09-DEC-2020 Marc Alff
+# Doxygen multiline error messages.
+#
+# Doxygen can print errors in multiple lines:
+# the first line contains the file path, line number, and error message
+# subsequent lines contains additional information.
+#
+# Ignore rules are based on the first line only (with a path),
+# so that subsequent lines are silenced here from tofix-regressions.log.
+#
+# To read a full error message, read tofix-all.log.
+#
+Possible candidates:
+^[ ]+
+#===========================================================================

@@ -1,13 +1,21 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,7 +26,53 @@
 #ifndef ITEM_CREATE_H
 #define ITEM_CREATE_H
 
-typedef struct st_udf_func udf_func;
+/**
+  @file sql/item_create.h
+  Builder for SQL functions.
+*/
+
+#include <cstddef>
+
+#include "field_types.h"
+#include "lex_string.h"
+#include "my_inttypes.h"         // uint
+#include "sql/parse_location.h"  // POS
+
+/**
+  @addtogroup GROUP_PARSER
+  @{
+*/
+
+class Item;
+class PT_item_list;
+class THD;
+struct Cast_type;
+struct CHARSET_INFO;
+struct udf_func;
+enum class Json_on_response_type : uint16;
+
+/* For type casts */
+
+enum Cast_target : unsigned char {
+  ITEM_CAST_SIGNED_INT,
+  ITEM_CAST_UNSIGNED_INT,
+  ITEM_CAST_DATE,
+  ITEM_CAST_TIME,
+  ITEM_CAST_DATETIME,
+  ITEM_CAST_YEAR,
+  ITEM_CAST_CHAR,
+  ITEM_CAST_DECIMAL,
+  ITEM_CAST_JSON,
+  ITEM_CAST_FLOAT,
+  ITEM_CAST_DOUBLE,
+  ITEM_CAST_POINT,
+  ITEM_CAST_LINESTRING,
+  ITEM_CAST_POLYGON,
+  ITEM_CAST_MULTIPOINT,
+  ITEM_CAST_MULTILINESTRING,
+  ITEM_CAST_MULTIPOLYGON,
+  ITEM_CAST_GEOMETRYCOLLECTION
+};
 
 /**
   Public function builder interface.
@@ -31,9 +85,8 @@ typedef struct st_udf_func udf_func;
   for each function, which has undesirable side effects in the grammar.
 */
 
-class Create_func
-{
-public:
+class Create_func {
+ public:
   /**
     The builder create method.
     Given the function name and list or arguments, this method creates
@@ -55,15 +108,13 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call, or NULL
   */
-  virtual Item *create_func(THD *thd, LEX_STRING name, List<Item> *item_list) = 0;
+  virtual Item *create_func(THD *thd, LEX_STRING name,
+                            PT_item_list *item_list) = 0;
 
-protected:
-  /** Constructor */
-  Create_func() {}
-  /** Destructor */
-  virtual ~Create_func() {}
+ protected:
+  Create_func() = default;
+  virtual ~Create_func() = default;
 };
-
 
 /**
   Function builder for qualified functions.
@@ -71,9 +122,8 @@ protected:
   syntax, as in <code>db.func(expr, expr, ...)</code>.
 */
 
-class Create_qfunc : public Create_func
-{
-public:
+class Create_qfunc : public Create_func {
+ public:
   /**
     The builder create method, for unqualified functions.
     This builder will use the current database for the database name.
@@ -82,54 +132,51 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call
   */
-  virtual Item *create_func(THD *thd, LEX_STRING name, List<Item> *item_list);
+  Item *create_func(THD *thd, LEX_STRING name,
+                    PT_item_list *item_list) override;
 
   /**
     The builder create method, for qualified functions.
     @param thd The current thread
-    @param db The database name
+    @param db The database name or NULL_STR to use the default db name
     @param name The function name
     @param use_explicit_name Should the function be represented as 'db.name'?
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call
   */
-  virtual Item* create(THD *thd, LEX_STRING db, LEX_STRING name,
-                       bool use_explicit_name, List<Item> *item_list) = 0;
+  virtual Item *create(THD *thd, LEX_STRING db, LEX_STRING name,
+                       bool use_explicit_name, PT_item_list *item_list) = 0;
 
-protected:
+ protected:
   /** Constructor. */
-  Create_qfunc() {}
+  Create_qfunc() = default;
   /** Destructor. */
-  virtual ~Create_qfunc() {}
+  ~Create_qfunc() override = default;
 };
-
 
 /**
   Find the native function builder associated with a given function name.
-  @param thd The current thread
+
   @param name The native function name
   @return The native function builder associated with the name, or NULL
 */
-extern Create_func * find_native_function_builder(THD *thd, LEX_STRING name);
-
+extern Create_func *find_native_function_builder(const LEX_STRING &name);
 
 /**
   Find the function builder for qualified functions.
   @param thd The current thread
   @return A function builder for qualified functions
 */
-extern Create_qfunc * find_qualified_function_builder(THD *thd);
+extern Create_qfunc *find_qualified_function_builder(THD *thd);
 
-
-#ifdef HAVE_DLOPEN
 /**
   Function builder for User Defined Functions.
 */
 
-class Create_udf_func : public Create_func
-{
-public:
-  virtual Item *create_func(THD *thd, LEX_STRING name, List<Item> *item_list);
+class Create_udf_func : public Create_func {
+ public:
+  Item *create_func(THD *thd, LEX_STRING name,
+                    PT_item_list *item_list) override;
 
   /**
     The builder create method, for User Defined Functions.
@@ -138,41 +185,76 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call
   */
-  Item *create(THD *thd, udf_func *fct, List<Item> *item_list);
+  Item *create(THD *thd, udf_func *fct, PT_item_list *item_list);
 
   /** Singleton. */
   static Create_udf_func s_singleton;
 
-protected:
+ protected:
   /** Constructor. */
-  Create_udf_func() {}
+  Create_udf_func() = default;
   /** Destructor. */
-  virtual ~Create_udf_func() {}
+  ~Create_udf_func() override = default;
 };
-#endif
-
 
 /**
   Builder for cast expressions.
   @param thd The current thread
-  @param a The item to cast
-  @param cast_type the type casted into
-  @param len TODO
-  @param dec TODO
-  @param cs The character set
+  @param pos Location of casting expression
+  @param arg The item to cast
+  @param type the type casted into
+  @param as_array Cast to array
 */
-Item *
-create_func_cast(THD *thd, Item *a, Cast_target cast_type,
-                 const char *len, const char *dec,
-                 const CHARSET_INFO *cs);
+Item *create_func_cast(THD *thd, const POS &pos, Item *arg,
+                       const Cast_type &type, bool as_array);
 
-Item *create_temporal_literal(THD *thd,
-                              const char *str, uint length,
-                              const CHARSET_INFO *cs,
-                              enum_field_types type, bool send_error);
+Item *create_func_cast(THD *thd, const POS &pos, Item *a,
+                       Cast_target cast_target, const CHARSET_INFO *cs_arg);
 
-int item_create_init();
+/**
+  Creates an Item that represents a JSON_VALUE expression.
+
+  @param thd        thread handler
+  @param pos        the location of the expression
+  @param arg        the JSON input argument to the JSON_VALUE expression
+  @param path       the path to extract from the JSON document
+  @param type       the target type of the JSON_VALUE expression
+  @param on_empty_type     the type of the ON EMPTY clause
+  @param on_empty_default  the default value specified in ON EMPTY, if any
+  @param on_error_type     the type of the ON ERROR clause
+  @param on_error_default  the default value specified in ON ERROR, if any
+  @return an Item on success, or nullptr on error
+*/
+Item *create_func_json_value(THD *thd, const POS &pos, Item *arg, Item *path,
+                             const Cast_type &type,
+                             Json_on_response_type on_empty_type,
+                             Item *on_empty_default,
+                             Json_on_response_type on_error_type,
+                             Item *on_error_default);
+
+Item *create_temporal_literal(THD *thd, const char *str, size_t length,
+                              const CHARSET_INFO *cs, enum_field_types type,
+                              bool send_error);
+
+/**
+  Load the hash table for native functions.
+  Note: this code is not thread safe, and is intended to be used at server
+  startup only (before going multi-threaded)
+
+  @retval false OK.
+  @retval true An exception was caught.
+*/
+bool item_create_init();
+
+/**
+  Empty the hash table for native functions.
+  Note: this code is not thread safe, and is intended to be used at server
+  shutdown only (after thread requests have been executed).
+*/
 void item_create_cleanup();
 
-#endif
+/**
+  @} (end of group GROUP_PARSER)
+*/
 
+#endif

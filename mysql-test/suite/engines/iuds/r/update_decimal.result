@@ -1,5 +1,8 @@
 DROP TABLE IF EXISTS t1,t2,t3,t4;
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1(c1 DECIMAL(10,5) UNSIGNED NOT NULL, c2 DECIMAL(10,5) SIGNED NULL, c3 DECIMAL, c4 INT, UNIQUE INDEX idx(c1,c4));
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 INSERT INTO t1 VALUES('00100.05000','-00100.05000','00100119',1),('11111.00009','-9999.99999','9999999',2);
 INSERT INTO t1 VALUES('1000000','10000000','1000000000.0001',3);
 Warnings:
@@ -205,6 +208,8 @@ c1
 99999.99999
 99999.99999
 SET SQL_MODE=STRICT_ALL_TABLES;
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 UPDATE t1 SET c1=NULL WHERE c1>1000;
 ERROR 23000: Column 'c1' cannot be null
 UPDATE IGNORE t1 SET c1=NULL WHERE c1>1000;
@@ -217,7 +222,7 @@ Warning	1048	Column 'c1' cannot be null
 Warning	1048	Column 'c1' cannot be null
 SELECT c1 from t1 WHERE c1>1000;
 c1
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='NO_ENGINE_SUBSTITUTION';
 TRUNCATE t1;
 INSERT INTO t1 VALUES ('11111.11111','-11111.11111','1111111111',1),('22222.22222','-22222.22222','2222222222',2),('33333.33333','-33333.33333','3333333333',3),('44444.44444','-44444.44444','4444444444',4),('55555.55555','-55555.55555','5555555555',5),('66666.66666','-66666.66666','6666666666',6),('77777.77777','-77777.77777','7777777777',7),('88888.88888','-88888.88888','8888888888',8),('99999.99999','-99999.99999','9999999999',9);
 SELECT * FROM t1;
@@ -361,7 +366,7 @@ c2
 -99999.99999
 1.00000
 UPDATE t4 SET c1=88888.88888,c3=8 WHERE c3=7;
-ERROR 23000: Duplicate entry '88888.88888-8' for key 'idx4'
+ERROR 23000: Duplicate entry '88888.88888-8' for key 't4.idx4'
 SELECT * FROM t1;
 c1	c2	c3	c4
 11111.11111	-11111.11111	0	1
@@ -390,6 +395,10 @@ c1	c2	c3
 99999.99999	9999999999	9
 DROP TABLES IF EXISTS t1,t2,t3,t4;
 CREATE TABLE t1(c1 FLOAT(10,5) UNSIGNED NOT NULL, c2 FLOAT(10,5) SIGNED NULL, c3 FLOAT, c4 INT, UNIQUE INDEX idx(c1,c4));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES('00100.05000','-00100.05000','00100119',1),('11111.00009','-9999.99999','9999999',2);
 INSERT INTO t1 VALUES('1000000','10000000','1000000000.0001',3);
 Warnings:
@@ -588,6 +597,8 @@ c1
 100000.00000
 100000.00000
 SET SQL_MODE=STRICT_ALL_TABLES;
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 UPDATE t1 SET c1=NULL WHERE c1>1000;
 ERROR 23000: Column 'c1' cannot be null
 UPDATE IGNORE t1 SET c1=NULL WHERE c1>1000;
@@ -601,7 +612,7 @@ Warning	1048	Column 'c1' cannot be null
 Warning	1048	Column 'c1' cannot be null
 SELECT c1 from t1 WHERE c1>1000;
 c1
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='NO_ENGINE_SUBSTITUTION';
 TRUNCATE t1;
 INSERT INTO t1 VALUES ('11111.11111','-11111.11111','1111111111',1),('22222.22222','-22222.22222','2222222222',2),('33333.33333','-33333.33333','3333333333',3),('44444.44444','-44444.44444','4444444444',4),('55555.55555','-55555.55555','5555555555',5),('66666.66666','-66666.66666','6666666666',6),('77777.77777','-77777.77777','7777777777',7),('88888.88888','-88888.88888','8888888888',8),('99999.99999','-99999.99999','9999999999',9);
 SELECT * FROM t1;
@@ -634,8 +645,14 @@ c1	c2	c3	c4
 77777.78125	-77777.78125	7777780000	7
 88888.89062	-88888.89062	8888890000	8
 CREATE TABLE t2(c1 FLOAT(10,5) NOT NULL, c2 FLOAT, c3 INT, UNIQUE INDEX idx2(c1,c3));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE TABLE t3(c1 FLOAT(10,5) NOT NULL, c2 FLOAT, c3 INT, UNIQUE INDEX idx3(c1,c3));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE TABLE t4(c1 FLOAT(10,5) NOT NULL, c2 FLOAT, c3 INT, UNIQUE INDEX idx4(c1,c3));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES ('11111.11111','1111111111',1),('22222.22222','2222222222',2),('33333.33333','3333333333',3);
 INSERT INTO t3 VALUES ('44444.44444','4444444444',4),('55555.55555','5555555555',5),('66666.66666','6666666666',6);
 INSERT INTO t4 VALUES ('77777.77777','7777777777',7),('88888.88888','8888888888',8),('99999.99999','9999999999',9);
@@ -696,31 +713,37 @@ UPDATE t2 SET t2.c1='44444.44444', t2.c3=4 WHERE t2.c1='22222.22222' AND t2.c3=2
 SELECT * FROM t2;
 c1	c2	c3
 11111.11133	1111110000	1
-22222.22266	2222220000	2
 33333.33203	3333330000	3
+44444.44531	2222220000	4
 update t2 set t2.c1='99999.99999' where c1 BETWEEN '11111' AND '44444';
 SELECT * FROM t2;
 c1	c2	c3
 100000.00000	1111110000	1
-100000.00000	2222220000	2
 100000.00000	3333330000	3
+44444.44531	2222220000	4
 UPDATE t2 SET c1=c1-1,c2=c2-1 WHERE c1 IN ('44444.44444','99999.99999');
 SELECT * FROM t2;
 c1	c2	c3
 100000.00000	1111110000	1
-100000.00000	2222220000	2
 100000.00000	3333330000	3
+44444.44531	2222220000	4
 DROP TABLE t2,t3;
 CREATE TABLE t2(c1 FLOAT(10,5) NOT NULL, c2 FLOAT, c3 INT);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE TABLE t3(c1 FLOAT(10,5) NOT NULL, c2 FLOAT, c3 INT, UNIQUE INDEX idx3(c1));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES ('11111.11111','1111111111',1),('22222.22222','2222222222',2),('33333.33333','3333333333',3);
 INSERT INTO t3 VALUES ('11111.11111','4444444444',1),('55555.55555','5555555555',2),('66666.66666','6666666666',3);
 UPDATE t2,t3 SET t3.c1='22222.22222' WHERE t2.c1=t3.c1 AND t2.c3=t3.c3;
 UPDATE t1 SET c3='asdf' WHERE c1='11111.11111';
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 SELECT c3 FROM t1;
 c3
+0
 10000000000
-1111110000
 2222220000
 3333330000
 4444440000
@@ -743,11 +766,11 @@ c2
 -88888.89062
 1.00000
 UPDATE t4 SET c1=88888.88888,c3=8 WHERE c3=7;
-ERROR 23000: Duplicate entry '88888.89062-8' for key 'idx4'
+ERROR 23000: Duplicate entry '88888.89062-8' for key 't4.idx4'
 SELECT * FROM t1;
 c1	c2	c3	c4
 100000.00000	-100000.00000	10000000000	9
-11111.11133	-11111.11133	1111110000	1
+11111.11133	-11111.11133	0	1
 22122.22266	1.00000	2222220000	2
 33233.33203	-100.00000	3333330000	3
 44344.44531	-100.00000	4444440000	4
@@ -772,6 +795,10 @@ c1	c2	c3
 88888.89062	8888890000	8
 DROP TABLES IF EXISTS t1,t2,t3,t4;
 CREATE TABLE t1(c1 DOUBLE(10,5) UNSIGNED NOT NULL, c2 DOUBLE(10,5) SIGNED NULL, c3 DOUBLE, c4 INT, UNIQUE INDEX idx(c1,c4));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES('00100.05000','-00100.05000','00100119',1),('11111.00009','-9999.99999','9999999',2);
 INSERT INTO t1 VALUES('1000000','10000000','1000000000.0001',3);
 Warnings:
@@ -970,6 +997,8 @@ c1
 99999.99999
 99999.99999
 SET SQL_MODE=STRICT_ALL_TABLES;
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 UPDATE t1 SET c1=NULL WHERE c1>1000;
 ERROR 23000: Column 'c1' cannot be null
 UPDATE IGNORE t1 SET c1=NULL WHERE c1>1000;
@@ -982,7 +1011,7 @@ Warning	1048	Column 'c1' cannot be null
 Warning	1048	Column 'c1' cannot be null
 SELECT c1 from t1 WHERE c1>1000;
 c1
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='NO_ENGINE_SUBSTITUTION';
 TRUNCATE t1;
 INSERT INTO t1 VALUES ('11111.11111','-11111.11111','1111111111',1),('22222.22222','-22222.22222','2222222222',2),('33333.33333','-33333.33333','3333333333',3),('44444.44444','-44444.44444','4444444444',4),('55555.55555','-55555.55555','5555555555',5),('66666.66666','-66666.66666','6666666666',6),('77777.77777','-77777.77777','7777777777',7),('88888.88888','-88888.88888','8888888888',8),('99999.99999','-99999.99999','9999999999',9);
 SELECT * FROM t1;
@@ -1015,8 +1044,14 @@ c1	c2	c3	c4
 88888.88888	-88888.88888	8888888888	8
 99999.99999	-99999.99999	9999999999	9
 CREATE TABLE t2(c1 DOUBLE(10,5) NOT NULL, c2 DOUBLE, c3 INT, UNIQUE INDEX idx2(c1,c3));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE TABLE t3(c1 DOUBLE(10,5) NOT NULL, c2 DOUBLE, c3 INT, UNIQUE INDEX idx3(c1,c3));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE TABLE t4(c1 DOUBLE(10,5) NOT NULL, c2 DOUBLE, c3 INT, UNIQUE INDEX idx4(c1,c3));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES ('11111.11111','1111111111',1),('22222.22222','2222222222',2),('33333.33333','3333333333',3);
 INSERT INTO t3 VALUES ('44444.44444','4444444444',4),('55555.55555','5555555555',5),('66666.66666','6666666666',6);
 INSERT INTO t4 VALUES ('77777.77777','7777777777',7),('88888.88888','8888888888',8),('99999.99999','9999999999',9);
@@ -1093,7 +1128,11 @@ c1	c2	c3
 99998.99999	3333333332	3
 DROP TABLE t2,t3;
 CREATE TABLE t2(c1 DOUBLE(10,5) NOT NULL, c2 DOUBLE, c3 INT);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 CREATE TABLE t3(c1 DOUBLE(10,5) NOT NULL, c2 DOUBLE, c3 INT, UNIQUE INDEX idx3(c1));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES ('11111.11111','1111111111',1),('22222.22222','2222222222',2),('33333.33333','3333333333',3);
 INSERT INTO t3 VALUES ('11111.11111','4444444444',1),('55555.55555','5555555555',2),('66666.66666','6666666666',3);
 UPDATE t2,t3 SET t3.c1='22222.22222' WHERE t2.c1=t3.c1 AND t2.c3=t3.c3;
@@ -1126,7 +1165,7 @@ c2
 -99999.99999
 1.00000
 UPDATE t4 SET c1=88888.88888,c3=8 WHERE c3=7;
-ERROR 23000: Duplicate entry '88888.88888-8' for key 'idx4'
+ERROR 23000: Duplicate entry '88888.88888-8' for key 't4.idx4'
 SELECT * FROM t1;
 c1	c2	c3	c4
 11111.11111	-11111.11111	0	1
@@ -1154,3 +1193,4 @@ c1	c2	c3
 88888.88888	8888888888	8
 99999.99999	9999999999	9
 DROP TABLES IF EXISTS t1,t2,t3,t4;
+SET sql_mode=default;

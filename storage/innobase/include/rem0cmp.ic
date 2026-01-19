@@ -1,186 +1,168 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2011, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1994, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/*******************************************************************//**
-@file include/rem0cmp.ic
-Comparison services for records
+/** @file include/rem0cmp.ic
+ Comparison services for records
 
-Created 7/1/1994 Heikki Tuuri
-************************************************************************/
+ Created 7/1/1994 Heikki Tuuri
+ ************************************************************************/
 
-/*************************************************************//**
-This function is used to compare two data fields for which we know the
-data type.
-@return	1, 0, -1, if data1 is greater, equal, less than data2, respectively */
-UNIV_INLINE
-int
-cmp_data_data(
-/*==========*/
-	ulint		mtype,	/*!< in: main type */
-	ulint		prtype,	/*!< in: precise type */
-	const byte*	data1,	/*!< in: data field (== a pointer to a memory
-				buffer) */
-	ulint		len1,	/*!< in: data field length or UNIV_SQL_NULL */
-	const byte*	data2,	/*!< in: data field (== a pointer to a memory
-				buffer) */
-	ulint		len2)	/*!< in: data field length or UNIV_SQL_NULL */
-{
-	return(cmp_data_data_slow(mtype, prtype, data1, len1, data2, len2));
+#include <mysql_com.h>
+
+#include "field_types.h"  // enum_field_types
+
+/** Compare two data fields.
+@param[in]      dfield1 data field; must have type field set
+@param[in]      dfield2 data field
+@param[in]      is_asc  true=ASC, false=DESC
+@return the comparison result of dfield1 and dfield2
+@retval 0 if dfield1 is equal to dfield2
+@retval negative if dfield1 is less than dfield2
+@retval positive if dfield1 is greater than dfield2 */
+static inline int cmp_dfield_dfield(const dfield_t *dfield1,
+                                    const dfield_t *dfield2, bool is_asc) {
+  const dtype_t *type;
+
+  /* The multi-value array data is not expected, however, if it's one
+  value of the array, then it's fine to compare it */
+  ut_ad(!(dfield_is_multi_value(dfield1) &&
+          (dfield_get_len(dfield1) == UNIV_MULTI_VALUE_ARRAY_MARKER ||
+           dfield_get_len(dfield1) == UNIV_NO_INDEX_VALUE)));
+  ut_ad(!(dfield_is_multi_value(dfield2) &&
+          (dfield_get_len(dfield2) == UNIV_MULTI_VALUE_ARRAY_MARKER ||
+           dfield_get_len(dfield2) == UNIV_NO_INDEX_VALUE)));
+  ut_ad(dfield_check_typed(dfield1));
+
+  type = dfield_get_type(dfield1);
+
+  return (cmp_data_data(
+      type->mtype, type->prtype, is_asc, (const byte *)dfield_get_data(dfield1),
+      dfield_get_len(dfield1), (const byte *)dfield_get_data(dfield2),
+      dfield_get_len(dfield2)));
 }
 
-/*****************************************************************
-This function is used to compare two (CHAR) data fields for the LIKE
-operator. */
-UNIV_INLINE
-int
-cmp_data_data_like_prefix(
-/*======================*/
-				/* out: 1, 0, -1, if data1 is greater, equal,
-				less than data2, respectively */
-	byte*           data1,  /* in: data field (== a pointer to a memory
-				buffer) */
-	ulint           len1,   /* in: data field length or UNIV_SQL_NULL */
-	byte*           data2,  /* in: data field (== a pointer to a memory
-				buffer) */
-	ulint           len2)   /* in: data field length or UNIV_SQL_NULL */
-{
-	return(cmp_data_data_slow_like_prefix(data1, len1, data2, len2));
-}
-/*****************************************************************
-This function is used to compare two (CHAR) data fields for the LIKE
-operator. */
-UNIV_INLINE
-int
-cmp_data_data_like_suffix(
-/*======================*/
-				/* out: 1, 0, -1, if data1 is greater, equal,
-				less than data2, respectively */
-	byte*           data1,  /* in: data field (== a pointer to a memory
-				buffer) */
-	ulint           len1,   /* in: data field length or UNIV_SQL_NULL */
-	byte*           data2,  /* in: data field (== a pointer to a memory
-				buffer) */
-	ulint           len2)   /* in: data field length or UNIV_SQL_NULL */
-{
-	return(cmp_data_data_slow_like_suffix(data1, len1, data2, len2));
-}
-/*****************************************************************
-This function is used to compare two (CHAR) data fields for the LIKE
-operator. */
-UNIV_INLINE
-int
-cmp_data_data_like_substr(
-/*======================*/
-				/* out: 1, 0, -1, if data1 is greater, equal,
-				less than data2, respectively */
-	byte*           data1,  /* in: data field (== a pointer to a memory
-				buffer) */
-	ulint           len1,   /* in: data field length or UNIV_SQL_NULL */
-	byte*           data2,  /* in: data field (== a pointer to a memory
-				buffer) */
-	ulint           len2)   /* in: data field length or UNIV_SQL_NULL */
-{
-	return(cmp_data_data_slow_like_substr(data1, len1, data2, len2));
-}
-/*************************************************************//**
-This function is used to compare two dfields where at least the first
-has its data type field set.
-@return 1, 0, -1, if dfield1 is greater, equal, less than dfield2,
-respectively */
-UNIV_INLINE
-int
-cmp_dfield_dfield(
-/*==============*/
-	const dfield_t*	dfield1,/*!< in: data field; must have type field set */
-	const dfield_t*	dfield2)/*!< in: data field */
-{
-	const dtype_t*	type;
+static inline int cmp_multi_value_dfield_dfield(const dfield_t *dfield1,
+                                                const dfield_t *dfield2) {
+  ut_ad(dfield_is_multi_value(dfield1));
+  ut_ad(dfield_is_multi_value(dfield2));
+  ut_ad(dfield_is_null(dfield2) ||
+        (dfield_get_len(dfield2) != UNIV_MULTI_VALUE_ARRAY_MARKER &&
+         dfield_get_len(dfield2) != UNIV_NO_INDEX_VALUE));
 
-	ut_ad(dfield_check_typed(dfield1));
+  if (dfield_is_null(dfield1)) {
+    return (dfield_is_null(dfield2) ? 0 : 1);
+  } else if (dfield_is_null(dfield2)) {
+    return (1);
+  }
 
-	type = dfield_get_type(dfield1);
+  if (dfield1->len == UNIV_NO_INDEX_VALUE) {
+    /* Nothing to be indexed, of course nothing match */
+    return (1);
+  }
 
-	return(cmp_data_data(type->mtype, type->prtype,
-			     (const byte*) dfield_get_data(dfield1),
-			     dfield_get_len(dfield1),
-			     (const byte*) dfield_get_data(dfield2),
-			     dfield_get_len(dfield2)));
+  ut_ad(dfield1->len == UNIV_MULTI_VALUE_ARRAY_MARKER);
+
+  multi_value_data *multi_value =
+      reinterpret_cast<multi_value_data *>(dfield_get_data(dfield1));
+
+  return (multi_value->has(dfield_get_type(dfield2),
+                           static_cast<const byte *>(dfield_get_data(dfield2)),
+                           dfield_get_len(dfield2))
+              ? 0
+              : 1);
 }
 
-/*****************************************************************
-This function is used to compare two dfields where at least the first
-has its data type field set. */
-UNIV_INLINE
-int
-cmp_dfield_dfield_like_suffix(
-/*==========================*/
-				/* out: 1, 0, -1, if dfield1 is greater, equal,
-				less than dfield2, respectively */
-	dfield_t*       dfield1,/* in: data field; must have type field set */
-	dfield_t*       dfield2)/* in: data field */
-{
-	ut_ad(dfield_check_typed(dfield1));
+static inline int cmp_rec_rec(const rec_t *rec1, const rec_t *rec2,
+                              const ulint *offsets1, const ulint *offsets2,
+                              const dict_index_t *index,
+                              bool spatial_index_non_leaf,
+                              ulint *matched_fields, bool cmp_btree_recs) {
+  ulint match_f;
+  int ret;
 
-	return(cmp_data_data_like_suffix(
-		(byte*) dfield_get_data(dfield1),
-		dfield_get_len(dfield1),
-		(byte*) dfield_get_data(dfield2),
-		dfield_get_len(dfield2)));
+  ret = cmp_rec_rec_with_match(rec1, rec2, offsets1, offsets2, index,
+                               spatial_index_non_leaf, false, &match_f,
+                               cmp_btree_recs);
+
+  if (matched_fields != nullptr) {
+    *matched_fields = match_f;
+  }
+
+  return (ret);
 }
 
-/*****************************************************************
-This function is used to compare two dfields where at least the first
-has its data type field set. */
-UNIV_INLINE
-int
-cmp_dfield_dfield_like_substr(
-/*==========================*/
-				/* out: 1, 0, -1, if dfield1 is greater, equal,
-				less than dfield2, respectively */
-	dfield_t*       dfield1,/* in: data field; must have type field set */
-	dfield_t*       dfield2)/* in: data field */
-{
-	ut_ad(dfield_check_typed(dfield1));
+#ifndef UNIV_HOTBACKUP
+/** Compare two data fields.
+@param[in] dfield1 data field
+@param[in] dfield2 data field
+@return the comparison result of dfield1 and dfield2
+@retval true if dfield1 is equal to dfield2, or a prefix of dfield1
+@retval false otherwise */
+static inline bool cmp_dfield_dfield_eq_prefix(const dfield_t *dfield1,
+                                               const dfield_t *dfield2) {
+  const dtype_t *type;
 
-	return(cmp_data_data_like_substr(
-		(byte*) dfield_get_data(dfield1),
-		dfield_get_len(dfield1),
-		(byte*) dfield_get_data(dfield2),
-		dfield_get_len(dfield2)));
-}
-/*************************************************************//**
-This function is used to compare two physical records. Only the common
-first fields are compared.
-@return 1, 0 , -1 if rec1 is greater, equal, less, respectively, than
-rec2; only the common first fields are compared */
-UNIV_INLINE
-int
-cmp_rec_rec(
-/*========*/
-	const rec_t*	rec1,	/*!< in: physical record */
-	const rec_t*	rec2,	/*!< in: physical record */
-	const ulint*	offsets1,/*!< in: rec_get_offsets(rec1, index) */
-	const ulint*	offsets2,/*!< in: rec_get_offsets(rec2, index) */
-	dict_index_t*	index)	/*!< in: data dictionary index */
-{
-	ulint	match_f		= 0;
-	ulint	match_b		= 0;
+  ut_ad(dfield_check_typed(dfield1));
+  ut_ad(dfield_check_typed(dfield2));
 
-	return(cmp_rec_rec_with_match(rec1, rec2, offsets1, offsets2, index,
-				      FALSE, &match_f, &match_b));
+  type = dfield_get_type(dfield1);
+
+#ifdef UNIV_DEBUG
+  switch (type->prtype & DATA_MYSQL_TYPE_MASK) {
+    case MYSQL_TYPE_BIT:
+    case MYSQL_TYPE_STRING:
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_VARCHAR:
+      break;
+    default:
+      ut_error;
+  }
+#endif /* UNIV_DEBUG */
+
+  uint cs_num = (uint)dtype_get_charset_coll(type->prtype);
+
+  if (CHARSET_INFO *cs = get_charset(cs_num, MYF(MY_WME))) {
+    return (!cs->coll->strnncoll(
+        cs, static_cast<uchar *>(dfield_get_data(dfield1)),
+        dfield_get_len(dfield1), static_cast<uchar *>(dfield_get_data(dfield2)),
+        dfield_get_len(dfield2), true));
+  }
+
+#ifdef UNIV_NO_ERR_MSGS
+  ib::fatal(UT_LOCATION_HERE)
+#else
+  ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_627)
+#endif /* !UNIV_NO_ERR_MSGS */
+      << "Unable to find charset-collation " << cs_num;
+
+  return (false);
 }
+#endif /* UNIV_HOTBACKUP */

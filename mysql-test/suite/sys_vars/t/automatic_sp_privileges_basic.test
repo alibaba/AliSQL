@@ -113,9 +113,11 @@ SELECT @@session.automatic_sp_privileges;
 # Check if the value in GLOBAL Tables matches values in variable             #
 ##############################################################################
 
+--disable_warnings
 SELECT IF(@@global.automatic_sp_privileges, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='automatic_sp_privileges';
+--enable_warnings
 
 --echo '#---------------------FN_DYNVARS_004_07----------------------#'
 ################################################################### 
@@ -161,7 +163,9 @@ SET global.automatic_sp_privileges = 1;
 --Error ER_UNKNOWN_TABLE
 SELECT global.automatic_sp_privileges;
 --Error ER_BAD_FIELD_ERROR
-SELECT automatic_sp_privileges = @@session.automatic_sp_privileges;
+SELECT automatic_sp_privileges;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.automatic_sp_privileges;
 
 
 

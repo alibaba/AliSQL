@@ -1,59 +1,62 @@
-# Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2008, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/storage/ndb/test/include)
 
-INCLUDE(${CMAKE_SOURCE_DIR}/storage/ndb/config/type_ndbapitest.cmake)
+NDB_ADD_EXECUTABLE(hugoFill hugoFill.cpp NDBTEST NDBCLIENT)
 
-ADD_EXECUTABLE(hugoFill hugoFill.cpp)
+NDB_ADD_EXECUTABLE(hugoLoad hugoLoad.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(hugoLockRecords hugoLockRecords.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(hugoPkDelete hugoPkDelete.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(hugoPkRead hugoPkRead.cpp NDBTEST NDBCLIENT)
 
-ADD_EXECUTABLE(hugoLoad hugoLoad.cpp)
-ADD_EXECUTABLE(hugoLockRecords hugoLockRecords.cpp)
-ADD_EXECUTABLE(hugoPkDelete hugoPkDelete.cpp)
-ADD_EXECUTABLE(hugoPkRead hugoPkRead.cpp)
+NDB_ADD_EXECUTABLE(hugoPkReadRecord hugoPkReadRecord.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(hugoPkUpdate hugoPkUpdate.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(hugoScanRead hugoScanRead.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(hugoScanUpdate hugoScanUpdate.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(restart restart.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(verify_index verify_index.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(copy_tab copy_tab.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(create_index create_index.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(hugoJoin hugoJoin.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(ndb_connect connect.cpp NDBTEST NDBCLIENT)
 
-ADD_EXECUTABLE(hugoPkReadRecord hugoPkReadRecord.cpp)
-ADD_EXECUTABLE(hugoPkUpdate hugoPkUpdate.cpp)
-ADD_EXECUTABLE(hugoScanRead hugoScanRead.cpp)
-ADD_EXECUTABLE(hugoScanUpdate hugoScanUpdate.cpp)
-ADD_EXECUTABLE(restart restart.cpp)
-ADD_EXECUTABLE(verify_index verify_index.cpp)
-ADD_EXECUTABLE(copy_tab copy_tab.cpp)
-ADD_EXECUTABLE(create_index create_index.cpp)
-ADD_EXECUTABLE(ndb_cpcc cpcc.cpp)
-ADD_EXECUTABLE(hugoJoin hugoJoin.cpp)
+NDB_ADD_EXECUTABLE(create_fk create_fk.cpp NDBTEST NDBCLIENT)
+NDB_ADD_EXECUTABLE(drop_fk drop_fk.cpp NDBTEST NDBCLIENT)
 
-SET(BINS
-    hugoFill
-    hugoLoad
-    hugoLockRecords
-    hugoPkDelete
-    hugoPkRead
-    hugoPkReadRecord
-    hugoPkUpdate
-    hugoScanRead
-    hugoScanUpdate
-    restart
-    verify_index
-    copy_tab
-    create_index
-    ndb_cpcc
-    hugoJoin)
+NDB_ADD_EXECUTABLE(ndb_cpcc cpcc.cpp)
+NDB_ADD_EXECUTABLE(statUtils statUtils.cpp NDBTEST NDBCLIENT)
 
-FOREACH(B ${BINS})
-  TARGET_LINK_LIBRARIES(${B} ndbNDBT)
-  TARGET_LINK_LIBRARIES(${B} ndbclient_so)
-ENDFOREACH()
+TARGET_LINK_LIBRARIES(ndb_cpcc ndbNDBT ndbclient_static)
 
-INSTALL(TARGETS ${BINS} DESTINATION bin)
+NDB_ADD_EXECUTABLE(test_cpcd test_cpcd.cpp NDBTEST NDBCLIENT SKIP_INSTALL)
+
+IF(NOT WIN32)
+  NDB_ADD_EXECUTABLE(spj_performance_test spj_performance_test.cpp
+    NDBTEST NDBCLIENT MYSQLCLIENT)
+  IF(MY_COMPILER_IS_CLANG)
+    ADD_COMPILE_FLAGS(spj_performance_test.cpp COMPILE_FLAGS
+      " -Wno-error=undefined-reinterpret-cast")
+  ENDIF()
+
+ENDIF()

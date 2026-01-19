@@ -1,123 +1,79 @@
-/* Copyright (c) 2010, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "rpl_info_table_access.h"
-#include "rpl_utility.h"
-#include "handler.h"
-#include "sql_parse.h"
+#include "sql/rpl_info_table_access.h"
 
-/**
-  Opens and locks a table.
+#include <stddef.h>
 
-  It's assumed that the caller knows what they are doing:
-  - whether it was necessary to reset-and-backup the open tables state
-  - whether the requested lock does not lead to a deadlock
-  - whether this open mode would work under LOCK TABLES, or inside a
-  stored function or trigger.
+#include "libbinlogevents/include/binlog_event.h"
+#include "m_ctype.h"
+#include "my_base.h"
+#include "my_dbug.h"
+#include "my_inttypes.h"
+#include "my_sqlcommand.h"
+#include "my_sys.h"
+#include "mysql/thread_type.h"
+#include "mysqld_error.h"
+#include "sql/current_thd.h"
+#include "sql/field.h"
+#include "sql/handler.h"
+#include "sql/key.h"
+#include "sql/log_event.h"
+#include "sql/rpl_info_values.h"  // Rpl_info_values
+#include "sql/rpl_rli.h"
+#include "sql/sql_base.h"  // MYSQL_OPEN_IGNORE_FLUSH
+#include "sql/sql_bitmap.h"
+#include "sql/sql_class.h"  // THD
+#include "sql/sql_const.h"
+#include "sql/sql_lex.h"
+#include "sql/sql_parse.h"  // mysql_reset_thd_for_next_command
+#include "sql/table.h"      // TABLE
+#include "sql_string.h"
 
-  Note that if the table can't be locked successfully this operation will
-  close it. Therefore it provides guarantee that it either opens and locks
-  table or fails without leaving any tables open.
+void Rpl_info_table_access::before_open(THD *thd) {
+  DBUG_TRACE;
 
-  @param[in]  thd           Thread requesting to open the table
-  @param[in]  dbstr         Database where the table resides
-  @param[in]  tbstr         Table to be openned
-  @param[in]  max_num_field Maximum number of fields
-  @param[in]  lock_type     How to lock the table
-  @param[out] table         We will store the open table here
-  @param[out] backup        Save the lock info. here
-
-  @return
-    @retval TRUE open and lock failed - an error message is pushed into the
-                                        stack
-    @retval FALSE success
-*/
-bool Rpl_info_table_access::open_table(THD* thd, const LEX_STRING dbstr,
-                                       const LEX_STRING tbstr,
-                                       uint max_num_field,
-                                       enum thr_lock_type lock_type,
-                                       TABLE** table,
-                                       Open_tables_backup* backup)
-{
-  TABLE_LIST tables;
-  Query_tables_list query_tables_list_backup;
-
-  uint flags= (MYSQL_OPEN_IGNORE_GLOBAL_READ_LOCK |
-               MYSQL_LOCK_IGNORE_GLOBAL_READ_ONLY |
-               MYSQL_OPEN_IGNORE_FLUSH |
-               MYSQL_LOCK_IGNORE_TIMEOUT |
-               MYSQL_LOCK_RPL_INFO_TABLE);
-
-  DBUG_ENTER("Rpl_info_table_access::open_table");
+  m_flags = (MYSQL_OPEN_IGNORE_GLOBAL_READ_LOCK |
+             MYSQL_LOCK_IGNORE_GLOBAL_READ_ONLY | MYSQL_OPEN_IGNORE_FLUSH |
+             MYSQL_LOCK_IGNORE_TIMEOUT | MYSQL_LOCK_RPL_INFO_TABLE);
 
   /*
     This is equivalent to a new "statement". For that reason, we call both
     lex_start() and mysql_reset_thd_for_next_command.
+    Notice in case of atomic DDL the new statement has to be initiated
+    with a special care to preserve LEX of the top level statement.
+    On the other hand non-atomic DDL behaves "natively" to reset.
   */
-  if (thd->slave_thread || !current_thd)
-  { 
+  if (!current_thd ||
+      (thd->slave_thread &&
+       ((!thd->rli_slave || !thd->rli_slave->current_event ||
+         thd->rli_slave->current_event->get_type_code() !=
+             binary_log::QUERY_EVENT) ||
+        !static_cast<Query_log_event *>(thd->rli_slave->current_event)
+             ->has_ddl_committed))) {
     lex_start(thd);
     mysql_reset_thd_for_next_command(thd);
   }
-
-  /*
-    We need to use new Open_tables_state in order not to be affected
-    by LOCK TABLES/prelocked mode.
-    Also in order not to break execution of current statement we also
-    have to backup/reset/restore Query_tables_list part of LEX, which
-    is accessed and updated in the process of opening and locking
-    tables.
-  */
-  thd->lex->reset_n_backup_query_tables_list(&query_tables_list_backup);
-  thd->reset_n_backup_open_tables_state(backup);
-
-  tables.init_one_table(dbstr.str, dbstr.length, tbstr.str, tbstr.length,
-                        tbstr.str, lock_type);
-
-  if (!open_n_lock_single_table(thd, &tables, tables.lock_type, flags))
-  {
-    close_thread_tables(thd);
-    thd->restore_backup_open_tables_state(backup);
-    thd->lex->restore_backup_query_tables_list(&query_tables_list_backup);
-    my_error(ER_NO_SUCH_TABLE, MYF(0), dbstr.str, tbstr.str);
-    DBUG_RETURN(TRUE);
-  }
-
-  DBUG_ASSERT(tables.table->s->table_category == TABLE_CATEGORY_RPL_INFO);
-
-  if (tables.table->s->fields < max_num_field)
-  {
-    /*
-      Safety: this can only happen if someone started the server and then
-      altered the table.
-    */
-    ha_rollback_trans(thd, FALSE);
-    close_thread_tables(thd);
-    thd->restore_backup_open_tables_state(backup);
-    thd->lex->restore_backup_query_tables_list(&query_tables_list_backup);
-    my_error(ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2, MYF(0),
-             tables.table->s->db.str, tables.table->s->table_name.str,
-             max_num_field, tables.table->s->fields);
-    DBUG_RETURN(TRUE);
-  }
-
-  thd->lex->restore_backup_query_tables_list(&query_tables_list_backup);
-
-  *table= tables.table;
-  tables.table->use_all_columns();
-  DBUG_RETURN(FALSE);
 }
 
 /**
@@ -137,56 +93,29 @@ bool Rpl_info_table_access::open_table(THD* thd, const LEX_STRING dbstr,
   committed. In this case, the changes were not done on behalf of
   any user transaction and if not finished, there would be pending
   changes.
-  
-  @return
-    @retval FALSE No error
-    @retval TRUE  Failure
+
+  @retval false Success
+  @retval true  Failure
 */
-bool Rpl_info_table_access::close_table(THD *thd, TABLE* table,
+bool Rpl_info_table_access::close_table(THD *thd, TABLE *table,
                                         Open_tables_backup *backup,
-                                        bool error)
-{
-  Query_tables_list query_tables_list_backup;
+                                        bool error) {
+  DBUG_TRACE;
+  bool res =
+      System_table_access::close_table(thd, table, backup, error, thd_created);
 
-  DBUG_ENTER("Rpl_info_table_access::close_table");
-
-  if (table)
-  {
-    if (error)
-      ha_rollback_trans(thd, FALSE);
-    else
-    {
-      /*
-        To make the commit not to block with global read lock set
-        "ignore_global_read_lock" flag to true.
-       */
-      ha_commit_trans(thd, FALSE, TRUE);
+  DBUG_EXECUTE_IF("replica_crash_after_commit_no_atomic_ddl", {
+    if (thd->slave_thread && thd->rli_slave && thd->rli_slave->current_event &&
+        thd->rli_slave->current_event->get_type_code() ==
+            binary_log::QUERY_EVENT &&
+        !static_cast<Query_log_event *>(thd->rli_slave->current_event)
+             ->has_ddl_committed) {
+      assert(thd->lex->sql_command == SQLCOM_END);
+      DBUG_SUICIDE();
     }
-    if (thd_created)
-    {
-      if (error)
-        ha_rollback_trans(thd, TRUE);
-      else
-      {
-        /*
-          To make the commit not to block with global read lock set
-          "ignore_global_read_lock" flag to true.
-         */
-        ha_commit_trans(thd, TRUE, TRUE);
-      }
-    }
-    /*
-      In order not to break execution of current statement we have to
-      backup/reset/restore Query_tables_list part of LEX, which is
-      accessed and updated in the process of closing tables.
-    */
-    thd->lex->reset_n_backup_query_tables_list(&query_tables_list_backup);
-    close_thread_tables(thd);
-    thd->lex->restore_backup_query_tables_list(&query_tables_list_backup);
-    thd->restore_backup_open_tables_state(backup);
-  }
+  });
 
-  DBUG_RETURN(FALSE);
+  return res;
 }
 
 /**
@@ -198,43 +127,39 @@ bool Rpl_info_table_access::close_table(THD *thd, TABLE* table,
   @param[in,out]  field_values The sequence of values
   @param[in,out]  table        Table
 
-  @return
-    @retval FOUND     The row was found.
-    @retval NOT_FOUND The row was not found.
-    @retval ERROR     There was a failure.
+  @retval FOUND_ID     The row was found.
+  @retval NOT_FOUND_ID The row was not found.
+  @retval ERROR_ID     There was a failure.
 */
-enum enum_return_id Rpl_info_table_access::find_info(Rpl_info_values *field_values,
-                                                     TABLE *table)
-{
-  KEY* keyinfo= NULL;
+enum enum_return_id Rpl_info_table_access::find_info(
+    Rpl_info_values *field_values, TABLE *table) {
+  KEY *keyinfo = nullptr;
   uchar key[MAX_KEY_LENGTH];
 
-  DBUG_ENTER("Rpl_info_table_access::find_info");
+  DBUG_TRACE;
 
   /*
     Checks if the table has a primary key as expected.
   */
   if (table->s->primary_key >= MAX_KEY ||
-      !table->s->keys_in_use.is_set(table->s->primary_key))
-  {
+      !table->s->keys_in_use.is_set(table->s->primary_key)) {
     /*
       This is not supposed to happen and means that someone
       has changed the table or disabled the keys.
     */
-    DBUG_RETURN(ERROR_ID);
+    return ERROR_ID;
   }
 
-  keyinfo= table->s->key_info + (uint) table->s->primary_key;
-  for (uint idx= 0; idx < keyinfo->user_defined_key_parts; idx++)
-  {
-    uint fieldnr= keyinfo->key_part[idx].fieldnr - 1;
+  keyinfo = table->s->key_info + table->s->primary_key;
+  for (uint idx = 0; idx < keyinfo->user_defined_key_parts; idx++) {
+    uint fieldnr = keyinfo->key_part[idx].fieldnr - 1;
 
     /*
       The size of the field must be great to store data.
     */
     if (field_values->value[fieldnr].length() >
         table->field[fieldnr]->field_length)
-      DBUG_RETURN(ERROR_ID);
+      return ERROR_ID;
 
     table->field[fieldnr]->store(field_values->value[fieldnr].c_ptr_safe(),
                                  field_values->value[fieldnr].length(),
@@ -242,11 +167,15 @@ enum enum_return_id Rpl_info_table_access::find_info(Rpl_info_values *field_valu
   }
   key_copy(key, table->record[0], table->key_info, table->key_info->key_length);
 
-  if (table->file->ha_index_read_idx_map(table->record[0], 0, key, HA_WHOLE_KEY,
-                                         HA_READ_KEY_EXACT))
-    DBUG_RETURN(NOT_FOUND_ID);
+  int lookup_return_value = table->file->ha_index_read_idx_map(
+      table->record[0], 0, key, HA_WHOLE_KEY, HA_READ_KEY_EXACT);
 
-  DBUG_RETURN(FOUND_ID);
+  if (lookup_return_value == HA_ERR_KEY_NOT_FOUND)
+    return NOT_FOUND_ID;
+  else if (lookup_return_value)
+    return ERROR_ID;
+
+  return FOUND_ID;
 }
 
 /**
@@ -258,108 +187,98 @@ enum enum_return_id Rpl_info_table_access::find_info(Rpl_info_values *field_valu
   The code built on top of this function needs to ensure there is
   no concurrent threads trying to update the table. So if an error
   different from HA_ERR_END_OF_FILE is returned, we abort with an
-  error because this implies that someone has manualy and
+  error because this implies that someone has manually and
   concurrently changed something.
 
-  @return
-    @retval FOUND     The row was found.
-    @retval NOT_FOUND The row was not found.
-    @retval ERROR     There was a failure.
+  @retval FOUND     The row was found.
+  @retval NOT_FOUND The row was not found.
+  @retval ERROR     There was a failure.
 */
-enum enum_return_id Rpl_info_table_access::scan_info(TABLE* table,
-                                                     uint instance)
-{
-  int error= 0;
-  uint counter= 0;
-  enum enum_return_id ret= NOT_FOUND_ID;
+enum enum_return_id Rpl_info_table_access::scan_info(TABLE *table,
+                                                     uint instance) {
+  int error = 0;
+  uint counter = 0;
+  enum enum_return_id ret = NOT_FOUND_ID;
 
-  DBUG_ENTER("Rpl_info_table_access::scan_info");
+  DBUG_TRACE;
 
-  if ((error= table->file->ha_rnd_init(TRUE)))
-    DBUG_RETURN(ERROR_ID);
+  if ((error = table->file->ha_rnd_init(true))) return ERROR_ID;
 
-  do
-  {
-    error= table->file->ha_rnd_next(table->record[0]);
-    switch (error)
-    {
+  do {
+    error = table->file->ha_rnd_next(table->record[0]);
+    switch (error) {
       case 0:
         counter++;
-        if (counter == instance)
-        {
-          ret= FOUND_ID;
-          error= HA_ERR_END_OF_FILE;
+        if (counter == instance) {
+          ret = FOUND_ID;
+          error = HA_ERR_END_OF_FILE;
         }
-      break;
+        break;
 
       case HA_ERR_END_OF_FILE:
-        ret= NOT_FOUND_ID;
-      break;
+        ret = NOT_FOUND_ID;
+        break;
 
       default:
         DBUG_PRINT("info", ("Failed to get next record"
-                            " (ha_rnd_next returns %d)", error));
-        ret= ERROR_ID;
-      break;
+                            " (ha_rnd_next returns %d)",
+                            error));
+        ret = ERROR_ID;
+        break;
     }
-  }
-  while (!error);
+  } while (!error);
 
   table->file->ha_rnd_end();
 
-  DBUG_RETURN(ret);
+  return ret;
 }
 
 /**
   Returns the number of entries in table.
 
   The code built on top of this function needs to ensure there is
-  no concurrent threads trying to update the table. So if an error
-  different from HA_ERR_END_OF_FILE is returned, we abort with an
-  error because this implies that someone has manualy and
-  concurrently changed something.
+  no concurrent threads trying to access the table. So if an error
+  different from HA_ERR_END_OF_FILE is returned, an error is returned
+  meaning the count failed cause a deadlock or other issue was found
 
   @param[in]  table   Table
   @param[out] counter Registers the number of entries.
 
-  @return
-    @retval false No error
-    @retval true  Failure
+  @retval false No error
+  @retval true  Failure
 */
-bool Rpl_info_table_access::count_info(TABLE* table, uint* counter)
-{
-  bool end= false;
-  int error= 0;
+bool Rpl_info_table_access::count_info(TABLE *table, ulonglong *counter) {
+  DBUG_TRACE;
+  int error = table->file->ha_records(counter);
+  return error != 0;
+}
 
-  DBUG_ENTER("Rpl_info_table_access::count_info");
+/**
+  Returns if the table is being used, meaning it contains at least a
+  line or some concurrency related error was returned when looking at
+  the table.
 
-  if ((error= table->file->ha_rnd_init(true)))
-    DBUG_RETURN(true);
+  @param[in]  table   Table
 
-  do
-  {
-    error= table->file->ha_rnd_next(table->record[0]);
-    switch (error) 
-    {
-      case 0:
-        (*counter)++;
-      break;
+  @retval a pair of booleans
+          First element is true if an error occurred, false otherwise.
+          Second element is true if the table is not empty or an access error
+          occurred meaning someone else is accessing it. False if the table
+          is empty.
+*/
+std::pair<bool, bool> Rpl_info_table_access::is_table_in_use(TABLE *table) {
+  DBUG_TRACE;
 
-      case HA_ERR_END_OF_FILE:
-        end= true;
-      break;
+  if ((table->file->ha_rnd_init(true))) return std::make_pair(true, false);
 
-      default:
-        DBUG_PRINT("info", ("Failed to get next record"
-                            " (ha_rnd_next returns %d)", error));
-      break;
-    }
+  bool is_in_use = true;
+  if (table->file->ha_rnd_next(table->record[0]) == HA_ERR_END_OF_FILE) {
+    is_in_use = false;
   }
-  while (!error);
 
   table->file->ha_rnd_end();
 
-  DBUG_RETURN(end ? false : true);
+  return std::make_pair(false, is_in_use);
 }
 
 /**
@@ -371,27 +290,33 @@ bool Rpl_info_table_access::count_info(TABLE* table, uint* counter)
   @param[in] fields        The sequence of fields
   @param[in] field_values  The sequence of values
 
-  @return
-    @retval FALSE No error
-    @retval TRUE  Failure
+  @retval false No error
+  @retval true  Failure
 */
 bool Rpl_info_table_access::load_info_values(uint max_num_field, Field **fields,
-                                             Rpl_info_values *field_values)
-{
-  DBUG_ENTER("Rpl_info_table_access::load_info_values");
+                                             Rpl_info_values *field_values) {
+  DBUG_TRACE;
   char buff[MAX_FIELD_WIDTH];
   String str(buff, sizeof(buff), &my_charset_bin);
 
-  uint field_idx= 0;
-  while (field_idx < max_num_field)
-  {
-    fields[field_idx]->val_str(&str);
-    field_values->value[field_idx].copy(str.c_ptr_safe(), str.length(),
-                                        &my_charset_bin);
+  uint field_idx = 0;
+  while (field_idx < max_num_field) {
+    if (fields[field_idx]->is_null()) {
+      bitmap_set_bit(&field_values->is_null, field_idx);
+    } else {
+      if (fields[field_idx]->real_type() == MYSQL_TYPE_ENUM) {
+        longlong enum_value = fields[field_idx]->val_int();
+        str.set_int(enum_value, false, &my_charset_bin);
+      } else
+        fields[field_idx]->val_str(&str);
+      field_values->value[field_idx].copy(str.c_ptr_safe(), str.length(),
+                                          &my_charset_bin);
+      bitmap_clear_bit(&field_values->is_null, field_idx);
+    }
     field_idx++;
   }
 
-  DBUG_RETURN(FALSE);
+  return false;
 }
 
 /**
@@ -403,32 +328,33 @@ bool Rpl_info_table_access::load_info_values(uint max_num_field, Field **fields,
   @param[in] fields        The sequence of fields
   @param[in] field_values  The sequence of values
 
-  @return
-    @retval FALSE No error
-    @retval TRUE  Failure
+  @retval false No error
+  @retval true  Failure
  */
-bool Rpl_info_table_access::store_info_values(uint max_num_field, Field **fields,
-                                              Rpl_info_values *field_values)
-{
-  DBUG_ENTER("Rpl_info_table_access::store_info_values");
-  uint field_idx= 0;
+bool Rpl_info_table_access::store_info_values(uint max_num_field,
+                                              Field **fields,
+                                              Rpl_info_values *field_values) {
+  DBUG_TRACE;
+  uint field_idx = 0;
 
-  while (field_idx < max_num_field)
-  {
-    fields[field_idx]->set_notnull();
+  while (field_idx < max_num_field) {
+    if (bitmap_is_set(&field_values->is_null, field_idx)) {
+      fields[field_idx]->set_null();
+    } else {
+      fields[field_idx]->set_notnull();
 
-    if (fields[field_idx]->store(field_values->value[field_idx].c_ptr_safe(),
-                                 field_values->value[field_idx].length(),
-                                 &my_charset_bin))
-    {
-      my_error(ER_RPL_INFO_DATA_TOO_LONG, MYF(0),
-               fields[field_idx]->field_name);
-      DBUG_RETURN(TRUE);
+      if (fields[field_idx]->store(field_values->value[field_idx].c_ptr_safe(),
+                                   field_values->value[field_idx].length(),
+                                   &my_charset_bin)) {
+        my_error(ER_RPL_INFO_DATA_TOO_LONG, MYF(0),
+                 fields[field_idx]->field_name);
+        return true;
+      }
     }
     field_idx++;
   }
 
-  DBUG_RETURN(FALSE);
+  return false;
 }
 
 /**
@@ -436,24 +362,23 @@ bool Rpl_info_table_access::store_info_values(uint max_num_field, Field **fields
   the mysqld startup, a thread is created in order to be able to
   access a table. Otherwise, the current thread is used.
 
-  @return
-    @retval THD* Pointer to thread structure
+  @returns THD* Pointer to thread structure
 */
-THD *Rpl_info_table_access::create_thd()
-{
-  THD *thd= current_thd;
+THD *Rpl_info_table_access::create_thd() {
+  THD *thd = current_thd;
 
-  if (!thd)
-  {
-    thd= new THD;
-    thd->thread_stack= (char*) &thd;
-    thd->store_globals();
-    thd->security_ctx->skip_grants();
-    thd->system_thread= SYSTEM_THREAD_INFO_REPOSITORY;
-    thd_created= true;
+  if (!thd) {
+    thd = System_table_access::create_thd();
+    thd->system_thread = SYSTEM_THREAD_INFO_REPOSITORY;
+    /*
+       Set the skip_readonly_check flag as this thread should not be
+       blocked by super_read_only check during ha_commit_trans.
+    */
+    thd->set_skip_readonly_check();
+    thd_created = true;
   }
 
-  return(thd);
+  return (thd);
 }
 
 /**
@@ -461,21 +386,13 @@ THD *Rpl_info_table_access::create_thd()
   system_thread information.
 
   @param[in] thd Thread requesting to be destroyed
-
-  @return
-    @retval FALSE No error
-    @retval TRUE  Failure
 */
-bool Rpl_info_table_access::drop_thd(THD *thd)
-{
-  DBUG_ENTER("Rpl_info::drop_thd");
+void Rpl_info_table_access::drop_thd(THD *thd) {
+  DBUG_TRACE;
 
-  if (thd_created)
-  {
-    delete thd;
-    my_pthread_setspecific_ptr(THR_THD,  NULL);
-    thd_created= false;
+  if (thd_created) {
+    thd->reset_skip_readonly_check();
+    System_table_access::drop_thd(thd);
+    thd_created = false;
   }
-
-  DBUG_RETURN(FALSE);
 }

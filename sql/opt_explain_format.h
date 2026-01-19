@@ -1,64 +1,55 @@
-/* Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
-
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #ifndef OPT_EXPLAIN_FORMAT_INCLUDED
 #define OPT_EXPLAIN_FORMAT_INCLUDED
 
-/** @file "EXPLAIN FORMAT=<format> <command>" 
-*/
-
-
-#include "sql_class.h"
-
-struct st_join_table;
-
-
 /**
-  Names for different query parse tree parts
+  @file sql/opt_explain_format.h
+  EXPLAIN FORMAT=@<format@> @<command@>.
 */
 
-enum Explain_context_enum
-{
-  CTX_NONE= 0, ///< Empty value
-  CTX_MESSAGE, ///< "No tables used" messages etc.
-  CTX_TABLE, ///< for single-table UPDATE/DELETE
-  CTX_SELECT_LIST, ///< SELECT (subquery), (subquery)...
-  CTX_UPDATE_VALUE_LIST, ///< UPDATE ... SET field=(subquery)...
-  CTX_JOIN,
-  CTX_JOIN_TAB,
-  CTX_MATERIALIZATION,
-  CTX_DUPLICATES_WEEDOUT,
-  CTX_DERIVED, ///< "Derived" subquery
-  CTX_WHERE, ///< Subquery in WHERE clause item tree
-  CTX_HAVING, ///< Subquery in HAVING clause item tree
-  CTX_ORDER_BY, ///< ORDER BY clause execution context
-  CTX_GROUP_BY, ///< GROUP BY clause execution context
-  CTX_SIMPLE_ORDER_BY, ///< ORDER BY clause execution context
-  CTX_SIMPLE_GROUP_BY, ///< GROUP BY clause execution context
-  CTX_DISTINCT, ///< DISTINCT clause execution context
-  CTX_SIMPLE_DISTINCT, ///< DISTINCT clause execution context
-  CTX_BUFFER_RESULT, ///< see SQL_BUFFER_RESULT in the manual
-  CTX_ORDER_BY_SQ, ///< Subquery in ORDER BY clause item tree
-  CTX_GROUP_BY_SQ, ///< Subquery in GROUP BY clause item tree
-  CTX_OPTIMIZED_AWAY_SUBQUERY, ///< Subquery executed once during optimization
-  CTX_UNION,
-  CTX_UNION_RESULT, ///< Pseudo-table context for UNION result
-  CTX_QUERY_SPEC ///< Inner SELECTs of UNION expression
-};
+#include <assert.h>
+#include <sys/types.h>
 
+#include <cstring>
+
+#include "my_alloc.h"  // MEM_ROOT
+#include "my_compiler.h"
+
+#include "my_inttypes.h"
+#include "my_sys.h"
+#include "sql/parse_tree_node_base.h"
+#include "sql/sql_list.h"
+#include "sql_string.h"
+
+class Opt_trace_object;
+class Query_result;
+class Query_expression;
+class Window;
+class Json_object;
+
+enum class enum_explain_type;
 
 /**
   Types of traditional "extra" column parts and property names for hierarchical
@@ -66,25 +57,21 @@ enum Explain_context_enum
   The traditional_extra_tags[] and json_extra_tags[] arrays must be in sync
   with this enum.
 */
-enum Extra_tag
-{
+enum Extra_tag {
   ET_none,
   ET_USING_TEMPORARY,
   ET_USING_FILESORT,
   ET_USING_INDEX_CONDITION,
   ET_USING,
   ET_RANGE_CHECKED_FOR_EACH_RECORD,
-  ET_USING_WHERE_WITH_PUSHED_CONDITION,
+  ET_USING_PUSHED_CONDITION,
   ET_USING_WHERE,
   ET_NOT_EXISTS,
   ET_USING_MRR,
   ET_USING_INDEX,
   ET_FULL_SCAN_ON_NULL_KEY,
-  ET_SKIP_OPEN_TABLE,
-  ET_OPEN_FRM_ONLY,
-  ET_OPEN_FULL_TABLE,
-  ET_SCANNED_DATABASES,
   ET_USING_INDEX_FOR_GROUP_BY,
+  ET_USING_INDEX_FOR_SKIP_SCAN,
   ET_DISTINCT,
   ET_LOOSESCAN,
   ET_START_TEMPORARY,
@@ -99,18 +86,23 @@ enum Extra_tag
   ET_UNIQUE_ROW_NOT_FOUND,
   ET_IMPOSSIBLE_ON_CONDITION,
   ET_PUSHED_JOIN,
+  ET_FT_HINTS,
+  ET_BACKWARD_SCAN,
+  ET_RECURSIVE,
+  ET_TABLE_FUNCTION,
+  ET_SKIP_RECORDS_IN_RANGE,
+  ET_USING_SECONDARY_ENGINE,
+  ET_REMATERIALIZE,
   //------------------------------------
   ET_total
 };
 
-
 /**
   Emulate lazy computation
 */
-class Lazy: public Sql_alloc
-{
-public:
-  virtual ~Lazy() {}
+class Lazy {
+ public:
+  virtual ~Lazy() = default;
 
   /**
     Deferred evaluation of encapsulated expression
@@ -120,7 +112,7 @@ public:
     @retval false       Success
     @retval true        Failure (OOM)
   */
-  virtual bool eval(String *ret)= 0;
+  virtual bool eval(String *ret) = 0;
 };
 
 /**
@@ -129,18 +121,19 @@ public:
   In structured EXPLAIN implementation Explain_context is a base class for
   notes of an intermediate tree.
 */
-struct Explain_context : Sql_alloc
-{
-  Explain_context_enum type; ///< type tag
+struct Explain_context {
+  enum_parsing_context type;  ///< type tag
 
-  explicit Explain_context(Explain_context_enum type_arg) : type(type_arg) {}
+  explicit Explain_context(enum_parsing_context type_arg) : type(type_arg) {}
 };
 
-
-namespace opt_explain_json_namespace // for forward declaration of "context"
+namespace opt_explain_json_namespace  // for forward declaration of "context"
 {
-  class context;
+class context;
 }
+
+// Table modification type
+enum enum_mod_type { MT_NONE, MT_INSERT, MT_UPDATE, MT_DELETE, MT_REPLACE };
 
 /**
   Helper class for table property buffering
@@ -149,17 +142,16 @@ namespace opt_explain_json_namespace // for forward declaration of "context"
   output row.
 
   For hierarchical EXPLAIN this structure contains property values for a single
-  CTX_TABLE/CTX_JOIN_TAB context node of the intermediate tree.
+  CTX_TABLE/CTX_QEP_TAB context node of the intermediate tree.
 */
 
-class qep_row : public Sql_alloc
-{
-private:
+class qep_row {
+ private:
   /* Don't copy this structure */
-  explicit qep_row(const qep_row &x); // undefined
-  qep_row &operator=(const qep_row &x); // undefined
+  explicit qep_row(const qep_row &x);    // undefined
+  qep_row &operator=(const qep_row &x);  // undefined
 
-public:
+ public:
   /**
     A wrapper for numeric table properties
 
@@ -168,28 +160,33 @@ public:
     "Extra" column - see the col_extra list).
 
     For hierarchical EXPLAIN this structure contains a numeric property value
-    for a single CTX_TABLE/CTX_JOIN_TAB context node of the intermediate tree.
+    for a single CTX_TABLE/CTX_QEP_TAB context node of the intermediate tree.
   */
-  template<typename T>
-  struct column
-  {
-  private:
-    bool nil; ///< true if the column contains NULL
-  public:
+  template <typename T>
+  struct column {
+   private:
+    bool nil;  ///< true if the column contains NULL
+   public:
     T value;
 
-  public:
+   public:
     column() { cleanup(); }
     bool is_empty() const { return nil; }
-    void cleanup() { nil= true; }
-    void set(T value_arg) { value= value_arg; nil= false; }
-    T get() const { DBUG_ASSERT(!nil); return value; }
+    void cleanup() { nil = true; }
+    void set(T value_arg) {
+      value = value_arg;
+      nil = false;
+    }
+    T get() const {
+      assert(!nil);
+      return value;
+    }
   };
 
   /**
     Helper class to keep string data in MEM_ROOT before passing to Item_string
 
-    Since Item_string constructors doesn't copy input string parameter data 
+    Since Item_string constructors doesn't copy input string parameter data
     in the most cases, those input strings must have the same lifetime as
     Item_string objects, i.e. lifetime of MEM_ROOT.
     This class allocates input parameters for Item_string objects in MEM_ROOT.
@@ -198,67 +195,40 @@ public:
           "length" fields, since is_empty() may trigger an evaluation of
           an associated expression that updates these fields.
   */
-  struct mem_root_str
-  {
+  struct mem_root_str {
     const char *str;
     size_t length;
-    Lazy *deferred; //< encapsulated expression to evaluate it later (on demand)
-    
+    Lazy *
+        deferred;  ///< encapsulated expression to evaluate it later (on demand)
+
     mem_root_str() { cleanup(); }
-    void cleanup()
-    {
-      str= NULL;
-      length= 0;
-      deferred= NULL;
+    void cleanup() {
+      str = nullptr;
+      length = 0;
+      deferred = nullptr;
     }
-    bool is_empty()
-    {
-      if (deferred)
-      {
-        StringBuffer<128> buff(system_charset_info);
-        if (deferred->eval(&buff) || set(buff))
-        {
-          DBUG_ASSERT(!"OOM!");
-          return true; // ignore OOM
-        }
-        deferred= NULL; // prevent double evaluation, if any
-      }
-      return str == NULL;
-    }
-    bool set(const char *str_arg)
-    {
-      return set(str_arg, strlen(str_arg));
-    }
-    bool set(const String &s)
-    {
-      return set(s.ptr(), s.length());
-    }
+    bool is_empty();
+    bool set(const char *str_arg) { return set(str_arg, strlen(str_arg)); }
+    bool set(const String &s) { return set(s.ptr(), s.length()); }
     /**
       Make a copy of the string in MEM_ROOT
-      
+
       @param str_arg    string to copy
       @param length_arg input string length
 
       @return false if success, true if error
     */
-    bool set(const char *str_arg, size_t length_arg)
-    {
-      deferred= NULL;
-      if (!(str= strndup_root(current_thd->mem_root, str_arg, length_arg)))
-        return true; /* purecov: inspected */
-      length= length_arg;
-      return false;
-    }
+    bool set(const char *str_arg, size_t length_arg);
+
     /**
       Save expression for further evaluation
 
       @param x  Expression
     */
-    void set(Lazy *x)
-    {
-      deferred= x;
-      str= NULL;
-      length= 0;
+    void set(Lazy *x) {
+      deferred = x;
+      str = nullptr;
+      length = 0;
     }
     /**
       Make a copy of string constant
@@ -266,29 +236,24 @@ public:
       Variant of set() usable when the str_arg argument lives longer
       than the mem_root_str instance.
     */
-    void set_const(const char *str_arg)
-    {
+    void set_const(const char *str_arg) {
       return set_const(str_arg, strlen(str_arg));
     }
-    void set_const(const char *str_arg, size_t length_arg)
-    {
-      deferred= NULL;
-      str= str_arg;
-      length= length_arg;
+    void set_const(const char *str_arg, size_t length_arg) {
+      deferred = nullptr;
+      str = str_arg;
+      length = length_arg;
     }
 
-    static char *strndup_root(MEM_ROOT *root, const char *str, size_t len)
-    {
-      if (len == 0 || str == NULL)
-        return const_cast<char *>("");
+    static char *strndup_root(MEM_ROOT *root, const char *str, size_t len) {
+      if (len == 0 || str == nullptr) return const_cast<char *>("");
       if (str[len - 1] == 0)
         return static_cast<char *>(memdup_root(root, str, len));
 
-      char *ret= static_cast<char*>(alloc_root(root, len + 1));
-      if (ret != NULL)
-      {
+      char *ret = static_cast<char *>(root->Alloc(len + 1));
+      if (ret != nullptr) {
         memcpy(ret, str, len);
-        ret[len]= 0;
+        ret[len] = 0;
       }
       return ret;
     }
@@ -297,8 +262,7 @@ public:
   /**
     Part of traditional "extra" column or related hierarchical property
   */
-  struct extra: public Sql_alloc
-  {
+  struct extra {
     /**
       A property name or a constant text head of the "extra" column part
     */
@@ -311,92 +275,126 @@ public:
     */
     const char *const data;
 
-    explicit extra(Extra_tag tag_arg, const char *data_arg= NULL)
-    : tag(tag_arg), data(data_arg)
-    {}
+    explicit extra(Extra_tag tag_arg, const char *data_arg = nullptr)
+        : tag(tag_arg), data(data_arg) {}
   };
 
   /*
     Next "col_*" fields are intended to be filling by "explain_*()" functions.
 
-    NOTE: NULL value or mem_root_str.is_empty()==true means that Item_null object
-          will be pushed into "items" list instead.
+    NOTE: NULL value or mem_root_str.is_empty()==true means that Item_null
+    object will be pushed into "items" list instead.
   */
-  column<uint> col_id; ///< "id" column: seq. number of SELECT withing the query
-  column<SELECT_LEX::type_enum> col_select_type; ///< "select_type" column
-  mem_root_str col_table_name; ///< "table" to which the row of output refers
-  List<const char> col_partitions; ///< "partitions" column
-  mem_root_str col_join_type; ///< "type" column, see join_type_str array
-  List<const char> col_possible_keys; ///< "possible_keys": comma-separated list
-  mem_root_str col_key; ///< "key" column: index that is actually decided to use
-  mem_root_str col_key_len; ///< "key_length" column: length of the "key" above
-  List<const char> col_ref; ///< "ref":columns/constants which are compared to "key"
-  column<longlong> col_rows; ///< "rows": estimated number of examined table rows
-  column<float>    col_filtered; ///< "filtered": % of rows filtered by condition
-  List<extra> col_extra; ///< "extra" column (traditional) or property list
+  column<uint> col_id;  ///< "id" column: seq. number of SELECT within the query
+  column<enum_explain_type> col_select_type;  ///< "select_type" column
+  mem_root_str col_table_name;  ///< "table" to which the row of output refers
+  List<const char> col_partitions;  ///< "partitions" column
+  mem_root_str col_join_type;       ///< "type" column, see join_type_str array
+  List<const char>
+      col_possible_keys;  ///< "possible_keys": comma-separated list
+  mem_root_str
+      col_key;  ///< "key" column: index that is actually decided to use
+  mem_root_str col_key_len;  ///< "key_length" column: length of the "key" above
+  List<const char>
+      col_ref;  ///< "ref":columns/constants which are compared to "key"
+  column<float> col_filtered;  ///< "filtered": % of rows filtered by condition
+  List<extra> col_extra;  ///< "extra" column (traditional) or property list
 
   // non-TRADITIONAL stuff:
-  mem_root_str col_message; ///< replaces "Extra" column if not empty
-  mem_root_str col_attached_condition; ///< former "Using where"
+  mem_root_str col_message;  ///< replaces "Extra" column if not empty
+  mem_root_str col_attached_condition;  ///< former "Using where"
 
-  /* For structured EXPLAIN in CTX_JOIN_TAB context: */
-  uint query_block_id; ///< query block id for materialized subqueries
+  /// "rows": estimated number of examined table rows per single scan
+  column<ulonglong> col_rows;
+  /// "rows": estimated number of examined table rows per query
+  column<ulonglong> col_prefix_rows;
+
+  column<double> col_read_cost;  ///< Time to read the table
+  /// Cost of the partial join including this table
+  column<double> col_prefix_cost;
+  /// Cost of evaluating conditions on this table per query
+  column<double> col_cond_cost;
+
+  /// Size of data expected to be read  per query
+  mem_root_str col_data_size_query;
+
+  /// List of used columns
+  List<const char> col_used_columns;
+
+  /// List of columns that can be updated using partial update.
+  List<const char> col_partial_update_columns;
+
+  /* For structured EXPLAIN in CTX_QEP_TAB context: */
+  uint query_block_id;  ///< query block id for materialized subqueries
 
   /**
     List of "derived" subquery trees
   */
   List<opt_explain_json_namespace::context> derived_from;
 
-  List<const char> col_key_parts; ///< used parts of the key
+  List<const char> col_key_parts;  ///< used parts of the key
 
   bool is_dependent;
   bool is_cacheable;
   bool using_temporary;
+  enum_mod_type mod_type;
   bool is_materialized_from_subquery;
-  bool is_update; //< UPDATE modified this table
-  bool is_delete; //< DELETE modified this table
+  /**
+     If a clone of a materialized derived table, this is the ID of the first
+     underlying query block of the first materialized derived table. 0
+     otherwise.
+  */
+  uint derived_clone_id;
 
-  qep_row() :
-    query_block_id(0),
-    is_dependent(false),
-    is_cacheable(true),
-    using_temporary(false),
-    is_materialized_from_subquery(false),
-    is_update(false),
-    is_delete(false)
-  {}
+  List<Window> *m_windows;  ///< Windows to describe in this node
 
-  virtual ~qep_row() {}
+  qep_row()
+      : query_block_id(0),
+        is_dependent(false),
+        is_cacheable(true),
+        using_temporary(false),
+        mod_type(MT_NONE),
+        is_materialized_from_subquery(false),
+        derived_clone_id(0),
+        m_windows(nullptr) {}
 
-  void cleanup()
-  {
+  virtual ~qep_row() = default;
+
+  void cleanup() {
     col_id.cleanup();
     col_table_name.cleanup();
-    col_partitions.empty();
+    col_partitions.clear();
     col_join_type.cleanup();
-    col_possible_keys.empty();
+    col_possible_keys.clear();
     col_key.cleanup();
     col_key_len.cleanup();
-    col_ref.empty();
-    col_rows.cleanup();
+    col_ref.clear();
     col_filtered.cleanup();
-    col_extra.empty();
+    col_extra.clear();
     col_message.cleanup();
     col_attached_condition.cleanup();
-    col_key_parts.empty();
+    col_key_parts.clear();
+
+    col_rows.cleanup();
+    col_prefix_rows.cleanup();
+
+    col_read_cost.cleanup();
+    col_prefix_cost.cleanup();
+    col_cond_cost.cleanup();
+
+    col_data_size_query.cleanup();
 
     /*
       Not needed (we call cleanup() for structured EXPLAIN only,
       just for the consistency).
     */
-    query_block_id= 0;
-    derived_from.empty();
-    is_dependent= false;
-    is_cacheable= true;
-    using_temporary= false;
-    is_materialized_from_subquery= false;
-    is_update= false;
-    is_delete= false;
+    query_block_id = 0;
+    derived_from.clear();
+    is_dependent = false;
+    is_cacheable = true;
+    using_temporary = false;
+    mod_type = MT_NONE;
+    is_materialized_from_subquery = false;
   }
 
   /**
@@ -414,26 +412,10 @@ public:
 
     @param subquery     WHERE clause subquery's unit
   */
-  virtual void register_where_subquery(SELECT_LEX_UNIT *subquery) {}
-};
+  virtual void register_where_subquery(Query_expression *subquery
+                                       [[maybe_unused]]) {}
 
-
-/**
-  Argument for Item::explain_subquery_checker()
-
-  Just a tuple of (destination, type) to pass as a single argument.
-  See a commentary for Item_subselect::explain_subquery_checker
-*/
-
-struct Explain_subquery_marker
-{
-  class qep_row *destination; ///< hosting TABLE/JOIN_TAB
-  Explain_context_enum type; ///< CTX_WHERE/CTX_HAVING/CTX_ORDER_BY/CTX_GROUP_BY
-
-  Explain_subquery_marker(qep_row *destination_arg,
-                          Explain_context_enum type_arg)
-  : destination(destination_arg), type(type_arg)
-  {}
+  void format_extra(Opt_trace_object *obj);
 };
 
 /**
@@ -441,104 +423,96 @@ struct Explain_subquery_marker
 
   See Explain_format_flags::sorts
 */
-enum Explain_sort_clause
-{
-  ESC_none          = 0,
-  ESC_ORDER_BY      = 1,
-  ESC_GROUP_BY      = 2,
-  ESC_DISTINCT      = 3,
+enum Explain_sort_clause {
+  ESC_none = 0,
+  ESC_ORDER_BY = 1,
+  ESC_GROUP_BY = 2,
+  ESC_DISTINCT = 3,
   ESC_BUFFER_RESULT = 4,
-//-----------------
+  ESC_WINDOWING = 5,
+  //-----------------
   ESC_MAX
 };
 
 /**
   Bit flags to explain GROUP BY, ORDER BY and DISTINCT clauses
 */
-enum Explain_sort_property
-{
-  ESP_none           = 0,
-  ESP_EXISTS         = 1 << 0, //< Original query has this clause
-  ESP_IS_SIMPLE      = 1 << 1, //< Clause is effective for single JOIN_TAB only
-  ESP_USING_FILESORT = 1 << 2, //< Clause causes a filesort
-  ESP_USING_TMPTABLE = 1 << 3, //< Clause creates an intermediate table
-  ESP_DUPS_REMOVAL   = 1 << 4, //< Duplicate removal for DISTINCT
-  ESP_CHECKED        = 1 << 5  //< Properties were already checked
+enum Explain_sort_property {
+  ESP_none = 0,
+  ESP_EXISTS = 1 << 0,     ///< Original query has this clause
+  ESP_IS_SIMPLE = 1 << 1,  ///< Clause is effective for single JOIN_TAB only
+  ESP_USING_FILESORT = 1 << 2,  ///< Clause causes a filesort
+  ESP_USING_TMPTABLE = 1 << 3,  ///< Clause creates an intermediate table
+  ESP_DUPS_REMOVAL = 1 << 4     ///< Duplicate removal for DISTINCT
 };
 
-
-class Explain_format_flags
-{
+class Explain_format_flags {
   /**
     Bitmasks of Explain_sort_property flags for Explain_sort_clause clauses
   */
   uint8 sorts[ESC_MAX];
 
-public:
+ public:
   Explain_format_flags() { memset(sorts, 0, sizeof(sorts)); }
 
   /**
     Set property bit flag for the clause
   */
-  void set(Explain_sort_clause clause, Explain_sort_property property)
-  {
-    sorts[clause]|= property | ESP_EXISTS;
+  void set(Explain_sort_clause clause, Explain_sort_property property) {
+    sorts[clause] |= property | ESP_EXISTS;
   }
 
-  void set(Explain_format_flags &flags)
-  {
+  void set(Explain_format_flags &flags) {
     memcpy(sorts, flags.sorts, sizeof(sorts));
   }
 
   /**
     Clear property bit flag for the clause
   */
-  void reset(Explain_sort_clause clause, Explain_sort_property property)
-  {
-    sorts[clause]&= ~property;
+  void reset(Explain_sort_clause clause, Explain_sort_property property) {
+    sorts[clause] &= ~property;
   }
 
   /**
     Return true if property is set for the clause
   */
-  bool get(Explain_sort_clause clause, Explain_sort_property property) const
-  {
-    return (sorts[clause] & property) || (sorts[clause] & ESP_CHECKED);
+  bool get(Explain_sort_clause clause, Explain_sort_property property) const {
+    return sorts[clause] & property;
   }
 
   /**
     Return true if any of clauses has this property set
+
+    @param property Check if this property is present in any of the sorts
+           except clause's sort if specified
+    @param clause Optional. Do not check for the property for this clause. The
+           default is to check all clauses.
   */
-  bool any(Explain_sort_property property) const
-  {
-    for (size_t i= ESC_none + 1; i <= ESC_MAX - 1; i++)
-    {
-      if (sorts[i] & property || sorts[i] & ESP_CHECKED)
-        return true;
+  bool any(Explain_sort_property property,
+           Explain_sort_clause clause = ESC_none) const {
+    for (size_t i = ESC_none + 1; i <= ESC_MAX - 1; i++) {
+      if (i != clause && (sorts[i] & property)) return true;
     }
     return false;
   }
 };
 
-
 /**
   Base class for structured and hierarchical EXPLAIN output formatters
 */
 
-class Explain_format : public Sql_alloc
-{
-private:
+class Explain_format {
+ private:
   /* Don't copy Explain_format values */
-  Explain_format(Explain_format &); // undefined
-  Explain_format &operator=(Explain_format &); // undefined
+  Explain_format(Explain_format &);             // undefined
+  Explain_format &operator=(Explain_format &);  // undefined
 
-public:
-  select_result *output; ///< output resulting data there
+ protected:
+  Query_result *output;  ///< output resulting data there
 
-public:
-  Explain_format() : output(NULL) {}
-  virtual ~Explain_format() {}
-
+ public:
+  Explain_format() : output(nullptr) {}
+  virtual ~Explain_format() = default;
 
   /**
     A hierarchical text or a plain table
@@ -546,7 +520,22 @@ public:
     @retval true        Formatter produces hierarchical text
     @retval false       Traditional explain
   */
-  virtual bool is_hierarchical() const= 0;
+  virtual bool is_hierarchical() const = 0;
+
+  /**
+    Whether the format closely resembles the final plan to be executed by
+    execution iterators (See RowIterator). These formats share a common logic
+    that uses AccessPath structure to generate the information, so they all
+    display exactly the same information, even though the style of each format
+    might be different.
+
+    @note: The new json format for hypergraph and the tree format are examples
+    of iterator-based formats.
+
+    @retval true        Format is Iterator-based.
+    @retval false       Format is not Iterator-based.
+  */
+  virtual bool is_iterator_based() const { return false; }
 
   /**
     Send EXPLAIN header item(s) to output stream
@@ -558,9 +547,8 @@ public:
     @retval false       OK
     @retval true        Error
   */
-  virtual bool send_headers(select_result *result)
-  {
-    output= result;
+  virtual bool send_headers(Query_result *result) {
+    output = result;
     return false;
   }
 
@@ -569,29 +557,39 @@ public:
 
     @param context      context type
     @param subquery     for CTX_WHERE: unit of the subquery
+    @param flags        Format flags, see Explain_format_flags.
   */
-  virtual bool begin_context(Explain_context_enum context,
-                             SELECT_LEX_UNIT *subquery = 0,
-                             const Explain_format_flags *flags= NULL)= 0;
+  virtual bool begin_context(enum_parsing_context context,
+                             Query_expression *subquery = nullptr,
+                             const Explain_format_flags *flags = nullptr) = 0;
 
   /**
     Leave the current context
 
     @param context      current context type (for validation/debugging)
   */
-  virtual bool end_context(Explain_context_enum context)= 0;
- 
+  virtual bool end_context(enum_parsing_context context) = 0;
+
   /**
     Flush TABLE/JOIN_TAB property set
 
     For traditional EXPLAIN: output a single EXPLAIN row.
   */
-  virtual bool flush_entry()= 0;
+  virtual bool flush_entry() = 0;
 
   /**
     Get a pointer to the current TABLE/JOIN_TAB property set
   */
-  virtual qep_row *entry()= 0;
+  virtual qep_row *entry() = 0;
+
+  /**
+    Convert Json object to string. Should only be called for iterator-based
+    formats.
+  */
+  virtual std::string ExplainJsonToString(Json_object *json [[maybe_unused]]) {
+    assert(false);
+    return nullptr;
+  }
 };
 
-#endif//OPT_EXPLAIN_FORMAT_INCLUDED
+#endif  // OPT_EXPLAIN_FORMAT_INCLUDED

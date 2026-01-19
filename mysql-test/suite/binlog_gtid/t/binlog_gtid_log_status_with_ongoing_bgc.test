@@ -1,0 +1,84 @@
+##############################################################################
+# ==== Purpose ====
+# The purpose of this test is to verify that, at any given time,
+# the gtid_executed value shown in log_status table matches the correct
+# executed GTIDs.
+#
+# ==== Requirement ====
+# At any given time, the gtid_executed value shown in log_status must match
+# the correct executed GTIDs.
+#
+# ==== Implementation ====
+# 1. Initial setup
+# 2. Execute an INSERT query and pause after it acquires commit_lock
+# 3. Execute a SELECT query on performance_schema.log_status and verify
+#    that it is waiting on MYSQL_BIN_LOG::prep_xids_cond
+# 4. Resume the INSERT query
+# 5. Let the SELECT query complete
+# 6. Verify that the correct GTID set is received from
+#    performance_schema.log_status
+# 7. Clean up
+#
+# ==== References ====
+# Bug#32442772 LOG_STATUS HAS WRONG BINARY_LOG_POSITION OF GTID_EXECUTED
+###############################################################################
+
+# This test case is binary log format agnostic
+--source include/have_binlog_format_row.inc
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+--echo #
+--echo # 1. Initial setup
+--connect (con1,localhost,root,,)
+--connect (con2,localhost,root,,)
+
+--connection default
+RESET MASTER;
+--let $server_uuid= `SELECT @@GLOBAL.SERVER_UUID`
+CREATE TABLE t1(c1 INT);
+INSERT INTO t1 VALUES(1);
+INSERT INTO t1 VALUES(2);
+FLUSH BINARY LOGS;
+
+--echo #
+--echo # 2. Execute an INSERT query and pause after it acquires commit_lock
+--let $auxiliary_connection = default
+--let $statement_connection = con1
+--let $sync_point = update_gtid_state_before_global_sid_lock
+--let $statement = INSERT INTO t1 VALUES (3)
+--source include/execute_to_sync_point.inc
+
+--echo #
+--echo # 3. Execute a SELECT query on performance_schema.log_status and wait
+--echo #    until it is waiting for MYSQL_BIN_LOG::prep_xids_cond
+--connection con2
+--send SELECT REPLACE(LOCAL->"$.gtid_executed", '"', '') INTO @ps_log_status FROM performance_schema.log_status
+
+--connection default
+--let $wait_condition = SELECT COUNT(*) = 1 FROM performance_schema.threads T, performance_schema.events_waits_current W WHERE T.THREAD_ID=W.THREAD_ID AND W.EVENT_NAME LIKE "%MYSQL_BIN_LOG::prep_xids_cond" AND T.PROCESSLIST_INFO LIKE "%FROM%log_status%"
+--source include/wait_condition.inc
+
+--echo #
+--echo # 4. Resume the INSERT query
+--source include/execute_from_sync_point.inc
+
+--echo #
+--echo # 5. Let the SELECT query complete
+--connection con2
+--reap
+
+--echo #
+--echo # 6. Verify that the correct GTID set is received from
+--echo #    performance_schema.log_status
+--let $assert_text= Gtid_executed is updated with GTID 4
+--let $assert_cond= "[SELECT @ps_log_status]" = "$server_uuid:1-4"
+--source include/assert.inc
+
+--echo #
+--echo # 7. Cleanup
+--connection default
+--disconnect con1
+--disconnect con2
+DROP TABLE t1;

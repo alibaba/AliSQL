@@ -65,12 +65,13 @@
 # HELPER include/table_aggregate_setup.inc
 # ========================================
 
---source include/not_embedded.inc
---source include/have_perfschema.inc
+# Test requires: sp-protocol/ps-protocol/view-protocol/cursor-protocol disabled
 --source include/no_protocol.inc
 --source ../include/wait_for_pfs_thread_count.inc
 
 --disable_query_log
+create user user1@localhost, user2@localhost,
+            user3@localhost, user4@localhost;
 grant ALL on *.* to user1@localhost;
 grant ALL on *.* to user2@localhost;
 grant ALL on *.* to user3@localhost;
@@ -99,13 +100,13 @@ create table test.setup_objects as
 # Only instrument the user connections (by default)
 truncate table performance_schema.setup_actors;
 insert into performance_schema.setup_actors
-  set host= 'localhost', user= 'user1', role= '%';
+  set host= 'localhost', user= 'user1', `role`= '%';
 insert into performance_schema.setup_actors
-  set host= 'localhost', user= 'user2', role= '%';
+  set host= 'localhost', user= 'user2', `role`= '%';
 insert into performance_schema.setup_actors
-  set host= 'localhost', user= 'user3', role= '%';
+  set host= 'localhost', user= 'user3', `role`= '%';
 insert into performance_schema.setup_actors
-  set host= 'localhost', user= 'user4', role= '%';
+  set host= 'localhost', user= 'user4', `role`= '%';
 
 # Only instrument test.t% tables (by default)
 truncate table performance_schema.setup_objects;
@@ -218,7 +219,9 @@ prepare dump_waits_global from
   order by event_name;";
 
 prepare dump_waits_history from
-  "select event_name, count(event_name), object_type, object_schema, object_name
+  "select event_name,
+    sum(if(number_of_bytes is null, 1, number_of_bytes)) as 'count(event_name)',
+    object_type, object_schema, object_name
   from performance_schema.events_waits_history_long
   where event_name in
   (\'wait/io/table/sql/handler\',
@@ -250,7 +253,7 @@ prepare dump_waits_table_lock from
   count_read_normal, count_read_with_shared_locks,
   count_read_high_priority, count_read_no_insert,
   count_read_external,
-  count_write_delayed, count_write_low_priority,
+  count_write_low_priority,
   count_write_external
   from performance_schema.table_lock_waits_summary_by_table
   where object_type='TABLE' and object_schema='test'

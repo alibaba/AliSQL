@@ -1,0 +1,97 @@
+-- source include/have_ndb.inc
+
+SET information_schema_stats_expiry=0;
+
+CREATE LOGFILE GROUP lg_1
+  ADD UNDOFILE 'undofile.dat'
+  INITIAL_SIZE 16M
+  UNDO_BUFFER_SIZE = 1M
+  ENGINE=NDB;
+
+# Check that the logfilegroups FILE_ID column in INFORMATION_SCHEMA.FILES is
+# same as the object id in NDB(as reported by ndbinfo)
+let $logfilegroup_objectid =
+  `SELECT LOGFILE_GROUP_NUMBER FROM INFORMATION_SCHEMA.FILES
+      WHERE LOGFILE_GROUP_NAME='lg_1'`;
+#echo logfilegroup_objectid: $logfilegroup_objectid;
+--replace_result $logfilegroup_objectid logfilegroup_objectid
+SELECT id, fq_name FROM ndbinfo.dict_obj_info WHERE type = 21;
+--echo
+
+# Check that the undofiles FILE_ID column in INFORMATION_SCHEMA.FILES is same
+# as the object id in NDB(as reported by ndbinfo)
+let $undofile_objectid =
+  `SELECT FILE_ID FROM INFORMATION_SCHEMA.FILES
+      WHERE ENGINE='ndbcluster' AND FILE_TYPE='UNDO LOG'`;
+#echo undofile_objectid: $undofile_objectid;
+--replace_result $undofile_objectid undofile_objectid
+SELECT id, fq_name FROM ndbinfo.dict_obj_info WHERE type = 23;
+--echo
+
+ALTER LOGFILE GROUP lg_1
+  ADD UNDOFILE 'undofile1.dat'
+  INITIAL_SIZE 16M
+  ENGINE=NDB;
+
+# Check relevant fields for undo files
+--vertical_results
+SELECT FILE_NAME, FILE_TYPE, LOGFILE_GROUP_NAME, ENGINE,
+  TOTAL_EXTENTS, EXTENT_SIZE, INITIAL_SIZE, MAXIMUM_SIZE, EXTRA
+FROM INFORMATION_SCHEMA.FILES
+WHERE ENGINE='ndbcluster' AND FILE_TYPE='UNDO LOG';
+
+CREATE TABLESPACE ts_1
+  ADD DATAFILE 'datafile.dat'
+  USE LOGFILE GROUP lg_1
+  INITIAL_SIZE 2M
+  ENGINE NDB;
+
+--echo Check that the datafiles FILE_ID column in INFORMATION_SCHEMA.FILES
+--echo is the same as its object id in NDB(as reported by ndbinfo)
+let $datafile_objectid =
+  `SELECT FILE_ID FROM INFORMATION_SCHEMA.FILES
+      WHERE ENGINE='ndbcluster' AND FILE_TYPE='DATAFILE'`;
+let $datafile_objectid_ndbinfo = `SELECT id FROM ndbinfo.dict_obj_info WHERE type = 22`;
+#--echo $datafile_objectid_ndbinfo, $datafile_objectid
+assert($datafile_objectid_ndbinfo == $datafile_objectid);
+--echo
+
+ALTER TABLESPACE ts_1
+  ADD DATAFILE 'datafile2.dat'
+  INITIAL_SIZE = 4M;
+
+CREATE TABLE t1 (
+  a int PRIMARY KEY,
+  b varchar(255)
+) ENGINE = NDB
+  TABLESPACE ts_1
+  STORAGE DISK;
+
+INSERT INTO t1 VALUES (1, "We have got Chhetri");
+
+# Check relevant fields for datafiles
+--vertical_results
+SELECT FILE_NAME, FILE_TYPE, TABLESPACE_NAME,
+  LOGFILE_GROUP_NAME, ENGINE, FREE_EXTENTS, TOTAL_EXTENTS, EXTENT_SIZE,
+  INITIAL_SIZE, MAXIMUM_SIZE, ROW_FORMAT
+FROM INFORMATION_SCHEMA.FILES
+WHERE ENGINE='ndbcluster' AND FILE_TYPE='DATAFILE';
+
+DROP TABLE t1;
+
+# Check FREE_EXTENTS after dropping table
+--vertical_results
+SELECT FILE_NAME, FREE_EXTENTS, TOTAL_EXTENTS
+FROM information_schema.files
+WHERE ENGINE='ndbcluster' AND FILE_TYPE='DATAFILE';
+
+ALTER TABLESPACE ts_1
+  DROP DATAFILE 'datafile.dat';
+
+ALTER TABLESPACE ts_1
+  DROP DATAFILE 'datafile2.dat';
+
+DROP TABLESPACE ts_1;
+
+DROP LOGFILE GROUP lg_1
+  ENGINE=NDB;

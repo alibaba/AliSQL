@@ -13,7 +13,7 @@ COUNT(@@GLOBAL.have_symlink)
 1 Expected
 '#---------------------BS_STVARS_018_03----------------------#'
 SELECT @@GLOBAL.have_symlink = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='have_symlink';
 @@GLOBAL.have_symlink = VARIABLE_VALUE
 1
@@ -23,7 +23,7 @@ COUNT(@@GLOBAL.have_symlink)
 1
 1 Expected
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='have_symlink';
 COUNT(VARIABLE_VALUE)
 1
@@ -48,6 +48,6 @@ SELECT COUNT(@@GLOBAL.have_symlink);
 COUNT(@@GLOBAL.have_symlink)
 1
 1 Expected
-SELECT have_symlink = @@SESSION.have_symlink;
+SELECT have_symlink;
 ERROR 42S22: Unknown column 'have_symlink' in 'field list'
-Expected error 'Readonly variable'
+Expected error 'Unknown column'

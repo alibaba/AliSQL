@@ -1,3 +1,4 @@
+!include include/default_mysqld.cnf
 !include include/default_ndbd.cnf
 
 [cluster_config.1]
@@ -21,74 +22,94 @@ mysqld=,,
 
 
 [mysqld]
-open-files-limit=           1024
-local-infile
-character-set-server=      latin1
-connect-timeout=            60
-log-bin-trust-function-creators=1
-key_buffer_size=            1M
-sort_buffer=                256K
-max_heap_table_size=        1M
-loose-innodb_data_file_path=      ibdata1:10M:autoextend
-slave-net-timeout=120
+# Make all mysqlds use cluster
 ndbcluster
-ndb-wait-setup=60
-ndb-index-stat-enable=0
+ndb-wait-connected=30
+ndb-wait-setup=120
+# Default log-replica-updates to off and turn it on
+# only selectively for some of the servers in config
+log-replica-updates=0
+# Use smaller than default cache size to save resources
+ndb-log-cache-size=32768
 
+
+[cluster_config.mysqld.1.1]
+NodeId=49
+Dedicated=1
+
+[cluster_config.mysqld.2.1]
+NodeId=16
+Dedicated=1
+
+[cluster_config.mysqld.3.1]
+NodeId=32
+Dedicated=1
 
 [mysqld.1.1]
+ndb-nodeid=49
 server-id= 1
+ndb-log-bin=1
 log-bin= master-bin
 binlog_format=row
 
 
 
 [mysqld.2.1]
+ndb-nodeid=16
 server-id= 2
 # Note no binary log
+skip-log-bin
 
 
 
 [mysqld.3.1]
+ndb-nodeid=32
 server-id= 3
+ndb-log-bin=1
 log-bin= master-bin
 binlog_format=row
 
 
+[cluster_config.mysqld.1.slave]
+NodeId=49
+Dedicated=1
+
+[cluster_config.mysqld.2.slave]
+NodeId=16
+Dedicated=1
+
+[cluster_config.mysqld.3.slave]
+NodeId=32
+Dedicated=1
+
 
 [mysqld.1.slave]
+ndb-nodeid=49
 # Note no binlog on this slave
+skip-log-bin
 server-id= 4
-skip-slave-start
-loose-skip-innodb
-slave-load-tmpdir= ../../../tmp
-ndb_connectstring= @mysql_cluster.slave.ndb_connectstring
-
+skip-replica-start
 
 
 [mysqld.2.slave]
+ndb-nodeid=16
 # Note binlog on this slave, but not logging slave updates
 server-id= 5
-skip-slave-start
-loose-skip-innodb
-slave-load-tmpdir= ../../../tmp
-ndb_connectstring= @mysql_cluster.slave.ndb_connectstring
+skip-replica-start
 log-bin= slave-master-bin
 binlog_format=row
-
+ndb-log-bin=1
 
 
 [mysqld.3.slave]
+ndb-nodeid=32
 # Note binlog on this slave, with slave updates logged
 server-id= 6
-skip-slave-start
-loose-skip-innodb
-slave-load-tmpdir= ../../../tmp
-ndb_connectstring= @mysql_cluster.slave.ndb_connectstring
+skip-replica-start
 log-bin= slave-master-bin
 binlog_format=row
-log-slave-updates
-
+log-replica-updates
+ndb-log-bin=1
 
 
 [ENV]

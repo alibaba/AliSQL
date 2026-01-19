@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005, 2006, 2008 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,21 +26,23 @@
 #ifndef WatchDog_H
 #define WatchDog_H
 
-#include <kernel_types.h>
-#include <NdbThread.h>
 #include <NdbMutex.h>
+#include <NdbThread.h>
 #include <NdbTick.h>
+#include <kernel_types.h>
 
-extern "C" void* runWatchDog(void* w);
+#define JAM_FILE_ID 253
 
-class WatchDog{
-  enum { MAX_WATCHED_THREADS = 64 };
+extern "C" void *runWatchDog(void *w);
+
+class WatchDog {
+  enum { MAX_WATCHED_THREADS = MAX_THREADS_TO_WATCH };
 
   struct WatchedThread {
     Uint32 *m_watchCounter;
     Uint32 m_threadId;
-    /* This is the time that activity was last registered from thread. */
-    MicroSecondTimer m_startTime;
+    /* This is the tick count when activity was last registered from thread. */
+    NDB_TICKS m_startTicks;
     /*
       During slow operation (memory allocation), warnings are output less
       frequently, and this is the point when the next warning should be given.
@@ -46,11 +55,11 @@ class WatchDog{
     Uint32 m_lastCounterValue;
   };
 
-public:
+ public:
   WatchDog(Uint32 interval = 3000);
   ~WatchDog();
- 
-  struct NdbThread* doStart();
+
+  struct NdbThread *doStart();
   void doStop();
 
   Uint32 setCheckInterval(Uint32 interval);
@@ -63,18 +72,20 @@ public:
   /* Remove a thread from registration, identified by thread id. */
   void unregisterWatchedThread(Uint32 threadId);
 
-protected:
+  void setKillSwitch(bool kill);
+
+ protected:
   /**
    * Thread function
    */
-  friend void* runWatchDog(void* w);
-  
+  friend void *runWatchDog(void *w);
+
   /**
-   * Thread pointer 
+   * Thread pointer
    */
-  NdbThread* theThreadPtr;
-  
-private:
+  NdbThread *theThreadPtr;
+
+ private:
   Uint32 theInterval;
   /*
     List of watched threads.
@@ -88,9 +99,12 @@ private:
   NdbMutex *m_mutex;
 
   bool theStop;
-  
+  bool killer;
+
   void run();
   void shutdownSystem(const char *last_stuck_action);
 };
 
-#endif // WatchDog_H
+#undef JAM_FILE_ID
+
+#endif  // WatchDog_H

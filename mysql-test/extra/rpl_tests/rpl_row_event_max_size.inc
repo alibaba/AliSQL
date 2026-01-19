@@ -10,6 +10,11 @@
 source include/master-slave.inc;
 source include/have_binlog_format_row.inc;
 
+SET SESSION sql_log_bin= 0;
+# Suppression of valgrind warning:
+CALL mtr.add_suppression("==[0-9]*== Warning: set address range perms: large range");
+SET SESSION sql_log_bin= 1;
+
 --let $binlog_filename= query_get_value(SHOW MASTER STATUS, File, 1)
 --let $MYSQLD_DATADIR= `select @@datadir`
 
@@ -41,7 +46,7 @@ eval set @@global.max_allowed_packet= $old_max_allowed_packet;
 
 INSERT INTO t1 (data1, data2) VALUES (repeat('a',1048576), repeat('a',1048576));
 
---source include/show_binlog_events2.inc
+--source suite/rpl/include/rpl_row_event_max_size_show_binlog.inc
 
 --source include/sync_slave_sql_with_master.inc
 --echo # On slave, test the row event data is replicated when the value of
@@ -60,13 +65,15 @@ DROP TABLE t1;
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_reset.inc
 
---echo # Test it will cause ER_MASTER_FATAL_ERROR_READING_BINLOG when the value
+# Bug #18233370
+
+--echo # Test it will cause ER_SOURCE_FATAL_ERROR_READING_BINLOG when the value
 --echo # of the bigger one of max_allowed_packet and binlog_row_event_max_size
 --echo # is lower than the the required size.
 connection master;
 
 CREATE TABLE t1 (a int not null auto_increment, data1 LONGBLOB,
-                 data2 LONGBLOB, data3 LONGBLOB, PRIMARY KEY(a));
+                 data2 LONGBLOB, data3 LONGBLOB, PRIMARY KEY(a)) ROW_FORMAT=DYNAMIC;
 
 --source include/sync_slave_sql_with_master.inc
 --connection master
@@ -79,9 +86,11 @@ drop table t1;
 --source include/sync_slave_sql_with_master.inc
 
 connection slave;
-call mtr.add_suppression("Slave I/O: Got fatal error 1236 from master when reading data from binary log: .*");
+call mtr.add_suppression("Replica I/O: Got fatal error 1236 from source when reading data from binary log: .*");
 call mtr.add_suppression("Found invalid event in binary log");
-call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+# Suppression of valgrind warning:
+CALL mtr.add_suppression("==[0-9]*== Warning: set address range perms: large range");
 
 --echo ==== clean up ====
 

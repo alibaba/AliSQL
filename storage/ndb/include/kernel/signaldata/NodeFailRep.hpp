@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,8 +26,10 @@
 #ifndef NODE_FAILREP_HPP
 #define NODE_FAILREP_HPP
 
-#include "SignalData.hpp"
 #include <NodeBitmask.hpp>
+#include "SignalData.hpp"
+
+#define JAM_FILE_ID 59
 
 /**
  * This signals is sent by Qmgr to NdbCntr
@@ -27,8 +37,12 @@
  *   and others
  */
 struct NodeFailRep {
-  STATIC_CONST( SignalLength = 3 + NdbNodeBitmask::Size );
-  STATIC_CONST( SignalLengthLong = 3 + NodeBitmask::Size );
+  static constexpr Uint32 SignalLength = 3;
+  static constexpr Uint32 SignalLengthLong = 3;
+
+  static constexpr Uint32 SignalLength_v1 = 3 + NdbNodeBitmask48::Size;
+  static constexpr Uint32 SignalLengthLong_v1 = 3 + NodeBitmask::Size;
+
   Uint32 failNo;
 
   /**
@@ -38,7 +52,19 @@ struct NodeFailRep {
   Uint32 masterNodeId;
 
   Uint32 noOfNodes;
-  Uint32 theNodes[NdbNodeBitmask::Size];
+  union {
+    Uint32 theNodes[NdbNodeBitmask::Size];  // data nodes 8.0.17 and older
+    Uint32 theAllNodes[NodeBitmask::Size];  // api nodes 8.0.17 and older
+  };
+
+  static Uint32 getNodeMaskLength(Uint32 signalLength) {
+    assert(signalLength == SignalLength || signalLength == SignalLengthLong ||
+           signalLength == SignalLength_v1 ||
+           signalLength == SignalLengthLong_v1);
+    return signalLength - 3;
+  }
 };
+
+#undef JAM_FILE_ID
 
 #endif

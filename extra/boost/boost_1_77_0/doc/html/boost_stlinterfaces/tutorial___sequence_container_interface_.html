@@ -1,0 +1,1866 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Tutorial: sequence_container_interface</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../stl_interfaces.html" title="Chapter 39. Boost.STLInterfaces">
+<link rel="prev" href="tutorial___view_interface_.html" title="Tutorial: view_interface">
+<link rel="next" href="tutorial___reverse_iterator_.html" title="Tutorial: reverse_iterator">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial___view_interface_.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="tutorial___reverse_iterator_.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_"></a><a class="link" href="tutorial___sequence_container_interface_.html" title="Tutorial: sequence_container_interface">Tutorial:
+    <code class="computeroutput"><span class="identifier">sequence_container_interface</span></code></a>
+</h2></div></div></div>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        All the member functions provided by <code class="computeroutput">sequence_container_interface</code>
+        are in your container's base class — <code class="computeroutput">sequence_container_interface</code>
+        — and can therefore be hidden if you define a member function with
+        the same name in your derived container. If you don't like the semantics
+        of any <code class="computeroutput">sequence_container_interface</code>-provided
+        member function, feel free to replace it.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h0"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.the__code__phrase_role__identifier__sequence_container_interface__phrase___code__template"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.the__code__phrase_role__identifier__sequence_container_interface__phrase___code__template">The
+      <code class="computeroutput"><span class="identifier">sequence_container_interface</span></code>
+      Template</a>
+    </h4>
+<p>
+      As mentioned earlier, writing containers is very tedious. The container requirements
+      tables in the C++ standard are long and complicated, and there are a lot of
+      them. The requirements often call for multiple overloads of a function, all
+      of which could be implemented in terms of just one overload.
+    </p>
+<p>
+      There is a large development cost associated with implementing a standard-compliant
+      container. As a result very few people do so. <code class="computeroutput">sequence_container_interface</code>
+      exists to make bring that large development time way, way down.
+    </p>
+<p>
+      Here is its declaration:
+    </p>
+<pre class="programlisting"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Derived</span><span class="special">,</span> <span class="identifier">element_layout</span> <span class="identifier">Contiguity</span> <span class="special">=</span> <span class="identifier">element_layout</span><span class="special">::</span><span class="identifier">discontiguous</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">sequence_container_interface</span><span class="special">;</span>
+</pre>
+<p>
+      Just as with <code class="computeroutput">view_interface</code>, <code class="computeroutput">sequence_container_interface</code>
+      takes the derived type and an optional non-type template parameter that indicates
+      whether <code class="computeroutput"><span class="identifier">Derived</span></code>'s iterators
+      are contiguous. The non-type parameter is necessary to support pre-C++20 code.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h1"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.how__code__phrase_role__identifier__sequence_container_interface__phrase___code__is_organized"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.how__code__phrase_role__identifier__sequence_container_interface__phrase___code__is_organized">How
+      <code class="computeroutput"><span class="identifier">sequence_container_interface</span></code>
+      is Organized</a>
+    </h4>
+<p>
+      The tables below represent a subset of the operations needed for each of the
+      container requirements tables in the standard. Here are the tables that apply
+      to sequence containers (from <code class="computeroutput"><span class="special">[</span><span class="identifier">container</span><span class="special">.</span><span class="identifier">requirements</span><span class="special">]</span></code>
+      in the standard):
+    </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+          Container requirements <code class="computeroutput"><span class="special">[</span><span class="identifier">tab</span><span class="special">:</span><span class="identifier">container</span><span class="special">.</span><span class="identifier">req</span><span class="special">]</span></code>
+        </li>
+<li class="listitem">
+          Reversible container requirements <code class="computeroutput"><span class="special">[</span><span class="identifier">tab</span><span class="special">:</span><span class="identifier">container</span><span class="special">.</span><span class="identifier">rev</span><span class="special">.</span><span class="identifier">req</span><span class="special">]</span></code>
+        </li>
+<li class="listitem">
+          Optional container operations <code class="computeroutput"><span class="special">[</span><span class="identifier">tab</span><span class="special">:</span><span class="identifier">container</span><span class="special">.</span><span class="identifier">opt</span><span class="special">]</span></code>
+        </li>
+<li class="listitem">
+          Allocator-aware container requirements <code class="computeroutput"><span class="special">[</span><span class="identifier">tab</span><span class="special">:</span><span class="identifier">container</span><span class="special">.</span><span class="identifier">alloc</span><span class="special">.</span><span class="identifier">req</span><span class="special">]</span></code>
+        </li>
+<li class="listitem">
+          Sequence container requirements <code class="computeroutput"><span class="special">[</span><span class="identifier">tab</span><span class="special">:</span><span class="identifier">container</span><span class="special">.</span><span class="identifier">seq</span><span class="special">.</span><span class="identifier">req</span><span class="special">]</span></code>
+        </li>
+<li class="listitem">
+          Optional sequence container operations <code class="computeroutput"><span class="special">[</span><span class="identifier">tab</span><span class="special">:</span><span class="identifier">container</span><span class="special">.</span><span class="identifier">seq</span><span class="special">.</span><span class="identifier">opt</span><span class="special">]</span></code>
+        </li>
+</ul></div>
+<p>
+      Each requirements table lists all the types and operations required by a standard-conforming
+      container. All of these sets of requirements are supported by <code class="computeroutput">sequence_container_interface</code>,
+      except the allocator-aware container requirements. The container and sequence
+      container requirements are required for any sequence container. <code class="computeroutput">sequence_container_interface</code>
+      provides each member in any table above (again, except the allocator-aware
+      ones). Each member is individually constrained, so if a given member (say,
+      a particular <code class="computeroutput"><span class="identifier">insert</span><span class="special">()</span></code>
+      overload) is ill-formed, it will not be usable in the resulting container.
+    </p>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        All table requirements satisfied by Boost.STLInterfaces use the 2017 version
+        of the C++ Standard. See your favorite online resource for the contents of
+        these tables. Many people like <a href="http://eel.is/c++draft" target="_top">eel.is</a>,
+        which is really easy to navigate.
+      </p></td></tr>
+</table></div>
+<p>
+      Note that <code class="computeroutput">sequence_container_interface</code>
+      does not interact at all with the allocator-aware container requirements, the
+      associative container requirements, or the unordered associative container
+      requirements. Specifically, nothing precludes you from satisfying any of those
+      sets or requirements — it's just that <code class="computeroutput">sequence_container_interface</code>
+      does not.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h2"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.how__code__phrase_role__identifier__sequence_container_interface__phrase___code__works"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.how__code__phrase_role__identifier__sequence_container_interface__phrase___code__works">How
+      <code class="computeroutput"><span class="identifier">sequence_container_interface</span></code>
+      Works</a>
+    </h4>
+<p>
+      To use <code class="computeroutput">sequence_container_interface</code>,
+      you provide certain operations yourself, and <code class="computeroutput">sequence_container_interface</code>
+      fills in the rest. If any provided operation <code class="computeroutput"><span class="identifier">O</span></code>
+      is not to your liking — say, because you know of a way to do <code class="computeroutput"><span class="identifier">O</span></code> directly in a way that is more efficient
+      than the way that <code class="computeroutput">sequence_container_interface</code>
+      does it — you can implement <code class="computeroutput"><span class="identifier">O</span></code>
+      yourself. Since your implementation is in a class <code class="computeroutput"><span class="identifier">D</span></code>
+      derived from <code class="computeroutput">sequence_container_interface</code>,
+      it will hide the <code class="computeroutput"><span class="identifier">O</span></code> from <code class="computeroutput">sequence_container_interface</code>.
+    </p>
+<p>
+      Below, there are tables that show what user-defined types and operations are
+      required for <code class="computeroutput">sequence_container_interface</code>
+      to fulfill all the requirements from one of the C++ Standard's requirements
+      tables. For instance, the table "Optional User-Defined Types and Operations
+      for Containers" below shows what you need to provide to fulfill all the
+      requirements in the standard's "Container requirements <code class="computeroutput"><span class="special">[</span><span class="identifier">tab</span><span class="special">:</span><span class="identifier">container</span><span class="special">.</span><span class="identifier">req</span><span class="special">]</span></code>"
+      table.
+    </p>
+<p>
+      So, to use <code class="computeroutput">sequence_container_interface</code>
+      to make a <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span></code>-like container (which is not a sequence
+      container, because it has no <code class="computeroutput"><span class="identifier">insert</span><span class="special">()</span></code>, <code class="computeroutput"><span class="identifier">erase</span><span class="special">()</span></code>, etc.), you need to define the types and
+      operations in the "User-Defined Types and Operations for Containers"
+      table, and optionally the ones in the "Optional User-Defined Types and
+      Operations for Containers".
+    </p>
+<p>
+      To make a <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">forward_list</span></code>-like type, you need to define
+      the types and operations in the "User-Defined Types and Operations for
+      Containers" table, and optionally the ones in the "Optional User-Defined
+      Types and Operations for Containers". You would also define the types
+      and operations in the "User-Defined Types and Operations for Sequence
+      Containers" table. You cannot define the types and operations in the "User-Defined
+      Types and Operations for Reversible Containers" table, because your container
+      is forward-only.
+    </p>
+<p>
+      To make a <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span></code>-like type, you would provide the types
+      and operations in all the tables below.
+    </p>
+<p>
+      If you have a type that does not have all the operations in one of the tables,
+      that's fine -- you can just implement the operations that your type can do,
+      and whatever operations can be provided by <code class="computeroutput">sequence_container_interface</code>
+      in terms of the user-defined operations, will be provided. For example, the
+      <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span></code>-like container described above would
+      have <code class="computeroutput"><span class="identifier">front</span><span class="special">()</span></code>
+      — which comes from the optional sequence container requirements —
+      even if you did not write any user-defined insertion or erasure member functions
+      into your container. If it has bidirectional iterators, the <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span></code>-like
+      container will have <code class="computeroutput"><span class="identifier">back</span><span class="special">()</span></code>
+      too.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h3"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.the__code__phrase_role__identifier__sequence_container_interface__phrase___code__tables"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.the__code__phrase_role__identifier__sequence_container_interface__phrase___code__tables">The
+      <code class="computeroutput"><span class="identifier">sequence_container_interface</span></code>
+      Tables</a>
+    </h4>
+<p>
+      After each requirements table, there's a table indicating how <code class="computeroutput">sequence_container_interface</code>
+      maps the user-defined operations to the operations it provides. These mapping
+      tables can be handy if you have a container that meets only some of the requirements
+      of one of the requirements tables.
+    </p>
+<p>
+      In the tables, <code class="computeroutput"><span class="identifier">X</span></code> is a user-defined
+      type derived from <code class="computeroutput">sequence_container_interface</code>
+      containing objects of type <code class="computeroutput"><span class="identifier">T</span></code>;
+      <code class="computeroutput"><span class="identifier">a</span></code> and <code class="computeroutput"><span class="identifier">b</span></code>
+      are objects of type <code class="computeroutput"><span class="identifier">X</span></code>; <code class="computeroutput"><span class="identifier">i</span></code> and <code class="computeroutput"><span class="identifier">j</span></code>
+      are objects of type (possibly const) <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>;
+      <code class="computeroutput"><span class="identifier">u</span></code> is an identifier; <code class="computeroutput"><span class="identifier">r</span></code> is a non-const value of type <code class="computeroutput"><span class="identifier">X</span></code>; <code class="computeroutput"><span class="identifier">rv_c</span></code>
+      is a non-const rvalue of type <code class="computeroutput"><span class="identifier">X</span></code>;
+      <code class="computeroutput"><span class="identifier">i</span></code> and <code class="computeroutput"><span class="identifier">j</span></code>
+      are forward iterators that refer to elements implicitly convertible to <code class="computeroutput"><span class="identifier">T</span></code>; <code class="computeroutput"><span class="special">[</span><span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span></code> is a range; <code class="computeroutput"><span class="identifier">il</span></code>
+      is an object of type <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;</span></code>; <code class="computeroutput"><span class="identifier">n</span></code> is a value of type <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">size_type</span></code>,
+      <code class="computeroutput"><span class="identifier">p</span></code> is a valid constant iterator
+      to <code class="computeroutput"><span class="identifier">a</span></code>; <code class="computeroutput"><span class="identifier">q</span></code>
+      is a valid dereferenceable constant iterator to <code class="computeroutput"><span class="identifier">a</span></code>;
+      <code class="computeroutput"><span class="special">[</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></code>
+      is a valid range of constant iterators to <code class="computeroutput"><span class="identifier">a</span></code>;
+      <code class="computeroutput"><span class="identifier">t</span></code> is an lvalue or a const rvalue
+      of T; and <code class="computeroutput"><span class="identifier">rv</span></code> denotes a non-const
+      rvalue of <code class="computeroutput"><span class="identifier">T</span></code>. <code class="computeroutput"><span class="identifier">Args</span></code> is a template parameter pack; <code class="computeroutput"><span class="identifier">args</span></code> denotes a function parameter pack with
+      the pattern <code class="computeroutput"><span class="identifier">Args</span> <span class="special">&amp;&amp;</span></code>.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h4"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.container"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.container">Container</a>
+    </h4>
+<p>
+      All containers must meet the requirements of this table:
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t0"></a><p class="title"><b>Table 39.3. User-Defined Types and Operations for Containers</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Types and Operations for Containers">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                Expression
+              </p>
+            </th>
+<th>
+              <p>
+                Return Type
+              </p>
+            </th>
+<th>
+              <p>
+                Semantics
+              </p>
+            </th>
+<th>
+              <p>
+                Assertion/note/pre-/post-condition
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">value_type</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">T</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Compile time only.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">reference</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">T</span> <span class="special">&amp;</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Compile time only.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">const_reference</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">T</span> <span class="keyword">const</span>
+                <span class="special">&amp;</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Compile time only.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                An iterator whose <code class="computeroutput"><span class="identifier">value_type</span></code>
+                is <code class="computeroutput"><span class="identifier">T</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Must meet the forward iterator requirements, and must be convertible
+                to <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">const_iterator</span></code>. Compile time only.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">const_iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                A constant iterator whose <code class="computeroutput"><span class="identifier">value_type</span></code>
+                is <code class="computeroutput"><span class="identifier">T</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Must meet the forward iterator requirements. Compile time only.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">difference_type</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                A signed integer type.
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Identical to the diference type of <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+                and <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">const_iterator</span></code>. Compile time only.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">size_type</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                An unsigned integer type.
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Compile time only.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span> <span class="identifier">u</span><span class="special">;</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Ensures:</em></span> <code class="computeroutput"><span class="identifier">u</span><span class="special">.</span><span class="identifier">empty</span><span class="special">()</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">X</span> <span class="identifier">u</span><span class="special">(</span><span class="identifier">a</span><span class="special">);</span>
+<span class="identifier">X</span> <span class="identifier">u</span> <span class="special">=</span> <span class="identifier">a</span><span class="special">;</span>
+</pre>
+<p>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Ensures:</em></span> <code class="computeroutput"><span class="identifier">u</span>
+                <span class="special">==</span> <span class="identifier">a</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">X</span> <span class="identifier">u</span><span class="special">(</span><span class="identifier">rv</span><span class="special">);</span>
+<span class="identifier">X</span> <span class="identifier">u</span> <span class="special">=</span> <span class="identifier">rv</span><span class="special">;</span>
+</pre>
+<p>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Ensures:</em></span> <code class="computeroutput"><span class="identifier">u</span></code>
+                is equal to the value <code class="computeroutput"><span class="identifier">rv_c</span></code>
+                had before this operation.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span> <span class="special">=</span>
+                <span class="identifier">rv</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span> <span class="special">&amp;</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                All existing elements of <code class="computeroutput"><span class="identifier">a</span></code>
+                are either move assigned to or destroyed.
+              </p>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Ensures:</em></span> <code class="computeroutput"><span class="identifier">u</span></code>
+                is equal to the value <code class="computeroutput"><span class="identifier">rv_c</span></code>
+                had before this operation.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.~</span><span class="identifier">X</span><span class="special">()</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Destroys every element of <code class="computeroutput"><span class="identifier">a</span></code>;
+                any memory obtained is deallocated.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                This is the non-<code class="computeroutput"><span class="keyword">const</span></code>
+                overload; the <code class="computeroutput"><span class="keyword">const</span></code>
+                overload is not needed.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">end</span><span class="special">()</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                This is the non-<code class="computeroutput"><span class="keyword">const</span></code>
+                overload; the <code class="computeroutput"><span class="keyword">const</span></code>
+                overload is not needed.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">swap</span><span class="special">(</span><span class="identifier">b</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Convertible to <code class="computeroutput"><span class="keyword">bool</span></code>.
+              </p>
+            </td>
+<td>
+              <p>
+                Exchanges the contents of <code class="computeroutput"><span class="identifier">a</span></code>
+                and <code class="computeroutput"><span class="identifier">b</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">r</span> <span class="special">=</span>
+                <span class="identifier">a</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span> <span class="special">&amp;</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Ensures:</em></span> <code class="computeroutput"><span class="identifier">r</span></code>
+                == <code class="computeroutput"><span class="identifier">a</span></code>.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">max_size</span><span class="special">()</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">size_type</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">distance</span><span class="special">(</span><span class="identifier">l</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span>
+                <span class="identifier">l</span><span class="special">.</span><span class="identifier">end</span><span class="special">())</span></code>
+                for the largest possible container <code class="computeroutput"><span class="identifier">l</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        The requirements above are taken from the standard. Even though the standard
+        requires things to be a certain way, you can often define types that work
+        in any context in which a container is supposed to work, even though it varies
+        from the requirements above. In particular, you may want to have non-reference
+        and non-pointer types for <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">reference</span></code>
+        and <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">pointer</span></code>, respectively — and that
+        certainly will not break <code class="computeroutput">sequence_container_interface</code>.
+      </p></td></tr>
+</table></div>
+<p>
+      If you provide the types and operations above, <code class="computeroutput">sequence_container_interface</code>
+      will provide the rest of the container requirements, using this mapping:
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t1"></a><p class="title"><b>Table 39.4. User-Defined Operations to sequence_container_interface Operations</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Operations to sequence_container_interface Operations">
+<colgroup>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                User-Defined
+              </p>
+            </th>
+<th>
+              <p>
+                <code class="computeroutput">sequence_container_interface</code>-Provided
+              </p>
+            </th>
+<th>
+              <p>
+                Note
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">end</span><span class="special">()</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">empty</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">size</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">end</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">cbegin</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">cend</span><span class="special">()</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+                The user-defined <code class="computeroutput"><span class="identifier">begin</span><span class="special">()</span></code> and <code class="computeroutput"><span class="identifier">end</span><span class="special">()</span></code> are non-<code class="computeroutput"><span class="keyword">const</span></code>,
+                and the <code class="computeroutput">sequence_container_interface</code>-provided
+                ones are <code class="computeroutput"><span class="keyword">const</span></code>. <code class="computeroutput">sequence_container_interface</code>
+                can only provide <code class="computeroutput"><span class="identifier">size</span><span class="special">()</span></code> if <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">const_iterator</span></code>
+                is a random access iterator; otherwise, it must be user-defined.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span> <span class="special">==</span>
+                <span class="identifier">b</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span> <span class="special">!=</span>
+                <span class="identifier">b</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Though <code class="computeroutput"><span class="identifier">a</span> <span class="special">==</span>
+                <span class="identifier">b</span></code> is provided by <code class="computeroutput">sequence_container_interface</code>,
+                any user-defined replacement will be used to provide <code class="computeroutput"><span class="identifier">a</span> <span class="special">!=</span>
+                <span class="identifier">b</span></code>.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">swap</span><span class="special">(</span><span class="identifier">b</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">swap</span><span class="special">(</span><span class="identifier">a</span><span class="special">,</span> <span class="identifier">b</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h5"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.reversible_container"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.reversible_container">Reversible
+      Container</a>
+    </h4>
+<p>
+      Containers that are reverse-iterable must meet the requirements of this table
+      (in addition to the container requirements):
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t2"></a><p class="title"><b>Table 39.5. User-Defined Types and Operations for Reversible Containers</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Types and Operations for Reversible Containers">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                Expression
+              </p>
+            </th>
+<th>
+              <p>
+                Return Type
+              </p>
+            </th>
+<th>
+              <p>
+                Semantics
+              </p>
+            </th>
+<th>
+              <p>
+                Assertion/note/pre-/post-condition
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">reverse_iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">reverse_iterator</span><span class="special">&lt;</span><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Compile time only.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="error">​</span><span class="special">::</span><span class="error">​</span><span class="identifier">const_reverse_iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">reverse_iterator</span><span class="special">&lt;</span><span class="identifier">X</span><span class="special">::</span><span class="identifier">const_iterator</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Compile time only.
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      If you provide the types and operations above, <code class="computeroutput">sequence_container_interface</code>
+      will provide the rest of the reversible container requirements, using this
+      mapping:
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t3"></a><p class="title"><b>Table 39.6. User-Defined Operations to sequence_container_interface Operations</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Operations to sequence_container_interface Operations">
+<colgroup>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                User-Defined
+              </p>
+            </th>
+<th>
+              <p>
+                <code class="computeroutput">sequence_container_interface</code>-Provided
+              </p>
+            </th>
+<th>
+              <p>
+                Note
+              </p>
+            </th>
+</tr></thead>
+<tbody><tr>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">end</span><span class="special">()</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">rbegin</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">rend</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">crbegin</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">crend</span><span class="special">()</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+                The user-defined <code class="computeroutput"><span class="identifier">begin</span><span class="special">()</span></code> and <code class="computeroutput"><span class="identifier">end</span><span class="special">()</span></code> are non-<code class="computeroutput"><span class="keyword">const</span></code>,
+                and <code class="computeroutput">sequence_container_interface</code>
+                provides both <code class="computeroutput"><span class="keyword">const</span></code>
+                and non-<code class="computeroutput"><span class="keyword">const</span></code> overloads
+                of <code class="computeroutput"><span class="identifier">rbegin</span><span class="special">()</span></code>
+                and <code class="computeroutput"><span class="identifier">rend</span><span class="special">()</span></code>.
+                <code class="computeroutput">sequence_container_interface</code>
+                can only provide these operations if <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+                and <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">const_iterator</span></code> are bidirectional
+                iterators.
+              </p>
+            </td>
+</tr></tbody>
+</table></div>
+</div>
+<br class="table-break"><h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h6"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.optional_container_operations"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.optional_container_operations">Optional
+      Container Operations</a>
+    </h4>
+<p>
+      Containers that are comparable with <code class="computeroutput"><span class="special">&lt;</span></code>,
+      <code class="computeroutput"><span class="special">&gt;</span></code>, <code class="computeroutput"><span class="special">&lt;=</span></code>,
+      and <code class="computeroutput"><span class="special">&gt;=</span></code> get those operations
+      automatically, so long as <code class="computeroutput"><span class="identifier">T</span></code>
+      is less-than comparable. In this case, there are no required user-defined operations,
+      so that table is not needed.
+    </p>
+<p>
+      <code class="computeroutput">sequence_container_interface</code>
+      will provide the optional container requirements using this mapping:
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t4"></a><p class="title"><b>Table 39.7. User-Defined Operations to sequence_container_interface Operations</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Operations to sequence_container_interface Operations">
+<colgroup>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                User-Defined
+              </p>
+            </th>
+<th>
+              <p>
+                <code class="computeroutput">sequence_container_interface</code>-Provided
+              </p>
+            </th>
+<th>
+              <p>
+                Note
+              </p>
+            </th>
+</tr></thead>
+<tbody><tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span> <span class="special">&lt;</span>
+                <span class="identifier">b</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span> <span class="special">&lt;=</span> <span class="identifier">b</span>
+<span class="identifier">a</span> <span class="special">&gt;</span> <span class="identifier">b</span>
+<span class="identifier">a</span> <span class="special">&gt;=</span> <span class="identifier">b</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+                Though <code class="computeroutput"><span class="identifier">a</span> <span class="special">&lt;</span>
+                <span class="identifier">b</span></code> is provided by <code class="computeroutput">sequence_container_interface</code>,
+                any user-defined replacement will be used to provide the other operations
+                listed here.
+              </p>
+            </td>
+</tr></tbody>
+</table></div>
+</div>
+<br class="table-break"><h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h7"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.sequence_container"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.sequence_container">Sequence
+      Container</a>
+    </h4>
+<p>
+      Sequence containers meet the requirements of this table (in addition to the
+      container requirements):
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t5"></a><p class="title"><b>Table 39.8. User-Defined Types and Operations for Sequence Containers</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Types and Operations for Sequence Containers">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                Expression
+              </p>
+            </th>
+<th>
+              <p>
+                Return Type
+              </p>
+            </th>
+<th>
+              <p>
+                Semantics
+              </p>
+            </th>
+<th>
+              <p>
+                Assertion/note/pre-/post-condition
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span> <span class="identifier">u</span><span class="special">(</span><span class="identifier">n</span><span class="special">,</span> <span class="identifier">t</span><span class="special">);</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Constructs a sequence of <code class="computeroutput"><span class="identifier">n</span></code>
+                copies of <code class="computeroutput"><span class="identifier">t</span></code>.
+              </p>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Ensures:</em></span> <code class="computeroutput"><span class="identifier">distance</span><span class="special">(</span><span class="identifier">u</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">u</span><span class="special">.</span><span class="identifier">end</span><span class="special">())</span> <span class="special">==</span> <span class="identifier">n</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span> <span class="identifier">u</span><span class="special">(</span><span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">);</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                Constructs a sequence equal to <code class="computeroutput"><span class="special">[</span><span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span></code>.
+              </p>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Ensures:</em></span> <code class="computeroutput"><span class="identifier">distance</span><span class="special">(</span><span class="identifier">u</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">u</span><span class="special">.</span><span class="identifier">end</span><span class="special">())</span> <span class="special">==</span> <span class="identifier">distance</span><span class="special">(</span><span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span> <span class="identifier">u</span><span class="special">(</span><span class="identifier">il</span><span class="special">);</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span> <span class="identifier">u</span><span class="special">(</span><span class="identifier">il</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">il</span><span class="special">.</span><span class="identifier">end</span><span class="special">());</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">args</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Inserts an object of type T constructed with <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">forward</span><span class="special">&lt;</span><span class="identifier">Args</span><span class="special">&gt;(</span><span class="identifier">args</span><span class="special">)...</span></code> before <code class="computeroutput"><span class="identifier">p</span></code>.
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">args</span></code> may directly
+                or indirectly refer to a value in <code class="computeroutput"><span class="identifier">a</span></code>.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Inserts copies of the elements in <code class="computeroutput"><span class="special">[</span><span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span></code>
+                before <code class="computeroutput"><span class="identifier">p</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Erases the elements in the range <code class="computeroutput"><span class="special">[</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="important"><table border="0" summary="Important">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Important]" src="../../../doc/src/images/important.png"></td>
+<th align="left">Important</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        In the notes for <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">args</span><span class="special">)</span></code>, it says: "<code class="computeroutput"><span class="identifier">args</span></code>
+        may directly or indirectly refer to a value in <code class="computeroutput"><span class="identifier">a</span></code>".
+        Don't forget to handle that case in your implementation. Otherwise, <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace</span><span class="special">(</span><span class="identifier">a</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">a</span><span class="special">.</span><span class="identifier">back</span><span class="special">())</span></code> may do the wrong thing.
+      </p></td></tr>
+</table></div>
+<p>
+      If you provide the types and operations above, <code class="computeroutput">sequence_container_interface</code>
+      will provide the rest of the sequence container requirements, using this mapping:
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t6"></a><p class="title"><b>Table 39.9. User-Defined Operations to sequence_container_interface Operations</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Operations to sequence_container_interface Operations">
+<colgroup>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                User-Defined
+              </p>
+            </th>
+<th>
+              <p>
+                <code class="computeroutput">sequence_container_interface</code>-Provided
+              </p>
+            </th>
+<th>
+              <p>
+                Note
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">(</span><span class="identifier">il</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span> <span class="special">=</span>
+                <span class="identifier">il</span></code>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">args</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">t</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">rv</span><span class="special">)</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">n</span><span class="special">,</span> <span class="identifier">t</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">il</span><span class="special">)</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">clear</span><span class="special">()</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">assign</span><span class="special">(</span><span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">assign</span><span class="special">(</span><span class="identifier">n</span><span class="special">,</span> <span class="identifier">t</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">assign</span><span class="special">(</span><span class="identifier">il</span><span class="special">)</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></code>
+                and <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span> <span class="identifier">i</span><span class="special">,</span> <span class="identifier">j</span><span class="special">)</span></code>
+                must both be user-defined for <code class="computeroutput">sequence_container_interface</code>
+                to provide these operations.
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h8"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.optional_sequence_container_operations"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.optional_sequence_container_operations">Optional
+      Sequence Container Operations</a>
+    </h4>
+<p>
+      Sequence containers with <code class="computeroutput"><span class="identifier">front</span><span class="special">()</span></code>, <code class="computeroutput"><span class="identifier">back</span><span class="special">()</span></code>, or any of the other operations in this table
+      must define these operations (in addition to the container requirements):
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t7"></a><p class="title"><b>Table 39.10. User-Defined Types and Operations for Sequence Containers</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Types and Operations for Sequence Containers">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                Expression
+              </p>
+            </th>
+<th>
+              <p>
+                Return Type
+              </p>
+            </th>
+<th>
+              <p>
+                Semantics
+              </p>
+            </th>
+<th>
+              <p>
+                Assertion/note/pre-/post-condition
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace_front</span><span class="special">(</span><span class="identifier">args</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">reference</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Prepends an object of type <code class="computeroutput"><span class="identifier">T</span></code>
+                constructed with <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">forward</span><span class="special">&lt;</span><span class="identifier">Args</span><span class="special">&gt;(</span><span class="identifier">args</span><span class="special">)...</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">args</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">reference</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Appends an object of type <code class="computeroutput"><span class="identifier">T</span></code>
+                constructed with <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">forward</span><span class="special">&lt;</span><span class="identifier">Args</span><span class="special">&gt;(</span><span class="identifier">args</span><span class="special">)...</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      If you provide the types and operations above, <code class="computeroutput">sequence_container_interface</code>
+      will provide the rest of the optional sequence container requirements, using
+      this mapping:
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.t8"></a><p class="title"><b>Table 39.11. User-Defined Operations to sequence_container_interface Operations</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Operations to sequence_container_interface Operations">
+<colgroup>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                User-Defined
+              </p>
+            </th>
+<th>
+              <p>
+                <code class="computeroutput">sequence_container_interface</code>-Provided
+              </p>
+            </th>
+<th>
+              <p>
+                Note
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">front</span><span class="special">()</span>
+<span class="identifier">a</span><span class="special">[</span><span class="identifier">n</span><span class="special">]</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">at</span><span class="special">(</span><span class="identifier">n</span><span class="special">)</span>
+</pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+                These operations are provided in <code class="computeroutput"><span class="keyword">const</span></code>
+                and non-<code class="computeroutput"><span class="keyword">const</span></code> overloads.
+                <code class="computeroutput">sequence_container_interface</code>
+                can only provide <code class="computeroutput"><span class="identifier">a</span><span class="special">[</span><span class="identifier">n</span><span class="special">]</span></code> and <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">at</span><span class="special">(</span><span class="identifier">n</span><span class="special">)</span></code> if <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+                and <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">const_iterator</span></code> are random access
+                iterators.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">end</span><span class="special">()</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">back</span><span class="special">()</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">back</span><span class="special">()</span></code>
+                is provided in <code class="computeroutput"><span class="keyword">const</span></code>
+                and non-<code class="computeroutput"><span class="keyword">const</span></code> overloads.
+                <code class="computeroutput">sequence_container_interface</code>
+                can only provide <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">back</span><span class="special">()</span></code> if <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">iterator</span></code>
+                and <code class="computeroutput"><span class="identifier">X</span><span class="special">::</span><span class="identifier">const_iterator</span></code> are bidirectional
+                iterators.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace_front</span><span class="special">(</span><span class="identifier">args</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">push_front</span><span class="special">(</span><span class="identifier">t</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">push_front</span><span class="special">(</span><span class="identifier">rv</span><span class="special">)</span>
+</pre>
+<p>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">args</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">push_back</span><span class="special">(</span><span class="identifier">t</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">push_back</span><span class="special">(</span><span class="identifier">rv</span><span class="special">)</span>
+</pre>
+<p>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace_front</span><span class="special">(</span><span class="identifier">args</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">pop_front</span><span class="special">(</span><span class="identifier">t</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace_front</span><span class="special">(</span><span class="identifier">args</span><span class="special">)</span></code>
+                and <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></code>
+                must both be user-defined for <code class="computeroutput">sequence_container_interface</code>
+                to provide this operation.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">args</span><span class="special">)</span>
+<span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">pop_back</span><span class="special">(</span><span class="identifier">t</span><span class="special">)</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace_front</span><span class="special">(</span><span class="identifier">args</span><span class="special">)</span></code>
+                and <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span> <span class="identifier">q2</span><span class="special">)</span></code>
+                must both be user-defined for <code class="computeroutput">sequence_container_interface</code>
+                to provide this operation.
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        <code class="computeroutput"><span class="identifier">emplace_front</span><span class="special">()</span></code>
+        and <code class="computeroutput"><span class="identifier">emplace_back</span><span class="special">()</span></code>
+        are not needed for some of the <code class="computeroutput">sequence_container_interface</code>-provided
+        operations above (e.g. <code class="computeroutput"><span class="identifier">pop_front</span><span class="special">()</span></code> and <code class="computeroutput"><span class="identifier">pop_back</span><span class="special">()</span></code>, respectively). However, they are each
+        used as the user-defined operation that indicates that the container being
+        defined is front- or back-mutation-friendly.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h9"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.general_requirements_on_all_user_defined_operations"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.general_requirements_on_all_user_defined_operations">General
+      Requirements on All User-Defined Operations</a>
+    </h4>
+<p>
+      There are other requirements listed in the standard that do not appear in any
+      of the requirements tables; user-defined operations must conform to those as
+      well:
+    </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+          If an exception is thrown by an <code class="computeroutput"><span class="identifier">insert</span><span class="special">()</span></code> or <code class="computeroutput"><span class="identifier">emplace</span><span class="special">()</span></code> call while inserting a single element,
+          that function has no effect.
+        </li>
+<li class="listitem">
+          No <code class="computeroutput"><span class="identifier">erase</span><span class="special">()</span></code>
+          function throws an exception.
+        </li>
+<li class="listitem">
+          No copy constructor or assignment operator of a returned iterator throws
+          an exception.
+        </li>
+<li class="listitem">
+          The iterator returned from <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">emplace</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span>
+          <span class="identifier">args</span><span class="special">)</span></code>
+          points to the new element constructed from <code class="computeroutput"><span class="identifier">args</span></code>
+          into <code class="computeroutput"><span class="identifier">a</span></code>.
+        </li>
+<li class="listitem">
+          The iterator returned from <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">insert</span><span class="special">(</span><span class="identifier">p</span><span class="special">,</span>
+          <span class="identifier">i</span><span class="special">,</span>
+          <span class="identifier">j</span><span class="special">)</span></code>
+          points to the copy of the first element inserted into <code class="computeroutput"><span class="identifier">a</span></code>,
+          or <code class="computeroutput"><span class="identifier">p</span></code> if <code class="computeroutput"><span class="identifier">i</span>
+          <span class="special">==</span> <span class="identifier">j</span></code>.
+        </li>
+<li class="listitem">
+          The iterator returned by <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">erase</span><span class="special">(</span><span class="identifier">q1</span><span class="special">,</span>
+          <span class="identifier">q2</span><span class="special">)</span></code>
+          points to the element pointed to by <code class="computeroutput"><span class="identifier">q2</span></code>
+          prior to any elements being erased. If no such element exists, <code class="computeroutput"><span class="identifier">a</span><span class="special">.</span><span class="identifier">end</span><span class="special">()</span></code> is returned.
+        </li>
+</ul></div>
+<h4>
+<a name="boost_stlinterfaces.tutorial___sequence_container_interface_.h10"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___sequence_container_interface_.example___code__phrase_role__identifier__static_vector__phrase___code_"></a></span><a class="link" href="tutorial___sequence_container_interface_.html#boost_stlinterfaces.tutorial___sequence_container_interface_.example___code__phrase_role__identifier__static_vector__phrase___code_">Example:
+      <code class="computeroutput"><span class="identifier">static_vector</span></code></a>
+    </h4>
+<p>
+      Let's look at an example. <a href="https://www.boost.org/doc/libs/release/libs/container" target="_top">Boost.Container</a>
+      contains a template called <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">container</span><span class="special">::</span><span class="identifier">static_vector</span></code>,
+      which is a fixed-capacity vector that does not allocate from the heap. We have
+      a similar template in this example, <code class="computeroutput"><span class="identifier">static_vector</span></code>.
+      It is implemented by deriving from <code class="computeroutput">sequence_container_interface</code>,
+      which provides much of the API specified in the STL, based on a subset of the
+      API that the user must provide.
+    </p>
+<p>
+      <code class="computeroutput"><span class="identifier">static_vector</span></code> meets all the
+      sequence container requirements (including many of the optional ones) and reversible
+      container requirements in the standard. It does not meet the allocator-aware
+      container requirements, since it does not allocate. In short, it has the same
+      full API as <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span></code>, without all the allocatory bits.
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="comment">// The sections of member functions below are commented as they are in the</span>
+<span class="comment">// standard for std::vector.  Each section has two numbers: the number of</span>
+<span class="comment">// member functions in that section, and the number that are missing, because</span>
+<span class="comment">// they are provided by sequence_container_interface.  The purely</span>
+<span class="comment">// allocator-specific members are neither present nor part of the counts.</span>
+<span class="comment">//</span>
+<span class="comment">// We're passing boost::stl_interfaces::contiguous here, so that</span>
+<span class="comment">// sequence_container_interface knows that it should provide data().</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">T</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">size_t</span> <span class="identifier">N</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">static_vector</span> <span class="special">:</span> <span class="identifier">sequence_container_interface</span><span class="special">&lt;</span>
+                           <span class="identifier">static_vector</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">,</span> <span class="identifier">N</span><span class="special">&gt;,</span>
+                           <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">element_layout</span><span class="special">::</span><span class="identifier">contiguous</span><span class="special">&gt;</span>
+<span class="special">{</span>
+    <span class="comment">// These are the types required for reversible containers.  These must be</span>
+    <span class="comment">// user-defined.</span>
+    <span class="keyword">using</span> <span class="identifier">value_type</span> <span class="special">=</span> <span class="identifier">T</span><span class="special">;</span>
+    <span class="keyword">using</span> <span class="identifier">pointer</span> <span class="special">=</span> <span class="identifier">T</span> <span class="special">*;</span>
+    <span class="keyword">using</span> <span class="identifier">const_pointer</span> <span class="special">=</span> <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">*;</span>
+    <span class="keyword">using</span> <span class="identifier">reference</span> <span class="special">=</span> <span class="identifier">value_type</span> <span class="special">&amp;;</span>
+    <span class="keyword">using</span> <span class="identifier">const_reference</span> <span class="special">=</span> <span class="identifier">value_type</span> <span class="keyword">const</span> <span class="special">&amp;;</span>
+    <span class="keyword">using</span> <span class="identifier">size_type</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">size_t</span><span class="special">;</span>
+    <span class="keyword">using</span> <span class="identifier">difference_type</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">ptrdiff_t</span><span class="special">;</span>
+    <span class="keyword">using</span> <span class="identifier">iterator</span> <span class="special">=</span> <span class="identifier">T</span> <span class="special">*;</span>
+    <span class="keyword">using</span> <span class="identifier">const_iterator</span> <span class="special">=</span> <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">*;</span>
+    <span class="keyword">using</span> <span class="identifier">reverse_iterator</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">reverse_iterator</span><span class="special">&lt;</span><span class="identifier">iterator</span><span class="special">&gt;;</span>
+    <span class="keyword">using</span> <span class="identifier">const_reverse_iterator</span> <span class="special">=</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">reverse_iterator</span><span class="special">&lt;</span><span class="identifier">const_iterator</span><span class="special">&gt;;</span>
+
+    <span class="comment">// construct/copy/destroy (9 members, skipped 2)</span>
+    <span class="comment">//</span>
+    <span class="comment">// Constructors and special member functions all must be user-provided.</span>
+    <span class="comment">// Were they provided by sequence_container_interface, everything would</span>
+    <span class="comment">// break, due to the language rules related to them.  However, assignment</span>
+    <span class="comment">// from std::initializer_list can come from sequence_container_interface.</span>
+    <span class="identifier">static_vector</span><span class="special">()</span> <span class="keyword">noexcept</span> <span class="special">:</span> <span class="identifier">size_</span><span class="special">(</span><span class="number">0</span><span class="special">)</span> <span class="special">{}</span>
+    <span class="keyword">explicit</span> <span class="identifier">static_vector</span><span class="special">(</span><span class="identifier">size_type</span> <span class="identifier">n</span><span class="special">)</span> <span class="special">:</span> <span class="identifier">size_</span><span class="special">(</span><span class="number">0</span><span class="special">)</span> <span class="special">{</span> <span class="identifier">resize</span><span class="special">(</span><span class="identifier">n</span><span class="special">);</span> <span class="special">}</span>
+    <span class="keyword">explicit</span> <span class="identifier">static_vector</span><span class="special">(</span><span class="identifier">size_type</span> <span class="identifier">n</span><span class="special">,</span> <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">&amp;</span> <span class="identifier">x</span><span class="special">)</span> <span class="special">:</span> <span class="identifier">size_</span><span class="special">(</span><span class="number">0</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="comment">// Note that you must write "this-&gt;" before all the member functions</span>
+        <span class="comment">// provided by sequence_container_interface, which is slightly annoying.</span>
+        <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">assign</span><span class="special">(</span><span class="identifier">n</span><span class="special">,</span> <span class="identifier">x</span><span class="special">);</span>
+    <span class="special">}</span>
+    <span class="keyword">template</span><span class="special">&lt;</span>
+        <span class="keyword">typename</span> <span class="identifier">InputIterator</span><span class="special">,</span>
+        <span class="keyword">typename</span> <span class="identifier">Enable</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">enable_if_t</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">is_convertible</span><span class="special">&lt;</span>
+            <span class="keyword">typename</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">iterator_traits</span><span class="special">&lt;</span><span class="identifier">InputIterator</span><span class="special">&gt;::</span><span class="identifier">iterator_category</span><span class="special">,</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">input_iterator_tag</span><span class="special">&gt;::</span><span class="identifier">value</span><span class="special">&gt;&gt;</span>
+    <span class="identifier">static_vector</span><span class="special">(</span><span class="identifier">InputIterator</span> <span class="identifier">first</span><span class="special">,</span> <span class="identifier">InputIterator</span> <span class="identifier">last</span><span class="special">)</span> <span class="special">:</span> <span class="identifier">size_</span><span class="special">(</span><span class="number">0</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">assign</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">);</span>
+    <span class="special">}</span>
+    <span class="identifier">static_vector</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;</span> <span class="identifier">il</span><span class="special">)</span> <span class="special">:</span>
+        <span class="identifier">static_vector</span><span class="special">(</span><span class="identifier">il</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">il</span><span class="special">.</span><span class="identifier">end</span><span class="special">())</span>
+    <span class="special">{}</span>
+    <span class="identifier">static_vector</span><span class="special">(</span><span class="identifier">static_vector</span> <span class="keyword">const</span> <span class="special">&amp;</span> <span class="identifier">other</span><span class="special">)</span> <span class="special">:</span> <span class="identifier">size_</span><span class="special">(</span><span class="number">0</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">assign</span><span class="special">(</span><span class="identifier">other</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">other</span><span class="special">.</span><span class="identifier">end</span><span class="special">());</span>
+    <span class="special">}</span>
+    <span class="identifier">static_vector</span><span class="special">(</span><span class="identifier">static_vector</span> <span class="special">&amp;&amp;</span> <span class="identifier">other</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">(</span>
+        <span class="keyword">noexcept</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">declval</span><span class="special">&lt;</span><span class="identifier">static_vector</span><span class="special">&gt;().</span><span class="identifier">emplace_back</span><span class="special">(</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(*</span><span class="identifier">other</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()))))</span> <span class="special">:</span>
+        <span class="identifier">size_</span><span class="special">(</span><span class="number">0</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">for</span> <span class="special">(</span><span class="keyword">auto</span> <span class="special">&amp;</span> <span class="identifier">element</span> <span class="special">:</span> <span class="identifier">other</span><span class="special">)</span> <span class="special">{</span>
+            <span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">element</span><span class="special">));</span>
+        <span class="special">}</span>
+        <span class="identifier">other</span><span class="special">.</span><span class="identifier">clear</span><span class="special">();</span>
+    <span class="special">}</span>
+    <span class="identifier">static_vector</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">=(</span><span class="identifier">static_vector</span> <span class="keyword">const</span> <span class="special">&amp;</span> <span class="identifier">other</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">clear</span><span class="special">();</span>
+        <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">assign</span><span class="special">(</span><span class="identifier">other</span><span class="special">.</span><span class="identifier">begin</span><span class="special">(),</span> <span class="identifier">other</span><span class="special">.</span><span class="identifier">end</span><span class="special">());</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="identifier">static_vector</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">=(</span><span class="identifier">static_vector</span> <span class="special">&amp;&amp;</span> <span class="identifier">other</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">(</span><span class="keyword">noexcept</span><span class="special">(</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">declval</span><span class="special">&lt;</span><span class="identifier">static_vector</span><span class="special">&gt;().</span><span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(*</span><span class="identifier">other</span><span class="special">.</span><span class="identifier">begin</span><span class="special">()))))</span>
+    <span class="special">{</span>
+        <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">clear</span><span class="special">();</span>
+        <span class="keyword">for</span> <span class="special">(</span><span class="keyword">auto</span> <span class="special">&amp;</span> <span class="identifier">element</span> <span class="special">:</span> <span class="identifier">other</span><span class="special">)</span> <span class="special">{</span>
+            <span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">element</span><span class="special">));</span>
+        <span class="special">}</span>
+        <span class="identifier">other</span><span class="special">.</span><span class="identifier">clear</span><span class="special">();</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="special">~</span><span class="identifier">static_vector</span><span class="special">()</span> <span class="special">{</span> <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">clear</span><span class="special">();</span> <span class="special">}</span>
+
+    <span class="comment">// iterators (2 members, skipped 10)</span>
+    <span class="comment">//</span>
+    <span class="comment">// This section is the first big win.  Instead of having to write 12</span>
+    <span class="comment">// overloads line begin, cbegin, rbegin, crbegin, etc., we can just write</span>
+    <span class="comment">// 2.</span>
+    <span class="identifier">iterator</span> <span class="identifier">begin</span><span class="special">()</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="keyword">reinterpret_cast</span><span class="special">&lt;</span><span class="identifier">T</span> <span class="special">*&gt;(</span><span class="identifier">buf_</span><span class="special">);</span> <span class="special">}</span>
+    <span class="identifier">iterator</span> <span class="identifier">end</span><span class="special">()</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="keyword">return</span> <span class="keyword">reinterpret_cast</span><span class="special">&lt;</span><span class="identifier">T</span> <span class="special">*&gt;(</span><span class="identifier">buf_</span> <span class="special">+</span> <span class="identifier">size_</span> <span class="special">*</span> <span class="keyword">sizeof</span><span class="special">(</span><span class="identifier">T</span><span class="special">));</span>
+    <span class="special">}</span>
+
+    <span class="comment">// capacity (6 members, skipped 2)</span>
+    <span class="comment">//</span>
+    <span class="comment">// Most of these are not even part of the general requirements, because</span>
+    <span class="comment">// some are specific to std::vector and related types.  However, we do get</span>
+    <span class="comment">// empty and size from sequence_container_interface.</span>
+    <span class="identifier">size_type</span> <span class="identifier">max_size</span><span class="special">()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">N</span><span class="special">;</span> <span class="special">}</span>
+    <span class="identifier">size_type</span> <span class="identifier">capacity</span><span class="special">()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">N</span><span class="special">;</span> <span class="special">}</span>
+    <span class="keyword">void</span> <span class="identifier">resize</span><span class="special">(</span><span class="identifier">size_type</span> <span class="identifier">sz</span><span class="special">)</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="identifier">resize_impl</span><span class="special">(</span><span class="identifier">sz</span><span class="special">,</span> <span class="special">[]</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">T</span><span class="special">();</span> <span class="special">});</span>
+    <span class="special">}</span>
+    <span class="keyword">void</span> <span class="identifier">resize</span><span class="special">(</span><span class="identifier">size_type</span> <span class="identifier">sz</span><span class="special">,</span> <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">&amp;</span> <span class="identifier">x</span><span class="special">)</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="identifier">resize_impl</span><span class="special">(</span><span class="identifier">sz</span><span class="special">,</span> <span class="special">[&amp;]()</span> <span class="special">-&gt;</span> <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">&amp;</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">x</span><span class="special">;</span> <span class="special">});</span>
+    <span class="special">}</span>
+    <span class="keyword">void</span> <span class="identifier">reserve</span><span class="special">(</span><span class="identifier">size_type</span> <span class="identifier">n</span><span class="special">)</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="identifier">assert</span><span class="special">(</span><span class="identifier">n</span> <span class="special">&lt;</span> <span class="identifier">capacity</span><span class="special">());</span> <span class="special">}</span>
+    <span class="keyword">void</span> <span class="identifier">shrink_to_fit</span><span class="special">()</span> <span class="keyword">noexcept</span> <span class="special">{}</span>
+
+    <span class="comment">// element access (skipped 8)</span>
+    <span class="comment">// data access (skipped 2)</span>
+    <span class="comment">//</span>
+    <span class="comment">// Another big win.  sequence_container_interface provides all of the</span>
+    <span class="comment">// overloads of operator[], at, front, back, and data.</span>
+
+    <span class="comment">// modifiers (5 members, skipped 9)</span>
+    <span class="comment">//</span>
+    <span class="comment">// In this section we again get most of the API from</span>
+    <span class="comment">// sequence_container_interface.</span>
+
+    <span class="comment">// emplace_back does not look very necessary -- just look at its trivial</span>
+    <span class="comment">// implementation -- but we can't provide it from</span>
+    <span class="comment">// sequence_container_interface, because it is an optional sequence</span>
+    <span class="comment">// container interface.  We would not want emplace_front to suddenly</span>
+    <span class="comment">// appear on our std::vector-like type, and there may be some other type</span>
+    <span class="comment">// for which emplace_back is a bad idea.</span>
+    <span class="comment">//</span>
+    <span class="comment">// However, by providing emplace_back here, we signal to the</span>
+    <span class="comment">// sequence_container_interface template that our container is</span>
+    <span class="comment">// back-mutation-friendly, and this allows it to provide all the overloads</span>
+    <span class="comment">// of push_back and pop_back.</span>
+    <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span><span class="special">...</span> <span class="identifier">Args</span><span class="special">&gt;</span>
+    <span class="identifier">reference</span> <span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">Args</span> <span class="special">&amp;&amp;...</span> <span class="identifier">args</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="identifier">emplace</span><span class="special">(</span><span class="identifier">end</span><span class="special">(),</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">forward</span><span class="special">&lt;</span><span class="identifier">Args</span><span class="special">&gt;(</span><span class="identifier">args</span><span class="special">)...);</span>
+    <span class="special">}</span>
+    <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span><span class="special">...</span> <span class="identifier">Args</span><span class="special">&gt;</span>
+    <span class="identifier">iterator</span> <span class="identifier">emplace</span><span class="special">(</span><span class="identifier">const_iterator</span> <span class="identifier">pos</span><span class="special">,</span> <span class="identifier">Args</span> <span class="special">&amp;&amp;...</span> <span class="identifier">args</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">auto</span> <span class="identifier">position</span> <span class="special">=</span> <span class="keyword">const_cast</span><span class="special">&lt;</span><span class="identifier">T</span> <span class="special">*&gt;(</span><span class="identifier">pos</span><span class="special">);</span>
+        <span class="keyword">bool</span> <span class="keyword">const</span> <span class="identifier">insert_before_end</span> <span class="special">=</span> <span class="identifier">position</span> <span class="special">&lt;</span> <span class="identifier">end</span><span class="special">();</span>
+        <span class="keyword">if</span> <span class="special">(</span><span class="identifier">insert_before_end</span><span class="special">)</span> <span class="special">{</span>
+            <span class="keyword">auto</span> <span class="identifier">last</span> <span class="special">=</span> <span class="identifier">end</span><span class="special">();</span>
+            <span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">back</span><span class="special">()));</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">move_backward</span><span class="special">(</span><span class="identifier">position</span><span class="special">,</span> <span class="identifier">last</span> <span class="special">-</span> <span class="number">1</span><span class="special">,</span> <span class="identifier">last</span><span class="special">);</span>
+        <span class="special">}</span>
+        <span class="keyword">new</span> <span class="special">(</span><span class="identifier">position</span><span class="special">)</span> <span class="identifier">T</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">forward</span><span class="special">&lt;</span><span class="identifier">Args</span><span class="special">&gt;(</span><span class="identifier">args</span><span class="special">)...);</span>
+        <span class="keyword">if</span> <span class="special">(!</span><span class="identifier">insert_before_end</span><span class="special">)</span>
+            <span class="special">++</span><span class="identifier">size_</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="identifier">position</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="comment">// Note: The iterator category here was upgraded to ForwardIterator</span>
+    <span class="comment">// (instead of vector's InputIterator), to ensure linear time complexity.</span>
+    <span class="keyword">template</span><span class="special">&lt;</span>
+        <span class="keyword">typename</span> <span class="identifier">ForwardIterator</span><span class="special">,</span>
+        <span class="keyword">typename</span> <span class="identifier">Enable</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">enable_if_t</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">is_convertible</span><span class="special">&lt;</span>
+            <span class="keyword">typename</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">iterator_traits</span><span class="special">&lt;</span><span class="identifier">ForwardIterator</span><span class="special">&gt;::</span><span class="identifier">iterator_category</span><span class="special">,</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">forward_iterator_tag</span><span class="special">&gt;::</span><span class="identifier">value</span><span class="special">&gt;&gt;</span>
+    <span class="identifier">iterator</span>
+    <span class="identifier">insert</span><span class="special">(</span><span class="identifier">const_iterator</span> <span class="identifier">pos</span><span class="special">,</span> <span class="identifier">ForwardIterator</span> <span class="identifier">first</span><span class="special">,</span> <span class="identifier">ForwardIterator</span> <span class="identifier">last</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">auto</span> <span class="identifier">position</span> <span class="special">=</span> <span class="keyword">const_cast</span><span class="special">&lt;</span><span class="identifier">T</span> <span class="special">*&gt;(</span><span class="identifier">pos</span><span class="special">);</span>
+        <span class="keyword">auto</span> <span class="keyword">const</span> <span class="identifier">insertions</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">distance</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">);</span>
+        <span class="identifier">assert</span><span class="special">(</span><span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">size</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">insertions</span> <span class="special">&lt;</span> <span class="identifier">capacity</span><span class="special">());</span>
+        <span class="identifier">uninitialized_generate</span><span class="special">(</span><span class="identifier">end</span><span class="special">(),</span> <span class="identifier">end</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">insertions</span><span class="special">,</span> <span class="special">[]</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">T</span><span class="special">();</span> <span class="special">});</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">move_backward</span><span class="special">(</span><span class="identifier">position</span><span class="special">,</span> <span class="identifier">end</span><span class="special">(),</span> <span class="identifier">end</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">insertions</span><span class="special">);</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">,</span> <span class="identifier">position</span><span class="special">);</span>
+        <span class="identifier">size_</span> <span class="special">+=</span> <span class="identifier">insertions</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="identifier">position</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="identifier">iterator</span> <span class="identifier">erase</span><span class="special">(</span><span class="identifier">const_iterator</span> <span class="identifier">f</span><span class="special">,</span> <span class="identifier">const_iterator</span> <span class="identifier">l</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">auto</span> <span class="identifier">first</span> <span class="special">=</span> <span class="keyword">const_cast</span><span class="special">&lt;</span><span class="identifier">T</span> <span class="special">*&gt;(</span><span class="identifier">f</span><span class="special">);</span>
+        <span class="keyword">auto</span> <span class="identifier">last</span> <span class="special">=</span> <span class="keyword">const_cast</span><span class="special">&lt;</span><span class="identifier">T</span> <span class="special">*&gt;(</span><span class="identifier">l</span><span class="special">);</span>
+        <span class="keyword">auto</span> <span class="identifier">end_</span> <span class="special">=</span> <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">end</span><span class="special">();</span>
+        <span class="keyword">auto</span> <span class="identifier">it</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">last</span><span class="special">,</span> <span class="identifier">end_</span><span class="special">,</span> <span class="identifier">first</span><span class="special">);</span>
+        <span class="keyword">for</span> <span class="special">(;</span> <span class="identifier">it</span> <span class="special">!=</span> <span class="identifier">end_</span><span class="special">;</span> <span class="special">++</span><span class="identifier">it</span><span class="special">)</span> <span class="special">{</span>
+            <span class="identifier">it</span><span class="special">-&gt;~</span><span class="identifier">T</span><span class="special">();</span>
+        <span class="special">}</span>
+        <span class="identifier">size_</span> <span class="special">-=</span> <span class="identifier">last</span> <span class="special">-</span> <span class="identifier">first</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="identifier">first</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="keyword">void</span> <span class="identifier">swap</span><span class="special">(</span><span class="identifier">static_vector</span> <span class="special">&amp;</span> <span class="identifier">other</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="identifier">size_type</span> <span class="identifier">short_size</span><span class="special">,</span> <span class="identifier">long_size</span><span class="special">;</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">tie</span><span class="special">(</span><span class="identifier">short_size</span><span class="special">,</span> <span class="identifier">long_size</span><span class="special">)</span> <span class="special">=</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">minmax</span><span class="special">(</span><span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">size</span><span class="special">(),</span> <span class="identifier">other</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+        <span class="keyword">for</span> <span class="special">(</span><span class="keyword">auto</span> <span class="identifier">i</span> <span class="special">=</span> <span class="identifier">size_type</span><span class="special">(</span><span class="number">0</span><span class="special">);</span> <span class="identifier">i</span> <span class="special">&lt;</span> <span class="identifier">short_size</span><span class="special">;</span> <span class="special">++</span><span class="identifier">i</span><span class="special">)</span> <span class="special">{</span>
+            <span class="keyword">using</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">swap</span><span class="special">;</span>
+            <span class="identifier">swap</span><span class="special">((*</span><span class="keyword">this</span><span class="special">)[</span><span class="identifier">i</span><span class="special">],</span> <span class="identifier">other</span><span class="special">[</span><span class="identifier">i</span><span class="special">]);</span>
+        <span class="special">}</span>
+
+        <span class="identifier">static_vector</span> <span class="special">*</span> <span class="identifier">longer</span> <span class="special">=</span> <span class="keyword">this</span><span class="special">;</span>
+        <span class="identifier">static_vector</span> <span class="special">*</span> <span class="identifier">shorter</span> <span class="special">=</span> <span class="keyword">this</span><span class="special">;</span>
+        <span class="keyword">if</span> <span class="special">(</span><span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">size</span><span class="special">()</span> <span class="special">&lt;</span> <span class="identifier">other</span><span class="special">.</span><span class="identifier">size</span><span class="special">())</span>
+            <span class="identifier">longer</span> <span class="special">=</span> <span class="special">&amp;</span><span class="identifier">other</span><span class="special">;</span>
+        <span class="keyword">else</span>
+            <span class="identifier">shorter</span> <span class="special">=</span> <span class="special">&amp;</span><span class="identifier">other</span><span class="special">;</span>
+
+        <span class="keyword">for</span> <span class="special">(</span><span class="keyword">auto</span> <span class="identifier">it</span> <span class="special">=</span> <span class="identifier">longer</span><span class="special">-&gt;</span><span class="identifier">begin</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">short_size</span><span class="special">,</span> <span class="identifier">last</span> <span class="special">=</span> <span class="identifier">longer</span><span class="special">-&gt;</span><span class="identifier">end</span><span class="special">();</span>
+             <span class="identifier">it</span> <span class="special">!=</span> <span class="identifier">last</span><span class="special">;</span>
+             <span class="special">++</span><span class="identifier">it</span><span class="special">)</span> <span class="special">{</span>
+            <span class="identifier">shorter</span><span class="special">-&gt;</span><span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(*</span><span class="identifier">it</span><span class="special">));</span>
+        <span class="special">}</span>
+
+        <span class="identifier">longer</span><span class="special">-&gt;</span><span class="identifier">resize</span><span class="special">(</span><span class="identifier">short_size</span><span class="special">);</span>
+        <span class="identifier">shorter</span><span class="special">-&gt;</span><span class="identifier">size_</span> <span class="special">=</span> <span class="identifier">long_size</span><span class="special">;</span>
+    <span class="special">}</span>
+
+    <span class="comment">// Since we're getting so many overloads from</span>
+    <span class="comment">// sequence_container_interface, and since many of those overloads are</span>
+    <span class="comment">// implemented in terms of a user-defined function of the same name, we</span>
+    <span class="comment">// need to add quite a few using declarations here.</span>
+    <span class="keyword">using</span> <span class="identifier">base_type</span> <span class="special">=</span> <span class="identifier">sequence_container_interface</span><span class="special">&lt;</span>
+        <span class="identifier">static_vector</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">,</span> <span class="identifier">N</span><span class="special">&gt;,</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">element_layout</span><span class="special">::</span><span class="identifier">contiguous</span><span class="special">&gt;;</span>
+    <span class="keyword">using</span> <span class="identifier">base_type</span><span class="special">::</span><span class="identifier">begin</span><span class="special">;</span>
+    <span class="keyword">using</span> <span class="identifier">base_type</span><span class="special">::</span><span class="identifier">end</span><span class="special">;</span>
+    <span class="keyword">using</span> <span class="identifier">base_type</span><span class="special">::</span><span class="identifier">insert</span><span class="special">;</span>
+    <span class="keyword">using</span> <span class="identifier">base_type</span><span class="special">::</span><span class="identifier">erase</span><span class="special">;</span>
+
+    <span class="comment">// comparisons (skipped 6)</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">F</span><span class="special">&gt;</span>
+    <span class="keyword">static</span> <span class="keyword">void</span> <span class="identifier">uninitialized_generate</span><span class="special">(</span><span class="identifier">iterator</span> <span class="identifier">f</span><span class="special">,</span> <span class="identifier">iterator</span> <span class="identifier">l</span><span class="special">,</span> <span class="identifier">F</span> <span class="identifier">func</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="keyword">for</span> <span class="special">(;</span> <span class="identifier">f</span> <span class="special">!=</span> <span class="identifier">l</span><span class="special">;</span> <span class="special">++</span><span class="identifier">f</span><span class="special">)</span> <span class="special">{</span>
+            <span class="keyword">new</span> <span class="special">(</span><span class="keyword">static_cast</span><span class="special">&lt;</span><span class="keyword">void</span> <span class="special">*&gt;(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">addressof</span><span class="special">(*</span><span class="identifier">f</span><span class="special">)))</span> <span class="identifier">T</span><span class="special">(</span><span class="identifier">func</span><span class="special">());</span>
+        <span class="special">}</span>
+    <span class="special">}</span>
+    <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">F</span><span class="special">&gt;</span>
+    <span class="keyword">void</span> <span class="identifier">resize_impl</span><span class="special">(</span><span class="identifier">size_type</span> <span class="identifier">sz</span><span class="special">,</span> <span class="identifier">F</span> <span class="identifier">func</span><span class="special">)</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+        <span class="identifier">assert</span><span class="special">(</span><span class="identifier">sz</span> <span class="special">&lt;</span> <span class="identifier">capacity</span><span class="special">());</span>
+        <span class="keyword">if</span> <span class="special">(</span><span class="identifier">sz</span> <span class="special">&lt;</span> <span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">size</span><span class="special">())</span>
+            <span class="identifier">erase</span><span class="special">(</span><span class="identifier">begin</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">sz</span><span class="special">,</span> <span class="identifier">end</span><span class="special">());</span>
+        <span class="keyword">if</span> <span class="special">(</span><span class="keyword">this</span><span class="special">-&gt;</span><span class="identifier">size</span><span class="special">()</span> <span class="special">&lt;</span> <span class="identifier">sz</span><span class="special">)</span>
+            <span class="identifier">uninitialized_generate</span><span class="special">(</span><span class="identifier">end</span><span class="special">(),</span> <span class="identifier">begin</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">sz</span><span class="special">,</span> <span class="identifier">func</span><span class="special">);</span>
+        <span class="identifier">size_</span> <span class="special">=</span> <span class="identifier">sz</span><span class="special">;</span>
+    <span class="special">}</span>
+
+    <span class="keyword">alignas</span><span class="special">(</span><span class="identifier">T</span><span class="special">)</span> <span class="keyword">unsigned</span> <span class="keyword">char</span> <span class="identifier">buf_</span><span class="special">[</span><span class="identifier">N</span> <span class="special">*</span> <span class="keyword">sizeof</span><span class="special">(</span><span class="identifier">T</span><span class="special">)];</span>
+    <span class="identifier">size_type</span> <span class="identifier">size_</span><span class="special">;</span>
+<span class="special">};</span>
+</pre>
+<p>
+    </p>
+<p>
+      That's quite a bit of code. However, by using <code class="computeroutput">sequence_container_interface</code>,
+      we were able to write only 22 functions, and let <code class="computeroutput">sequence_container_interface</code>
+      provide the other 39. 9 of the 22 function that we did have to write were constructors
+      and special member functions, and those always have to be written in the derived
+      class; <code class="computeroutput">sequence_container_interface</code>
+      never could have helped with those.
+    </p>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        <code class="computeroutput">sequence_container_interface</code>
+        does not support all the sets of container requirements in the standard.
+        In particular, it does not support the allocator-aware requirements, and
+        it does not support the associative or unordered associative container requirements.
+      </p></td></tr>
+</table></div>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2019 T. Zachary Laine<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial___view_interface_.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="tutorial___reverse_iterator_.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

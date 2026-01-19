@@ -118,9 +118,11 @@ SELECT @@session.flush;
 # Check if the value in GLOBAL Tables matches values in variable   #
 ####################################################################
 
+--disable_warnings
 SELECT IF(@@global.flush, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='flush';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_030_07----------------------#'
@@ -154,7 +156,9 @@ SET global.flush = 1;
 --Error ER_UNKNOWN_TABLE
 SELECT global.flush;
 --Error ER_BAD_FIELD_ERROR
-SELECT flush = @@session.flush;
+SELECT flush;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.flush;
 
 
 ##############################  

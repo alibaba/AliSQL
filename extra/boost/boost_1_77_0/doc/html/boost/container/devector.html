@@ -1,0 +1,731 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Class template devector</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../../boost_container_header_reference.html#header.boost.container.devector_hpp" title="Header &lt;boost/container/devector.hpp&gt;">
+<link rel="prev" href="pmr/deque_of.html" title="Struct template deque_of">
+<link rel="next" href="reserve_only_tag_t.html" title="Struct reserve_only_tag_t">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="pmr/deque_of.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../../boost_container_header_reference.html#header.boost.container.devector_hpp"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="reserve_only_tag_t.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="refentry">
+<a name="boost.container.devector"></a><div class="titlepage"></div>
+<div class="refnamediv">
+<h2><span class="refentrytitle">Class template devector</span></h2>
+<p>boost::container::devector</p>
+</div>
+<h2 xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" class="refsynopsisdiv-title">Synopsis</h2>
+<div xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" class="refsynopsisdiv"><pre class="synopsis"><span class="comment">// In header: &lt;<a class="link" href="../../boost_container_header_reference.html#header.boost.container.devector_hpp" title="Header &lt;boost/container/devector.hpp&gt;">boost/container/devector.hpp</a>&gt;
+
+</span><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">,</span> <span class="keyword">typename</span> A <span class="special">=</span> <span class="keyword">void</span><span class="special">,</span> <span class="keyword">typename</span> Options <span class="special">=</span> <span class="keyword">void</span><span class="special">&gt;</span> 
+<span class="keyword">class</span> <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">{</span>
+<span class="keyword">public</span><span class="special">:</span>
+  <span class="comment">// types</span>
+  <span class="keyword">typedef</span> <span class="identifier">T</span>                                                   <a name="boost.container.devector.value_type"></a><span class="identifier">value_type</span><span class="special">;</span>            
+  <span class="keyword">typedef</span> <span class="identifier">implementation_defined</span>                              <a name="boost.container.devector.allocator_type"></a><span class="identifier">allocator_type</span><span class="special">;</span>        
+  <span class="keyword">typedef</span> <span class="identifier">allocator_type</span>                                      <a name="boost.container.devector.stored_allocator_type"></a><span class="identifier">stored_allocator_type</span><span class="special">;</span> 
+  <span class="keyword">typedef</span> <a class="link" href="allocator_traits.html" title="Struct template allocator_traits">allocator_traits</a><span class="special">&lt;</span> <span class="identifier">allocator_type</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">pointer</span>         <a name="boost.container.devector.pointer"></a><span class="identifier">pointer</span><span class="special">;</span>               
+  <span class="keyword">typedef</span> <a class="link" href="allocator_traits.html" title="Struct template allocator_traits">allocator_traits</a><span class="special">&lt;</span> <span class="identifier">allocator_type</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">const_pointer</span>   <a name="boost.container.devector.const_pointer"></a><span class="identifier">const_pointer</span><span class="special">;</span>         
+  <span class="keyword">typedef</span> <a class="link" href="allocator_traits.html" title="Struct template allocator_traits">allocator_traits</a><span class="special">&lt;</span> <span class="identifier">allocator_type</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">reference</span>       <a name="boost.container.devector.reference"></a><span class="identifier">reference</span><span class="special">;</span>             
+  <span class="keyword">typedef</span> <a class="link" href="allocator_traits.html" title="Struct template allocator_traits">allocator_traits</a><span class="special">&lt;</span> <span class="identifier">allocator_type</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">const_reference</span> <a name="boost.container.devector.const_reference"></a><span class="identifier">const_reference</span><span class="special">;</span>       
+  <span class="keyword">typedef</span> <a class="link" href="allocator_traits.html" title="Struct template allocator_traits">allocator_traits</a><span class="special">&lt;</span> <span class="identifier">allocator_type</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">size_type</span>       <a name="boost.container.devector.size_type"></a><span class="identifier">size_type</span><span class="special">;</span>             
+  <span class="keyword">typedef</span> <a class="link" href="allocator_traits.html" title="Struct template allocator_traits">allocator_traits</a><span class="special">&lt;</span> <span class="identifier">allocator_type</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">difference_type</span> <a name="boost.container.devector.difference_type"></a><span class="identifier">difference_type</span><span class="special">;</span>       
+  <span class="keyword">typedef</span> <span class="identifier">pointer</span>                                             <a name="boost.container.devector.iterator"></a><span class="identifier">iterator</span><span class="special">;</span>              
+  <span class="keyword">typedef</span> <span class="identifier">const_pointer</span>                                       <a name="boost.container.devector.const_iterator"></a><span class="identifier">const_iterator</span><span class="special">;</span>        
+  <span class="keyword">typedef</span> <span class="identifier">implementation_defined</span>                              <a name="boost.container.devector.reverse_iterator"></a><span class="identifier">reverse_iterator</span><span class="special">;</span>      
+  <span class="keyword">typedef</span> <span class="identifier">implementation_defined</span>                              <a name="boost.container.devector.const_reverse_iterator"></a><span class="identifier">const_reverse_iterator</span><span class="special">;</span>
+
+  <span class="comment">// <a class="link" href="devector.html#boost.container.devectorconstruct-copy-destruct">construct/copy/destruct</a></span>
+  <a class="link" href="devector.html#idm46469469292656-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="keyword">explicit</span> <a class="link" href="devector.html#idm46469469288912-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469284176-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">,</span> <a class="link" href="reserve_only_tag_t.html" title="Struct reserve_only_tag_t">reserve_only_tag_t</a><span class="special">,</span> 
+           <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469276416-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">,</span> <span class="identifier">size_type</span><span class="special">,</span> <a class="link" href="reserve_only_tag_t.html" title="Struct reserve_only_tag_t">reserve_only_tag_t</a><span class="special">,</span> 
+           <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">explicit</span> <a class="link" href="devector.html#idm46469469267488-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469257776-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> InputIterator<span class="special">&gt;</span> 
+    <a class="link" href="devector.html#idm46469469247248-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="identifier">InputIterator</span><span class="special">,</span> <span class="identifier">InputIterator</span><span class="special">,</span> 
+             <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span> <span class="identifier">BOOST_CONTAINER_DOCIGN</span><span class="special">(</span><span class="identifier">BOOST_MOVE_I</span> <span class="keyword">typename</span> <span class="identifier">dtl</span><span class="special">::</span><span class="identifier">disable_if_or</span><span class="special">&lt;</span> <span class="keyword">void</span> <span class="identifier">BOOST_MOVE_I</span> <span class="identifier">dtl</span><span class="special">::</span><span class="identifier">is_convertible</span><span class="special">&lt;</span> <span class="identifier">InputIterator</span> <span class="identifier">BOOST_MOVE_I</span> <span class="identifier">size_type</span> <span class="special">&gt;</span> <span class="identifier">BOOST_MOVE_I</span> <span class="identifier">dtl</span><span class="special">::</span><span class="identifier">is_not_input_iterator</span><span class="special">&lt;</span> <span class="identifier">InputIterator</span> <span class="special">&gt;</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">type</span> <span class="special">*=</span><span class="number">0</span><span class="special">)</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469230080-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="keyword">const</span> <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469221664-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="keyword">const</span> <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469212528-bb"><span class="identifier">devector</span></a><span class="special">(</span><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;&amp;</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469204784-bb"><span class="identifier">devector</span></a><span class="special">(</span><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;&amp;</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469196528-bb"><span class="identifier">devector</span></a><span class="special">(</span><span class="keyword">const</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span> <span class="special">&amp;</span><span class="special">,</span> 
+           <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> <a class="link" href="devector.html#idm46469469189984-bb"><span class="keyword">operator</span><span class="special">=</span></a><span class="special">(</span><span class="keyword">const</span> <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> <a class="link" href="devector.html#idm46469469175680-bb"><span class="keyword">operator</span><span class="special">=</span></a><span class="special">(</span><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;&amp;</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">(</span><span class="identifier">allocator_traits_type</span><span class="special">::</span><span class="identifier">propagate_on_container_move_assignment</span><span class="special">::</span><span class="identifier">value</span><span class="special">||</span><span class="identifier">allocator_traits_type</span><span class="special">::</span><span class="identifier">is_always_equal</span><span class="special">::</span><span class="identifier">value</span><span class="special">)</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> <a class="link" href="devector.html#idm46469469164128-bb"><span class="keyword">operator</span><span class="special">=</span></a><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="devector.html#idm46469469192640-bb"><span class="special">~</span><span class="identifier">devector</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+
+  <span class="comment">// <a class="link" href="devector.html#idm46469469745024-bb">public member functions</a></span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> InputIterator<span class="special">&gt;</span> 
+    <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469744464-bb"><span class="identifier">assign</span></a><span class="special">(</span><span class="identifier">InputIterator</span><span class="special">,</span> <span class="identifier">InputIterator</span> <span class="identifier">last</span> <span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469723568-bb"><span class="identifier">assign</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469707792-bb"><span class="identifier">assign</span></a><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">allocator_type</span> <a class="link" href="devector.html#idm46469469704800-bb"><span class="identifier">get_allocator</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <a class="link" href="devector.html#idm46469469701808-bb"><span class="identifier">get_stored_allocator</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <a class="link" href="devector.html#idm46469469700688-bb"><span class="identifier">get_stored_allocator</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469699568-bb"><span class="identifier">begin</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_iterator</span> <a class="link" href="devector.html#idm46469469696528-bb"><span class="identifier">begin</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469693472-bb"><span class="identifier">end</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_iterator</span> <a class="link" href="devector.html#idm46469469690480-bb"><span class="identifier">end</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">reverse_iterator</span> <a class="link" href="devector.html#idm46469469687488-bb"><span class="identifier">rbegin</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_reverse_iterator</span> <a class="link" href="devector.html#idm46469469684416-bb"><span class="identifier">rbegin</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">reverse_iterator</span> <a class="link" href="devector.html#idm46469469681344-bb"><span class="identifier">rend</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_reverse_iterator</span> <a class="link" href="devector.html#idm46469469678272-bb"><span class="identifier">rend</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_iterator</span> <a class="link" href="devector.html#idm46469469675200-bb"><span class="identifier">cbegin</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_iterator</span> <a class="link" href="devector.html#idm46469469672144-bb"><span class="identifier">cend</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_reverse_iterator</span> <a class="link" href="devector.html#idm46469469669152-bb"><span class="identifier">crbegin</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_reverse_iterator</span> <a class="link" href="devector.html#idm46469469666080-bb"><span class="identifier">crend</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="keyword">bool</span> <a class="link" href="devector.html#idm46469469663008-bb"><span class="identifier">empty</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">size_type</span> <a class="link" href="devector.html#idm46469469659616-bb"><span class="identifier">size</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">size_type</span> <a class="link" href="devector.html#idm46469469656640-bb"><span class="identifier">max_size</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">size_type</span> <a class="link" href="devector.html#idm46469469653648-bb"><span class="identifier">capacity</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">size_type</span> <a class="link" href="devector.html#idm46469469650624-bb"><span class="identifier">front_free_capacity</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">size_type</span> <a class="link" href="devector.html#idm46469469647584-bb"><span class="identifier">back_free_capacity</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469644544-bb"><span class="identifier">resize</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469641584-bb"><span class="identifier">resize</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469637936-bb"><span class="identifier">resize_front</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469627200-bb"><span class="identifier">resize_front</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469615232-bb"><span class="identifier">resize_back</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469604496-bb"><span class="identifier">resize_back</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469592576-bb"><span class="identifier">reserve</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469574256-bb"><span class="identifier">reserve_front</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469563408-bb"><span class="identifier">reserve_back</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469552688-bb"><span class="identifier">shrink_to_fit</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">reference</span> <a class="link" href="devector.html#idm46469469545728-bb"><span class="keyword">operator</span><span class="special">[</span><span class="special">]</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_reference</span> <a class="link" href="devector.html#idm46469469540336-bb"><span class="keyword">operator</span><span class="special">[</span><span class="special">]</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">reference</span> <a class="link" href="devector.html#idm46469469534928-bb"><span class="identifier">at</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">const_reference</span> <a class="link" href="devector.html#idm46469469528944-bb"><span class="identifier">at</span></a><span class="special">(</span><span class="identifier">size_type</span><span class="special">)</span> <span class="keyword">const</span><span class="special">;</span>
+  <span class="identifier">reference</span> <a class="link" href="devector.html#idm46469469522672-bb"><span class="identifier">front</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_reference</span> <a class="link" href="devector.html#idm46469469518400-bb"><span class="identifier">front</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">reference</span> <a class="link" href="devector.html#idm46469469514112-bb"><span class="identifier">back</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">const_reference</span> <a class="link" href="devector.html#idm46469469509840-bb"><span class="identifier">back</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="identifier">T</span> <span class="special">*</span> <a class="link" href="devector.html#idm46469469505552-bb"><span class="identifier">data</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">*</span> <a class="link" href="devector.html#idm46469469501600-bb"><span class="identifier">data</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">class</span><span class="special">...</span> Args<span class="special">&gt;</span> <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469497648-bb"><span class="identifier">emplace_front</span></a><span class="special">(</span><span class="identifier">Args</span> <span class="special">&amp;&amp;</span><span class="special">...</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469486576-bb"><span class="identifier">push_front</span></a><span class="special">(</span><span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469477952-bb"><span class="identifier">push_front</span></a><span class="special">(</span><span class="identifier">T</span> <span class="special">&amp;&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469468832-bb"><span class="identifier">pop_front</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">class</span><span class="special">...</span> Args<span class="special">&gt;</span> <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469462832-bb"><span class="identifier">emplace_back</span></a><span class="special">(</span><span class="identifier">Args</span> <span class="special">&amp;&amp;</span><span class="special">...</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469451008-bb"><span class="identifier">push_back</span></a><span class="special">(</span><span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469442032-bb"><span class="identifier">push_back</span></a><span class="special">(</span><span class="identifier">T</span> <span class="special">&amp;&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469432912-bb"><span class="identifier">pop_back</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">class</span><span class="special">...</span> Args<span class="special">&gt;</span> <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469426912-bb"><span class="identifier">emplace</span></a><span class="special">(</span><span class="identifier">const_iterator</span><span class="special">,</span> <span class="identifier">Args</span> <span class="special">&amp;&amp;</span><span class="special">...</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469413088-bb"><span class="identifier">insert</span></a><span class="special">(</span><span class="identifier">const_iterator</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469400864-bb"><span class="identifier">insert</span></a><span class="special">(</span><span class="identifier">const_iterator</span><span class="special">,</span> <span class="identifier">T</span> <span class="special">&amp;&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469388528-bb"><span class="identifier">insert</span></a><span class="special">(</span><span class="identifier">const_iterator</span><span class="special">,</span> <span class="identifier">size_type</span><span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> InputIterator<span class="special">&gt;</span> 
+    <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469374192-bb"><span class="identifier">insert</span></a><span class="special">(</span><span class="identifier">const_iterator</span><span class="special">,</span> <span class="identifier">InputIterator</span><span class="special">,</span> <span class="identifier">InputIterator</span> <span class="identifier">last</span> <span class="special">)</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469349872-bb"><span class="identifier">insert</span></a><span class="special">(</span><span class="identifier">const_iterator</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469346192-bb"><span class="identifier">erase</span></a><span class="special">(</span><span class="identifier">const_iterator</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469334864-bb"><span class="identifier">erase</span></a><span class="special">(</span><span class="identifier">const_iterator</span><span class="special">,</span> <span class="identifier">const_iterator</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">iterator</span> <a class="link" href="devector.html#idm46469469321536-bb"><span class="identifier">erase</span></a><span class="special">(</span><span class="identifier">iterator</span><span class="special">,</span> <span class="identifier">iterator</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469309120-bb"><span class="identifier">swap</span></a><span class="special">(</span><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">(</span><span class="identifier">allocator_traits_type</span><span class="special">::</span><span class="identifier">propagate_on_container_swap</span><span class="special">::</span><span class="identifier">value</span><span class="special">||</span><span class="identifier">allocator_traits_type</span><span class="special">::</span><span class="identifier">is_always_equal</span><span class="special">::</span><span class="identifier">value</span><span class="special">)</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="devector.html#idm46469469298560-bb"><span class="identifier">clear</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span>
+<span class="special">}</span><span class="special">;</span></pre></div>
+<div class="refsect1">
+<a name="id-1.3.10.14.8.3.4"></a><h2>Description</h2>
+<p>A vector-like sequence container providing front and back operations (e.g: <code class="computeroutput">push_front</code>/<code class="computeroutput">pop_front</code>/<code class="computeroutput">push_back</code>/<code class="computeroutput">pop_back</code>) with amortized constant complexity and unsafe methods geared towards additional performance.</p>
+<p>Models the <a href="http://en.cppreference.com/w/cpp/concept/SequenceContainer" target="_top">SequenceContainer</a>, <a href="http://en.cppreference.com/w/cpp/concept/ReversibleContainer" target="_top">ReversibleContainer</a>, and <a href="http://en.cppreference.com/w/cpp/concept/AllocatorAwareContainer" target="_top">AllocatorAwareContainer</a> concepts.</p>
+<p><span class="bold"><strong>Requires</strong></span>:</p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem"><p><code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into the devector.</p></li>
+<li class="listitem"><p><code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/Erasable" target="_top">Erasable</a> from any <code class="computeroutput">devector&lt;T, allocator_type, GP&gt;</code>.</p></li>
+<li class="listitem"><p><code class="computeroutput">GrowthFactor</code>, and <code class="computeroutput">Allocator</code> must model the concepts with the same names or be void.</p></li>
+</ul></div>
+<p>
+</p>
+<p><span class="bold"><strong>Definition</strong></span>: <code class="computeroutput">T</code> is <code class="computeroutput">NothrowConstructible</code> if it's either nothrow move constructible or nothrow copy constructible.</p>
+<p><span class="bold"><strong>Definition</strong></span>: <code class="computeroutput">T</code> is <code class="computeroutput">NothrowAssignable</code> if it's either nothrow move assignable or nothrow copy assignable.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: The exception specifications assume <code class="computeroutput">T</code> is nothrow <a href="http://en.cppreference.com/w/cpp/concept/Destructible" target="_top">Destructible</a>.</p>
+<p>Most methods providing the strong exception guarantee assume <code class="computeroutput">T</code> either has a move constructor marked noexcept or is <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into the devector. If it isn't true, and the move constructor throws, the guarantee is waived and the effects are unspecified.</p>
+<p>In addition to the exceptions specified in the <span class="bold"><strong>Throws</strong></span> clause, the following operations of <code class="computeroutput">T</code> can throw when any of the specified concept is required:</p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem"><p><a href="http://en.cppreference.com/w/cpp/concept/DefaultInsertable" target="_top">DefaultInsertable</a>: Default constructor</p></li>
+<li class="listitem"><p><a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a>: Move constructor</p></li>
+<li class="listitem"><p><a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a>: Copy constructor</p></li>
+<li class="listitem"><p><a href="http://en.cppreference.com/w/cpp/concept/DefaultConstructible" target="_top">DefaultConstructible</a>: Default constructor</p></li>
+<li class="listitem"><p><a href="http://en.cppreference.com/w/cpp/concept/EmplaceConstructible" target="_top">EmplaceConstructible</a>: Constructor selected by the given arguments</p></li>
+<li class="listitem"><p><a href="http://en.cppreference.com/w/cpp/concept/MoveAssignable" target="_top">MoveAssignable</a>: Move assignment operator</p></li>
+<li class="listitem"><p><a href="http://en.cppreference.com/w/cpp/concept/CopyAssignable" target="_top">CopyAssignable</a>: Copy assignment operator</p></li>
+</ul></div>
+<p>
+</p>
+<p>Furthermore, not <code class="computeroutput">noexcept</code> methods throws whatever the allocator throws if memory allocation fails. Such methods also throw <code class="computeroutput"><a class="link" href="length_error.html" title="Class length_error">length_error</a></code> if the capacity exceeds <code class="computeroutput">max_size()</code>.</p>
+<p><span class="bold"><strong>Remark</strong></span>: If a method invalidates some iterators, it also invalidates references and pointers to the elements pointed by the invalidated iterators.</p>
+<p><span class="bold"><strong>Policies</strong></span>:</p>
+<p>devector_growth_policy models the <code class="computeroutput">GrowthFactor</code> concept. </p>
+<div class="refsect2">
+<a name="id-1.3.10.14.8.3.4.14"></a><h3>
+<a name="boost.container.devectorconstruct-copy-destruct"></a><code class="computeroutput">devector</code> 
+        public
+       construct/copy/destruct</h3>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469292656-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Constructs an empty devector.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">empty() &amp;&amp; front_free_capacity() == 0 &amp;&amp; back_free_capacity() == 0</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">explicit</span> <a name="idm46469469288912-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator<span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Constructs an empty devector, using the specified allocator.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">empty() &amp;&amp; front_free_capacity() == 0 &amp;&amp; back_free_capacity() == 0</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469284176-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="identifier">size_type</span> n<span class="special">,</span> <a class="link" href="reserve_only_tag_t.html" title="Struct reserve_only_tag_t">reserve_only_tag_t</a><span class="special">,</span> 
+         <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Constructs an empty devector, using the specified allocator and reserves <code class="computeroutput">n</code> slots as if <code class="computeroutput">reserve(n)</code> was called.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">empty() &amp;&amp; front_free_capacity() == 0 &amp;&amp; back_free_capacity() &gt;= n</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469276416-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="identifier">size_type</span> front_cap<span class="special">,</span> <span class="identifier">size_type</span> back_cap<span class="special">,</span> <a class="link" href="reserve_only_tag_t.html" title="Struct reserve_only_tag_t">reserve_only_tag_t</a><span class="special">,</span> 
+         <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Constructs an empty devector, using the specified allocator and reserves <code class="computeroutput">front_cap + back_cap</code> slots as if <code class="computeroutput">reserve_front(front_cap)</code> and <code class="computeroutput">reserve_back(back_cap)</code> was called.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">empty() &amp;&amp; front_free_capacity() == front_cap &amp;&amp; back_free_capacity() &gt;= back_cap</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">explicit</span> <a name="idm46469469267488-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="identifier">size_type</span> n<span class="special">,</span> 
+                  <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Constructs a devector with <code class="computeroutput">n</code> default-inserted elements using the specified allocator.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/DefaultInsertable" target="_top">DefaultInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">size() == n &amp;&amp; front_free_capacity() == 0</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in <code class="computeroutput">n</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469257776-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="identifier">size_type</span> n<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> value<span class="special">,</span> 
+         <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Constructs a devector with <code class="computeroutput">n</code> copies of <code class="computeroutput">value</code>, using the specified allocator.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">size() == n &amp;&amp; front_free_capacity() == 0</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in <code class="computeroutput">n</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> InputIterator<span class="special">&gt;</span> 
+  <a name="idm46469469247248-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="identifier">InputIterator</span> first<span class="special">,</span> <span class="identifier">InputIterator</span> last<span class="special">,</span> 
+           <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span> <span class="identifier">BOOST_CONTAINER_DOCIGN</span><span class="special">(</span><span class="identifier">BOOST_MOVE_I</span> <span class="keyword">typename</span> <span class="identifier">dtl</span><span class="special">::</span><span class="identifier">disable_if_or</span><span class="special">&lt;</span> <span class="keyword">void</span> <span class="identifier">BOOST_MOVE_I</span> <span class="identifier">dtl</span><span class="special">::</span><span class="identifier">is_convertible</span><span class="special">&lt;</span> <span class="identifier">InputIterator</span> <span class="identifier">BOOST_MOVE_I</span> <span class="identifier">size_type</span> <span class="special">&gt;</span> <span class="identifier">BOOST_MOVE_I</span> <span class="identifier">dtl</span><span class="special">::</span><span class="identifier">is_not_input_iterator</span><span class="special">&lt;</span> <span class="identifier">InputIterator</span> <span class="special">&gt;</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">type</span> <span class="special">*=</span><span class="number">0</span><span class="special">)</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Constructs a devector equal to the range <code class="computeroutput">[first,last)</code>, using the specified allocator.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/EmplaceConstructible" target="_top">EmplaceConstructible</a> into <code class="computeroutput">*this</code> from <code class="computeroutput">*first</code>. If the specified iterator does not meet the forward iterator requirements, <code class="computeroutput">T</code> shall also be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: `size() == boost::container::iterator_distance(first, last)</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Makes only <code class="computeroutput">N</code> calls to the copy constructor of <code class="computeroutput">T</code> (where <code class="computeroutput">N</code> is the distance between <code class="computeroutput">first</code> and <code class="computeroutput">last</code>), at most one allocation and no reallocations if iterators first and last are of forward, bidirectional, or random access categories. It makes <code class="computeroutput">O(N)</code> calls to the copy constructor of <code class="computeroutput">T</code> and `O(log(N)) reallocations if they are just input iterators.</p>
+<p><span class="bold"><strong>Remarks</strong></span>: Each iterator in the range <code class="computeroutput">[first,last)</code> shall be dereferenced exactly once, unless an exception is thrown. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469230080-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="keyword">const</span> <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> x<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Copy constructs a devector.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">this-&gt;size() == x.size() &amp;&amp; front_free_capacity() == 0</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">x</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469221664-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="keyword">const</span> <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> x<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Copy constructs a devector, using the specified allocator.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">this-&gt;size() == x.size() &amp;&amp; front_free_capacity() == 0</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">x</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469212528-bb"></a><span class="identifier">devector</span><span class="special">(</span><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;&amp;</span> rhs<span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Moves <code class="computeroutput">rhs</code>'s resources to <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Throws</strong></span>: Nothing.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">rhs</code> is left in an unspecified but valid state.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if not <code class="computeroutput">noexcept</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469204784-bb"></a><span class="identifier">devector</span><span class="special">(</span><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;&amp;</span> rhs<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Moves <code class="computeroutput">rhs</code>'s resources to <code class="computeroutput">*this</code>, using the specified allocator.</p>
+<p><span class="bold"><strong>Throws</strong></span>: If allocation or T's move constructor throws.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">rhs</code> is left in an unspecified but valid state.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if not <code class="computeroutput">noexcept</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear if allocator != rhs.get_allocator(), otherwise constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469196528-bb"></a><span class="identifier">devector</span><span class="special">(</span><span class="keyword">const</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span> <span class="special">&amp;</span> il<span class="special">,</span> 
+         <span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> allocator <span class="special">=</span> <span class="identifier">allocator_type</span><span class="special">(</span><span class="special">)</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Equivalent to</strong></span>: <code class="computeroutput">devector(il.begin(), il.end())</code> or <code class="computeroutput">devector(il.begin(), il.end(), allocator)</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> <a name="idm46469469189984-bb"></a><span class="keyword">operator</span><span class="special">=</span><span class="special">(</span><span class="keyword">const</span> <a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> rhs<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Copies elements of <code class="computeroutput">x</code> to <code class="computeroutput">*this</code>. Previously held elements get copy assigned to or destroyed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">this-&gt;size() == x.size()</code>, the elements of <code class="computeroutput">*this</code> are copies of elements in <code class="computeroutput">x</code> in the same order.</p>
+<p><span class="bold"><strong>Returns</strong></span>: <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowConstructible</code> and the allocator is allowed to be propagated (<a href="http://en.cppreference.com/w/cpp/memory/allocator_traits" target="_top">propagate_on_container_copy_assignment</a> is true), Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">x</code> and <code class="computeroutput">*this</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> <a name="idm46469469175680-bb"></a><span class="keyword">operator</span><span class="special">=</span><span class="special">(</span><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;&amp;</span> x<span class="special">)</span> <span class="keyword">noexcept</span><span class="special">(</span><span class="identifier">allocator_traits_type</span><span class="special">::</span><span class="identifier">propagate_on_container_move_assignment</span><span class="special">::</span><span class="identifier">value</span><span class="special">||</span><span class="identifier">allocator_traits_type</span><span class="special">::</span><span class="identifier">is_always_equal</span><span class="special">::</span><span class="identifier">value</span><span class="special">)</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Moves elements of <code class="computeroutput">x</code> to <code class="computeroutput">*this</code>. Previously held elements get move/copy assigned to or destroyed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">x</code> is left in an unspecified but valid state.</p>
+<p><span class="bold"><strong>Returns</strong></span>: <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Basic exception guarantee if not <code class="computeroutput">noexcept</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant if allocator_traits_type:: propagate_on_container_move_assignment is true or this-&gt;get&gt;allocator() == x.get_allocator(). Linear otherwise. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> <a name="idm46469469164128-bb"></a><span class="keyword">operator</span><span class="special">=</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span> il<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Copies elements of <code class="computeroutput">il</code> to <code class="computeroutput">*this</code>. Previously held elements get copy assigned to or destroyed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code> and <a href="http://en.cppreference.com/w/cpp/concept/CopyAssignable" target="_top">CopyAssignable</a>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">this-&gt;size() == il.size()</code>, the elements of <code class="computeroutput">*this</code> are copies of elements in <code class="computeroutput">il</code> in the same order.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is nothrow copy assignable from <code class="computeroutput">T</code> and <code class="computeroutput">NothrowConstructible</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Returns</strong></span>: <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">il</code> and <code class="computeroutput">*this</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><a name="idm46469469192640-bb"></a><span class="special">~</span><span class="identifier">devector</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Destroys the devector. All stored values are destroyed and used memory, if any, deallocated.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code>. </p>
+</li>
+</ol></div>
+</div>
+<div class="refsect2">
+<a name="id-1.3.10.14.8.3.4.15"></a><h3>
+<a name="idm46469469745024-bb"></a><code class="computeroutput">devector</code> public member functions</h3>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> InputIterator<span class="special">&gt;</span> 
+  <span class="keyword">void</span> <a name="idm46469469744464-bb"></a><span class="identifier">assign</span><span class="special">(</span><span class="identifier">InputIterator</span> first<span class="special">,</span> <span class="identifier">InputIterator</span> <span class="identifier">last</span>  BOOST_CONTAINER_DOCIGN<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Replaces elements of <code class="computeroutput">*this</code> with a copy of <code class="computeroutput">[first,last)</code>. Previously held elements get copy assigned to or destroyed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/EmplaceConstructible" target="_top">EmplaceConstructible</a> from <code class="computeroutput">*first</code>. If the specified iterator does not meet the forward iterator requirements, <code class="computeroutput">T</code> shall be also <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">first</code> and <code class="computeroutput">last</code> are not iterators into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">size() == N</code>, where <code class="computeroutput">N</code> is the distance between <code class="computeroutput">first</code> and <code class="computeroutput">last</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is nothrow copy assignable from <code class="computeroutput">*first</code> and <code class="computeroutput">NothrowConstructible</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the distance between <code class="computeroutput">first</code> and <code class="computeroutput">last</code>. Makes a single reallocation at most if the iterators <code class="computeroutput">first</code> and <code class="computeroutput">last</code> are of forward, bidirectional, or random access categories. It makes <code class="computeroutput">O(log(N))</code> reallocations if they are just input iterators.</p>
+<p><span class="bold"><strong>Remarks</strong></span>: Each iterator in the range <code class="computeroutput">[first,last)</code> shall be dereferenced exactly once, unless an exception is thrown. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469723568-bb"></a><span class="identifier">assign</span><span class="special">(</span><span class="identifier">size_type</span> n<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> u<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Replaces elements of <code class="computeroutput">*this</code> with <code class="computeroutput">n</code> copies of <code class="computeroutput">u</code>. Previously held elements get copy assigned to or destroyed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code> and <a href="http://en.cppreference.com/w/cpp/concept/CopyAssignable" target="_top">CopyAssignable</a>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">u</code> is not a reference into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">size() == n</code> and the elements of <code class="computeroutput">*this</code> are copies of <code class="computeroutput">u</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is nothrow copy assignable from <code class="computeroutput">u</code> and <code class="computeroutput">NothrowConstructible</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in <code class="computeroutput">n</code> and the size of <code class="computeroutput">*this</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469707792-bb"></a><span class="identifier">assign</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span> il<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Equivalent to</strong></span>: <code class="computeroutput">assign(il.begin(), il.end())</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">allocator_type</span> <a name="idm46469469704800-bb"></a><span class="identifier">get_allocator</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A copy of the allocator associated with the container.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">const</span> <span class="identifier">allocator_type</span> <span class="special">&amp;</span> <a name="idm46469469701808-bb"></a><span class="identifier">get_stored_allocator</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre></li>
+<li class="listitem"><pre class="literallayout"><span class="identifier">allocator_type</span> <span class="special">&amp;</span> <a name="idm46469469700688-bb"></a><span class="identifier">get_stored_allocator</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre></li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469699568-bb"></a><span class="identifier">begin</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A iterator pointing to the first element in the devector, or the past the end iterator if the devector is empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_iterator</span> <a name="idm46469469696528-bb"></a><span class="identifier">begin</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant iterator pointing to the first element in the devector, or the past the end iterator if the devector is empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469693472-bb"></a><span class="identifier">end</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: An iterator pointing past the last element of the container.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_iterator</span> <a name="idm46469469690480-bb"></a><span class="identifier">end</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant iterator pointing past the last element of the container.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">reverse_iterator</span> <a name="idm46469469687488-bb"></a><span class="identifier">rbegin</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A reverse iterator pointing to the first element in the reversed devector, or the reverse past the end iterator if the devector is empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_reverse_iterator</span> <a name="idm46469469684416-bb"></a><span class="identifier">rbegin</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant reverse iterator pointing to the first element in the reversed devector, or the reverse past the end iterator if the devector is empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">reverse_iterator</span> <a name="idm46469469681344-bb"></a><span class="identifier">rend</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A reverse iterator pointing past the last element in the reversed container, or to the beginning of the reversed container if it's empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_reverse_iterator</span> <a name="idm46469469678272-bb"></a><span class="identifier">rend</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant reverse iterator pointing past the last element in the reversed container, or to the beginning of the reversed container if it's empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_iterator</span> <a name="idm46469469675200-bb"></a><span class="identifier">cbegin</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant iterator pointing to the first element in the devector, or the past the end iterator if the devector is empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_iterator</span> <a name="idm46469469672144-bb"></a><span class="identifier">cend</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant iterator pointing past the last element of the container.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_reverse_iterator</span> <a name="idm46469469669152-bb"></a><span class="identifier">crbegin</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant reverse iterator pointing to the first element in the reversed devector, or the reverse past the end iterator if the devector is empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_reverse_iterator</span> <a name="idm46469469666080-bb"></a><span class="identifier">crend</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant reverse iterator pointing past the last element in the reversed container, or to the beginning of the reversed container if it's empty.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">bool</span> <a name="idm46469469663008-bb"></a><span class="identifier">empty</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: True, if <code class="computeroutput">size() == 0</code>, false otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">size_type</span> <a name="idm46469469659616-bb"></a><span class="identifier">size</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: The number of elements the devector contains.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">size_type</span> <a name="idm46469469656640-bb"></a><span class="identifier">max_size</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: The maximum number of elements the devector could possibly hold.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">size_type</span> <a name="idm46469469653648-bb"></a><span class="identifier">capacity</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: The total number of elements that the devector can hold without requiring reallocation.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">size_type</span> <a name="idm46469469650624-bb"></a><span class="identifier">front_free_capacity</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: The total number of elements that can be pushed to the front of the devector without requiring reallocation.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">size_type</span> <a name="idm46469469647584-bb"></a><span class="identifier">back_free_capacity</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: The total number of elements that can be pushed to the back of the devector without requiring reallocation.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469644544-bb"></a><span class="identifier">resize</span><span class="special">(</span><span class="identifier">size_type</span> sz<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Equivalent to</strong></span>: <code class="computeroutput">resize_back(sz)</code> </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469641584-bb"></a><span class="identifier">resize</span><span class="special">(</span><span class="identifier">size_type</span> sz<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> c<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Equivalent to</strong></span>: <code class="computeroutput">resize_back(sz, c)</code> </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469637936-bb"></a><span class="identifier">resize_front</span><span class="special">(</span><span class="identifier">size_type</span> sz<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: If <code class="computeroutput">sz</code> is greater than the size of <code class="computeroutput">*this</code>, additional value-initialized elements are inserted to the front. Invalidates iterators if reallocation is needed. If <code class="computeroutput">sz</code> is smaller than than the size of <code class="computeroutput">*this</code>, elements are popped from the front.</p>
+<p><span class="bold"><strong>Requires</strong></span>: T shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into *this and <a href="http://en.cppreference.com/w/cpp/concept/DefaultConstructible" target="_top">DefaultConstructible</a>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">sz == size()</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code> and <code class="computeroutput">sz</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469627200-bb"></a><span class="identifier">resize_front</span><span class="special">(</span><span class="identifier">size_type</span> sz<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> c<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: If <code class="computeroutput">sz</code> is greater than the size of <code class="computeroutput">*this</code>, copies of <code class="computeroutput">c</code> are inserted to the front. Invalidates iterators if reallocation is needed. If <code class="computeroutput">sz</code> is smaller than than the size of <code class="computeroutput">*this</code>, elements are popped from the front.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">sz == size()</code>.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code> and <code class="computeroutput">sz</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469615232-bb"></a><span class="identifier">resize_back</span><span class="special">(</span><span class="identifier">size_type</span> sz<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: If <code class="computeroutput">sz</code> is greater than the size of <code class="computeroutput">*this</code>, additional value-initialized elements are inserted to the back. Invalidates iterators if reallocation is needed. If <code class="computeroutput">sz</code> is smaller than than the size of <code class="computeroutput">*this</code>, elements are popped from the back.</p>
+<p><span class="bold"><strong>Requires</strong></span>: T shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into *this and <a href="http://en.cppreference.com/w/cpp/concept/DefaultConstructible" target="_top">DefaultConstructible</a>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">sz == size()</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code> and <code class="computeroutput">sz</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469604496-bb"></a><span class="identifier">resize_back</span><span class="special">(</span><span class="identifier">size_type</span> sz<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> c<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: If <code class="computeroutput">sz</code> is greater than the size of <code class="computeroutput">*this</code>, copies of <code class="computeroutput">c</code> are inserted to the back. If <code class="computeroutput">sz</code> is smaller than than the size of <code class="computeroutput">*this</code>, elements are popped from the back.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">sz == size()</code>.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code> and <code class="computeroutput">sz</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469592576-bb"></a><span class="identifier">reserve</span><span class="special">(</span><span class="identifier">size_type</span> new_capacity<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Unsafe method</strong></span>, use with care.</p>
+<p><span class="bold"><strong>Effects</strong></span>: Changes the size of the devector without properly initializing the extra or destroying the superfluous elements. If <code class="computeroutput">n &lt; size()</code>, elements are removed from the front without getting destroyed; if <code class="computeroutput">n &gt; size()</code>, uninitialized elements are added before the first element at the front. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">size() == n</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in <code class="computeroutput">size()</code> if <code class="computeroutput">capacity() &lt; n</code>, constant otherwise.</p>
+<p><span class="bold"><strong>Remarks</strong></span>: The devector does not keep track of initialization of the elements: Elements without a trivial destructor must be manually destroyed before shrinking, elements without a trivial constructor must be initialized after growing.<span class="bold"><strong>Unsafe method</strong></span>, use with care.</p>
+<p><span class="bold"><strong>Effects</strong></span>: Changes the size of the devector without properly initializing the extra or destroying the superfluous elements. If <code class="computeroutput">n &lt; size()</code>, elements are removed from the back without getting destroyed; if <code class="computeroutput">n &gt; size()</code>, uninitialized elements are added after the last element at the back. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">size() == n</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in <code class="computeroutput">size()</code> if <code class="computeroutput">capacity() &lt; n</code>, constant otherwise.</p>
+<p><span class="bold"><strong>Remarks</strong></span>: The devector does not keep track of initialization of the elements: Elements without a trivial destructor must be manually destroyed before shrinking, elements without a trivial constructor must be initialized after growing.<span class="bold"><strong>Equivalent to</strong></span>: <code class="computeroutput">reserve_back(new_capacity)</code> </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469574256-bb"></a><span class="identifier">reserve_front</span><span class="special">(</span><span class="identifier">size_type</span> new_capacity<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Ensures that <code class="computeroutput">n</code> elements can be pushed to the front without requiring reallocation, where <code class="computeroutput">n</code> is <code class="computeroutput">new_capacity - size()</code>, if <code class="computeroutput">n</code> is positive. Otherwise, there are no effects. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of *this.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Throws</strong></span>: <code class="computeroutput"><code class="computeroutput"><a class="link" href="length_error.html" title="Class length_error">length_error</a></code></code> if <code class="computeroutput">new_capacity &gt; max_size()</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469563408-bb"></a><span class="identifier">reserve_back</span><span class="special">(</span><span class="identifier">size_type</span> new_capacity<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Ensures that <code class="computeroutput">n</code> elements can be pushed to the back without requiring reallocation, where <code class="computeroutput">n</code> is <code class="computeroutput">new_capacity - size()</code>, if <code class="computeroutput">n</code> is positive. Otherwise, there are no effects. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of *this.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Throws</strong></span>: <code class="computeroutput"><a class="link" href="length_error.html" title="Class length_error">length_error</a></code> if <code class="computeroutput">new_capacity &gt; max_size()</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469552688-bb"></a><span class="identifier">shrink_to_fit</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Reduces <code class="computeroutput">capacity()</code> to <code class="computeroutput">size()</code>. Invalidates iterators.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of *this. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">reference</span> <a name="idm46469469545728-bb"></a><span class="keyword">operator</span><span class="special">[</span><span class="special">]</span><span class="special">(</span><span class="identifier">size_type</span> n<span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A reference to the <code class="computeroutput">n</code>th element in the devector.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">n &lt; size()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_reference</span> <a name="idm46469469540336-bb"></a><span class="keyword">operator</span><span class="special">[</span><span class="special">]</span><span class="special">(</span><span class="identifier">size_type</span> n<span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant reference to the <code class="computeroutput">n</code>th element in the devector.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">n &lt; size()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">reference</span> <a name="idm46469469534928-bb"></a><span class="identifier">at</span><span class="special">(</span><span class="identifier">size_type</span> n<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A reference to the <code class="computeroutput">n</code>th element in the devector.</p>
+<p><span class="bold"><strong>Throws</strong></span>: <code class="computeroutput"><code class="computeroutput"><a class="link" href="out_of_range.html" title="Class out_of_range">out_of_range</a></code></code>, if <code class="computeroutput">n &gt;= size()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_reference</span> <a name="idm46469469528944-bb"></a><span class="identifier">at</span><span class="special">(</span><span class="identifier">size_type</span> n<span class="special">)</span> <span class="keyword">const</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant reference to the <code class="computeroutput">n</code>th element in the devector.</p>
+<p><span class="bold"><strong>Throws</strong></span>: <code class="computeroutput"><code class="computeroutput"><a class="link" href="out_of_range.html" title="Class out_of_range">out_of_range</a></code></code>, if <code class="computeroutput">n &gt;= size()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">reference</span> <a name="idm46469469522672-bb"></a><span class="identifier">front</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A reference to the first element in the devector.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">!empty()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_reference</span> <a name="idm46469469518400-bb"></a><span class="identifier">front</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant reference to the first element in the devector.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">!empty()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">reference</span> <a name="idm46469469514112-bb"></a><span class="identifier">back</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A reference to the last element in the devector.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">!empty()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">const_reference</span> <a name="idm46469469509840-bb"></a><span class="identifier">back</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant reference to the last element in the devector.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">!empty()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">T</span> <span class="special">*</span> <a name="idm46469469505552-bb"></a><span class="identifier">data</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A pointer to the underlying array serving as element storage. The range <code class="computeroutput">[data(); data() + size())</code> is always valid. For a non-empty devector, <code class="computeroutput">data() == &amp;front()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">const</span> <span class="identifier">T</span> <span class="special">*</span> <a name="idm46469469501600-bb"></a><span class="identifier">data</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Returns</strong></span>: A constant pointer to the underlying array serving as element storage. The range <code class="computeroutput">[data(); data() + size())</code> is always valid. For a non-empty devector, <code class="computeroutput">data() == &amp;front()</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">class</span><span class="special">...</span> Args<span class="special">&gt;</span> <span class="keyword">void</span> <a name="idm46469469497648-bb"></a><span class="identifier">emplace_front</span><span class="special">(</span><span class="identifier">Args</span> <span class="special">&amp;&amp;</span><span class="special">...</span> args<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Pushes a new element to the front of the devector. The element is constructed in-place, using the perfect forwarded <code class="computeroutput">args</code> as constructor arguments. Invalidates iterators if reallocation is needed. (<code class="computeroutput">front_free_capacity() == 0</code>)</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/EmplaceConstructible" target="_top">EmplaceConstructible</a> from <code class="computeroutput">args</code> and <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Amortized constant in the size of <code class="computeroutput">*this</code>. (Constant, if <code class="computeroutput">front_free_capacity() &gt; 0</code>) </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469486576-bb"></a><span class="identifier">push_front</span><span class="special">(</span><span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> x<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Pushes the copy of <code class="computeroutput">x</code> to the front of the devector. Invalidates iterators if reallocation is needed. (<code class="computeroutput">front_free_capacity() == 0</code>)</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Amortized constant in the size of <code class="computeroutput">*this</code>. (Constant, if <code class="computeroutput">front_free_capacity() &gt; 0</code>) </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469477952-bb"></a><span class="identifier">push_front</span><span class="special">(</span><span class="identifier">T</span> <span class="special">&amp;&amp;</span> x<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Move constructs a new element at the front of the devector using <code class="computeroutput">x</code>. Invalidates iterators if reallocation is needed. (<code class="computeroutput">front_free_capacity() == 0</code>)</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee, not regarding the state of <code class="computeroutput">x</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Amortized constant in the size of <code class="computeroutput">*this</code>. (Constant, if <code class="computeroutput">front_free_capacity() &gt; 0</code>) </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469468832-bb"></a><span class="identifier">pop_front</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Removes the first element of <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">!empty()</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">front_free_capacity()</code> is incremented by 1.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">class</span><span class="special">...</span> Args<span class="special">&gt;</span> <span class="keyword">void</span> <a name="idm46469469462832-bb"></a><span class="identifier">emplace_back</span><span class="special">(</span><span class="identifier">Args</span> <span class="special">&amp;&amp;</span><span class="special">...</span> args<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Pushes a new element to the back of the devector. The element is constructed in-place, using the perfect forwarded <code class="computeroutput">args</code> as constructor arguments. Invalidates iterators if reallocation is needed. (<code class="computeroutput">back_free_capacity() == 0</code>)</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/EmplaceConstructible" target="_top">EmplaceConstructible</a> from <code class="computeroutput">args</code> and <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>, and <a href="http://en.cppreference.com/w/cpp/concept/MoveAssignable" target="_top">MoveAssignable</a>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Amortized constant in the size of <code class="computeroutput">*this</code>. (Constant, if <code class="computeroutput">back_free_capacity() &gt; 0</code>) </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469451008-bb"></a><span class="identifier">push_back</span><span class="special">(</span><span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> x<span class="special">)</span><span class="special">;</span></pre>defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED) <p><span class="bold"><strong>Effects</strong></span>: Pushes the copy of <code class="computeroutput">x</code> to the back of the devector. Invalidates iterators if reallocation is needed. (<code class="computeroutput">back_free_capacity() == 0</code>)</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Amortized constant in the size of <code class="computeroutput">*this</code>. (Constant, if <code class="computeroutput">back_free_capacity() &gt; 0</code>) </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469442032-bb"></a><span class="identifier">push_back</span><span class="special">(</span><span class="identifier">T</span> <span class="special">&amp;&amp;</span> x<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Move constructs a new element at the back of the devector using <code class="computeroutput">x</code>. Invalidates iterators if reallocation is needed. (<code class="computeroutput">back_free_capacity() == 0</code>)</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee, not regarding the state of <code class="computeroutput">x</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Amortized constant in the size of <code class="computeroutput">*this</code>. (Constant, if <code class="computeroutput">back_free_capacity() &gt; 0</code>) </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469432912-bb"></a><span class="identifier">pop_back</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Removes the last element of <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">!empty()</code>.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">back_free_capacity()</code> is incremented by 1.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">class</span><span class="special">...</span> Args<span class="special">&gt;</span> 
+  <span class="identifier">iterator</span> <a name="idm46469469426912-bb"></a><span class="identifier">emplace</span><span class="special">(</span><span class="identifier">const_iterator</span> position<span class="special">,</span> <span class="identifier">Args</span> <span class="special">&amp;&amp;</span><span class="special">...</span> args<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Constructs a new element before the element pointed by <code class="computeroutput">position</code>. The element is constructed in-place, using the perfect forwarded <code class="computeroutput">args</code> as constructor arguments. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/EmplaceConstructible" target="_top">EmplaceConstructible</a>, and <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>, and <a href="http://en.cppreference.com/w/cpp/concept/MoveAssignable" target="_top">MoveAssignable</a>.</p>
+<p><span class="bold"><strong>Returns</strong></span>: Iterator pointing to the newly constructed element.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowConstructible</code> and <code class="computeroutput">NothrowAssignable</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469413088-bb"></a><span class="identifier">insert</span><span class="special">(</span><span class="identifier">const_iterator</span> position<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> x<span class="special">)</span><span class="special">;</span></pre>defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED) <p><span class="bold"><strong>Effects</strong></span>: Copy constructs a new element before the element pointed by <code class="computeroutput">position</code>, using <code class="computeroutput">x</code> as constructor argument. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code> and and <a href="http://en.cppreference.com/w/cpp/concept/CopyAssignable" target="_top">CopyAssignable</a>.</p>
+<p><span class="bold"><strong>Returns</strong></span>: Iterator pointing to the newly constructed element.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowConstructible</code> and <code class="computeroutput">NothrowAssignable</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469400864-bb"></a><span class="identifier">insert</span><span class="special">(</span><span class="identifier">const_iterator</span> position<span class="special">,</span> <span class="identifier">T</span> <span class="special">&amp;&amp;</span> x<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Move constructs a new element before the element pointed by <code class="computeroutput">position</code>, using <code class="computeroutput">x</code> as constructor argument. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code> and and <a href="http://en.cppreference.com/w/cpp/concept/CopyAssignable" target="_top">CopyAssignable</a>.</p>
+<p><span class="bold"><strong>Returns</strong></span>: Iterator pointing to the newly constructed element.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowConstructible</code> and <code class="computeroutput">NothrowAssignable</code> (not regarding the state of <code class="computeroutput">x</code>), Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469388528-bb"></a><span class="identifier">insert</span><span class="special">(</span><span class="identifier">const_iterator</span> position<span class="special">,</span> <span class="identifier">size_type</span> n<span class="special">,</span> <span class="keyword">const</span> <span class="identifier">T</span> <span class="special">&amp;</span> x<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Copy constructs <code class="computeroutput">n</code> elements before the element pointed by <code class="computeroutput">position</code>, using <code class="computeroutput">x</code> as constructor argument. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/CopyInsertable" target="_top">CopyInsertable</a> into <code class="computeroutput">*this</code> and and <a href="http://en.cppreference.com/w/cpp/concept/CopyAssignable" target="_top">CopyAssignable</a>.</p>
+<p><span class="bold"><strong>Returns</strong></span>: Iterator pointing to the first inserted element, or <code class="computeroutput">position</code>, if <code class="computeroutput">n</code> is zero.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowConstructible</code> and <code class="computeroutput">NothrowAssignable</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code> and <code class="computeroutput">n</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> InputIterator<span class="special">&gt;</span> 
+  <span class="identifier">iterator</span> <a name="idm46469469374192-bb"></a><span class="identifier">insert</span><span class="special">(</span><span class="identifier">const_iterator</span> position<span class="special">,</span> <span class="identifier">InputIterator</span> first<span class="special">,</span> 
+                  <span class="identifier">InputIterator</span> <span class="identifier">last</span>  BOOST_CONTAINER_DOCIGN<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Copy constructs elements before the element pointed by position using each element in the rage pointed by <code class="computeroutput">first</code> and <code class="computeroutput">last</code> as constructor arguments. Invalidates iterators if reallocation is needed.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/EmplaceConstructible" target="_top">EmplaceConstructible</a> into <code class="computeroutput">*this</code> from <code class="computeroutput">*first</code>. If the specified iterator does not meet the forward iterator requirements, <code class="computeroutput">T</code> shall also be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code> and <a href="http://en.cppreference.com/w/cpp/concept/MoveAssignable" target="_top">MoveAssignable</a>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">first</code> and <code class="computeroutput">last</code> are not iterators into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Returns</strong></span>: Iterator pointing to the first inserted element, or <code class="computeroutput">position</code>, if <code class="computeroutput">first == last</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code> and <code class="computeroutput">N</code> (where <code class="computeroutput">N</code> is the distance between <code class="computeroutput">first</code> and <code class="computeroutput">last</code>). Makes only <code class="computeroutput">N</code> calls to the constructor of <code class="computeroutput">T</code> and no reallocations if iterators <code class="computeroutput">first</code> and <code class="computeroutput">last</code> are of forward, bidirectional, or random access categories. It makes 2N calls to the copy constructor of <code class="computeroutput">T</code> and allocates memory twice at most if they are just input iterators.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowConstructible</code> and <code class="computeroutput">NothrowAssignable</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Remarks</strong></span>: Each iterator in the range <code class="computeroutput">[first,last)</code> shall be dereferenced exactly once, unless an exception is thrown. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469349872-bb"></a><span class="identifier">insert</span><span class="special">(</span><span class="identifier">const_iterator</span> position<span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">initializer_list</span><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span> il<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Equivalent to</strong></span>: <code class="computeroutput">insert(position, il.begin(), il.end())</code> </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469346192-bb"></a><span class="identifier">erase</span><span class="special">(</span><span class="identifier">const_iterator</span> position<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Destroys the element pointed by <code class="computeroutput">position</code> and removes it from the devector. Invalidates iterators.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveAssignable" target="_top">MoveAssignable</a>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">position</code> must be in the range of <code class="computeroutput">[begin(), end())</code>.</p>
+<p><span class="bold"><strong>Returns</strong></span>: Iterator pointing to the element immediately following the erased element prior to its erasure. If no such element exists, <code class="computeroutput">end()</code> is returned.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowAssignable</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in half the size of <code class="computeroutput">*this</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469334864-bb"></a><span class="identifier">erase</span><span class="special">(</span><span class="identifier">const_iterator</span> first<span class="special">,</span> <span class="identifier">const_iterator</span> last<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Destroys the range <code class="computeroutput">[first,last)</code> and removes it from the devector. Invalidates iterators.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveAssignable" target="_top">MoveAssignable</a>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">[first,last)</code> must be in the range of <code class="computeroutput">[begin(), end())</code>.</p>
+<p><span class="bold"><strong>Returns</strong></span>: Iterator pointing to the element pointed to by <code class="computeroutput">last</code> prior to any elements being erased. If no such element exists, <code class="computeroutput">end()</code> is returned.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowAssignable</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in half the size of <code class="computeroutput">*this</code> plus the distance between <code class="computeroutput">first</code> and <code class="computeroutput">last</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">iterator</span> <a name="idm46469469321536-bb"></a><span class="identifier">erase</span><span class="special">(</span><span class="identifier">iterator</span> first<span class="special">,</span> <span class="identifier">iterator</span> last<span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Destroys the range <code class="computeroutput">[first,last)</code> and removes it from the devector. Invalidates iterators.</p>
+<p><span class="bold"><strong>Requires</strong></span>: <code class="computeroutput">T</code> shall be <a href="http://en.cppreference.com/w/cpp/concept/MoveAssignable" target="_top">MoveAssignable</a>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: <code class="computeroutput">[first,last)</code> must be in the range of <code class="computeroutput">[begin(), end())</code>.</p>
+<p><span class="bold"><strong>Returns</strong></span>: Iterator pointing to the element pointed to by <code class="computeroutput">last</code> prior to any elements being erased. If no such element exists, <code class="computeroutput">end()</code> is returned.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Strong exception guarantee if <code class="computeroutput">T</code> is <code class="computeroutput">NothrowAssignable</code>, Basic exception guarantee otherwise.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in half the size of <code class="computeroutput">*this</code>. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469309120-bb"></a><span class="identifier">swap</span><span class="special">(</span><a class="link" href="devector.html" title="Class template devector">devector</a> <span class="special">&amp;</span> b<span class="special">)</span> <span class="keyword">noexcept</span><span class="special">(</span><span class="identifier">allocator_traits_type</span><span class="special">::</span><span class="identifier">propagate_on_container_swap</span><span class="special">::</span><span class="identifier">value</span><span class="special">||</span><span class="identifier">allocator_traits_type</span><span class="special">::</span><span class="identifier">is_always_equal</span><span class="special">::</span><span class="identifier">value</span><span class="special">)</span><span class="special">)</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: exchanges the contents of <code class="computeroutput">*this</code> and <code class="computeroutput">b</code>.</p>
+<p><span class="bold"><strong>Requires</strong></span>: instances of <code class="computeroutput">T</code> must be swappable by unqualified call of <code class="computeroutput">swap</code> and <code class="computeroutput">T</code> must be <a href="http://en.cppreference.com/w/cpp/concept/MoveInsertable" target="_top">MoveInsertable</a> into <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Precondition</strong></span>: The allocators should allow propagation or should compare equal.</p>
+<p><span class="bold"><strong>Exceptions</strong></span>: Basic exceptions guarantee if not <code class="computeroutput">noexcept</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Constant. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="idm46469469298560-bb"></a><span class="identifier">clear</span><span class="special">(</span><span class="special">)</span> <span class="keyword">noexcept</span><span class="special">;</span></pre>
+<p><span class="bold"><strong>Effects</strong></span>: Destroys all elements in the devector. Invalidates all references, pointers and iterators to the elements of the devector.</p>
+<p><span class="bold"><strong>Postcondition</strong></span>: <code class="computeroutput">empty() &amp;&amp; front_free_capacity() == 0 &amp;&amp; back_free_capacity() == old capacity</code>.</p>
+<p><span class="bold"><strong>Complexity</strong></span>: Linear in the size of <code class="computeroutput">*this</code>.</p>
+<p><span class="bold"><strong>Remarks</strong></span>: Does not free memory. </p>
+</li>
+</ol></div>
+</div>
+</div>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2009-2018 Ion Gaztanaga<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="pmr/deque_of.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../../boost_container_header_reference.html#header.boost.container.devector_hpp"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="reserve_only_tag_t.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

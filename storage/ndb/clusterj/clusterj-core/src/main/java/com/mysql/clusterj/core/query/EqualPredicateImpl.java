@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -40,21 +48,44 @@ public class EqualPredicateImpl extends ComparativePredicateImpl {
     }
 
     @Override
-    public void operationSetBounds(QueryExecutionContext context, IndexScanOperation op, boolean lastColumn) {
+    public void markBoundsForCandidateIndices(CandidateIndexImpl[] candidateIndices) {
+        property.markEqualBound(candidateIndices, this);
+    }
+
+    @Override
+    public int operationSetBounds(QueryExecutionContext context, IndexScanOperation op, boolean lastColumn) {
         // can always set boundEQ
-        property.operationSetBounds(param.getParameterValue(context), IndexScanOperation.BoundType.BoundEQ, op);
+        Object value = param.getParameterValue(context);
+        if (value != null) {
+            property.operationSetBounds(value, IndexScanOperation.BoundType.BoundEQ, op);
+            return BOTH_BOUNDS_SET;
+        } else {
+            return NO_BOUND_SET;
+        }
     }
 
     @Override
-    public void operationSetLowerBound(QueryExecutionContext context, IndexScanOperation op, boolean lastColumn) {
+    public int operationSetLowerBound(QueryExecutionContext context, IndexScanOperation op, boolean lastColumn) {
         // only set lower bound
-        property.operationSetBounds(param.getParameterValue(context), IndexScanOperation.BoundType.BoundLE, op);
+        Object value = param.getParameterValue(context);
+        if (value != null) {
+            property.operationSetBounds(value, IndexScanOperation.BoundType.BoundLE, op);
+            return LOWER_BOUND_SET;
+        } else {
+            return NO_BOUND_SET;
+        }
     }
 
     @Override
-    public void operationSetUpperBound(QueryExecutionContext context, IndexScanOperation op, boolean lastColumn) {
+    public int operationSetUpperBound(QueryExecutionContext context, IndexScanOperation op, boolean lastColumn) {
         // only set upper bound
-        property.operationSetBounds(param.getParameterValue(context), IndexScanOperation.BoundType.BoundGE, op);
+        Object value = param.getParameterValue(context);
+        if (value != null) {
+            property.operationSetBounds(param.getParameterValue(context), IndexScanOperation.BoundType.BoundGE, op);
+            return UPPER_BOUND_SET;
+        } else {
+            return NO_BOUND_SET;
+        }
     }
 
     @Override

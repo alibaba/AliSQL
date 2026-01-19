@@ -1,8 +1,7 @@
 #
 # Check statement instrumentation of replicated statements
 #
---source include/not_embedded.inc
---source include/have_perfschema.inc
+# Test requires: sp-protocol/ps-protocol/view-protocol/cursor-protocol disabled
 --source include/no_protocol.inc
 --source include/have_binlog_format_mixed.inc
 --source include/master-slave.inc
@@ -63,7 +62,7 @@ connection master;
 --echo *** Create test tables
 --echo
 
-show variables like '%binlog_format%';
+show global variables like '%binlog_format%';
 
 --disable_warnings
 drop table if exists test.marker;
@@ -105,7 +104,7 @@ sync_slave_with_master;
 --echo *** Verify row, get replication thread id, clear statement events
 --echo
 
-# TODO: Get slave thread id from threads using thread/sql/slave_sql event name
+# TODO: Get slave thread id from threads using thread/sql/replica_sql event name
 
 select thread_id into @slave_thread_id from performance_schema.events_statements_history
   where sql_text like '%marker%';
@@ -128,7 +127,7 @@ connection master;
 --echo *** MASTER ***
 --echo **************
 --echo
-show variables like '%binlog_format%';
+show global variables like '%binlog_format%';
 
 --echo *** Clear statement events
 --source ../include/rpl_statements_truncate.inc

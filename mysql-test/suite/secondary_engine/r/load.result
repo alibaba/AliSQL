@@ -1,0 +1,124 @@
+#
+# Load into and unload from secondary engine.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t1 SECONDARY_UNLOAD;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+DROP TABLE t1;
+#
+# Attempt to load and unload table with no secondary engine.
+#
+CREATE TABLE t1 (a INT);
+ALTER TABLE t1 SECONDARY_LOAD;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined.
+ALTER TABLE t1 SECONDARY_UNLOAD;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined.
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+DROP TABLE t1;
+#
+# Attempt to unload temporary table with no secondary engine.
+#
+CREATE TEMPORARY TABLE t1 (a INT);
+ALTER TABLE t1 SECONDARY_LOAD;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined.
+ALTER TABLE t1 SECONDARY_UNLOAD;
+ERROR HY000: Secondary engine operation failed. No secondary engine defined.
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+DROP TABLE t1;
+#
+# Attempt to load into secondary engine in conjunction with other DDL
+# operations.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD, FORCE;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ', FORCE' at line 1
+DROP TABLE t1;
+#
+# Perform alterations related to secondary engine using differing
+# algorithms.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD, ALGORITHM=INPLACE;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ', ALGORITHM=INPLACE' at line 1
+ALTER TABLE t1 SECONDARY_UNLOAD, ALGORITHM=INPLACE;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ', ALGORITHM=INPLACE' at line 1
+ALTER TABLE t1 SECONDARY_LOAD, ALGORITHM=COPY;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ', ALGORITHM=COPY' at line 1
+ALTER TABLE t1 SECONDARY_UNLOAD, ALGORITHM=COPY;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ', ALGORITHM=COPY' at line 1
+ALTER TABLE t1 SECONDARY_ENGINE NULL, ALGORITHM=INPLACE;
+ALTER TABLE t1 SECONDARY_ENGINE MOCK, ALGORITHM=INPLACE;
+ALTER TABLE t1 SECONDARY_ENGINE NULL, ALGORITHM=COPY;
+ALTER TABLE t1 SECONDARY_ENGINE MOCK, ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci SECONDARY_ENGINE=MOCK
+DROP TABLE t1;
+#
+# Load and unload a table in one session while another session
+# accesses the table concurrently.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+DROP TABLE t1;
+#
+# Attempt to LOCK TABLE before loading a table into secondary engine.
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+LOCK TABLES t1 WRITE;
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t1 SECONDARY_UNLOAD;
+UNLOCK TABLES;
+LOCK TABLES t1 READ;
+ALTER TABLE t1 SECONDARY_LOAD;
+ERROR HY000: Table 't1' was locked with a READ lock and can't be updated
+ALTER TABLE t1 SECONDARY_UNLOAD;
+ERROR HY000: Table 't1' was locked with a READ lock and can't be updated
+LOCK TABLES t1 WRITE;
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t1 SECONDARY_UNLOAD;
+UNLOCK TABLES;
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t1 SECONDARY_UNLOAD;
+DROP TABLE t1;
+#
+# Bug#28835066: Table not unloaded with SECONDARY_ENGINE = NULL
+#
+CREATE TABLE t1 (a INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+ALTER TABLE t1 SECONDARY_ENGINE MOCK;
+FLUSH STATUS;
+SELECT * FROM t1;
+a
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+DROP TABLE t1;
+#
+# Exclude some columns from secondary engine.
+#
+CREATE TABLE t1 (
+a INT,
+b INT NOT SECONDARY,
+c INT,
+d INT NOT SECONDARY
+) SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+DROP TABLE t1;
+#
+# Attempt to exclude all columns from secondary engine.
+#
+CREATE TABLE t1 (a INT NOT SECONDARY, b INT NOT SECONDARY) SECONDARY_ENGINE MOCK;
+CREATE TABLE t2 (a INT NOT SECONDARY, KEY i ((a < 10))) SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ERROR HY000: Secondary engine operation failed. All columns marked as NOT SECONDARY.
+ALTER TABLE t2 SECONDARY_LOAD;
+ERROR HY000: Secondary engine operation failed. All columns marked as NOT SECONDARY.
+DROP TABLE t1, t2;

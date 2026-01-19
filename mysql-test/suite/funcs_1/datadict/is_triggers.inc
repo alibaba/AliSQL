@@ -17,11 +17,7 @@
 #                   Create this script based on older scripts and new code.
 # Last Change:
 # 2008-06-11 mleich Move t/is_triggers.test to this file and
-#                   create variants for embedded/non embedded server.
 #
-
-let $engine_type       = MEMORY;
-let $other_engine_type = MyISAM;
 
 let $is_table = TRIGGERS;
 
@@ -70,6 +66,7 @@ eval SHOW TABLES FROM information_schema LIKE '$is_table';
 --source suite/funcs_1/datadict/datadict_bug_12777.inc
 eval DESCRIBE          information_schema.$is_table;
 --source suite/funcs_1/datadict/datadict_bug_12777.inc
+--replace_result InnoDB TMP_TABLE_ENGINE MyISAM TMP_TABLE_ENGINE 
 eval SHOW CREATE TABLE information_schema.$is_table;
 --source suite/funcs_1/datadict/datadict_bug_12777.inc
 eval SHOW COLUMNS FROM information_schema.$is_table;
@@ -78,11 +75,17 @@ eval SHOW COLUMNS FROM information_schema.$is_table;
 # Note: Retrieval of information within information_schema.columns about
 #       information_schema.tables is in is_columns_is.test.
 
-# Show that several columns are always NULL.
+# Note: Do not use mtr --sorted_result:
+# the result set contains the trigger body (sql statements),
+# which itself contains several lines.
+# This confuses --sorted_result
+
+--replace_column 17 #
 SELECT * FROM information_schema.triggers
 WHERE trigger_catalog IS NOT NULL OR event_object_catalog IS NOT NULL
    OR action_condition IS NOT NULL OR action_reference_old_table IS NOT NULL
-   OR action_reference_new_table IS NOT NULL;
+   OR action_reference_new_table IS NOT NULL
+   ORDER BY TRIGGER_CATALOG, TRIGGER_SCHEMA, TRIGGER_NAME;
 
 
 --echo ##################################################################################
@@ -99,7 +102,7 @@ WHERE trigger_catalog IS NOT NULL OR event_object_catalog IS NOT NULL
 --disable_warnings
 DROP DATABASE IF EXISTS db_datadict;
 --enable_warnings
-CREATE DATABASE db_datadict;
+CREATE DATABASE db_datadict charset latin1;
 --error 0,ER_CANNOT_USER
 DROP   USER 'testuser1'@'localhost';
 CREATE USER 'testuser1'@'localhost';
@@ -133,7 +136,9 @@ ON db_datadict.t1 FOR EACH ROW SET @test_before = 2, new.f1 = @test_before;
 GRANT ALL ON db_datadict.t1 TO 'testuser2'@'localhost';
 REVOKE TRIGGER ON db_datadict.t1 FROM 'testuser2'@'localhost';
 GRANT SELECT ON db_datadict.t1 TO 'testuser3'@'localhost';
+--replace_column 17 #
 eval $my_select;
+--replace_column 6 #
 eval $my_show;
 
 --echo # Establish connection testuser2 (user=testuser2)
@@ -141,7 +146,9 @@ eval $my_show;
 connect (testuser2, localhost, testuser2, , db_datadict);
 SHOW GRANTS FOR 'testuser2'@'localhost';
 --echo # No TRIGGER Privilege --> no result for query
+--replace_column 17 #
 eval $my_select;
+--replace_column 6 #
 eval $my_show;
 
 --echo # Establish connection testuser3 (user=testuser3)
@@ -149,7 +156,9 @@ eval $my_show;
 connect (testuser3, localhost, testuser3, , test);
 SHOW GRANTS FOR 'testuser3'@'localhost';
 --echo # TRIGGER Privilege + SELECT Privilege on t1 --> result for query
+--replace_column 17 #
 eval $my_select;
+--replace_column 6 #
 eval $my_show;
 
 --echo # Establish connection testuser4 (user=testuser4)
@@ -160,7 +169,9 @@ SHOW GRANTS FOR 'testuser4'@'localhost';
 --disable_abort_on_error
 SELECT * FROM db_datadict.t1;
 DESC db_datadict.t1;
+--replace_column 17 #
 eval $my_select;
+--replace_column 6 #
 eval $my_show;
 
 --echo # Switch to connection default and close connections testuser1 - testuser4
@@ -169,7 +180,9 @@ disconnect testuser1;
 disconnect testuser2;
 disconnect testuser3;
 disconnect testuser4;
+--replace_column 17 #
 eval $my_select;
+--replace_column 6 #
 eval $my_show;
 DROP USER 'testuser1'@'localhost';
 DROP USER 'testuser2'@'localhost';
@@ -216,7 +229,7 @@ DROP DATABASE db_datadict;
 --disable_warnings
 DROP DATABASE IF EXISTS db_datadict;
 --enable_warnings
-CREATE DATABASE db_datadict;
+CREATE DATABASE db_datadict charset latin1;
 --replace_result $engine_type <engine_type>
 eval
 CREATE TABLE db_datadict.t1 (f1 BIGINT)
@@ -228,9 +241,25 @@ ON db_datadict.t1 FOR EACH ROW SET @test_before = 2, new.f1 = @test_before;
 INSERT INTO information_schema.triggers
 SELECT * FROM information_schema.triggers;
 
---error ER_DBACCESS_DENIED_ERROR
+# Note:
+# 1. We can get different error messages here.
+# 2. We do not want to unify the individual messages to the far to unspecific
+#    'Got one of the listed errors'.
+let $my_error_message =
+##### The previous statement must fail ######
+# Server type  | expected error name      | expected error message
+# --------------------------------------------------------------------------------------------------------------------
+# MySQL | ER_DBACCESS_DENIED_ERROR | ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
+;
+--disable_abort_on_error
 UPDATE information_schema.triggers SET trigger_schema = 'test'
 WHERE table_name = 't1';
+if (!$mysql_errno)
+{
+   --echo $my_error_message
+   exit;
+}
+--enable_abort_on_error
 
 --error ER_DBACCESS_DENIED_ERROR
 DELETE FROM information_schema.triggers WHERE trigger_name = 't1';

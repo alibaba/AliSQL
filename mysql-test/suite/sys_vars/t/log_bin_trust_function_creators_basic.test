@@ -1,4 +1,4 @@
-############## mysql-test\t\log_bin_trust_function_creators_basic.test ########
+ #############mysql-test\t\log_bin_trust_function_creators_basic.test ########
 #                                                                             #
 # Variable Name: log_bin_trust_function_creators                              #
 # Scope: GLOBAL | SESSION                                                     #
@@ -47,7 +47,6 @@ SET @@global.log_bin_trust_function_creators = TRUE;
 SET @@global.log_bin_trust_function_creators = DEFAULT;
 SELECT @@global.log_bin_trust_function_creators;
 
-
 --echo '#--------------------FN_DYNVARS_063_02-------------------------#'
 ###############################################################################
 #     Check the DEFAULT value of log_bin_trust_function_creators              #
@@ -95,7 +94,7 @@ SELECT @@session.log_bin_trust_function_creators;
 SET @@global.log_bin_trust_function_creators = 'ONN';
 --Error ER_WRONG_VALUE_FOR_VAR
 SET @@global.log_bin_trust_function_creators = "OFFF";
---Error ER_WRONG_VALUE_FOR_VAR
+--error ER_PARSE_ERROR
 SET @@global.log_bin_trust_function_creators = OF;
 --Error ER_WRONG_VALUE_FOR_VAR
 SET @@global.log_bin_trust_function_creators = TTRUE;
@@ -111,18 +110,20 @@ SET @@global.log_bin_trust_function_creators = 65530.34;
 SET @@global.log_bin_trust_function_creators = test;
 
 --echo '#------------------FN_DYNVARS_063_06-----------------------#'
-###############################################################################
+##############################################################################
 #   Check if the value in GLOBAL & SESSION Tables matches value in variable   #
 ###############################################################################
 
 
+--disable_warnings
 SELECT IF(@@global.log_bin_trust_function_creators, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='log_bin_trust_function_creators';
+--enable_warnings
 
 --Error ER_INCORRECT_GLOBAL_LOCAL_VAR
 SELECT IF(@@session.log_bin_trust_function_creators, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='log_bin_trust_function_creators';
 
 --echo '#---------------------FN_DYNVARS_063_07----------------------#'
@@ -147,7 +148,9 @@ SELECT local.log_bin_trust_function_creators;
 --Error ER_UNKNOWN_TABLE
 SELECT session.log_bin_trust_function_creators;
 --Error ER_BAD_FIELD_ERROR
-SELECT log_bin_trust_function_creators = @@session.log_bin_trust_function_creators;
+SELECT log_bin_trust_function_creators;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.log_bin_trust_function_creators;
 
 
 ####################################

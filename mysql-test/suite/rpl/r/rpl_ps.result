@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 drop table if exists t1;
 create table t1(n char(30));
@@ -27,6 +27,8 @@ from-var-from-master-3
 drop table t1;
 include/sync_slave_sql_with_master.inc
 stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 include/wait_for_slave_to_stop.inc
 
 ########################################################################
@@ -37,6 +39,8 @@ include/wait_for_slave_to_stop.inc
 ########################################################################
 # Connection: slave
 START SLAVE;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 # Connection: master
 CREATE DATABASE mysqltest1;
 CREATE TABLE t1(db_name CHAR(32), db_col_name CHAR(32));
@@ -48,8 +52,8 @@ EXECUTE stmt_d_1;
 include/sync_slave_sql_with_master.inc
 SELECT * FROM t1;
 db_name	db_col_name
-test	latin1_swedish_ci
-test	latin1_swedish_ci
+test	utf8mb4_0900_ai_ci
+test	utf8mb4_0900_ai_ci
 # Connection: master
 DROP DATABASE mysqltest1;
 use test;

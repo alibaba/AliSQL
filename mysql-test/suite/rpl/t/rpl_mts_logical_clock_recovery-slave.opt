@@ -1,0 +1,3 @@
+--replica-transaction-retries=0
+--relay-log-info-repository=FILE
+--master-info-repository=FILE

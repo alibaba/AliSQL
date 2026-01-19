@@ -1,19 +1,17 @@
 # This test can't be run with running server (--extern) as this uses
 # load_file() on a file in the tree.
 #
-
 #
 # Basic cleanup
 #
 --disable_warnings
 drop table if exists t1,t2,t3,t4,t5,t6,t7;
 --enable_warnings
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 
 #
 # Check syntax for creating BLOB/TEXT
 #
-
 CREATE TABLE t1 (a blob, b text, c blob(250), d text(70000), e text(70000000));
 show columns from t1;
 # PS doesn't give errors on prepare yet
@@ -52,6 +50,7 @@ insert into t1 values (null,"a","A");
 insert into t1 values (null,"bbb","BBB");
 insert into t1 values (null,"ccc","CCC");
 select last_insert_id();
+--sorted_result
 select * from t1,t1 as t2;
 
 drop table t1;
@@ -81,11 +80,8 @@ insert into t1 values (NULL,NULL,NULL,NULL);
 update t1 set c="",b=null where c="1";
 
 lock tables t1 READ;
-# We mask out the Privileges column because it differs for embedded server
---replace_column 8 #
 show full fields from t1;
 lock tables t1 WRITE;
---replace_column 8 #
 show full fields from t1;
 unlock tables;
 
@@ -106,35 +102,42 @@ select t from t1 order by t;
 select c from t1 order by c;
 select b from t1 order by b;
 select d from t1 order by d;
+--sorted_result
 select distinct t from t1;
+--sorted_result
 select distinct b from t1;
 select distinct t from t1 order by t;
 select distinct b from t1 order by b;
+--sorted_result
 select t from t1 group by t;
+--sorted_result
 select b from t1 group by b;
 set big_tables=1;
+--sorted_result
 select distinct t from t1;
+--sorted_result
 select distinct b from t1;
 select distinct t from t1 order by t;
 select distinct b from t1 order by b;
+--sorted_result
 select distinct c from t1;
+--sorted_result
 select distinct d from t1;
 select distinct c from t1 order by c;
 select distinct d from t1 order by d;
 select c from t1 group by c;
 select d from t1 group by d;
 set big_tables=0;
+--sorted_result
 select distinct * from t1;
+--sorted_result
 select t,count(*) from t1 group by t;
+--sorted_result
 select b,count(*) from t1 group by b;
+--sorted_result
 select c,count(*) from t1 group by c;
+--sorted_result
 select d,count(*) from t1 group by d;
-drop table t1;
-
--- error 1071
-create table t1 (a text, unique (a(2100))); # should give an error
-create table t1 (a text, key (a(2100)));    # key is auto-truncated
-show create table t1;
 drop table t1;
 
 #
@@ -252,9 +255,11 @@ CREATE TABLE t7 (
 INSERT INTO t7 VALUES (1,0,'High',1);
 INSERT INTO t7 VALUES (2,0,'Medium',2);
 INSERT INTO t7 VALUES (3,0,'Low',3);
+--source include/turn_off_only_full_group_by.inc
 
 select replace(t3._field_140, "\r","^M"),t3_id,min(t3._field_131), min(t3._field_135), min(t3._field_139), min(t3._field_137), min(link_alias_142._field_165), min(link_alias_133._field_72), min(t3._field_145), min(link_alias_148._field_156), replace(min(t3._field_140), "\r","^M"),t3.t3_id from t3 left join t4 on t4.seq_0_id = t3.t3_id left join t7 link_alias_142 on t4.seq_1_id = link_alias_142.t7_id left join t6 on t6.seq_0_id = t3.t3_id left join t1 link_alias_133 on t6.seq_1_id = link_alias_133.t1_id left join t2 on t2.seq_0_id = t3.t3_id left join t5 link_alias_148 on t2.seq_1_id = link_alias_148.t5_id where t3.t3_id in (1) group by t3.t3_id order by link_alias_142._field_166, _field_139, link_alias_133._field_72, _field_135, link_alias_148._field_156;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1,t2,t3,t4,t5,t6,t7;
 
 #
@@ -312,7 +317,7 @@ eval select
   collation(load_file('../../std_data/words.dat')),
   coercibility(load_file('../../std_data/words.dat'));
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
-eval explain extended select
+eval explain select
   charset(load_file('$MYSQLTEST_VARDIR/std_data/words.dat')),
   collation(load_file('$MYSQLTEST_VARDIR/std_data/words.dat')),
   coercibility(load_file('$MYSQLTEST_VARDIR/std_data/words.dat'));
@@ -322,17 +327,15 @@ select if(imagem is null, "ERROR", "OK"),length(imagem) from t1 where id = 1;
 drop table t1;
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 eval create table t1 select load_file('$MYSQLTEST_VARDIR/std_data/words.dat') l;
-# We mask out the Privileges column because it differs for embedded server
---replace_column 8 #
 show full fields from t1;
 drop table t1;
 
 #
-# Test blob's with end space (Bug #1651)
+# Test blobs with end space (Bug #1651)
 # This is a bit changed since we now have true varchar
 #
 
-create table t1 (id integer primary key auto_increment, txt text not null, unique index txt_index (txt (20)));
+create table t1 (id integer primary key auto_increment, txt text not null, unique index txt_index (txt (20))) charset latin1;
 --error ER_DUP_ENTRY
 insert into t1 (txt) values ('Chevy'), ('Chevy ');
 --error ER_DUP_ENTRY
@@ -359,9 +362,10 @@ select * from t1 where txt > 'Chevy';
 select * from t1 where txt >= 'Chevy';
 drop table t1;
 
-create table t1 (id integer primary key auto_increment, txt text, index txt_index (txt (20)));
+create table t1 (id integer primary key auto_increment, txt text, index txt_index (txt (20))) charset latin1;
 insert into t1 (txt) values ('Chevy'), ('Chevy '), (NULL);
 select * from t1 where txt='Chevy' or txt is NULL;
+analyze table t1;
 explain select * from t1 where txt='Chevy' or txt is NULL;
 select * from t1 where txt='Chevy ';
 select * from t1 where txt='Chevy ' or txt='Chevy';
@@ -382,6 +386,7 @@ select * from t1 where txt <= 'Chevy';
 select * from t1 where txt > 'Chevy';
 select * from t1 where txt >= 'Chevy';
 alter table t1 modify column txt blob;
+analyze table t1;
 explain select * from t1 where txt='Chevy' or txt is NULL;
 select * from t1 where txt='Chevy' or txt is NULL;
 explain select * from t1 where txt='Chevy' or txt is NULL order by txt;
@@ -520,42 +525,44 @@ CREATE TABLE b15776 (a char(4294967296));
 
 
 # Other numeric-ish types
-## For year, widths not "2" or "4" are silently rewritten to "4".  But
-## When we complain about it, we say that the max is 255.  We may be 
-## talking about different things.  It's confusing.
+## For year, only support YEAR(4) or YEAR.
+--error ER_INVALID_YEAR_COLUMN_LENGTH
 CREATE TABLE b15776 (a year(4294967295));
+CREATE TABLE b15776 (a year(4));
 INSERT INTO b15776 VALUES (42);
 SELECT * FROM b15776;
 DROP TABLE b15776;
---error ER_TOO_BIG_DISPLAYWIDTH
+--error ER_INVALID_YEAR_COLUMN_LENGTH
 CREATE TABLE b15776 (a year(4294967296));
-CREATE TABLE b15776 (a year(0));  # 0 is special case, means default size
-DROP TABLE b15776;
+--error ER_INVALID_YEAR_COLUMN_LENGTH
+CREATE TABLE b15776 (a year(0));
 --error ER_PARSE_ERROR
 CREATE TABLE b15776 (a year(-2));
 
 
-# We've already tested the case, but this should visually show that 
+# We have already tested the case, but this should visually show that 
 # widths that are too large to be interpreted cause DISPLAYWIDTH errors.
 --error ER_TOO_BIG_DISPLAYWIDTH
 CREATE TABLE b15776 (a int(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
 --error ER_TOO_BIG_DISPLAYWIDTH
 CREATE TABLE b15776 (a char(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
---error ER_TOO_BIG_DISPLAYWIDTH
+--error ER_INVALID_YEAR_COLUMN_LENGTH
 CREATE TABLE b15776 (a year(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
 
 ## Do not select, too much memory needed.
+--error ER_DATA_OUT_OF_RANGE
 CREATE TABLE b15776 select cast(null as char(4294967295));
-show columns from b15776;
-drop table b15776;
+
+--error ER_DATA_OUT_OF_RANGE
 CREATE TABLE b15776 select cast(null as nchar(4294967295));
-show columns from b15776;
-drop table b15776;
+
 CREATE TABLE b15776 select cast(null as binary(4294967295));
 show columns from b15776;
 drop table b15776;
 
+--error ER_DATA_OUT_OF_RANGE
 explain select cast(1 as char(4294967295));
+--error ER_DATA_OUT_OF_RANGE
 explain select cast(1 as nchar(4294967295));
 explain select cast(1 as binary(4294967295));
 
@@ -581,11 +588,13 @@ explain select cast(1 as decimal(4294967296));
 --error ER_TOO_BIG_PRECISION,ER_PARSE_ERROR
 explain select cast(1 as decimal(999999999999999999999999999999999999));
 
+--error ER_DATA_OUT_OF_RANGE
 explain select convert(1, char(4294967295));
 --error ER_TOO_BIG_DISPLAYWIDTH
 explain select convert(1, char(4294967296));
 --error ER_TOO_BIG_DISPLAYWIDTH
 explain select convert(1, char(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
+--error ER_DATA_OUT_OF_RANGE
 explain select convert(1, nchar(4294967295));
 --error ER_TOO_BIG_DISPLAYWIDTH
 explain select convert(1, nchar(4294967296));
@@ -629,5 +638,230 @@ SELECT COUNT(*) FROM t1 GROUP BY f1(), a;
 
 DROP FUNCTION f1;
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo End of 5.1 tests
+
+--echo #
+--echo # Bug #18127749: OPTIMIZER SHOULD THROW AN ERROR WHEN USER USES
+--echo #                COMPARISION OPERATORS ON GIS DATA
+--echo #
+CREATE TABLE tab(c1 int NOT NULL PRIMARY KEY,c2 POINT NOT NULL,
+                 c3 LINESTRING NOT NULL,c4 POLYGON NOT NULL,
+                 c5 GEOMETRY NOT NULL);
+
+INSERT INTO tab(c1,c2,c3,c4,c5)
+VALUES(1,ST_GeomFromText('POINT(10 10)'),
+       ST_GeomFromText('LINESTRING(5 5,20 20,30 30)'),
+       ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))'),
+       ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))'));
+
+INSERT INTO tab(c1,c2,c3,c4,c5)
+VALUES(2,ST_GeomFromText('POINT(20 20)'),
+       ST_GeomFromText('LINESTRING(20 20,30 30,40 40)'),
+       ST_GeomFromText('POLYGON((40 50,40 70,50 100,70 100,80 80,70 50,40 50))'),
+       ST_GeomFromText('POLYGON((40 50,40 70,50 100,70 100,80 80,70 50,40 50))'));
+
+SET @g1 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+
+
+--error ER_WRONG_ARGUMENTS
+SELECT c1,ST_Astext(c4) FROM tab WHERE c4<@g1;
+SELECT c1,ST_Astext(c4) FROM tab WHERE
+  c4=ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+
+--error ER_WRONG_ARGUMENTS
+SELECT c1,ST_Astext(c4) FROM tab WHERE c4>@g1+3;
+
+
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM tab WHERE c2+4 > 5;
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM tab WHERE c3-4 > 5;
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM tab WHERE c4*4 > 5;
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM tab WHERE c5/4 > 5;
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM tab WHERE c3%4 > 5;
+--error ER_WRONG_ARGUMENTS
+SELECT * FROM tab WHERE c3 DIV 4 > 5;
+
+# Aggregate functions.
+select count(*) from tab;
+select count(distinct c2) from tab;
+--error ER_WRONG_ARGUMENTS
+select sum(c2) from tab;
+--error ER_WRONG_ARGUMENTS
+select sum(distinct c2) from tab;
+--error ER_WRONG_ARGUMENTS
+select avg(c2) from tab;
+--error ER_WRONG_ARGUMENTS
+select avg(distinct c2) from tab;
+--error ER_WRONG_ARGUMENTS
+select min(c2) from tab;
+--error ER_WRONG_ARGUMENTS
+select max(c2) from tab;
+--error ER_WRONG_ARGUMENTS
+select std(c2) from tab;
+
+
+drop table tab;
+
+set @g1 = 1;
+set @g2 = 2;
+select @g1 < @g2;
+select @g1 = @g2;
+select @g1 > @g2;
+select @g1 + @g2;
+
+SET @g1 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+SET @g2 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+select @g1=ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+
+# Numeric operators.
+--error ER_WRONG_ARGUMENTS
+select @g1+ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select @g1-ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select @g1*ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select @g1/ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select @g1%ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select 42 / ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)');
+--error ER_WRONG_ARGUMENTS
+select 42 + ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'); 
+--error ER_WRONG_ARGUMENTS
+select -(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+
+--error ER_WRONG_ARGUMENTS
+select @g1 > ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select @g1 >= ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select @g1 < ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select @g1 <= ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+select @g1 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+select @g1 != ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select @g1 between @g1 and ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+--error ER_WRONG_ARGUMENTS
+select least(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'),
+             ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select greatest(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'),
+                ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+
+
+# Numeric functions.
+--error ER_WRONG_ARGUMENTS
+select abs(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select acos(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select asin(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select atan(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select atan2(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select ceil(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select ceiling(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select conv(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'), 2, 10);
+--error ER_WRONG_ARGUMENTS
+select cos(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select cot(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+# CRC32 can accept a geometry argument.
+select crc32(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select degrees(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select exp(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select floor(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select format(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'), 5);
+# hex() can accept a geometry argument.
+select hex(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select ln(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select log(2, ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select log2(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select log10(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select mod(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'), 7);
+--error ER_WRONG_ARGUMENTS
+select pow(2, ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select power(2, ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select radians(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select rand(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select round(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select sign(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select sin(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select sqrt(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select tan(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+--error ER_WRONG_ARGUMENTS
+select truncate(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'),0);
+
+
+# should have failed with ER_WRONG_ARGUMENTS, but in current implementation
+# a variable's accurate field type is lost after it's assigned.
+select @g1=@g2;
+
+set @g1 = 'abc';
+set @g2 = 'def';
+select @g1 < @g2;
+select @g1 = @g2;
+select @g1 > @g2;
+
+SET @g3 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+# should have failed with ER_WRONG_ARGUMENTS, but in current implementation
+# a variable's accurate field type is lost after it's assigned.
+select @g1 > @g3;
+
+--echo #
+--echo # Bug#21153489 VALGRIND ERRORS IN ITEM_BOOL_FUNC2::IS_NULL 
+--echo #              LEAD TO CRASH LATER
+--echo #
+
+set sql_mode="";
+CREATE TABLE t1(a LONGBLOB NOT NULL) engine=innodb default charset=latin1;
+INSERT INTO t1 VALUES (''),(''),(''),('');
+CREATE TABLE t2 (b LONGTEXT) engine=innodb default charset=latin1;
+INSERT INTO t2 VALUES ('a');
+SELECT ( SELECT ( b <> 1 ) FROM t2) <> ALL(SELECT 1681007452 FROM t1) FROM t1;
+SELECT ( SELECT ( b <> 1 ) FROM t2) <> ALL(SELECT 1681007452 FROM t1) FROM t1;
+DROP TABLE t1,t2;
+set sql_mode=default;
+
+--echo #
+--echo # Bug#30308063 UBSAN: NULL POINTER PASSED AS ARGUMENT 2,
+--echo #              WHICH IS DECLARED TO NEVER BE NULL
+--echo #
+
+CREATE TABLE t1 (c1 INTEGER PRIMARY KEY, c2 TEXT, c3 INTEGER);
+
+INSERT INTO t1(c1) VALUES(0);
+
+INSERT INTO t1(c1) VALUES(0) ON DUPLICATE KEY
+UPDATE c2 = VALUES(c2), c3 = NULL;
+
+SELECT * FROM t1;
+DROP TABLE t1;

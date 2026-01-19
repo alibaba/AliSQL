@@ -16,51 +16,83 @@ use My::Find;
 my $vardir = $ENV{MYSQLTEST_VARDIR} or die "Need MYSQLTEST_VARDIR";
 my $mysql_test_dir = $ENV{MYSQL_TEST_DIR} or die "Need MYSQL_TEST_DIR";
 my $basedir = dirname($mysql_test_dir);
+my $version = $ENV{MYSQL_SERVER_VERSION};
+
+# In the RPM case, binaries and libraries are installed in the
+# default system locations, instead of having our own private base
+# directory. And we install "usr/share/mysql-test". Moving up two
+# more directory relative to "mysql-test" gives us a usable base
+# directory for RPM installs.
+if (! -d "$basedir/sql" and ! -d "$basedir/bin" )
+{
+  $basedir= dirname($basedir);
+}
+
+my $bindir = $ENV{MTR_BINDIR} || $basedir; # Out of source set MTR_BINDIR
 
 #
 # Check if the needed jars and libs are available
 #
 
-my $clusterj_jar = my_find_file($basedir,
-                                ["storage/ndb/clusterj", 
-                                 "share/mysql/java",             # install unix
-                                 "lib/java"],                    # install windows
-                                "clusterj-*.jar", NOT_REQUIRED);
+my $clusterj_jar = my_find_file($bindir,
+                                [ "storage/ndb/clusterj", 
+                                  "share/java",
+                                  "share/mysql/java",
+                                  "share/mysql-8.0/java",
+                                  "lib/java"
+                                ],
+                                "clusterj-$version.jar",
+                                NOT_REQUIRED);
 
-my $clusterj_test_jar = my_find_file($basedir,
-                                    ["storage/ndb/clusterj/clusterj-test",
-                                     "share/mysql/java",             # install unix
-                                     "lib/java"],                    # install windows
-                                    "clusterj-test-*.jar", NOT_REQUIRED);
+my $clusterj_test_jar = my_find_file($bindir,
+                                     [ "storage/ndb/clusterj/clusterj-test",
+                                       "share/java",
+                                       "share/mysql/java",
+                                       "share/mysql-8.0/java",
+                                       "lib/java"
+                                     ],
+                                     "clusterj-test-$version.jar",
+                                     NOT_REQUIRED);
 
-my $ndbclient_lib = my_find_file($basedir,
-                                ["storage/ndb/src/.libs", 
-                                 "storage/ndb/src", 
-                                 "lib/mysql",
-                                 "lib"],
-                                ["ndbclient.dll", "libndbclient.so", "libndbclient.dylib"],
+# The expected installation locations are lib, lib/mysql, lib64/mysql, lib/x86_64-linux-gnu
+my $ndbclient_lib = my_find_file($bindir,
+                                [ "library_output_directory",
+                                  "lib*/*",
+                                  "lib"
+                                ],
+                                [ "ndbclient.dll",
+                                  "libndbclient.so",
+                                  "libndbclient.dylib"
+                                ],
                                 NOT_REQUIRED);
 
 my $F = IO::File->new("$vardir/tmp/have_clusterj_result.inc", 'w') or die;
+print $F "# Looking for clusterj-$version.jar\n";
+
 if ($clusterj_jar) {
   print $F "--let \$CLUSTERJ_JAR= $clusterj_jar\n"; 
-  print $F "--echo Found clusterj.jar: '\$CLUSTERJ_JAR'\n"
+  print $F "--echo Found clusterj.jar\n"
 } else {
-  print $F "skip Could not find clusterj jar file\n";
+  print $F "--let \$skip_test=1\n";
+  print $F "--let \$skip_reason=Could not find clusterj jar file\n";
 }
 
 if ($clusterj_test_jar) {
   print $F "--let \$CLUSTERJ_TEST_JAR= $clusterj_test_jar\n";
-  print $F "--echo Found clusterj_test jar: '\$CLUSTERJ_TEST_JAR'\n"
+  print $F "--echo Found clusterj_test jar\n"
 } else {
-  print $F "skip Could not find clusterj test jar file\n";
+  print $F "--let \$skip_test=1\n";
+  print $F "--let \$skip_reason=Could not find clusterj test jar file\n";
 }
 
 if ($ndbclient_lib) {
   my $ndbclient_lib_dir = dirname($ndbclient_lib);
   print $F "--let \$NDBCLIENT_LIB_DIR= $ndbclient_lib_dir\n";
+  print $F "--echo Found ndbclient library\n"
 } else {
-    print $F "skip Did not find libndbclient\n";
+  # Test runs only when ndb is compiled and enabled.
+  # If not able to find libndbclient, probably an issue with this script.
+  print $F "die Did not find libndbclient\n";
 }
 
 $F->close();
@@ -85,7 +117,7 @@ sub write_properties {
   add($F, 'connect.timeout.before', '30');
   add($F, 'connect.timeout.after', '20');
   add($F, 'jdbc.url', "jdbc:mysql://localhost:$ENV{MASTER_MYPORT}/$db");
-  add($F, 'jdbc.driver', 'com.mysql.jdbc.Driver');
+  add($F, 'jdbc.driver', 'com.mysql.cj.jdbc.Driver');
   add($F, 'jdbc.username', $user);
   add($F, 'jdbc.password', '');
   add($F, 'username', '');
@@ -98,3 +130,11 @@ sub write_properties {
 EOF
 
 --source $MYSQLTEST_VARDIR/tmp/have_clusterj_result.inc
+--remove_file $MYSQLTEST_VARDIR/tmp/have_clusterj_result.inc
+
+# skip if the required jars were not found
+if ($skip_test) {
+  # remove the clusterj.properties file
+  --remove_file $MYSQLTEST_VARDIR/tmp/clusterj.properties
+  --skip $skip_reason
+}

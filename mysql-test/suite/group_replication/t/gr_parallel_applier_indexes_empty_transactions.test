@@ -1,0 +1,85 @@
+################################################################################
+# Validate that empty transactions are applied in parallel in
+# `group_replication_applier` channel.
+#
+# Test:
+# 0. The test requires two servers: M1 and M2.
+# 1. Execute DDL, DML and empty transactions.
+# 2. Validate applier indexes on server2
+#    `group_replication_applier` channel.
+# 3. Clean up.
+################################################################################
+--source include/have_group_replication_plugin.inc
+--source include/group_replication.inc
+
+
+--echo
+--echo ############################################################
+--echo # 1. Execute DDL, DML and empty transactions.
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+# on server2 `group_replication_applier` channel: DDL
+# server_id=1, last_committed=1, sequence_number=2
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY);
+
+# on server2 `group_replication_applier` channel: empty transaction
+# server_id=1, last_committed=2, sequence_number=3
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1';
+BEGIN;
+COMMIT;
+SET GTID_NEXT= 'AUTOMATIC';
+
+# on server2 `group_replication_applier` channel: empty transaction
+# server_id=1, last_committed=2, sequence_number=4
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:2';
+BEGIN;
+COMMIT;
+SET GTID_NEXT= 'AUTOMATIC';
+
+# on server2 `group_replication_applier` channel: DML
+# server_id=1, last_committed=2, sequence_number=5
+INSERT INTO t1 VALUES (1);
+
+# on server2 `group_replication_applier` channel: empty transaction
+# server_id=1, last_committed=2, sequence_number=6
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:3';
+BEGIN;
+COMMIT;
+SET GTID_NEXT= 'AUTOMATIC';
+
+# on server2 `group_replication_applier` channel: DDL
+# server_id=1, last_committed=6, sequence_number=7
+DROP TABLE t1;
+
+# on server2 `group_replication_applier` channel: empty transaction
+# server_id=1, last_committed=7, sequence_number=8
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:4';
+BEGIN;
+COMMIT;
+SET GTID_NEXT= 'AUTOMATIC';
+
+# on server2 `group_replication_applier` channel: empty transaction
+# server_id=1, last_committed=7, sequence_number=9
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:5';
+BEGIN;
+COMMIT;
+SET GTID_NEXT= 'AUTOMATIC';
+
+--source include/rpl_sync.inc
+
+
+--echo
+--echo ############################################################
+--echo # 2. Validate applier indexes on server2
+--echo #    `group_replication_applier` channel.
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--let $binlog_file= server-relay-log-group_replication_applier.000002
+--let $logical_timestamps= 0 0;0 0;1 2;2 3;2 4;2 5;2 6;6 7;7 8;7 9
+--source include/assert_logical_timestamps.inc
+
+
+--echo
+--echo ############################################################
+--echo # 3. Clean up.
+--source include/group_replication_end.inc

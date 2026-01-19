@@ -22,7 +22,7 @@ SELECT @@session.lc_time_names;
 @@session.lc_time_names
 ar_AE
 SET global.lc_time_names=ar_AE;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'lc_time_names=ar_AE' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'global.lc_time_names=ar_AE' at line 1
 SET session lc_time_names=ar_AE;
 SELECT session lc_time_names;
 ERROR 42S22: Unknown column 'session' in 'field list'
@@ -1075,7 +1075,7 @@ SET @@global.lc_time_names = ON;
 ERROR HY000: Unknown locale: 'ON'
 '#--------------------FN_DYNVARS_060_12-------------------------#'
 SELECT @@global.lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
 res
 1
@@ -1084,23 +1084,23 @@ SELECT @@global.lc_time_names;
 @@global.lc_time_names
 en_GB
 SELECT @@global.lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
 res
 1
 '#--------------------FN_DYNVARS_060_13-------------------------#'
 SELECT @@lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
 res
 1
 SELECT @@local.lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
 res
 1
 SELECT @@session.lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
 res
 1

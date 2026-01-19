@@ -1,21 +1,27 @@
-/* -*- mode: java; c-basic-offset: 4; indent-tabs-mode: nil; -*-
- *  vim:expandtab:shiftwidth=4:tabstop=4:smarttab:
- *
- *  Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
+/*
+  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License, version 2.0, for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 package com.mysql.cluster.crund;
 
@@ -31,21 +37,18 @@ import java.util.Collection;
 @javax.persistence.Entity
 @javax.persistence.Table(name="a")
 public class A implements Serializable {
-    // see B0.java for persistence annotations
+    // see B.java for persistence annotations
 
     @javax.persistence.Id
     private int id;
 
     private int cint;
-
     private long clong;
-
     private float cfloat;
-
     private double cdouble;
 
     @javax.persistence.OneToMany(mappedBy="a")
-    private Collection<B0> b0s;
+    private Collection<B> bs;
 
     public A() {
     }
@@ -53,7 +56,6 @@ public class A implements Serializable {
     public int getId() {
         return id;
     }
-
     public void setId(int id) {
         this.id = id;
     }
@@ -61,7 +63,6 @@ public class A implements Serializable {
     public int getCint() {
         return cint;
     }
-
     public void setCint(int cint) {
         this.cint = cint;
     }
@@ -69,7 +70,6 @@ public class A implements Serializable {
     public long getClong() {
         return clong;
     }
-
     public void setClong(long clong) {
         this.clong = clong;
     }
@@ -77,7 +77,6 @@ public class A implements Serializable {
     public float getCfloat() {
         return cfloat;
     }
-
     public void setCfloat(float cfloat) {
         this.cfloat = cfloat;
     }
@@ -85,17 +84,15 @@ public class A implements Serializable {
     public double getCdouble() {
         return cdouble;
     }
-
     public void setCdouble(double cdouble) {
         this.cdouble = cdouble;
     }
 
-    public Collection<B0> getB0s() {
-        return b0s;
+    public Collection<B> getBs() {
+        return bs;
     }
-
-    public void setB0s(Collection<B0> b0s) {
-        this.b0s = b0s;
+    public void setBs(Collection<B> bs) {
+        this.bs = bs;
     }
 
     // while implementing Serializable...
@@ -110,26 +107,5 @@ public class A implements Serializable {
     private void writeObject(ObjectOutputStream out) throws IOException {
         out.defaultWriteObject();
     }
-
-/*
-    static public class Oid implements Serializable {
-
-        public int id;
-
-        public Oid() {
-        }
-
-        public boolean equals(Object obj) {
-            if (obj == null || !this.getClass().equals(obj.getClass()))
-                return false;
-            Oid o = (Oid)obj;
-            return (this.id == o.id);
-        }
-
-        public int hashCode() {
-            return id;
-        }
-    }
-*/
 }
 

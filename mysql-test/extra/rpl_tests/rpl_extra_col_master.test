@@ -125,12 +125,12 @@ SELECT f1,f2,f3,f4,f5,f6,f7,f8,f9,
 #connection slave;
 
 --disable_query_log
-call mtr.add_suppression("Slave SQL.*Table definition on master and slave does not match: Column 2 type mismatch.* 1535");
-call mtr.add_suppression("Slave.*Can.t DROP .c7.; check that column.key exists.* Error_code: 1091");
-call mtr.add_suppression("Slave.*Unknown column .c7. in .t15.* Error_code: 1054");
-call mtr.add_suppression("Slave.*Key column .c6. doesn.t exist in table.* Error_code: 1072");
-call mtr.add_suppression("Slave SQL.*Column 2 of table .test.t1.. cannot be converted from type.* Error_code: 1677");
-call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("Replica SQL.*Table definition on source and replica does not match: Column 2 type mismatch.* MY-001535");
+call mtr.add_suppression("Replica.*Can.t DROP .c7.; check that column.key exists.* Error_code: MY-001091");
+call mtr.add_suppression("Replica.*Unknown column .c7. in .t15.* Error_code: MY-001054");
+call mtr.add_suppression("Replica.*Key column .c6. doesn.t exist in table.* Error_code: MY-001072");
+call mtr.add_suppression("Replica SQL.*Column 2 of table .test.t1.. cannot be converted from type.* Error_code: MY-013146");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 --enable_query_log
 
 sync_slave_with_master;
@@ -254,9 +254,9 @@ some var char';
    INSERT into t4 set f1=1, f2=1, f3=1, f4='first', f7='f7: medium size blob', f10='f10:
 binary data';
    INSERT into t31 set f1=1, f2=1, f3=1, f4='first';
-   INSERT into t31 set f1=1, f2=1, f3=2, f4='second',
+   INSERT IGNORE into t31 set f1=1, f2=1, f3=2, f4='second',
      f9=2.2,  f10='seven samurai', f28=222.222, f35='222';
-   INSERT into t31 values (1, 1, 3, 'third',
+   INSERT IGNORE into t31 values (1, 1, 3, 'third',
       /* f5  BIGINT,  */            333333333333333333333333,
       /* f6  BLOB,  */              '3333333333333333333333',
       /* f7  DATE,  */              '2007-07-18',
@@ -290,7 +290,7 @@ binary data';
       /*f35 VARCHAR(257),*/         'three times three'
       );
    
-   INSERT into t31 values (1, 1, 4, 'fourth',
+   INSERT IGNORE into t31 values (1, 1, 4, 'fourth',
        /* f5  BIGINT,  */            333333333333333333333333,
        /* f6  BLOB,  */              '3333333333333333333333',
        /* f7  DATE,  */              '2007-07-18',
@@ -409,7 +409,7 @@ connection master;
    update t31 set f5=555555555555555 where f3=6;
    update t31 set f2=2 where f3=2;
    update t31 set f1=NULL where f3=1;
-   update t31 set f3=NULL, f27=NULL, f35='f35 new value' where f3=3;
+   update ignore t31 set f3=NULL, f27=NULL, f35='f35 new value' where f3=3;
 
 --echo
 --echo ** Delete from Master **
@@ -487,7 +487,7 @@ INSERT INTO t10 () VALUES(1,@b1,DEFAULT,'Kyle',DEFAULT),
 --echo
 connection slave;
 --let $slave_skip_counter= 2
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 --echo
@@ -541,7 +541,7 @@ INSERT INTO t11 () VALUES(1,@b1,'Testing is fun','Kyle',DEFAULT),
 --echo
 connection slave;
 --let $slave_skip_counter= 2
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 --echo
@@ -695,6 +695,9 @@ DROP TABLE t14;
 
 connection slave;
 
+# Execute RESET REPLICA before calling rpl_reset.inc
+# To avoid failure in MTS and rpl-priv_checks_user runs
+RESET REPLICA;
 # reset master and slave and start slave
 --let $rpl_only_running_threads= 1
 --source include/rpl_reset.inc
@@ -1036,7 +1039,7 @@ SET SQL_LOG_BIN=1;
 -- connection master
 
 -- disable_warnings
-INSERT INTO t1 VALUES (); 
+INSERT IGNORE INTO t1 VALUES (); 
 
 # insert multi-byte chars that will take more than 255 bytes 
 SET @text= REPEAT(_utf8'ç', 255);

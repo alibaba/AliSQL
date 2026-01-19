@@ -1,115 +1,3 @@
-CREATE TABLE t1(a int) TABLESPACE ts ENGINE=MyISAM;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) TABLESPACE ts STORAGE DISK ENGINE=MyISAM;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts STORAGE DISK */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) TABLESPACE ts STORAGE MEMORY ENGINE=MyISAM;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts STORAGE MEMORY */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) STORAGE MEMORY ENGINE=MyISAM;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 STORAGE MEMORY */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) STORAGE DISK ENGINE=MyISAM;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 STORAGE DISK */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) TABLESPACE ts ENGINE=MyISAM;
-ALTER TABLE t1 ADD COLUMN b int;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL,
-  `b` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) TABLESPACE ts STORAGE DISK ENGINE=MyISAM;
-ALTER TABLE t1 ADD COLUMN b int;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL,
-  `b` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts STORAGE DISK */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) ENGINE=MyISAM;
-ALTER TABLE t1 TABLESPACE ts;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-ALTER TABLE t1 TABLESPACE ts2;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts2 */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) ENGINE=MyISAM;
-ALTER TABLE t1 STORAGE MEMORY;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 STORAGE MEMORY */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-ALTER TABLE t1 STORAGE DISK;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 STORAGE DISK */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-CREATE TABLE t1(a int) ENGINE=MyISAM;
-ALTER TABLE t1 STORAGE MEMORY TABLESPACE ts;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts STORAGE MEMORY */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-ALTER TABLE t1 STORAGE DISK TABLESPACE ts2;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) /*!50100 TABLESPACE ts2 STORAGE DISK */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `a` int(11) NOT NULL,
-  `b` int(11) DEFAULT NULL,
-  `c` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL,
-  `d` int(11) NOT NULL /*!50606 STORAGE MEMORY */,
-  `e` int(11) /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `f` int(11) /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `g` int(11) DEFAULT NULL,
-  `h` int(11) NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
-  `i` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `j` int(11) /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `k` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  PRIMARY KEY (`a`)
-) /*!50100 TABLESPACE the_tablespacename STORAGE DISK */ ENGINE=MyISAM DEFAULT CHARSET=latin1
-DROP TABLE t1;
 #
 # WL#3627 Add COLUMN_FORMAT and STORAGE for fields
 #
@@ -127,16 +15,16 @@ i int STORAGE MEMORY COLUMN_FORMAT FIXED
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL,
-  `b` int(11) NOT NULL /*!50606 STORAGE MEMORY */,
-  `c` int(11) /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `d` int(11) /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `e` int(11) DEFAULT NULL,
-  `f` int(11) NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
-  `g` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `h` int(11) /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `i` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` int /*!50606 STORAGE DISK */ DEFAULT NULL,
+  `b` int NOT NULL /*!50606 STORAGE MEMORY */,
+  `c` int /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `d` int /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `e` int DEFAULT NULL,
+  `f` int NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
+  `g` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `h` int /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `i` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1
 ADD COLUMN j int STORAGE DISK,
 ADD COLUMN k int STORAGE MEMORY NOT NULL,
@@ -150,25 +38,25 @@ ADD COLUMN r int STORAGE MEMORY COLUMN_FORMAT FIXED;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL,
-  `b` int(11) NOT NULL /*!50606 STORAGE MEMORY */,
-  `c` int(11) /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `d` int(11) /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `e` int(11) DEFAULT NULL,
-  `f` int(11) NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
-  `g` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `h` int(11) /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `i` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `j` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL,
-  `k` int(11) NOT NULL /*!50606 STORAGE MEMORY */,
-  `l` int(11) /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `m` int(11) /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `n` int(11) DEFAULT NULL,
-  `o` int(11) NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
-  `p` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `q` int(11) /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `r` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` int /*!50606 STORAGE DISK */ DEFAULT NULL,
+  `b` int NOT NULL /*!50606 STORAGE MEMORY */,
+  `c` int /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `d` int /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `e` int DEFAULT NULL,
+  `f` int NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
+  `g` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `h` int /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `i` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `j` int /*!50606 STORAGE DISK */ DEFAULT NULL,
+  `k` int NOT NULL /*!50606 STORAGE MEMORY */,
+  `l` int /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `m` int /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `n` int DEFAULT NULL,
+  `o` int NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
+  `p` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `q` int /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `r` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1
 MODIFY COLUMN j int STORAGE MEMORY NOT NULL,
 MODIFY COLUMN k int COLUMN_FORMAT DYNAMIC,
@@ -182,25 +70,25 @@ MODIFY COLUMN r int STORAGE DISK;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL,
-  `b` int(11) NOT NULL /*!50606 STORAGE MEMORY */,
-  `c` int(11) /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `d` int(11) /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `e` int(11) DEFAULT NULL,
-  `f` int(11) NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
-  `g` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `h` int(11) /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `i` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `j` int(11) NOT NULL /*!50606 STORAGE MEMORY */,
-  `k` int(11) /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `l` int(11) /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `m` int(11) DEFAULT NULL,
-  `n` int(11) NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
-  `o` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `p` int(11) /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `q` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `r` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` int /*!50606 STORAGE DISK */ DEFAULT NULL,
+  `b` int NOT NULL /*!50606 STORAGE MEMORY */,
+  `c` int /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `d` int /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `e` int DEFAULT NULL,
+  `f` int NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
+  `g` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `h` int /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `i` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `j` int NOT NULL /*!50606 STORAGE MEMORY */,
+  `k` int /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `l` int /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `m` int DEFAULT NULL,
+  `n` int NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
+  `o` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `p` int /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `q` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `r` int /*!50606 STORAGE DISK */ DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1
 MODIFY COLUMN h int COLUMN_FORMAT DYNAMIC COLUMN_FORMAT FIXED,
 MODIFY COLUMN i int COLUMN_FORMAT DYNAMIC COLUMN_FORMAT DEFAULT,
@@ -219,23 +107,535 @@ STORAGE DISK STORAGE MEMORY STORAGE DISK STORAGE DISK;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL,
-  `b` int(11) NOT NULL /*!50606 STORAGE MEMORY */,
-  `c` int(11) /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `d` int(11) /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `e` int(11) DEFAULT NULL,
-  `f` int(11) NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
-  `g` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `h` int(11) /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
-  `i` int(11) DEFAULT NULL,
-  `j` int(11) /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `k` int(11) DEFAULT NULL,
-  `l` int(11) /*!50606 STORAGE MEMORY */ DEFAULT NULL,
-  `m` int(11) DEFAULT NULL,
-  `n` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL,
-  `o` int(11) DEFAULT NULL,
-  `p` int(11) /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
-  `q` int(11) DEFAULT NULL,
-  `r` int(11) /*!50606 STORAGE DISK */ DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` int /*!50606 STORAGE DISK */ DEFAULT NULL,
+  `b` int NOT NULL /*!50606 STORAGE MEMORY */,
+  `c` int /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `d` int /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `e` int DEFAULT NULL,
+  `f` int NOT NULL /*!50606 STORAGE DISK */ /*!50606 COLUMN_FORMAT DYNAMIC */,
+  `g` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `h` int /*!50606 COLUMN_FORMAT FIXED */ DEFAULT NULL,
+  `i` int DEFAULT NULL,
+  `j` int /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `k` int DEFAULT NULL,
+  `l` int /*!50606 STORAGE MEMORY */ DEFAULT NULL,
+  `m` int DEFAULT NULL,
+  `n` int /*!50606 STORAGE DISK */ DEFAULT NULL,
+  `o` int DEFAULT NULL,
+  `p` int /*!50606 STORAGE MEMORY */ /*!50606 COLUMN_FORMAT DYNAMIC */ DEFAULT NULL,
+  `q` int DEFAULT NULL,
+  `r` int /*!50606 STORAGE DISK */ DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
+#
+# Bug#21347001   SEGMENTATION FAULT WHILE CREATING GENERAL
+#                  TABLESPACE IN DISK FULL LINUX
+#
+SET SESSION debug="+d,out_of_tablespace_disk";
+CREATE TABLESPACE `ts6` ADD DATAFILE 'ts6.ibd' ENGINE=INNODB;
+ERROR HY000: Failed to create TABLESPACE ts6
+SHOW WARNINGS;
+Level	Code	Message
+Error	1528	Failed to create TABLESPACE ts6
+Error	1114	The table 'ts6' is full
+SET SESSION debug="-d,out_of_tablespace_disk";
+#
+# Additional coverage for WL#7743 "New data dictionary: changes
+# to DDL-related parts of SE API".
+#
+# Check that limits on tablespace comment and datafile path lengths
+# are enforced.
+#
+CREATE TABLESPACE ts ADD DATAFILE 'ts.ibd' COMMENT="TOO_LONG_COMMENT" ENGINE=InnoDB;
+ERROR HY000: Comment for tablespace 'ts' is too long (max = 2048)
+CREATE TABLESPACE ts ADD DATAFILE 'TOO_LONG_PATH' ENGINE=InnoDB;
+ERROR HY000: The path specified for DATAFILE is too long.
+# Also coverage for ALTER TABLESPACE case.
+ALTER TABLESPACE no_such_ts ADD DATAFILE 'ts.ibd';
+ERROR HY000: Tablespace no_such_ts doesn't exist.
+CREATE TABLESPACE ts ADD DATAFILE 'ts.ibd' ENGINE=InnoDB;
+ALTER TABLESPACE ts ADD DATAFILE 'TOO_LONG_PATH';
+ERROR HY000: The path specified for DATAFILE is too long.
+ALTER TABLESPACE ts DROP DATAFILE 'no_such_file.ibd';
+ERROR HY000: Tablespace 'ts' does not have a file named 'no_such_file.ibd'
+DROP TABLESPACE ts;
+#
+# Validate tablespace names in the SE.
+#
+# 1. Tablespace DDL.
+# 1.1 Create/drop predefined tablespaces.
+CREATE TABLESPACE innodb_system ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+ERROR 42000: InnoDB: `innodb_system` is a reserved tablespace name.
+CREATE TABLESPACE innodb_file_per_table ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+ERROR 42000: InnoDB: `innodb_file_per_table` is a reserved tablespace name.
+CREATE TABLESPACE innodb_temporary ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+ERROR 42000: InnoDB: `innodb_temporary` is a reserved tablespace name.
+CREATE TABLESPACE mysql ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+ERROR 42000: InnoDB: `mysql` is a reserved tablespace name.
+DROP TABLESPACE innodb_system;
+ERROR 42000: InnoDB: `innodb_system` is a reserved tablespace name.
+DROP TABLESPACE innodb_file_per_table;
+ERROR HY000: Tablespace innodb_file_per_table doesn't exist.
+DROP TABLESPACE innodb_temporary;
+ERROR 42000: InnoDB: `innodb_temporary` is a reserved tablespace name.
+DROP TABLESPACE mysql;
+ERROR 42000: InnoDB: `mysql` is a reserved tablespace name.
+# 1.2 Create/drop implicit tablespaces.
+CREATE TABLESPACE `innodb_file_per_table.2` ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+DROP TABLESPACE `innodb_file_per_table.2`;
+ERROR HY000: Tablespace innodb_file_per_table.2 doesn't exist.
+CREATE TABLESPACE innodb_file_per_table_whatever ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+DROP TABLESPACE innodb_file_per_table_whatever;
+ERROR HY000: Tablespace innodb_file_per_table_whatever doesn't exist.
+CREATE TABLESPACE innodb_file_per_table ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+ERROR 42000: InnoDB: `innodb_file_per_table` is a reserved tablespace name.
+DROP TABLESPACE innodb_file_per_table;
+ERROR HY000: Tablespace innodb_file_per_table doesn't exist.
+# 2. Non partitioned table DDL.
+# 2.1 Create table.
+CREATE TABLE t1 (i INTEGER) TABLESPACE innodb_file_per_table ENGINE InnoDB;
+CREATE TABLE t2 (i INTEGER) TABLESPACE innodb_system ENGINE InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `innodb_file_per_table` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE TABLE t_bad (i INTEGER) TABLESPACE `innodb_file_per_table.2` ENGINE InnoDB;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+# For t1, changing engine back to InnoDB will re-establish usage of the implicit tablespace:
+ALTER TABLE t1 ENGINE InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `innodb_file_per_table` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Changing both engine and tablespace works:
+ALTER TABLE t1 TABLESPACE innodb_system ENGINE InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t2 TABLESPACE innodb_file_per_table ENGINE InnoDB;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `innodb_file_per_table` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Keeping a valid tablespace through ALTER TABLE:
+ALTER TABLE t1 ADD COLUMN (j INTEGER);
+CREATE TABLESPACE ts ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+ALTER TABLE t1 TABLESPACE ts;
+ALTER TABLE t1 ENGINE InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int DEFAULT NULL,
+  `j` int DEFAULT NULL
+) /*!50100 TABLESPACE `ts` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 ENGINE InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int DEFAULT NULL,
+  `j` int DEFAULT NULL
+) /*!50100 TABLESPACE `ts` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLESPACE ts;
+# 3. Partitioned table DDL.
+# 3.1 Create table.
+CREATE TABLE t_part_bad (i INTEGER) PARTITION BY RANGE(i)
+PARTITIONS 2 (
+PARTITION p0 VALUES LESS THAN(100) TABLESPACE `innodb_file_per_table.2`,
+PARTITION p1 VALUES LESS THAN(200));
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+CREATE TABLE t_part (i INTEGER) TABLESPACE innodb_file_per_table PARTITION BY RANGE(i)
+PARTITIONS 2 (
+PARTITION p0 VALUES LESS THAN(100),
+PARTITION p1 VALUES LESS THAN(200));
+SHOW CREATE TABLE t_part;
+Table	Create Table
+t_part	CREATE TABLE `t_part` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `innodb_file_per_table` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`i`)
+(PARTITION p0 VALUES LESS THAN (100) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (200) ENGINE = InnoDB) */
+CREATE TABLE t_subpart (i INTEGER) PARTITION BY RANGE(i)
+PARTITIONS 2 SUBPARTITION BY HASH(i) (
+PARTITION p0 VALUES LESS THAN(100) (
+SUBPARTITION sp00,
+SUBPARTITION sp01),
+PARTITION p1 VALUES LESS THAN(200) (
+SUBPARTITION sp10,
+SUBPARTITION sp11));
+SHOW CREATE TABLE t_subpart;
+Table	Create Table
+t_subpart	CREATE TABLE `t_subpart` (
+  `i` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`i`)
+SUBPARTITION BY HASH (`i`)
+(PARTITION p0 VALUES LESS THAN (100)
+ (SUBPARTITION sp00 ENGINE = InnoDB,
+  SUBPARTITION sp01 ENGINE = InnoDB),
+ PARTITION p1 VALUES LESS THAN (200)
+ (SUBPARTITION sp10 ENGINE = InnoDB,
+  SUBPARTITION sp11 ENGINE = InnoDB)) */
+# 2.3 Alter table.
+ALTER TABLE t_subpart TABLESPACE innodb_file_per_table;
+SHOW CREATE TABLE t_subpart;
+Table	Create Table
+t_subpart	CREATE TABLE `t_subpart` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `innodb_file_per_table` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`i`)
+SUBPARTITION BY HASH (`i`)
+(PARTITION p0 VALUES LESS THAN (100)
+ (SUBPARTITION sp00 ENGINE = InnoDB,
+  SUBPARTITION sp01 ENGINE = InnoDB),
+ PARTITION p1 VALUES LESS THAN (200)
+ (SUBPARTITION sp10 ENGINE = InnoDB,
+  SUBPARTITION sp11 ENGINE = InnoDB)) */
+ALTER TABLE t_part TABLESPACE `innodb_file_per_table.2`;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+ALTER TABLE t_subpart TABLESPACE `innodb_file_per_table.2`;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+ALTER TABLE t_part REORGANIZE PARTITION p1 INTO
+(PARTITION p1 VALUES LESS THAN (300) TABLESPACE `innodb_file_per_table.2`);
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+ALTER TABLE t_subpart REORGANIZE PARTITION p1 INTO
+(PARTITION p1 VALUES LESS THAN (300) TABLESPACE `innodb_file_per_table.2`);
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+ALTER TABLE t_subpart REORGANIZE PARTITION s11 INTO
+(PARTITION s11 TABLESPACE `innodb_file_per_table.2`);
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+DROP TABLE t_part;
+DROP TABLE t_subpart;
+#
+# Tescases for wl#8972. Rename a general tablespace
+#
+CREATE TABLESPACE ts ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+CREATE TABLE t1(i INT) TABLESPACE ts;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `ts` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Negative tests
+ALTER TABLESPACE ts RENAME TO innodb_system;
+ERROR HY000: Tablespace 'innodb_system' exists.
+ALTER TABLESPACE ts RENAME TO innodb_file_per_table;
+ERROR 42000: InnoDB: `innodb_file_per_table` is a reserved tablespace name.
+ALTER TABLESPACE ts RENAME TO innodb_temporary;
+ERROR HY000: Tablespace 'innodb_temporary' exists.
+ALTER TABLESPACE ts RENAME TO mysql;
+ERROR HY000: Tablespace 'mysql' exists.
+ALTER TABLESPACE innodb_system RENAME TO ts3;
+ERROR 42000: InnoDB: `innodb_system` is a reserved tablespace name.
+ALTER TABLESPACE innodb_temporary RENAME TO ts3;
+ERROR 42000: InnoDB: `innodb_temporary` is a reserved tablespace name.
+ALTER TABLESPACE mysql RENAME TO ts3;
+ERROR 42000: InnoDB: `mysql` is a reserved tablespace name.
+ALTER TABLESPACE ts RENAME TO `innodb_file_per_table.2`;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+ALTER TABLESPACE ts RENAME TO innodb_file_per_table_whatever;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+ALTER TABLESPACE ts RENAME TO innodb_file_per_table;
+ERROR 42000: InnoDB: `innodb_file_per_table` is a reserved tablespace name.
+#
+# Test cases for Bug #26073851
+# NO ERROR OR WARNING WHEN CREATING TABLES IN A RESERVED TABLESPACE
+#
+CREATE TABLESPACE altering ADD DATAFILE 'altering.ibd' ENGINE InnoDB;
+CREATE TABLE altering_table (id int) TABLESPACE altering;
+# Negative tests
+# Altering tables in the mysql tablespace must be allowed
+# because of the mysql upgrade client.
+ALTER TABLE mysql.user ENGINE InnoDB TABLESPACE mysql;
+# An arbitrary table cannot be altered to be in the mysql tablespace.
+ALTER TABLE altering_table TABLESPACE mysql;
+ERROR HY000: The table 'altering_table' may not be created in the reserved tablespace 'mysql'.
+# An arbitrary table cannot be created in the mysql tablespace.
+CREATE TABLE foos (id int) TABLESPACE mysql;
+ERROR HY000: The table 'foos' may not be created in the reserved tablespace 'mysql'.
+# An arbitrary partitioned table cannot have partitions in the mysql tablespace.
+CREATE TABLE partition_test (a INT, b INT) ENGINE = InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY RANGE(a) SUBPARTITION BY KEY(b) (
+PARTITION p1 VALUES LESS THAN (100) TABLESPACE mysql,
+PARTITION p2 VALUES LESS THAN (200) TABLESPACE mysql,
+PARTITION p3 VALUES LESS THAN (300) TABLESPACE mysql,
+PARTITION p4 VALUES LESS THAN (400) TABLESPACE mysql);
+ERROR HY000: The table 'partition_test' may not be created in the reserved tablespace 'mysql'.
+# An arbitrary partitioned table cannot have partitions in the mysql tablespace.
+CREATE TABLE partition_test2 (a INT, b INT) ENGINE = InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY RANGE(a) SUBPARTITION BY KEY(b) (
+PARTITION p1 VALUES LESS THAN (100) TABLESPACE altering,
+PARTITION p2 VALUES LESS THAN (200) TABLESPACE altering,
+PARTITION p3 VALUES LESS THAN (300) TABLESPACE mysql,
+PARTITION p4 VALUES LESS THAN (400) TABLESPACE mysql);
+ERROR HY000: The table 'partition_test2' may not be created in the reserved tablespace 'mysql'.
+# An arbitrary partitioned table cannot have subpartitions in the mysql tablespace.
+CREATE TABLE partition_test4 (i INTEGER) PARTITION BY RANGE(i)
+PARTITIONS 2 SUBPARTITION BY HASH(i) (
+PARTITION p0 VALUES LESS THAN(100) (
+SUBPARTITION sp00,
+SUBPARTITION sp01),
+PARTITION p1 VALUES LESS THAN(200) (
+SUBPARTITION sp10,
+SUBPARTITION sp11 TABLESPACE mysql));
+ERROR HY000: The table 'partition_test4' may not be created in the reserved tablespace 'mysql'.
+Clean up
+DROP TABLE altering_table;
+DROP TABLESPACE altering;
+SELECT (COUNT(*)=1) FROM INFORMATION_SCHEMA.FILES WHERE TABLESPACE_NAME = 'ts';
+(COUNT(*)=1)
+1
+ALTER TABLESPACE ts RENAME TO ts2;
+SELECT (COUNT(*)=1) FROM INFORMATION_SCHEMA.FILES WHERE TABLESPACE_NAME = 'ts2';
+(COUNT(*)=1)
+1
+SELECT (COUNT(*)=0) FROM INFORMATION_SCHEMA.FILES WHERE TABLESPACE_NAME = 'ts';
+(COUNT(*)=0)
+1
+# Should display ts2 as tablespace name
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int DEFAULT NULL
+) /*!50100 TABLESPACE `ts2` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check that table in renamed tablespace is accessible
+SELECT * FROM t1;
+i
+ALTER TABLE t1 ADD COLUMN j VARCHAR(32);
+# Should display ts2 as tablespace name, and new column
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int DEFAULT NULL,
+  `j` varchar(32) DEFAULT NULL
+) /*!50100 TABLESPACE `ts2` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 VALUES (0,'0'),(1,'1'),(2,'2'),(3,'3');
+# Check that a new table can be created in the renamed tablespace
+CREATE TABLE t2(j int) TABLESPACE ts2;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `j` int DEFAULT NULL
+) /*!50100 TABLESPACE `ts2` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t2 VALUES (0),(1),(2),(3);
+DROP TABLE t2;
+DROP TABLE t1;
+DROP TABLESPACE ts2;
+# 2. Tablespace operations without required privileges are rejected
+# Create user without any privileges.
+CREATE USER noprivs@localhost;
+REVOKE ALL ON *.* FROM noprivs@localhost;
+# Connect as user noprivs@localhost;
+# Should fail due to missing privileges
+CREATE TABLESPACE ts1 ADD DATAFILE 'df1.ibd';
+ERROR 42000: Access denied; you need (at least one of) the CREATE TABLESPACE privilege(s) for this operation
+ALTER TABLESPACE ts1 ADD DATAFILE 'df2.ibd';
+ERROR 42000: Access denied; you need (at least one of) the CREATE TABLESPACE privilege(s) for this operation
+ALTER TABLESPACE ts1 DROP DATAFILE 'df2.ibd';
+ERROR 42000: Access denied; you need (at least one of) the CREATE TABLESPACE privilege(s) for this operation
+ALTER TABLESPACE ts1 RENAME TO ts2;
+ERROR 42000: Access denied; you need (at least one of) the CREATE TABLESPACE privilege(s) for this operation
+DROP TABLESPACE ts1;
+ERROR 42000: Access denied; you need (at least one of) the CREATE TABLESPACE privilege(s) for this operation
+CREATE LOGFILE GROUP lg1
+ADD UNDOFILE 'lg1_undofile.dat'
+  INITIAL_SIZE 1M
+UNDO_BUFFER_SIZE = 1M;
+ERROR 42000: Access denied; you need (at least one of) the CREATE TABLESPACE privilege(s) for this operation
+DROP LOGFILE GROUP lg1;
+ERROR 42000: Access denied; you need (at least one of) the CREATE TABLESPACE privilege(s) for this operation
+DROP USER noprivs@localhost;
+# Tablespace operations are autocommited
+SET AUTOCOMMIT=OFF;
+BEGIN WORK;
+CREATE TABLESPACE ts1 ADD DATAFILE 'df1.ibd';
+ROLLBACK WORK;
+BEGIN WORK;
+ALTER TABLESPACE ts1 RENAME TO ts2;
+ROLLBACK WORK;
+BEGIN WORK;
+DROP TABLESPACE ts2;
+ROLLBACK WORK;
+SET AUTOCOMMIT=ON;
+#
+# Bug#26435800: DD::PROPERTIES_IMPL::GET_UINT64 (THIS=0X7FAC6822B0A0,
+# KEY=...,PROPERTIES_IMPL.H:
+#
+CREATE TABLESPACE ts1 ADD DATAFILE 'ts1.ibd' Engine=InnoDB;
+CREATE TABLE t1 (a INT, b INT) ENGINE = InnoDB TABLESPACE=ts1;
+ALTER TABLESPACE ts1 RENAME TO ts11;
+TRUNCATE TABLE t1;
+DROP TABLE t1;
+DROP TABLESPACE ts11;
+#
+# WL#12236 - CREATE TABLESPACE without DATAFILE clause.
+#
+CREATE TABLESPACE ts Engine=InnoDB;
+CREATE TABLESPACE ts1 Engine=InnoDB;
+SELECT NAME FROM INFORMATION_SCHEMA.INNODB_TABLESPACES WHERE NAME LIKE 'ts%';
+NAME
+ts
+ts1
+CREATE TABLE t1(c INT) ENGINE=InnoDB TABLESPACE=ts;
+INSERT INTO t1 VALUES(1);
+ALTER TABLE t1 TABLESPACE ts1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c` int DEFAULT NULL
+) /*!50100 TABLESPACE `ts1` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+DROP TABLESPACE ts1;
+DROP TABLESPACE ts;
+#
+# BUG#28656211 - DEBUG SERVER CRASHES WHEN CALL CREATE TABLESPACE WITHOUT DATAFILE
+#                FROM PROCEDURE.
+#
+CREATE PROCEDURE cr(IN start BIGINT)
+BEGIN
+SET @idx =start;
+WHILE (@idx > 0) DO
+CREATE TABLESPACE x;
+DROP TABLESPACE x;
+SET @idx = @idx - 1;
+END WHILE;
+END |
+CALL cr(3);
+DROP PROCEDURE cr;
+#
+# perform table join with two different tablespaces
+# alter tablespace and then perform table join
+#
+CREATE TABLESPACE ts1 Engine=InnoDB;
+CREATE TABLESPACE ts2 ADD DATAFILE 'ts2.ibd' Engine=InnoDB;
+CREATE TABLE t1(c1 INT, c2 CHAR(1)) ENGINE=InnoDB TABLESPACE=ts1;
+INSERT INTO t1 VALUES(1,'a');
+CREATE TABLE t2(c1 INT, c2 CHAR(1)) ENGINE=InnoDB TABLESPACE=ts2;
+INSERT INTO t2 VALUES(1,'b');
+SELECT * FROM t1 JOIN t2 WHERE t1.c1 = t2.c1;
+c1	c2	c1	c2
+1	a	1	b
+ALTER TABLESPACE ts2 RENAME TO ts3;
+SELECT * FROM t1 JOIN t2 WHERE t1.c1 = t2.c1;
+c1	c2	c1	c2
+1	a	1	b
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLESPACE ts1;
+DROP TABLESPACE ts3;
+#
+# tablespace creation fails if user does'nt have CREATE TABLESPACE privilege
+#
+CREATE USER user1@localhost;
+CREATE TABLESPACE ts2 Engine=InnoDB;
+ERROR 42000: Access denied; you need (at least one of) the CREATE TABLESPACE privilege(s) for this operation
+GRANT CREATE TABLESPACE on *.* TO user1@localhost;
+CREATE TABLESPACE ts2 Engine=InnoDB;
+CREATE TABLE t2(c INT) ENGINE=InnoDB TABLESPACE=ts2;
+DROP TABLE t2;
+DROP TABLESPACE ts2;
+DROP USER user1@localhost;
+#
+# Test case for:
+# Bug#29756808 assertion failure: trx0trx.*trx_state_eq(((trx)), trx_state_not_started).*
+# Bug#29368581 server crash assertion failure: buf0buf.cc after executing check table
+# Bug#29601004 assertion failure: buf0buf.cc.*:found while doing check table extended
+# Bug#29600913 assertion failure: fsp0fsp.cc:.*((space->flags & ((~(~0u << 1))<< (((((((0 + 1.*
+#
+#
+# Check that the kill query request is ignored when acquiring
+# locks on tables in tablespace, when ALTER TABLESPACE changes
+# encryption type.
+#
+# Create table t1 in tablespace and hold read lock on it.
+CREATE TABLESPACE ts ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+CREATE TABLE t1 (f1 int) tablespace=ts;
+LOCK TABLE t1 read;
+# In another thread, wait when ALTER TABLESPACE request for lock
+# upgrade.
+SET DEBUG_SYNC= 'upgrade_lock_for_tables_in_tablespace_kill_point SIGNAL cond2 WAIT_FOR cond3';
+ALTER TABLESPACE ts ENCRYPTION='Y';
+# Wait for ALTER to reach above condition and set KILL QUERY request.
+SET DEBUG_SYNC= 'now WAIT_FOR cond2';
+KILL QUERY @id;
+SET DEBUG_SYNC= 'now SIGNAL cond3';
+UNLOCK TABLES;
+# Verify that ALTER TABLESPACE does not fail with the fix.
+# Verify that server restarts after the fix.
+SET DEBUG_SYNC= "RESET";
+# restart
+DROP TABLE t1;
+DROP TABLESPACE ts;
+#
+# Check that the lock_wait_timeout is ignored when acquiring
+# locks on tables in tablespace, when ALTER TABLESPACE changes
+# encryption type.
+#
+# Create table t1 in tablespace and hold read lock on it.
+CREATE TABLESPACE ts ADD DATAFILE 'f.ibd' ENGINE InnoDB;
+CREATE TABLE t1 (f1 INT) TABLESPACE=ts;
+LOCK TABLE t1 READ, performance_schema.threads READ;
+set @@session.lock_wait_timeout=1;
+ALTER TABLESPACE ts ENCRYPTION='Y';
+UNLOCK TABLES;
+# Verify that ALTER TABLESPACE does not fail with the fix.
+# Verify that server restarts after the fix.
+# restart
+DROP TABLE t1;
+DROP TABLESPACE ts;
+#
+# BUG#29959193 - ERROR 1831 TABLESPACE EXISTS: EVEN IF CREATE TABLESPACE COMMAND DIDNT SUCCEED
+#
+SELECT NAME FROM information_schema.INNODB_TABLESPACES WHERE NAME LIKE 'ts1';
+SET SESSION DEBUG="+d, pre_commit_error";
+CREATE TABLESPACE ts1;
+ERROR HY000: Unknown error
+SET SESSION DEBUG="-d, pre_commit_error";
+CREATE TABLESPACE ts1;
+SELECT NAME FROM information_schema.INNODB_TABLESPACES WHERE NAME LIKE 'ts1';
+NAME	ts1
+SET SESSION DEBUG="+d,pre_commit_error";
+ALTER TABLESPACE ts1 RENAME TO ts11;
+ERROR HY000: Unknown error
+SET SESSION DEBUG="-d,pre_commit_error";
+ALTER TABLESPACE ts1 RENAME TO ts11;
+SELECT NAME FROM information_schema.INNODB_TABLESPACES WHERE NAME LIKE 'ts11';
+NAME	ts11
+DROP TABLESPACE ts11;
+#
+# WL#13341: Store options for secondary engines.
+# Testing engine and secondary engine attributes on tablespaces.
+#
+CREATE TABLESPACE ts1 ENGINE_ATTRIBUTE='';
+CREATE TABLESPACE ts2 ENGINE_ATTRIBUTE='{"c": "v"}';
+SELECT * FROM information_schema.tablespaces_extensions WHERE tablespace_name = 'ts2';
+TABLESPACE_NAME	ENGINE_ATTRIBUTE
+ts2	{"c": "v"}
+CREATE TABLESPACE ts3 ENGINE_ATTRIBUTE='{"c": v}';
+ERROR HY000: Invalid json attribute, error: "Invalid value." at pos 6: 'v}'
+ALTER TABLESPACE ts1 ENGINE_ATTRIBUTE='{"foo": "bar}';
+ERROR HY000: Invalid json attribute, error: "Missing a closing quotation mark in string." at pos 13: ''
+ALTER TABLESPACE ts1 ENGINE_ATTRIBUTE='{"foo": "bar"}';
+SELECT * FROM information_schema.tablespaces_extensions WHERE tablespace_name = 'ts1';
+TABLESPACE_NAME	ENGINE_ATTRIBUTE
+ts1	{"foo": "bar"}
+ALTER TABLESPACE ts1 RENAME TO ts11;
+SELECT * FROM information_schema.tablespaces_extensions WHERE tablespace_name = 'ts11';
+TABLESPACE_NAME	ENGINE_ATTRIBUTE
+ts11	{"foo": "bar"}
+DROP TABLESPACE ts2;
+DROP TABLESPACE ts11;

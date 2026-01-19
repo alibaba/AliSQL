@@ -1,25 +1,28 @@
-# 
+--source include/no_valgrind_without_big.inc
+#
 # Run subquery_sj.inc with semijoin and turn off all strategies, but FirstMatch
 #
 
---source include/have_semijoin.inc
---source include/have_firstmatch.inc
 set optimizer_switch='semijoin=on,firstmatch=on';
 
 --disable_query_log
-if (`select locate('materialization', @@optimizer_switch) > 0`) 
+if (`select locate('materialization', @@optimizer_switch) > 0`)
 {
   set optimizer_switch='materialization=off';
 }
-if (`select locate('loosescan', @@optimizer_switch) > 0`) 
+if (`select locate('loosescan', @@optimizer_switch) > 0`)
 {
   set optimizer_switch='loosescan=off';
 }
-if (`select locate('index_condition_pushdown', @@optimizer_switch) > 0`) 
+if (`select locate('duplicateweedout', @@optimizer_switch) > 0`)
+{
+  set optimizer_switch='duplicateweedout=off';
+}
+if (`select locate('index_condition_pushdown', @@optimizer_switch) > 0`)
 {
   set optimizer_switch='index_condition_pushdown=off';
 }
-if (`select locate('mrr', @@optimizer_switch) > 0`) 
+if (`select locate('mrr', @@optimizer_switch) > 0`)
 {
   set optimizer_switch='mrr=off';
 }
@@ -65,6 +68,7 @@ FROM t2 AS nt2
 WHERE 1 IN (SELECT it1.a
             FROM t1 AS it1 JOIN t6 AS it3 ON it1.a=it3.a);
 
+--sorted_result
 SELECT *
 FROM t2 AS nt2
 WHERE 1 IN (SELECT it1.a
@@ -76,6 +80,7 @@ FROM t2 AS nt2, t8 AS nt4
 WHERE 1 IN (SELECT it1.a
             FROM t1 AS it1 JOIN t6 AS it3 ON it1.a=it3.a);
 
+--sorted_result
 SELECT *
 FROM t2 AS nt2, t8 AS nt4
 WHERE 1 IN (SELECT it1.a

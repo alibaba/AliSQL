@@ -5,7 +5,7 @@ COUNT(@@GLOBAL.ssl_key)
 1 Expected
 '#---------------------BS_STVARS_049_02----------------------#'
 SET @@GLOBAL.ssl_key=1;
-ERROR HY000: Variable 'ssl_key' is a read only variable
+ERROR 42000: Incorrect argument type to variable 'ssl_key'
 Expected error 'Read only variable'
 SELECT COUNT(@@GLOBAL.ssl_key);
 COUNT(@@GLOBAL.ssl_key)
@@ -13,7 +13,7 @@ COUNT(@@GLOBAL.ssl_key)
 1 Expected
 '#---------------------BS_STVARS_049_03----------------------#'
 SELECT @@GLOBAL.ssl_key = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='ssl_key';
 @@GLOBAL.ssl_key = VARIABLE_VALUE
 1
@@ -23,7 +23,7 @@ COUNT(@@GLOBAL.ssl_key)
 1
 1 Expected
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='ssl_key';
 COUNT(VARIABLE_VALUE)
 1
@@ -48,6 +48,6 @@ SELECT COUNT(@@GLOBAL.ssl_key);
 COUNT(@@GLOBAL.ssl_key)
 1
 1 Expected
-SELECT ssl_key = @@SESSION.ssl_key;
+SELECT ssl_key;
 ERROR 42S22: Unknown column 'ssl_key' in 'field list'
-Expected error 'Readonly variable'
+Expected error 'Unknown column'

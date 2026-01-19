@@ -1,148 +1,312 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1994, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/******************************************************************//**
-@file include/ut0rnd.h
-Random numbers and hashing
+/** @file include/ut0rnd.h
+ Random numbers and hashing
 
-Created 1/20/1994 Heikki Tuuri
-***********************************************************************/
+ Created 1/20/1994 Heikki Tuuri
+ ***********************************************************************/
 
 #ifndef ut0rnd_h
 #define ut0rnd_h
 
+#include <atomic>
+#include <cstdint>
+
 #include "univ.i"
-
-#ifndef UNIV_INNOCHECKSUM
-
 #include "ut0byte.h"
+#include "ut0math.h"
 
-/** The 'character code' for end of field or string (used
-in folding records */
-#define UT_END_OF_FIELD		257
+#include "ut0class_life_cycle.h"
+#include "ut0crc32.h"
+#include "ut0seq_lock.h"
 
-/********************************************************//**
-This is used to set the random number seed. */
-UNIV_INLINE
-void
-ut_rnd_set_seed(
-/*============*/
-	ulint	 seed);		 /*!< in: seed */
-/********************************************************//**
-The following function generates a series of 'random' ulint integers.
-@return	the next 'random' number */
-UNIV_INLINE
-ulint
-ut_rnd_gen_next_ulint(
-/*==================*/
-	ulint	rnd);	/*!< in: the previous random number value */
-/*********************************************************//**
-The following function generates 'random' ulint integers which
-enumerate the value space (let there be N of them) of ulint integers
-in a pseudo-random fashion. Note that the same integer is repeated
-always after N calls to the generator.
-@return	the 'random' number */
-UNIV_INLINE
-ulint
-ut_rnd_gen_ulint(void);
-/*==================*/
-/********************************************************//**
-Generates a random integer from a given interval.
-@return	the 'random' number */
-UNIV_INLINE
-ulint
-ut_rnd_interval(
-/*============*/
-	ulint	low,	/*!< in: low limit; can generate also this value */
-	ulint	high);	/*!< in: high limit; can generate also this value */
-/*********************************************************//**
-Generates a random iboolean value.
-@return	the random value */
-UNIV_INLINE
-ibool
-ut_rnd_gen_ibool(void);
-/*=================*/
-/*******************************************************//**
-The following function generates a hash value for a ulint integer
-to a hash table of size table_size, which should be a prime or some
-random number to work reliably.
-@return	hash value */
-UNIV_INLINE
-ulint
-ut_hash_ulint(
-/*==========*/
-	ulint	 key,		/*!< in: value to be hashed */
-	ulint	 table_size);	/*!< in: hash table size */
-/*************************************************************//**
-Folds a 64-bit integer.
-@return	folded value */
-UNIV_INLINE
-ulint
-ut_fold_ull(
-/*========*/
-	ib_uint64_t	d)	/*!< in: 64-bit integer */
-	MY_ATTRIBUTE((const));
-/*************************************************************//**
-Folds a character string ending in the null character.
-@return	folded value */
-UNIV_INLINE
-ulint
-ut_fold_string(
-/*===========*/
-	const char*	str)	/*!< in: null-terminated string */
-	MY_ATTRIBUTE((pure));
-/***********************************************************//**
-Looks for a prime number slightly greater than the given argument.
-The prime is chosen so that it is not near any power of 2.
-@return	prime */
-UNIV_INTERN
-ulint
-ut_find_prime(
-/*==========*/
-	ulint	n)	/*!< in: positive number > 100 */
-	MY_ATTRIBUTE((const));
+namespace ut {
+/** The following function generates pseudo-random 64bit integers which
+enumerate the value space generated by a linear congruence. This is very similar
+to what can be achieved with std::linear_congruential_engine<uint64_t, ...>. If
+you need reliably good pseudo-random numbers for some reason, please consider
+using std::mersenne_twister_engine<>.
+@return a pseudo-random number */
+[[nodiscard]] static inline uint64_t random_64();
 
-#endif /* !UNIV_INNOCHECKSUM */
+/** The following function returns fine clock count as random value.
+This is used for cases which need performance more than the true randomness.
+It is not causing any loads or stores, so it is very CPU-cache-friendly.
+Even for very frequent use, it doesn't cause any CPU cache pollution.
+@return a pseudo-random number */
+[[nodiscard]] static inline uint64_t random_64_fast();
 
-/*************************************************************//**
-Folds a pair of ulints.
-@return	folded value */
-UNIV_INLINE
-ulint
-ut_fold_ulint_pair(
-/*===============*/
-	ulint	n1,	/*!< in: ulint */
-	ulint	n2)	/*!< in: ulint */
-	MY_ATTRIBUTE((const));
-/*************************************************************//**
-Folds a binary string.
-@return	folded value */
-UNIV_INLINE
-ulint
-ut_fold_binary(
-/*===========*/
-	const byte*	str,	/*!< in: string of bytes */
-	ulint		len)	/*!< in: length */
-	MY_ATTRIBUTE((pure));
+/** Generates a pseudo-random integer from a given interval.
+@param[in]      low     low limit; can generate also this value
+@param[in]      high    high limit; can generate also this value
+@return the pseudo-random number within the [low, high] two-side inclusive range
+*/
+[[nodiscard]] static inline uint64_t random_from_interval(uint64_t low,
+                                                          uint64_t high);
 
+/** Generates a light-weight pseudo-random integer from a given interval.
+This is used for the cases which need performance more than the true randomness.
+@param[in]      low     low limit; can generate also this value
+@param[in]      high    high limit; can generate also this value
+@return the pseudo-random number within the [low, high] two-side inclusive range
+*/
+[[nodiscard]] static inline uint64_t random_from_interval_fast(uint64_t low,
+                                                               uint64_t high);
 
-#ifndef UNIV_NONINL
-#include "ut0rnd.ic"
-#endif
+/** Hashes a 64-bit integer.
+@param[in]	value	64-bit integer
+@return hashed value */
+[[nodiscard]] static inline uint64_t hash_uint64(uint64_t value);
+
+/** Hashes a character string ending in the null character.
+ @return hashed value */
+[[nodiscard]] static inline uint64_t hash_string(const char *str);
+
+/** Hashes a pair of 64bit integers.
+@param[in]	n1	first 64bit integer
+@param[in]	n2	second 64bit integer
+@return hashed value */
+[[nodiscard]] static inline uint64_t hash_uint64_pair(uint64_t n1, uint64_t n2);
+/** Hashes a binary buffer of given length.
+@param[in]  buf   buffer of bytes
+@param[in]  len   length
+@param[in]  seed  seed to be used in calculation. Can be previous value. A
+                  default value is just a randomly chosen number.
+@return hashed value */
+[[nodiscard]] static inline uint64_t hash_binary(
+    const byte *buf, size_t len, uint64_t seed = 0xacb1f3526e25dd39);
+
+/** Hashes a binary buffer of given length in the old innobase way. This is
+highly inefficient, don't use outside areas that require backward compatibility
+on data written to disk.
+@param[in]	str		buffer of bytes
+@param[in]	len		length
+@return hashed value */
+[[nodiscard]] static inline uint32_t hash_binary_ib(const byte *str,
+                                                    size_t len);
+
+namespace detail {
+/** Seed value of ut::random_64() */
+extern thread_local uint64_t random_seed;
+
+/** A helper method, it is used by hash_binary_ib for backward compatibility.
+NOTE: Do not use this method, it produces results that are not hashed well.
+Especially for sequences of pairs of <i+n, j+n> over n. */
+constexpr uint32_t hash_uint32_pair_ib(uint32_t n1, uint32_t n2) {
+  constexpr uint32_t HASH_RANDOM_MASK = 1463735687;
+  constexpr uint32_t HASH_RANDOM_MASK2 = 1653893711;
+
+  return ((((n1 ^ n2 ^ HASH_RANDOM_MASK2) << 8) + n1) ^ HASH_RANDOM_MASK) + n2;
+}
+
+/* Helper methods to read unaligned little-endian integers. These should be
+optimized to just simple, single reads on little-endian architecture like x86
+and x64. It may be different for SPARC (and in particular read_from_8(&some_u64)
+is not equal to some_u64's value. On SPARC the unaligned reads are prohibited,
+so for buffer that is not known to be aligned we will read data byte by byte.
+Note that the following methods and usages similar to what we do in
+hash_binary() could be applied to crc32 algorithm calculations and an early
+investigation showed 10-50% improvement in CRC32 speed for buffer lengths <=
+500. However, there was a lot of effort put into crc32 implementation to make
+sure it is efficient and generates correct, simple assembly for x64, ARM (and M1
+CPU) and other architectures. So in order to incorporate these ideas into CRC32
+a lot of testing is required to be performed again, with care. */
+
+static inline int64_t read_from_1(const byte *addr) { return *addr; }
+static inline int64_t read_from_2(const byte *addr) {
+  return read_from_1(addr) | (read_from_1(addr + 1) << 8);
+}
+static inline int64_t read_from_4(const byte *addr) {
+  return read_from_2(addr) | (read_from_2(addr + 2) << 16);
+}
+static inline int64_t read_from_8(const byte *addr) {
+  return read_from_4(addr) | (read_from_4(addr + 4) << 32);
+}
+
+/** Table for Tabulation Hashing, precomputed hash values for all byte values.
+The table could be for different amount of bits per chunk than 8, but 8 seems to
+yield faster hash calculation than 4 or 16bits - 4bits require 16 XOR operations
+and sets of bit manipulations, while 16bit require bigger tables that slow down
+caches. The indexes are set such that hash values for a specific byte value are
+stored in the same cache line (8 values * 8 bytes = 64B). This way it should be
+much faster and less demanding on CPU caches to calculate results for small
+integers (where most bytes are 0). */
+extern std::array<std::array<uint64_t, 8>, 256> tab_hash_lookup_table;
+
+}  // namespace detail
+
+static inline uint64_t random_64() {
+  detail::random_seed = hash_uint64(detail::random_seed);
+  return detail::random_seed;
+}
+
+static inline uint64_t random_64_fast() {
+  /* Granularity of my_timer_cycles() might be over 1, to keep constant rate for
+  frequency changes of CPU core clocks. Drops lower 5 bits. */
+  const uint64_t res = my_timer_cycles();
+  return res != 0 ? res >> 5 : random_64();
+}
+
+template <uint64_t random_64_func()>
+static inline uint64_t random_from_interval_gen(uint64_t low, uint64_t high) {
+  ut_ad(high >= low);
+  return low + (random_64_func() % (high - low + 1));
+}
+
+static inline uint64_t random_from_interval(uint64_t low, uint64_t high) {
+  return random_from_interval_gen<random_64>(low, high);
+}
+
+static inline uint64_t random_from_interval_fast(uint64_t low, uint64_t high) {
+  /* FIXME: To keep backward compatibility with the previous ut_rnd_interval(),
+  high value is not to be returned to keep same behavior for performance tuning
+  parameter.
+  (Bug#37212019: behavior related to innodb_spin_wait_delay changed in 8.0.30)
+  This function is not required accurate randomness, no real problems. */
+
+  if (low == high) {
+    return (low);
+  }
+
+  return random_from_interval_gen<random_64_fast>(low, high - 1);
+}
+
+static inline uint64_t hash_uint64(uint64_t value) {
+#ifndef CRC32_DEFAULT
+  if (ut_crc32_cpu_enabled) {
+    return crc32_hash_uint64(value);
+  }
+#endif /* !CRC32_DEFAULT */
+
+  /* This implements Tabulation Hashing. It is a simple yet effective algorithm
+  that easily passes the unit tests that check distributions of hash values
+  modulo different numbers. Other techniques like one from hash_uint64_pair_fast
+  or extended 4-universal version did have some problems for specific modulo
+  numbers or have been providing 61bit hashes. */
+  uint64_t res = 0;
+  for (size_t i = 0; i < sizeof(uint64_t); ++i) {
+    res ^= detail::tab_hash_lookup_table[(value >> (i * 8)) & 0xFF][i];
+  }
+  return res;
+}
+
+static inline uint64_t hash_uint64_pair(uint64_t n1, uint64_t n2) {
+  return hash_uint64(hash_uint64(n1) ^ n2);
+}
+
+static inline uint64_t hash_string(const char *str) {
+  return hash_binary(reinterpret_cast<const byte *>(str), strlen(str));
+}
+
+static inline uint64_t hash_binary(const byte *str, size_t len, uint64_t seed) {
+  /* Our implementation is slower than CRC32 while the CRC32 implementation is
+  super fast, especially for higher lengths as it leverages 3-fold parallelism
+  on CPU core pipeline level. */
+  if (len >= 15) {
+    /* The CRC32 is returning only 32bits of hash. We take out the first 8 bytes
+    to seed our 64bit hash just like we do when CRC32 is not used. */
+    const auto h = hash_uint64_pair(seed, detail::read_from_8(str));
+    return hash_uint64_pair(h, ut_crc32(str + 8, len - 8));
+  }
+
+  /* The following algorithm is based on idea of applying hash_uint64_pair for
+  64bit blocks of data. If there are less than 8 bytes remaining, we hash
+  remaining 4, 2 and 1 bytes for all input bytes have influence on result hash.
+  */
+
+  uint64_t h = seed;
+  size_t i = 0;
+  if (len & 8) {
+    h = hash_uint64_pair(h, detail::read_from_8(str + i));
+    i += 8;
+  }
+  uint64_t last_part = 0;
+  if ((len & 7) == 0) {
+    return h;
+  }
+  if (len & 4) {
+    last_part |= detail::read_from_4(str + i) << (16 + 8);
+    i += 4;
+  }
+  if (len & 2) {
+    last_part |= detail::read_from_2(str + i) << 8;
+    i += 2;
+  }
+  if (len & 1) {
+    last_part |= detail::read_from_1(str + i);
+    i += 1;
+  }
+  ut_ad(i == len);
+  return hash_uint64_pair(h, last_part);
+}
+
+static inline uint32_t hash_binary_ib(const byte *str, size_t len) {
+  uint32_t hash_value = 0;
+  const byte *str_end = str + (len & 0xFFFFFFF8);
+
+  ut_ad(str || !len);
+
+  while (str < str_end) {
+    hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+    hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+    hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+    hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+    hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+    hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+    hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+    hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+  }
+
+  switch (len & 0x7) {
+    case 7:
+      hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+      [[fallthrough]];
+    case 6:
+      hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+      [[fallthrough]];
+    case 5:
+      hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+      [[fallthrough]];
+    case 4:
+      hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+      [[fallthrough]];
+    case 3:
+      hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+      [[fallthrough]];
+    case 2:
+      hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+      [[fallthrough]];
+    case 1:
+      hash_value = detail::hash_uint32_pair_ib(hash_value, *str++);
+  }
+
+  return (hash_value);
+}
+}  // namespace ut
 
 #endif

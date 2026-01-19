@@ -1,0 +1,3 @@
+--initialize --innodb_page_size=64k
+--innodb_buffer_pool_size=5M
+--innodb_directories=$MYSQL_TMP_DIR

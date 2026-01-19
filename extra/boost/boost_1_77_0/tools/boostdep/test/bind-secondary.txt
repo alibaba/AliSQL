@@ -1,0 +1,6 @@
+Secondary dependencies for bind:
+
+core:
+    adds assert
+    adds static_assert
+

@@ -16,13 +16,12 @@
 #                                                                             #
 ###############################################################################
 
---source include/have_innodb.inc
 
 ####################################################################
 #   Display the default value                                      #
 ####################################################################
-SELECT @@GLOBAL.innodb_undo_directory;
---echo . Expected
+SELECT COUNT(@@GLOBAL.innodb_undo_directory);
+--echo 1 Expected
 
 
 ####################################################################
@@ -41,17 +40,21 @@ SELECT COUNT(@@GLOBAL.innodb_undo_directory);
 # Check if the value in GLOBAL table matches value in variable                 #
 ################################################################################
 
-SELECT VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+--disable_warnings
+SELECT @@GLOBAL.innodb_undo_directory = VARIABLE_VALUE
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_undo_directory';
---echo . Expected
+--enable_warnings
+--echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.innodb_undo_directory);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='innodb_undo_directory';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -81,5 +84,5 @@ SELECT COUNT(@@GLOBAL.innodb_undo_directory);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_undo_directory = @@SESSION.innodb_undo_directory;
---echo Expected error 'Readonly variable'
+SELECT innodb_undo_directory;
+--echo Expected error 'Unknown column'

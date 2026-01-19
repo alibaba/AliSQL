@@ -1,16 +1,23 @@
 #!/usr/bin/perl -w
 
-# Copyright (C) 2005-2008 MySQL AB
-#  All rights reserved. Use is subject to license terms.
+# Copyright (c) 2005, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -462,7 +469,9 @@ my %queries; # used for loadqueries/savequeries
 
 if(!$loadqueries)
 {
-    my $dsn = "DBI:mysql:host=$hostname";
+    my ($host,$port) = split(/:/, $hostname);
+    my $dsn = "DBI:mysql:host=$host";
+    $dsn.= ";port=$port" if ($port);
     $dsn.= ";mysql_socket=$socket" if ($socket);
     $dbh= DBI->connect($dsn, $user, $password) or exit(1);
     $report->dsn($dsn);
@@ -1327,7 +1336,7 @@ sub output
 	printf $f, 'Varsize NULL Bytes/Row';
 	printf $v, $t->vdm_null_bytes->{$_}||0 foreach @{$t->dm_versions};
 	print "\n";
-	printf $f, 'Avg Varside DM/Row';
+	printf $f, 'Avg Varsize DM/Row';
 	printf $v, (exists($t->row_vdm_size->{$_})?
 		    $t->row_vdm_size->{$_}: 0)
 		    foreach @{$r->versions};
@@ -1730,7 +1739,7 @@ ENDHTML
 	    push @r, (exists($t->row_vdm_size->{$_})?
 		      $t->row_vdm_size->{$_}: 0)
 		foreach @{$r->versions};
-	    print $self->tr('Avg Varside DM/Row',@r);
+	    print $self->tr('Avg Varsize DM/Row',@r);
 	}
 	print "</table>\n";
 	print $self->h4("Memory Calculations");

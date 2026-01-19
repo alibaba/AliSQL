@@ -23,8 +23,10 @@
 #    http://dev.mysql.com/doc/refman/5.1/en/server-system-variables.html       #
 #                                                                              #
 ################################################################################
+--source include/force_myisam_default.inc
 
---source include/not_embedded.inc
+# Skip the test if MyISAM is not available
+--source include/have_myisam.inc
 
 --disable_warnings
 DROP TABLE IF EXISTS t1;

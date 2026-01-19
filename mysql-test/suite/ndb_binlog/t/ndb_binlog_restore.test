@@ -4,13 +4,10 @@
 -- source include/have_case_sensitive_file_system.inc
 -- source include/have_ndb.inc
 -- source include/have_binlog_format_mixed_or_row.inc
+-- source suite/ndb/include/backup_restore_setup.inc
 
 # Directory containing the saved backup files
 let $backup_data_dir=$MYSQL_TEST_DIR/suite/ndb/backups;
-
---disable_warnings
-drop table if exists t1;
---enable_warnings
 
 --echo #
 --echo # create a table with some data with and without binlogging
@@ -27,13 +24,13 @@ insert into t1 values (1,1);
 --echo # reset and restore schema
 drop table t1;
 reset master;
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -m --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
-show tables;
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -m --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+select * from t1 where 1=0 /* force discover table */;
 
 --echo #
 --echo # restore and _no_ binlog
---exec $NDB_RESTORE --no-defaults --no-binlog -b $the_backup_id -n 1 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults --no-binlog -b $the_backup_id -n 2 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --no-binlog -b $the_backup_id -n 1 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --no-binlog -b $the_backup_id -n 2 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
 
 --echo #
 --echo # check the binlog, should be empty apart from our marker
@@ -43,20 +40,20 @@ create table binlogmarker (a int) engine=ndb;
 let $wait_binlog_event= binlogmarker;
 --source include/wait_for_binlog_event.inc
 
---source include/show_binlog_events2.inc
+--source include/show_binlog_events.inc
 
 --echo #
 --echo # reset and restore schema again
 drop table binlogmarker;
 drop table t1;
 reset master;
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -m --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
-show tables;
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -m --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+select * from t1 where 1=0 /* force discover table */;
 
 --echo #
 --echo # restore and  binlog should now happen as well as the marker
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
 
 --echo #
 --echo # check the binlog, should contain data
@@ -66,7 +63,7 @@ create table binlogmarker (a int) engine=ndb;
 let $wait_binlog_event= binlogmarker;
 --source include/wait_for_binlog_event.inc
 
---source include/show_binlog_events2.inc
+--source include/show_binlog_events.inc
 
 drop table binlogmarker, t1;
 
@@ -127,10 +124,12 @@ CREATE TABLE ACCOUNT_TYPE ( ACCOUNT_TYPE_ID INT UNSIGNED NOT NULL,
 --echo #
 --echo # reset, restore and  binlog should _not_ happen
 reset master;
---exec $NDB_RESTORE --no-defaults --no-binlog -b 1 -n 1 -p 1 -r $backup_data_dir/51 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults --no-binlog -b 1 -n 2 -p 1 -r $backup_data_dir/51 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR --no-binlog -b 1 -n 1 -p 1 -r $backup_data_dir/51 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR --no-binlog -b 1 -n 2 -p 1 -r $backup_data_dir/51 >> $NDB_TOOLS_OUTPUT
 
 select count(*) from TRANSACTION;
---source include/show_binlog_events2.inc
+--source include/show_binlog_events.inc
 
 DROP DATABASE BANK;
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT

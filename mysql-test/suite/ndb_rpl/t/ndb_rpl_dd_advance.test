@@ -5,9 +5,8 @@
 #### Include Section ####
 --source include/have_ndb.inc
 --source include/have_binlog_format_mixed_or_row.inc
---source include/ndb_default_cluster.inc
---source include/not_embedded.inc
 --source suite/ndb_rpl/ndb_master-slave.inc
+--source suite/ndb/include/backup_restore_setup.inc
 
 ######################################################
 # Requirment: Cluster DD and replication must be able#
@@ -34,12 +33,12 @@ CREATE TABLESPACE ts1
 ADD DATAFILE 'datafile.dat'
 USE LOGFILE GROUP lg1
 INITIAL_SIZE 24M
+EXTENT_SIZE 256K
 ENGINE=NDB;
 
 ALTER TABLESPACE ts1
 ADD DATAFILE 'datafile02.dat'
-INITIAL_SIZE 8M 
-ENGINE=NDB;
+INITIAL_SIZE 12M;
 
 CREATE TABLE t1
   (c1 INT NOT NULL PRIMARY KEY, 
@@ -92,13 +91,17 @@ CREATE INDEX t1_i ON t1(c2, c3);
 CREATE UNIQUE INDEX t1_i2 ON t1(c2);
 ALTER TABLE t1 ADD c4 TIMESTAMP;
 ALTER TABLE t1 ADD c5 DOUBLE;
-ALTER TABLE t1 ADD INDEX (c5);  
+ALTER TABLE t1 ADD INDEX (c5);
+--disable_warnings
 SHOW CREATE TABLE t1;
+--enable_warnings
 
 --echo **** Show first set of ALTERs on SLAVE ****
 --sync_slave_with_master
 connection slave;
+--disable_warnings
 SHOW CREATE TABLE t1;
+--enable_warnings
 
 --echo **** Second set of alters test 1 ****
 ############################################
@@ -122,12 +125,16 @@ ALTER TABLE t2 RENAME t1;
 
 --echo **** Show second set of ALTERs on MASTER ****
 
+--disable_warnings
 SHOW CREATE TABLE t1;
+--enable_warnings
 
 --echo **** Show second set of ALTERs on SLAVE ****
 --sync_slave_with_master
 connection slave;
+--disable_warnings
 SHOW CREATE TABLE t1;
+--enable_warnings
 
 --echo **** Third and last set of alters for test1  ****
 #########################################################
@@ -143,7 +150,7 @@ connection master;
 ALTER TABLE t1 CHANGE c1 c1 DOUBLE;
 ALTER TABLE t1 CHANGE c2 c2 DECIMAL(10,2);
 ALTER TABLE t1 DROP COLUMN c3;
-ALTER TABLE t1 CHANGE c4 c4 TEXT CHARACTER SET utf8;
+ALTER TABLE t1 CHANGE c4 c4 TEXT CHARACTER SET utf8mb4;
 ALTER TABLE t1 CHANGE c4 c4 BLOB;
 ALTER TABLE t1 CHANGE c4 c3 BLOB;
 set @b1 = 'b1';
@@ -153,13 +160,17 @@ UPDATE t1 SET c3=@b1 where c1 = 2;
  
 --echo **** Show last set of ALTERs on MASTER ****
 
+--disable_warnings
 SHOW CREATE TABLE t1;
+--enable_warnings
 SELECT * FROM t1 ORDER BY c1 LIMIT 5;
 
 --echo **** Show last set of ALTERs on SLAVE ****
 --sync_slave_with_master
 connection slave;
+--disable_warnings
 SHOW CREATE TABLE t1;
+--enable_warnings
 # Bug 18094
 SELECT * FROM t1 ORDER BY c1 LIMIT 5;
 SELECT * FROM t1 where c1 = 1;
@@ -190,12 +201,12 @@ CREATE TABLESPACE ts2
 ADD DATAFILE 'datafile03.dat'
 USE LOGFILE GROUP lg1
 INITIAL_SIZE 28M
+EXTENT_SIZE 256K
 ENGINE=NDB;
 
 ALTER TABLESPACE ts2
 ADD DATAFILE 'datafile04.dat'
-INITIAL_SIZE 18M
-ENGINE=NDB;
+INITIAL_SIZE 18M;
 
 let engine_type=NDBCLUSTER;
 let table_space=ts2;
@@ -230,8 +241,12 @@ while ($j)
 
 
 --echo ***** Time to try slave sync ***********
+--sync_slave_with_master
+
 --echo **** Must make sure slave is clean *****
 --connection slave
+USE tpcb;
+SELECT COUNT(*) FROM account;
 STOP SLAVE;
 RESET SLAVE;
 DROP PROCEDURE IF EXISTS tpcb.load;
@@ -243,24 +258,20 @@ DROP TABLE IF EXISTS tpcb.history;
 DROP DATABASE tpcb;
 
 ALTER TABLESPACE ts1
-DROP DATAFILE 'datafile.dat'
-ENGINE=NDB;
+DROP DATAFILE 'datafile.dat';
 
 ALTER TABLESPACE ts1
-DROP DATAFILE 'datafile02.dat'
-ENGINE=NDB;
+DROP DATAFILE 'datafile02.dat';
 
-DROP TABLESPACE ts1 ENGINE=NDB;
-
-ALTER TABLESPACE ts2
-DROP DATAFILE 'datafile03.dat'
-ENGINE=NDB;
+DROP TABLESPACE ts1;
 
 ALTER TABLESPACE ts2
-DROP DATAFILE 'datafile04.dat'
-ENGINE=NDB;
+DROP DATAFILE 'datafile03.dat';
 
-DROP TABLESPACE ts2 ENGINE=NDB;
+ALTER TABLESPACE ts2
+DROP DATAFILE 'datafile04.dat';
+
+DROP TABLESPACE ts2;
 
 DROP LOGFILE GROUP lg1 ENGINE=NDB;
 
@@ -285,7 +296,19 @@ SELECT COUNT(*) FROM history;
 --echo ************ Restore the slave ************************
 connection slave;
 CREATE DATABASE tpcb;
+
 --source include/ndb_restore_slave_eoption.inc
+
+# Wait until the following 7 object changes are synced:
+# Logfile group 'lg1'
+# Tablespace 'ts1'
+# Tablespace 'ts2'
+# Table 'tpcb.account'
+# Table 'tpcb.history'
+# Table 'tpcb.teller'
+# Table 'tpcb.branch'
+--let $max_wait = 60
+--source wait_immediate_metadata_sync.inc
 
 --echo ***** Check a few slave restore values ***************
 connection slave;
@@ -314,7 +337,7 @@ while ($j)
 --echo ***** Finsh the slave sync process *******
 --disable_query_log
 # 1. 2. 3.
---source include/ndb_setup_slave.inc
+--source suite/ndb_rpl/ndb_setup_slave.inc
 --enable_query_log
 
 # 4.
@@ -365,24 +388,20 @@ DROP TABLE tpcb.history;
 DROP DATABASE tpcb;
 
 ALTER TABLESPACE ts1
-DROP DATAFILE 'datafile.dat'
-ENGINE=NDB;
+DROP DATAFILE 'datafile.dat';
 
 ALTER TABLESPACE ts1
-DROP DATAFILE 'datafile02.dat'
-ENGINE=NDB;
+DROP DATAFILE 'datafile02.dat';
 
-DROP TABLESPACE ts1 ENGINE=NDB;
-
-ALTER TABLESPACE ts2
-DROP DATAFILE 'datafile03.dat'
-ENGINE=NDB;
+DROP TABLESPACE ts1;
 
 ALTER TABLESPACE ts2
-DROP DATAFILE 'datafile04.dat'
-ENGINE=NDB;
+DROP DATAFILE 'datafile03.dat';
 
-DROP TABLESPACE ts2 ENGINE=NDB;
+ALTER TABLESPACE ts2
+DROP DATAFILE 'datafile04.dat';
+
+DROP TABLESPACE ts2;
 
 DROP LOGFILE GROUP lg1 ENGINE=NDB;
 
@@ -401,3 +420,5 @@ diff_files $MYSQLTEST_VARDIR/tmp/RPL_DD_ADV_M.sql $MYSQLTEST_VARDIR/tmp/RPL_DD_A
 
 # End 5.1 test case
 --source include/rpl_end.inc
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT

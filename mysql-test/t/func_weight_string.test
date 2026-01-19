@@ -1,3 +1,7 @@
+
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
@@ -45,38 +49,21 @@ select hex(weight_string('aa' as binary(3)));
 select hex(weight_string(cast('aa' as binary(3))));
 
 #
-# If and only if one specifies "LEVEL numeric-list" (not "range"),
-# one may follow any "number" with [ASC|DESC][REVERSE]
-#
---error 1064
-select hex(weight_string('ab' level 1-1 ASC));
---error 1064
-select hex(weight_string('ab' level 1-1 DESC));
---error 1064
-select hex(weight_string('ab' level 1-1 REVERSE));
-
-#
-# If one says "DESC", then the weights come out NOTed
-# or negated for that level. 
-# If one says "REVERSE", then the weights come out in
-# reverse order for that level, that is, starting with
-# the last character and ending with the first character.
-#
-select hex(weight_string('ab' level 1 ASC));
-select hex(weight_string('ab' level 1 DESC));
-select hex(weight_string('ab' level 1 REVERSE));
-select hex(weight_string('ab' level 1 DESC REVERSE));
-
-#
 # If the result length is less than or equal to the
 # maximum possible length for the VARBINARY data type,
 # then the result data type is VARBINARY. Otherwise
 # the result data type is BLOB.
 #
-create table t1 select weight_string('test') as w;
+create table t1 charset latin1 select weight_string('test') as w;
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
-create table t1 select weight_string(repeat('t',66000)) as w;
+create table t1 charset latin1 select weight_string(repeat('t',66000)) as w;
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 
@@ -100,7 +87,7 @@ select coercibility(weight_string('test' collate latin1_swedish_ci));
 # Bug#33663 Character sets: weight_string function,
 # varchar column, wrong result
 #
-create table t1 (s1 varchar(5));
+create table t1 (s1 varchar(5)) charset latin1;
 insert into t1 values ('a'),(null);
 select hex(weight_string(s1)) from t1 order by s1;
 drop table t1;
@@ -108,6 +95,96 @@ drop table t1;
 --echo #
 --echo # BUG#11898467 - SERVER CRASHES ON SELECT HEX(WEIGHT_STRING(STR AS [CHAR|BINARY](N))) IF N IS BIG 
 --echo #
-SELECT HEX(WEIGHT_STRING('ab' AS CHAR(1000000000000000000))); 
-SELECT HEX(WEIGHT_STRING('ab' AS BINARY(1000000000000000000))); 
 
+--source include/count_sessions.inc
+SET GLOBAL max_allowed_packet=1024;
+
+connect (con1,localhost,root,,);
+
+SELECT HEX(WEIGHT_STRING('ab' AS CHAR(1000000))); 
+SELECT HEX(WEIGHT_STRING('ab' AS BINARY(1000000))); 
+
+connection default;
+disconnect con1;
+
+SET GLOBAL max_allowed_packet=default;
+
+--echo #
+--echo # BUG#21974321: WEIGHT_STRING RESULT IS WRONG IF USED IN A
+--echo #               VIEW (AS CHAR CLAUSE IS LOST)
+--echo #
+SET NAMES utf8;
+SET collation_connection=utf16_unicode_ci;
+CREATE TABLE t1 (a VARCHAR(10) CHARACTER SET latin2 COLLATE latin2_czech_cs);
+INSERT INTO t1 VALUES ('abcd');
+INSERT INTO t1 VALUES ('dcba');
+CREATE VIEW v1 AS SELECT WEIGHT_STRING(_latin1 'ab') AS b;
+CREATE VIEW v5 AS SELECT WEIGHT_STRING(a AS BINARY(2)) AS b FROM t1;
+CREATE VIEW v6 AS SELECT WEIGHT_STRING(a AS BINARY(6)) AS b FROM t1;
+SHOW CREATE VIEW v1;
+SHOW CREATE VIEW v5;
+SHOW CREATE VIEW v6;
+DROP VIEW v1;
+DROP VIEW v5;
+DROP VIEW v6;
+DROP TABLE t1;
+CREATE TABLE t1 (a VARCHAR(10)) charset latin1;
+INSERT INTO t1 VALUES ('abcd');
+INSERT INTO t1 VALUES ('dcba');
+CREATE VIEW v1 AS SELECT WEIGHT_STRING(_latin1 'ab') AS b;
+CREATE VIEW v2 AS SELECT WEIGHT_STRING(a) AS b FROM t1;
+CREATE VIEW v3 AS SELECT WEIGHT_STRING(a AS CHAR(2)) AS b FROM t1;
+CREATE VIEW v4 AS SELECT WEIGHT_STRING(a AS CHAR(6)) AS b FROM t1;
+CREATE VIEW v5 AS SELECT WEIGHT_STRING(a AS BINARY(2)) AS b FROM t1;
+CREATE VIEW v6 AS SELECT WEIGHT_STRING(a AS BINARY(6)) AS b FROM t1;
+SHOW CREATE VIEW v1;
+SHOW CREATE VIEW v2;
+SHOW CREATE VIEW v3;
+SHOW CREATE VIEW v4;
+SHOW CREATE VIEW v5;
+SHOW CREATE VIEW v6;
+SELECT HEX(b) FROM v1;
+SELECT HEX(WEIGHT_STRING(_latin1 'ab'));
+SELECT HEX(b) FROM v2;
+SELECT HEX(b) FROM v3;
+SELECT HEX(b) FROM v4;
+SELECT HEX(b) FROM v5;
+SELECT HEX(WEIGHT_STRING(a AS BINARY(2))) FROM t1;
+SELECT HEX(b) FROM v6;
+SELECT HEX(WEIGHT_STRING(a AS BINARY(6))) FROM t1;
+DROP VIEW v1;
+DROP VIEW v2;
+DROP VIEW v3;
+DROP VIEW v4;
+DROP VIEW v5;
+DROP VIEW v6;
+DROP TABLE t1;
+
+--echo #
+--echo # BUG#27752619: ASSERTION FAILED: SRC WEIGHT_STRING IN
+--echo #               MY_STRNXFRM_UNICODE_FULL_BIN
+--echo #
+SELECT HEX(WEIGHT_STRING(JSON_UNQUOTE(JSON_SET('{}','$',''))));
+
+--echo #
+--echo # Bug #30898753: DISTINCT(HEX(WEIGHT_STRING(CH))) CUT RESULT OFF
+--echo #
+
+CREATE TABLE t1 ( ch VARCHAR(1) COLLATE latin2_czech_cs );
+INSERT INTO t1 VALUES (0x4F);
+SELECT DISTINCT HEX(WEIGHT_STRING(ch)) FROM t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #32744772 REGRESSION: TRIM CRASHES IN STRING::LENGTH
+--echo #
+
+# Other tests in this file use latin1
+SET NAMES DEFAULT;
+
+--error ER_CANNOT_CONVERT_STRING
+DO ltrim(weight_string(1));
+--error ER_CANNOT_CONVERT_STRING
+DO rtrim(weight_string(1));
+
+SET NAMES latin1;

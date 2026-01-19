@@ -1,0 +1,96 @@
+# ==== Purpose ====
+#
+# Verify that `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option is settable for GR channels.
+# Except the value `GENERATE`
+#
+# ==== Implementation ====
+#
+# 1. Check that the value GENERATE can not be used for REQUIRE_TABLE_PRIMARY_KEY_CHECK
+#    with Group Replication channels
+# 2. Set `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option for the applier channel
+#    Start a member and check the `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option is set
+# 3. Block the applier to block server 2 recovery
+# 4. Set `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option for the recovery channel
+#    Start the member and check the `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option is set
+# 5. Cleanup
+#
+# ==== References ====
+#
+# WL#13239: Enable/disable primary key checks on slaves
+# WL#15419: Make the replica_generate_invisible_primary_key option settable per channel
+#
+
+--source include/have_debug_sync.inc
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--source include/group_replication.inc
+
+--echo
+--echo # 1. Check that the value GENERATE can not be used for REQUIRE_TABLE_PRIMARY_KEY_CHECK
+--echo #    with Group Replication channels
+
+--error ER_REQUIRE_TABLE_PRIMARY_KEY_CHECK_GENERATE_WITH_GR
+--eval CHANGE REPLICATION SOURCE TO REQUIRE_TABLE_PRIMARY_KEY_CHECK = GENERATE FOR CHANNEL "group_replication_recovery"
+
+--error ER_REQUIRE_TABLE_PRIMARY_KEY_CHECK_GENERATE_WITH_GR
+--eval CHANGE REPLICATION SOURCE TO REQUIRE_TABLE_PRIMARY_KEY_CHECK = GENERATE FOR CHANNEL "group_replication_applier"
+
+--echo
+--echo # 2. Set `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option for the applier channel
+--echo #    Start a member and check the `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option is set
+
+--eval CHANGE REPLICATION SOURCE TO REQUIRE_TABLE_PRIMARY_KEY_CHECK = OFF FOR CHANNEL "group_replication_applier"
+
+--source include/start_and_bootstrap_group_replication.inc
+
+--let $count = `SELECT COUNT(*) FROM performance_schema.replication_applier_configuration WHERE require_table_primary_key_check = 'OFF' AND channel_name = "group_replication_applier"`
+--let $assert_text = require_table_primary_key_check in performance_schema.replication_applier_configuration is set to OFF for "group_replication_applier"
+--let $assert_cond = 1 = $count
+--source include/assert.inc
+
+--echo
+--echo # 3. Block the applier to block server 2 recovery
+
+SET @@GLOBAL.DEBUG='+d,block_applier_updates';
+
+--echo
+--echo # 4. Set `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option for the recovery channel
+--echo #    Start the member and check the `REQUIRE_TABLE_PRIMARY_KEY_CHECK` option is set
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+
+--eval CHANGE REPLICATION SOURCE TO REQUIRE_TABLE_PRIMARY_KEY_CHECK = ON FOR CHANNEL "group_replication_recovery"
+
+--let $group_replication_start_member_state= RECOVERING
+--source include/start_group_replication.inc
+
+--let $wait_condition=SELECT COUNT(*)=1 FROM performance_schema.replication_applier_configuration WHERE require_table_primary_key_check = 'ON' AND channel_name = "group_replication_recovery"
+--source include/wait_condition.inc
+
+--let $count = `SELECT COUNT(*) FROM performance_schema.replication_applier_configuration WHERE require_table_primary_key_check = 'ON' AND channel_name = "group_replication_recovery"`
+--let $assert_text = require_table_primary_key_check in performance_schema.replication_applier_configuration is set to ON for "group_replication_recovery"
+--let $assert_cond = 1 = $count
+--source include/assert.inc
+
+--echo
+--echo # 5. Cleanup
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+
+SET DEBUG_SYNC = "now WAIT_FOR applier_read_blocked";
+SET @@GLOBAL.DEBUG='-d,block_applier_updates';
+SET DEBUG_SYNC = "now SIGNAL resume_applier_read";
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+
+--let $group_replication_member_state= ONLINE
+--source include/gr_wait_for_member_state.inc
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+SET DEBUG_SYNC= 'RESET';
+
+--source include/group_replication_end.inc

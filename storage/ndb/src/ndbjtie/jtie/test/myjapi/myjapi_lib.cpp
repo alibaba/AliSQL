@@ -1,14 +1,22 @@
 /*
- Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is designed to work with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have either included with
+ the program or referenced in the documentation.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -26,8 +34,8 @@
 #include "jtie_lib.hpp"
 
 // global myjapi library definitions
-#include "myjapi_MyJapiCtypes.hpp"
 #include "myjapi_MyJapi.hpp"
+#include "myjapi_MyJapiCtypes.hpp"
 #include "myjapi_classes.hpp"
 
 // ---------------------------------------------------------------------------
@@ -56,42 +64,38 @@ JTIE_INSTANTIATE_JINT_ENUM_TYPE_MAPPING(E::EE)
 
 // Initializes the JTie resources; called when the native library is loaded;
 // returns the JNI version needed by the native library or JNI_ERR.
-JNIEXPORT jint JNICALL
-JNI_OnLoad(JavaVM * jvm, void * reserved)
-{
-    TRACE("jint JNI_OnLoad(JavaVM *, void *)");
-    VERBOSE("loading the MyJAPI JTie library ...");
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
+  TRACE("jint JNI_OnLoad(JavaVM *, void *)");
+  VERBOSE("loading the MyJAPI JTie library ...");
 
-    const jint required_jni_version = JTie_OnLoad(jvm, reserved);
-    if (required_jni_version == JNI_ERR) {
-        PRINT_ERROR("JTie_OnLoad() returned: JNI_ERR");
-        return JNI_ERR;
-    }
+  const jint required_jni_version = JTie_OnLoad(jvm, reserved);
+  if (required_jni_version == JNI_ERR) {
+    PRINT_ERROR("JTie_OnLoad() returned: JNI_ERR");
+    return JNI_ERR;
+  }
 
-    VERBOSE("initializing the myapi resources ...");
-    myapi_init();
-    VERBOSE("... initialized the myapi resources");
+  VERBOSE("initializing the myapi resources ...");
+  myapi_init();
+  VERBOSE("... initialized the myapi resources");
 
-    VERBOSE("... loaded the MyJAPI JTie library");
-    return required_jni_version;
+  VERBOSE("... loaded the MyJAPI JTie library");
+  return required_jni_version;
 }
 
 // Called when the class loader containing the native library is garbage
 // collected; called in an unknown context (such as from a finalizer):
 // be conservative, and refrain from arbitrary Java call-backs.
-JNIEXPORT void JNICALL
-JNI_OnUnload(JavaVM * jvm, void * reserved)
-{
-    TRACE("void JNI_OnUnload(JavaVM *, void *)");
-    VERBOSE("unloading the MyJAPI JTie library...");
+JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *jvm, void *reserved) {
+  TRACE("void JNI_OnUnload(JavaVM *, void *)");
+  VERBOSE("unloading the MyJAPI JTie library...");
 
-    VERBOSE("releasing the myapi resources ...");
-    myapi_finit();
-    VERBOSE("... released the myapi resources");
+  VERBOSE("releasing the myapi resources ...");
+  myapi_finit();
+  VERBOSE("... released the myapi resources");
 
-    JTie_OnUnload(jvm, reserved);
+  JTie_OnUnload(jvm, reserved);
 
-    VERBOSE("... unloaded the MyJAPI JTie library");
+  VERBOSE("... unloaded the MyJAPI JTie library");
 }
 
 // ---------------------------------------------------------------------------

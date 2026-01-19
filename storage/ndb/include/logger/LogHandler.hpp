@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2006, 2008 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,18 +26,20 @@
 #ifndef LOGHANDLER_H
 #define LOGHANDLER_H
 
+#include <time.h>
+
 #include "Logger.hpp"
 
 /**
- * This class is the base class for all log handlers. A log handler is 
+ * This class is the base class for all log handlers. A log handler is
  * responsible for formatting and writing log messages to a specific output.
  *
- * A log entry consists of three parts: a header, <body/log message and a footer.
- * <pre>
- * 09:17:37 2002-03-13 [MgmSrv] INFO     -- Local checkpoint 13344 started.
+ * A log entry consists of three parts: a header, <body/log message and a
+ * footer. <pre> 09:17:37 2002-03-13 [MgmSrv] INFO     -- Local checkpoint 13344
+ * started.
  * </pre>
  *
- * Header format: TIME&DATE CATEGORY LEVEL -- 
+ * Header format: TIME&DATE CATEGORY LEVEL --
  *   TIME&DATE = ctime() format.
  *   CATEGORY  = Any string.
  *   LEVEL     = ALERT to DEBUG (Log levels)
@@ -39,33 +48,32 @@
  *
  * @version #@ $Id: LogHandler.hpp,v 1.7 2003/09/01 10:15:53 innpeno Exp $
  */
-class LogHandler
-{
-public:  
+class LogHandler {
+ public:
   /**
    * Default constructor.
    */
   LogHandler();
-  
+
   /**
    * Destructor.
    */
   virtual ~LogHandler();
 
-  virtual const char* handler_type() {return "NONE";};
+  virtual const char *handler_type() { return "NONE"; }
 
   /**
    * Opens/initializes the log handler.
    *
    * @return true if successful.
-   */ 
+   */
   virtual bool open() = 0;
 
   /**
-   * Closes/free any allocated resources used by the log handler. 
+   * Closes/free any allocated resources used by the log handler.
    *
    * @return true if successful.
-   */ 
+   */
   virtual bool close() = 0;
 
   /**
@@ -85,45 +93,30 @@ public:
    * @param level the log level.
    * @param pMsg the log message.
    */
-  void append(const char* pCategory, Logger::LoggerLevel level,
-	      const char* pMsg);
-  void append_impl(const char* pCategory, Logger::LoggerLevel level,
-		   const char* pMsg);
+  virtual void append(const char *pCategory, Logger::LoggerLevel level,
+                      const char *pMsg, time_t now);
+  void append_impl(const char *pCategory, Logger::LoggerLevel level,
+                   const char *pMsg, time_t now);
 
   /**
    * Returns a default formatted header. It currently has the
-   * follwing default format: '%H:%M:%S %Y-%m-%d [CATEGORY] LOGLEVEL --' 
+   * following default format: '%H:%M:%S %Y-%m-%d [CATEGORY] LOGLEVEL --'
    *
    * @param pStr the header string to format.
    * @param pCategory a category/name to tag the log entry with.
    * @param level the log level.
    * @return the header.
    */
-  const char* getDefaultHeader(char* pStr, const char* pCategory, 
-			       Logger::LoggerLevel level) const;
-  
+  const char *getDefaultHeader(char *pStr, const char *pCategory,
+                               Logger::LoggerLevel level, time_t now) const;
+
   /**
    * Returns a default formatted footer. Currently only returns a newline.
    *
    * @return the footer.
    */
-  const char* getDefaultFooter() const;
-  
-  /**
-   * Returns the date and time format used by ctime().
-   *
-   * @return the date and time format.
-   */
-  const char* getDateTimeFormat() const;
+  const char *getDefaultFooter() const;
 
-  /**
-   * Sets the date and time format. It needs to have the same arguments
-   * a ctime().
-   *
-   * @param pFormat  the date and time format.
-   */
-  void setDateTimeFormat(const char* pFormat);
-  
   /**
    * Returns the error code.
    */
@@ -139,22 +132,22 @@ public:
   /**
    * Returns the error string.
    */
-  char* getErrorStr();
+  const char *getErrorStr() const;
 
   /**
    * Sets the error string.
    *
    * @param str the error string.
    */
-  void setErrorStr(const char* str);
+  void setErrorStr(const char *str);
 
   /**
    * Parse logstring parameters
    *
-   * @param params list of parameters, formatted as "param=value", 
+   * @param params list of parameters, formatted as "param=value",
    * entries separated by ","
    * @return true on success, false on failure
-   */ 
+   */
   bool parseParams(const BaseString &params);
 
   /**
@@ -184,58 +177,48 @@ public:
    *
    * @param config where to store parameters
    */
-  virtual bool getParams(BaseString &config) {return false;};
+  virtual bool getParams(BaseString & /*config*/) { return false; }
 
-  virtual off_t getCurrentSize() {return -1;};
-  virtual off_t getMaxSize() {return -1;};
+  virtual ndb_off_t getCurrentSize() { return -1; }
+  virtual ndb_off_t getMaxSize() { return -1; }
 
-protected:
-  /** Max length of the date and time header in the log. */
-  STATIC_CONST( MAX_DATE_TIME_HEADER_LENGTH = 64 );
   /** Max length of the header the log. */
-  STATIC_CONST( MAX_HEADER_LENGTH = 128 );
-  /** Max lenght of footer in the log. */
-  STATIC_CONST( MAX_FOOTER_LENGTH = 128 );
+  static constexpr Uint32 MAX_HEADER_LENGTH = 128;
+
+ protected:
+  /** Max length of footer in the log. */
+  static constexpr Uint32 MAX_FOOTER_LENGTH = 128;
 
   /**
    * Write the header to the log.
-   * 
+   *
    * @param pCategory the category to tag the log with.
    * @param level the log level.
    */
-  virtual void writeHeader(const char* category, Logger::LoggerLevel level) = 0;
+  virtual void writeHeader(const char *pCategory, Logger::LoggerLevel level,
+                           time_t now) = 0;
 
   /**
    * Write the message to the log.
-   * 
+   *
    * @param pMsg the message to log.
    */
-  virtual void writeMessage(const char* pMsg) = 0;
+  virtual void writeMessage(const char *pMsg) = 0;
 
   /**
    * Write the footer to the log.
-   * 
+   *
    */
   virtual void writeFooter() = 0;
-  
-private: 
-  /**
-   * Returns a string date and time string.
-   * @note does not update time, uses m_now as time
-   * @param pStr a string.
-   * @return a string with date and time.
-   */
-  char* getTimeAsString(char* pStr) const;
-  time_t m_now;
 
+ private:
   /** Prohibit */
-  LogHandler(const LogHandler&);
-  LogHandler* operator = (const LogHandler&);
-  bool operator == (const LogHandler&);
+  LogHandler(const LogHandler &);
+  LogHandler *operator=(const LogHandler &);
+  bool operator==(const LogHandler &);
 
-  const char* m_pDateTimeFormat;
   int m_errorCode;
-  char* m_errorStr;
+  const char *m_errorStr;
 
   // for handling repeated messages
   unsigned m_count_repeated_messages;

@@ -25,7 +25,6 @@
 
 -- source include/have_log_bin.inc
 -- source include/have_binlog_format_row.inc
--- source include/have_innodb.inc
 
 RESET MASTER;
 -- let $MYSQLD_DATADIR= `select @@datadir`
@@ -72,8 +71,8 @@ COMMIT;
 
 FLUSH LOGS;
 
--- let $log_file1= $MYSQLD_DATADIR/master-bin.000001
--- let $log_file2= $MYSQLD_DATADIR/master-bin.000002
+-- let $log_file1= $MYSQLD_DATADIR/binlog.000001
+-- let $log_file2= $MYSQLD_DATADIR/binlog.000002
 -- let $outfile= $MYSQLTEST_VARDIR/tmp/b42941-mysqlbinlog
 -- let $cmd= $MYSQL_BINLOG
 
@@ -138,6 +137,17 @@ while($i)
   if (!`SELECT INSTR(@b42941_output.2, 'b42941')`)
   {
     -- echo **** ERROR **** Database name 'b42941' NOT FOUND in mysqlbinlog output ($flags $outfile.2).
+  }
+
+  #bug #13067813
+  if (`SELECT INSTR(@b42941_output.1, 'unknown table')`)
+  {
+    -- echo **** ERROR **** Table mapping failure detected
+  }
+
+  if (`SELECT INSTR(@b42941_output.2, 'unknown table')`)
+  {
+    -- echo **** ERROR **** Table mapping failure detected
   }
 
   dec $i;

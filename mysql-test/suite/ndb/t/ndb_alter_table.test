@@ -1,15 +1,8 @@
 -- source include/have_multi_ndb.inc
 
---disable_warnings
-DROP TABLE IF EXISTS t1, t2;
-drop database if exists mysqltest;
---enable_warnings
-
 connect (con1,localhost,root,,test);
 connect (con2,localhost,root,,test);
 
-connection con2;
--- sleep 2
 connection con1;
 
 #
@@ -22,7 +15,7 @@ CREATE TABLE t1 (
 ) ENGINE=ndbcluster;
 
 INSERT INTO t1 VALUES (9410,9412);
-  
+
 ALTER TABLE t1 ADD COLUMN c int not null;
 SELECT * FROM t1;
 
@@ -53,7 +46,7 @@ col2 varchar(30) not null,
 col3 varchar (20) not null,
 col4 varchar(4) not null,
 col5 enum('PENDING', 'ACTIVE', 'DISABLED') not null,
-col6 int not null, to_be_deleted int)  ENGINE=ndbcluster;
+col6 int not null, to_be_deleted int)  ENGINE=ndbcluster charset=latin1;
 --replace_column 6 # 7 # 8 # 10 # 12 # 13 # 14 # 18 #
 show table status;
 SET SQL_MODE=NO_AUTO_VALUE_ON_ZERO;
@@ -144,7 +137,7 @@ drop table t1;
 #create table t1 ( a int primary key, b varchar(10), c varchar(10), index (b) )
 #engine=ndb;
 #insert into t1 values (1,'one','one'), (2,'two','two'), (3,'three','three');
-#create index c on t1(c); 
+#create index c on t1(c);
 #connection server2;
 #select * from t1 where c = 'two';
 #connection server1;
@@ -194,7 +187,7 @@ drop table t1;
 ### This should work as transaction is ongoing...
 ##delete from t3;
 ##insert into t3 values (1);
-#commit; 
+#commit;
 
 ## This should fail as its a new transaction
 #--error 1146
@@ -318,12 +311,10 @@ c109 int(11) not null,
 primary key (ai),
 unique key tx1 (c002, c003, c004, c005)) engine=ndb;
 
-create index tx2 
+create index tx2
 on t1 (c010, c011, c012, c013);
 
 drop table t1;
-
-# End of 4.1 tests
 
 # simple test that auto incr is not lost at rename or alter
 create table t1 (a int primary key auto_increment, b int) engine=ndb;
@@ -371,9 +362,13 @@ drop table t1;
 
 # alter .. alter
 create table t1 (a int not null primary key, b int not null default 0, c varchar(254)) engine=ndb;
+--disable_warnings
 show create table t1;
+--enable_warnings
 alter table t1 alter b set default 1;
+--disable_warnings
 show create table t1;
+--enable_warnings
 drop table t1;
 
 # alter .. order by
@@ -384,4 +379,73 @@ alter table t1 order by b;
 select * from t1 order by b;
 drop table t1;
 
---echo End of 5.1 tests
+#
+# Alter main memory columns to disk columns (by copying the table)
+#
+
+CREATE LOGFILE GROUP lg1
+ADD UNDOFILE 'undofile.dat'
+ENGINE = ndb;
+
+CREATE TABLESPACE ts1
+ADD DATAFILE 'datafile.dat'
+USE LOGFILE GROUP lg1
+ENGINE = ndb;
+
+CREATE TABLE t1
+(a INT NOT NULL PRIMARY KEY, b VARCHAR(20), c VARCHAR(20))
+ENGINE = ndb;
+
+ALTER TABLE t1 TABLESPACE ts1, MODIFY c CHAR(20) STORAGE DISK;
+
+DROP TABLE t1;
+
+ALTER TABLESPACE ts1
+DROP DATAFILE 'datafile.dat';
+
+DROP TABLESPACE ts1;
+
+DROP LOGFILE GROUP lg1
+ENGINE = ndb;
+
+#
+# BUG19667566 : PARTITION BY WITH COMMENT LEADS TO MYSQL SERVER REBOOT IN MYSQL CLUSTER
+#
+--echo #test alter table add column with partion by and comment clause
+CREATE TABLE t1(id INT, PRIMARY KEY(id)) ENGINE=NDB CHARSET=latin1;
+ALTER TABLE t1 ADD value INT NULL, COMMENT='comment1' PARTITION BY KEY(id);
+--disable_warnings
+SHOW CREATE TABLE t1;
+--enable_warnings
+DROP TABLE t1;
+
+--echo #test alter table with and without ENGINE clause
+CREATE TABLE t1(id INT, PRIMARY KEY(id)) ENGINE=NDB CHARSET=latin1;
+ALTER TABLE t1 ENGINE=NDB PARTITION BY KEY(id);
+--disable_warnings
+SHOW CREATE TABLE t1;
+--enable_warnings
+DROP TABLE t1;
+
+CREATE TABLE t1(id INT, PRIMARY KEY(id)) ENGINE=NDB CHARSET=latin1;
+ALTER TABLE t1 PARTITION BY KEY(id);
+--disable_warnings
+SHOW CREATE TABLE t1;
+--enable_warnings
+DROP TABLE t1;
+ 
+--echo bug#24577931 table comment is case sensitive
+create table tbasic(
+  id int not null,
+  name varchar(20), age int
+) engine=ndb charset=latin1;
+
+SELECT read_backup, fully_replicated from ndbinfo.dictionary_tables
+  WHERE table_name = 'tbasic';
+
+alter table tbasic algorithm=copy, comment="NDB_TABLE=FULLY_REPLICATEd=1";
+
+SELECT read_backup, fully_replicated from ndbinfo.dictionary_tables
+  WHERE table_name = 'tbasic';
+
+drop table tbasic;

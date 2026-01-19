@@ -1,0 +1,130 @@
+[/
+  Copyright 2011 - 2020 John Maddock.
+  Copyright 2013 - 2019 Paul A. Bristow.
+  Copyright 2013 Christopher Kormanyos.
+
+  Distributed under the Boost Software License, Version 1.0.
+  (See accompanying file LICENSE_1_0.txt or copy at
+  http://www.boost.org/LICENSE_1_0.txt).
+]
+
+[section:rational_performance Rational Type Performance]
+
+Note that these tests are carefully designed to test performance of the underlying algorithms
+and not memory allocation or variable copying.  As usual, performance results should be taken
+with a healthy dose of scepticism, and real-world performance may vary widely depending upon the
+specifics of the program.  In each table relative times are given first, with the best performer
+given a score of 1.  Total actual times are given in brackets, measured in seconds for 500000
+operations.
+
+[table Operator *
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][2.59318 (1.11835s)][3.74332 (6.61855s)][4.71871 (18.5981s)][5.48511 (47.0022s)]]
+[[mpq_rational][[*1] (0.431264s)][[*1] (1.7681s)][[*1] (3.94136s)][[*1] (8.56905s)]]
+]
+[table Operator *(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][5.63431 (0.612884s)][25.5205 (2.83784s)][64.6798 (7.61151s)][135.335 (19.4821s)]]
+[[mpq_rational][[*1] (0.108777s)][[*1] (0.111198s)][[*1] (0.11768s)][[*1] (0.143955s)]]
+]
+[table Operator *(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][4.44786 (0.691659s)][18.4155 (2.97414s)][44.4009 (7.64879s)][98.4603 (19.5719s)]]
+[[mpq_rational][[*1] (0.155504s)][[*1] (0.161502s)][[*1] (0.172267s)][[*1] (0.19878s)]]
+]
+[table Operator *=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][4.12301 (0.690473s)][20.2597 (3.35519s)][42.8043 (7.47312s)][94.2742 (19.3092s)]]
+[[mpq_rational][[*1] (0.167468s)][[*1] (0.165609s)][[*1] (0.174588s)][[*1] (0.20482s)]]
+]
+[table Operator +
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][8.51825 (1.97719s)][7.8609 (7.34254s)][9.73008 (21.2507s)][11.1497 (49.7843s)]]
+[[mpq_rational][[*1] (0.232113s)][[*1] (0.93406s)][[*1] (2.18402s)][[*1] (4.46507s)]]
+]
+[table Operator +(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][7.17647 (0.669913s)][29.8489 (2.91217s)][75.7668 (7.40631s)][254.371 (29.7057s)]]
+[[mpq_rational][[*1] (0.0933486s)][[*1] (0.0975637s)][[*1] (0.0977514s)][[*1] (0.116781s)]]
+]
+[table Operator +(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][12.4996 (1.16835s)][33.6691 (3.37438s)][82.0167 (8.08959s)][171.692 (19.9733s)]]
+[[mpq_rational][[*1] (0.0934708s)][[*1] (0.100222s)][[*1] (0.0986335s)][[*1] (0.116332s)]]
+]
+[table Operator +=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][11.7663 (1.14891s)][34.4202 (3.45541s)][78.1856 (8.17612s)][161.351 (20.0733s)]]
+[[mpq_rational][[*1] (0.0976436s)][[*1] (0.100389s)][[*1] (0.104573s)][[*1] (0.124408s)]]
+]
+[table Operator -
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][8.56942 (2.0234s)][7.88071 (7.38282s)][9.54207 (19.913s)][11.4343 (50.8786s)]]
+[[mpq_rational][[*1] (0.236118s)][[*1] (0.936822s)][[*1] (2.08686s)][[*1] (4.44964s)]]
+]
+[table Operator -(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][6.62286 (0.62794s)][30.6629 (2.96506s)][75.926 (7.56072s)][199.475 (23.42s)]]
+[[mpq_rational][[*1] (0.094814s)][[*1] (0.0966986s)][[*1] (0.0995801s)][[*1] (0.117408s)]]
+]
+[table Operator -(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][12.3835 (1.16081s)][36.0761 (3.40187s)][83.3673 (8.26011s)][169.239 (20.5682s)]]
+[[mpq_rational][[*1] (0.0937381s)][[*1] (0.094297s)][[*1] (0.099081s)][[*1] (0.121534s)]]
+]
+[table Operator -=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][11.6833 (1.16049s)][36.6427 (3.64132s)][77.0952 (8.10257s)][160.444 (20.0829s)]]
+[[mpq_rational][[*1] (0.0993285s)][[*1] (0.0993737s)][[*1] (0.105098s)][[*1] (0.12517s)]]
+]
+[table Operator /
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][5.67626 (6.66075s)][5.99288 (21.0634s)][8.08809 (55.0195s)][10.5818 (149.774s)]]
+[[mpq_rational][[*1] (1.17344s)][[*1] (3.51474s)][[*1] (6.80254s)][[*1] (14.1539s)]]
+]
+[table Operator /(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][5.9046 (0.64166s)][25.5252 (2.84312s)][65.4027 (7.74325s)][134.42 (19.5619s)]]
+[[mpq_rational][[*1] (0.108671s)][[*1] (0.111385s)][[*1] (0.118393s)][[*1] (0.145528s)]]
+]
+[table Operator /(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][4.35172 (0.691696s)][18.2795 (2.94678s)][44.2487 (7.48547s)][99.1392 (19.5526s)]]
+[[mpq_rational][[*1] (0.158948s)][[*1] (0.161207s)][[*1] (0.169168s)][[*1] (0.197224s)]]
+]
+[table Operator /=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][4.14511 (0.685733s)][18.3237 (3.08065s)][43.3784 (7.43555s)][94.2547 (19.2754s)]]
+[[mpq_rational][[*1] (0.165432s)][[*1] (0.168124s)][[*1] (0.171411s)][[*1] (0.204503s)]]
+]
+[table Operator construct
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][[*1] (0.00323537s)][[*1] (0.00328614s)][[*1] (0.0032946s)][[*1] (0.00333283s)]]
+[[mpq_rational][28.9199 (0.0935664s)][28.1463 (0.0924926s)][28.2564 (0.0930936s)][27.5848 (0.0919355s)]]
+]
+[table Operator construct(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][[*1] (0.00333944s)][[*1] (0.00335336s)][[*1] (0.00348777s)][[*1] (0.00345967s)]]
+[[mpq_rational][29.1785 (0.09744s)][29.1475 (0.097742s)][27.4732 (0.0958203s)][28.6655 (0.099173s)]]
+]
+[table Operator construct(unsigned)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][[*1] (0.00321917s)][[*1] (0.00319471s)][[*1] (0.00327131s)][[*1] (0.00366486s)]]
+[[mpq_rational][30.8553 (0.0993283s)][30.5973 (0.0977495s)][29.5866 (0.0967869s)][28.3432 (0.103874s)]]
+]
+[table Operator str
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][5.80834 (0.00206821s)][11.5273 (0.00645497s)][18.1686 (0.0156602s)][38.1095 (0.0705044s)]]
+[[mpq_rational][[*1] (0.000356077s)][[*1] (0.000559971s)][[*1] (0.000861937s)][[*1] (0.00185005s)]]
+]
+
+[table:platform Platform Details
+[[Platform][Linux 5.3.0-24-generic, version \#26-Ubuntu SMP Thu Nov 14 01:33:18 UTC 2019, x86_64]]
+[[Compiler][GNU C++ version 9.2.1 20191008]]
+[[GMP][6.1.2]]
+[[MPFR][262146]]
+[[Boost][107200]]
+[[Run date][Dec 13 2019]]
+]
+
+[endsect]

@@ -1,0 +1,144 @@
+CREATE LOGFILE GROUP lg1
+ADD UNDOFILE 'lg1_undofile.dat'
+  INITIAL_SIZE 16M
+UNDO_BUFFER_SIZE 1M
+ENGINE NDB;
+CREATE TABLESPACE ts1
+ADD DATAFILE 'ts1_datafile.dat'
+  USE LOGFILE GROUP lg1
+INITIAL_SIZE 16M
+ENGINE NDB;
+CREATE TABLESPACE ts2
+ADD DATAFILE 'ts2_datafile.dat'
+  USE LOGFILE GROUP lg1
+INITIAL_SIZE 16M
+ENGINE NDB;
+CREATE TABLE t1 (
+a INT PRIMARY KEY,
+b INT
+) ENGINE NDB;
+INSERT INTO t1 VALUES (1, 2);
+CREATE TABLE t2 (
+a INT PRIMARY KEY,
+b INT
+) ENGINE NDB
+TABLESPACE ts1
+STORAGE DISK;
+INSERT INTO t2 VALUES (1, 1);
+Node 1 is being restarted
+
+Node 1: NOT_STARTED
+Database node 1 is being started.
+
+Node 1: STARTED
+Node 2: STARTED
+SELECT TABLESPACE_NAME, LOGFILE_GROUP_NAME
+FROM INFORMATION_SCHEMA.FILES
+WHERE ENGINE = "NDBCLUSTER";
+TABLESPACE_NAME	LOGFILE_GROUP_NAME
+lg1	lg1
+ts1	lg1
+ts2	lg1
+SHOW TABLES;
+Tables_in_test
+t1
+t2
+INSERT INTO t1 VALUES (2, 3);
+SELECT * FROM t1;
+a	b
+1	2
+2	3
+INSERT INTO t2 VALUES (2, 3);
+SELECT * FROM t2;
+a	b
+1	1
+2	3
+Node 1 is being restarted
+
+Node 1: NOT_STARTED
+Database node 1 is being started.
+
+Node 1: STARTED
+Node 2: STARTED
+SELECT TABLESPACE_NAME, LOGFILE_GROUP_NAME
+FROM INFORMATION_SCHEMA.FILES
+WHERE ENGINE = "NDBCLUSTER";
+TABLESPACE_NAME	LOGFILE_GROUP_NAME
+lg1	lg1
+ts1	lg1
+ts2	lg1
+SHOW TABLES;
+Tables_in_test
+t1
+t2
+INSERT INTO t1 VALUES (3, 4);
+SELECT * FROM t1;
+a	b
+1	2
+2	3
+3	4
+INSERT INTO t2 VALUES (5, 8);
+SELECT * FROM t2;
+a	b
+1	1
+2	3
+5	8
+Executing RESTART on all nodes.
+Starting shutdown. This may take a while. Please wait...
+All DB nodes are being restarted.
+
+Node 1: NOT_STARTED
+Node 2: NOT_STARTED
+NDB Cluster is being started.
+NDB Cluster is being started.
+
+Node 1: STARTED
+Node 2: STARTED
+# verify that the mysqld detected the restart
+include/assert_grep.inc [Detect normal restart in MySQL Server 1]
+include/assert_grep.inc [Detect normal restart in MySQL Server 2]
+SELECT TABLESPACE_NAME, LOGFILE_GROUP_NAME
+FROM INFORMATION_SCHEMA.FILES
+WHERE ENGINE = "NDBCLUSTER";
+TABLESPACE_NAME	LOGFILE_GROUP_NAME
+lg1	lg1
+ts1	lg1
+ts2	lg1
+SHOW TABLES;
+Tables_in_test
+t1
+t2
+INSERT INTO t1 VALUES (4, 5);
+SELECT * FROM t1;
+a	b
+1	2
+2	3
+3	4
+4	5
+INSERT INTO t2 VALUES (13, 21);
+SELECT * FROM t2 ORDER BY a;
+a	b
+1	1
+2	3
+5	8
+13	21
+Executing RESTART on all nodes.
+Starting shutdown. This may take a while. Please wait...
+All DB nodes are being restarted.
+
+Node 1: NOT_STARTED
+Node 2: NOT_STARTED
+NDB Cluster is being started.
+NDB Cluster is being started.
+
+Node 1: STARTED
+Node 2: STARTED
+# verify that the mysqld detected the initial restart
+include/assert_grep.inc [Detect initial restart in MySQL Server 1]
+include/assert_grep.inc [Detect initial restart in MySQL Server 2]
+SELECT TABLESPACE_NAME, LOGFILE_GROUP_NAME
+FROM INFORMATION_SCHEMA.FILES
+WHERE ENGINE = "NDBCLUSTER";
+TABLESPACE_NAME	LOGFILE_GROUP_NAME
+SHOW TABLES;
+Tables_in_test

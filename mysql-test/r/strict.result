@@ -2,7 +2,7 @@ set @org_mode=@@sql_mode;
 set @@sql_mode='ansi,traditional';
 select @@sql_mode;
 @@sql_mode
-REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
+REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION
 DROP TABLE IF EXISTS t1, t2;
 CREATE TABLE t1 (col1 date);
 INSERT INTO t1 VALUES('2004-01-01'),('2004-02-29');
@@ -26,10 +26,12 @@ ERROR 22007: Incorrect date value: '0000-00-00' for column 'col1' at row 1
 INSERT INTO t1 VALUES ('59');
 ERROR 22007: Incorrect date value: '59' for column 'col1' at row 1
 set @@sql_mode='STRICT_ALL_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT INTO t1 VALUES('2004-01-03'),('2004-0-31');
 set @@sql_mode='STRICT_ALL_TABLES,NO_ZERO_IN_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT INTO t1 VALUES('2004-0-30');
 ERROR 22007: Incorrect date value: '2004-0-30' for column 'col1' at row 1
 INSERT INTO t1 VALUES('2004-01-04'),('2004-0-31'),('2004-01-05');
@@ -40,7 +42,7 @@ Warnings:
 Warning	1264	Out of range value for column 'col1' at row 1
 set @@sql_mode='STRICT_ALL_TABLES,NO_ZERO_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT INTO t1 VALUES('0000-00-00');
 ERROR 22007: Incorrect date value: '0000-00-00' for column 'col1' at row 1
 INSERT IGNORE INTO t1 VALUES('0000-00-00');
@@ -50,6 +52,8 @@ INSERT INTO t1 VALUES ('2004-0-30');
 INSERT INTO t1 VALUES ('2004-2-30');
 ERROR 22007: Incorrect date value: '2004-2-30' for column 'col1' at row 1
 set @@sql_mode='STRICT_ALL_TABLES,ALLOW_INVALID_DATES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT INTO t1 VALUES ('2004-2-30');
 set @@sql_mode='ansi,traditional';
 INSERT IGNORE INTO t1 VALUES('2004-02-29'),('2004-13-15'),('0000-00-00');
@@ -75,6 +79,8 @@ col1
 0000-00-00
 drop table t1;
 set @@sql_mode='strict_trans_tables';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 CREATE TABLE t1 (col1 date) engine=myisam;
 INSERT INTO t1 VALUES('2004-13-31'),('2004-1-1');
 ERROR 22007: Incorrect date value: '2004-13-31' for column 'col1' at row 1
@@ -90,6 +96,8 @@ INSERT ignore INTO t1 VALUES('2003-02-30');
 Warnings:
 Warning	1264	Out of range value for column 'col1' at row 1
 set @@sql_mode='STRICT_ALL_TABLES,ALLOW_INVALID_DATES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT ignore INTO t1 VALUES('2003-02-31');
 select * from t1;
 col1
@@ -102,6 +110,8 @@ col1
 2003-02-31
 drop table t1;
 set @@sql_mode='strict_trans_tables';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 CREATE TABLE t1 (col1 date) engine=innodb;
 INSERT INTO t1 VALUES('2004-13-31'),('2004-1-1');
 ERROR 22007: Incorrect date value: '2004-13-31' for column 'col1' at row 1
@@ -116,6 +126,8 @@ INSERT ignore INTO t1 VALUES('2003-02-30');
 Warnings:
 Warning	1264	Out of range value for column 'col1' at row 1
 set @@sql_mode='STRICT_ALL_TABLES,ALLOW_INVALID_DATES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT ignore INTO t1 VALUES('2003-02-31');
 select * from t1;
 col1
@@ -182,6 +194,8 @@ Warning	1264	Out of range value for column 'col1' at row 1
 INSERT INTO t1 VALUES ('59');
 ERROR 22007: Incorrect datetime value: '59' for column 'col1' at row 1
 set @@sql_mode='STRICT_ALL_TABLES,ALLOW_INVALID_DATES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT INTO t1 VALUES('2004-0-31 15:30:00');
 ERROR 22007: Incorrect datetime value: '2004-0-31 15:30:00' for column 'col1' at row 1
 INSERT INTO t1 VALUES('2004-10-0 15:30:00');
@@ -190,14 +204,14 @@ INSERT INTO t1 VALUES('2004-10-32 15:30:00');
 ERROR 22007: Incorrect datetime value: '2004-10-32 15:30:00' for column 'col1' at row 1
 INSERT INTO t1 VALUES('2004-02-30 15:30:04');
 ERROR 22007: Incorrect datetime value: '2004-02-30 15:30:04' for column 'col1' at row 1
-INSERT INTO t1 VALUES('0000-00-00 00:00:00');
+INSERT IGNORE INTO t1 VALUES('0000-00-00 00:00:00');
 set @@sql_mode='STRICT_ALL_TABLES,NO_ZERO_IN_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT INTO t1 VALUES('0000-00-00 00:00:00');
 set @@sql_mode='STRICT_ALL_TABLES,NO_ZERO_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT INTO t1 VALUES('0000-00-00 00:00:00');
 ERROR 22007: Incorrect datetime value: '0000-00-00 00:00:00' for column 'col1' at row 1
 set @@sql_mode='ansi,traditional';
@@ -220,11 +234,11 @@ ERROR HY000: Incorrect datetime value: '31.0.2004 15.30' for function str_to_dat
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('0.10.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '0.10.2004 15.30' for function str_to_date
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('31.9.2004 15.30','%d.%m.%Y %H.%i'));
-ERROR 22007: Incorrect date value: '2004-09-31 15:30:00' for column 'col1' at row 1
+ERROR HY000: Incorrect datetime value: '31.9.2004 15.30' for function str_to_date
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('32.10.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '32.10.2004 15.30' for function str_to_date
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('29.02.2003 15.30','%d.%m.%Y %H.%i'));
-ERROR 22007: Incorrect date value: '2003-02-29 15:30:00' for column 'col1' at row 1
+ERROR HY000: Incorrect datetime value: '29.02.2003 15.30' for function str_to_date
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('15.13.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '15.13.2004 15.30' for function str_to_date
 INSERT INTO t1 (col1) VALUES(STR_TO_DATE('00.00.0000','%d.%m.%Y'));
@@ -236,11 +250,11 @@ ERROR HY000: Incorrect datetime value: '31.0.2004 15.30' for function str_to_dat
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('0.10.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '0.10.2004 15.30' for function str_to_date
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('31.9.2004 15.30','%d.%m.%Y %H.%i'));
-ERROR 22007: Incorrect datetime value: '2004-09-31 15:30:00' for column 'col2' at row 1
+ERROR HY000: Incorrect datetime value: '31.9.2004 15.30' for function str_to_date
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('32.10.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '32.10.2004 15.30' for function str_to_date
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('29.02.2003 15.30','%d.%m.%Y %H.%i'));
-ERROR 22007: Incorrect datetime value: '2003-02-29 15:30:00' for column 'col2' at row 1
+ERROR HY000: Incorrect datetime value: '29.02.2003 15.30' for function str_to_date
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('15.13.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '15.13.2004 15.30' for function str_to_date
 INSERT INTO t1 (col2) VALUES(STR_TO_DATE('00.00.0000','%d.%m.%Y'));
@@ -252,11 +266,11 @@ ERROR HY000: Incorrect datetime value: '31.0.2004 15.30' for function str_to_dat
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('0.10.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '0.10.2004 15.30' for function str_to_date
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('31.9.2004 15.30','%d.%m.%Y %H.%i'));
-ERROR 22007: Incorrect datetime value: '2004-09-31 15:30:00' for column 'col3' at row 1
+ERROR HY000: Incorrect datetime value: '31.9.2004 15.30' for function str_to_date
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('32.10.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '32.10.2004 15.30' for function str_to_date
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('29.02.2003 15.30','%d.%m.%Y %H.%i'));
-ERROR 22007: Incorrect datetime value: '2003-02-29 15:30:00' for column 'col3' at row 1
+ERROR HY000: Incorrect datetime value: '29.02.2003 15.30' for function str_to_date
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('15.13.2004 15.30','%d.%m.%Y %H.%i'));
 ERROR HY000: Incorrect datetime value: '15.13.2004 15.30' for function str_to_date
 INSERT INTO t1 (col3) VALUES(STR_TO_DATE('00.00.0000','%d.%m.%Y'));
@@ -268,24 +282,24 @@ INSERT INTO t1 (col2) VALUES (CAST('2004-10-15 10:15' AS DATETIME));
 INSERT INTO t1 (col3) VALUES (CAST('2004-10-15 10:15' AS DATETIME));
 INSERT INTO t1 (col1) VALUES(CAST('0000-10-31' AS DATE));
 INSERT INTO t1 (col1) VALUES(CAST('2004-10-0' AS DATE));
-ERROR 22007: Incorrect date value: '2004-10-00' for column 'col1' at row 1
+ERROR 22007: Incorrect datetime value: '2004-10-0'
 INSERT INTO t1 (col1) VALUES(CAST('2004-0-10' AS DATE));
-ERROR 22007: Incorrect date value: '2004-00-10' for column 'col1' at row 1
+ERROR 22007: Incorrect datetime value: '2004-0-10'
 INSERT INTO t1 (col1) VALUES(CAST('0000-00-00' AS DATE));
 ERROR 22007: Incorrect datetime value: '0000-00-00'
 INSERT INTO t1 (col2) VALUES(CAST('0000-10-31 15:30' AS DATETIME));
 INSERT INTO t1 (col2) VALUES(CAST('2004-10-0 15:30' AS DATETIME));
-ERROR 22007: Incorrect datetime value: '2004-10-00 15:30:00' for column 'col2' at row 1
+ERROR 22007: Incorrect datetime value: '2004-10-0 15:30'
 INSERT INTO t1 (col2) VALUES(CAST('2004-0-10 15:30' AS DATETIME));
-ERROR 22007: Incorrect datetime value: '2004-00-10 15:30:00' for column 'col2' at row 1
+ERROR 22007: Incorrect datetime value: '2004-0-10 15:30'
 INSERT INTO t1 (col2) VALUES(CAST('0000-00-00' AS DATETIME));
 ERROR 22007: Incorrect datetime value: '0000-00-00'
 INSERT INTO t1 (col3) VALUES(CAST('0000-10-31 15:30' AS DATETIME));
 ERROR 22007: Incorrect datetime value: '0000-10-31 15:30:00' for column 'col3' at row 1
 INSERT INTO t1 (col3) VALUES(CAST('2004-10-0 15:30' AS DATETIME));
-ERROR 22007: Incorrect datetime value: '2004-10-00 15:30:00' for column 'col3' at row 1
+ERROR 22007: Incorrect datetime value: '2004-10-0 15:30'
 INSERT INTO t1 (col3) VALUES(CAST('2004-0-10 15:30' AS DATETIME));
-ERROR 22007: Incorrect datetime value: '2004-00-10 15:30:00' for column 'col3' at row 1
+ERROR 22007: Incorrect datetime value: '2004-0-10 15:30'
 INSERT INTO t1 (col3) VALUES(CAST('0000-00-00' AS DATETIME));
 ERROR 22007: Incorrect datetime value: '0000-00-00'
 drop table t1;
@@ -295,24 +309,24 @@ INSERT INTO t1 (col2) VALUES (CONVERT('2004-10-15 10:15',DATETIME));
 INSERT INTO t1 (col3) VALUES (CONVERT('2004-10-15 10:15',DATETIME));
 INSERT INTO t1 (col1) VALUES(CONVERT('0000-10-31' , DATE));
 INSERT INTO t1 (col1) VALUES(CONVERT('2004-10-0' , DATE));
-ERROR 22007: Incorrect date value: '2004-10-00' for column 'col1' at row 1
+ERROR 22007: Incorrect datetime value: '2004-10-0'
 INSERT INTO t1 (col1) VALUES(CONVERT('2004-0-10' , DATE));
-ERROR 22007: Incorrect date value: '2004-00-10' for column 'col1' at row 1
+ERROR 22007: Incorrect datetime value: '2004-0-10'
 INSERT INTO t1 (col1) VALUES(CONVERT('0000-00-00',DATE));
 ERROR 22007: Incorrect datetime value: '0000-00-00'
 INSERT INTO t1 (col2) VALUES(CONVERT('0000-10-31 15:30',DATETIME));
 INSERT INTO t1 (col2) VALUES(CONVERT('2004-10-0 15:30',DATETIME));
-ERROR 22007: Incorrect datetime value: '2004-10-00 15:30:00' for column 'col2' at row 1
+ERROR 22007: Incorrect datetime value: '2004-10-0 15:30'
 INSERT INTO t1 (col2) VALUES(CONVERT('2004-0-10 15:30',DATETIME));
-ERROR 22007: Incorrect datetime value: '2004-00-10 15:30:00' for column 'col2' at row 1
+ERROR 22007: Incorrect datetime value: '2004-0-10 15:30'
 INSERT INTO t1 (col2) VALUES(CONVERT('0000-00-00',DATETIME));
 ERROR 22007: Incorrect datetime value: '0000-00-00'
 INSERT INTO t1 (col3) VALUES(CONVERT('0000-10-31 15:30',DATETIME));
 ERROR 22007: Incorrect datetime value: '0000-10-31 15:30:00' for column 'col3' at row 1
 INSERT INTO t1 (col3) VALUES(CONVERT('2004-10-0 15:30',DATETIME));
-ERROR 22007: Incorrect datetime value: '2004-10-00 15:30:00' for column 'col3' at row 1
+ERROR 22007: Incorrect datetime value: '2004-10-0 15:30'
 INSERT INTO t1 (col3) VALUES(CONVERT('2004-0-10 15:30',DATETIME));
-ERROR 22007: Incorrect datetime value: '2004-00-10 15:30:00' for column 'col3' at row 1
+ERROR 22007: Incorrect datetime value: '2004-0-10 15:30'
 INSERT INTO t1 (col3) VALUES(CONVERT('0000-00-00',DATETIME));
 ERROR 22007: Incorrect datetime value: '0000-00-00'
 drop table t1;
@@ -360,7 +374,7 @@ UPDATE t1 SET col1=col1 / 0 WHERE col1 > 0;
 ERROR 22012: Division by 0
 set @@sql_mode='ERROR_FOR_DIVISION_BY_ZERO';
 Warnings:
-Warning	1681	'ERROR_FOR_DIVISION_BY_ZERO' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 INSERT INTO t1 values (1/0,1/0);
 Warnings:
 Warning	1365	Division by 0
@@ -843,6 +857,8 @@ NULL
 -99.99
 DROP TABLE t1;
 CREATE TABLE t1 (col1 FLOAT, col2 FLOAT UNSIGNED);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 INSERT INTO t1 VALUES (-1.1E-37,0),(+3.4E+38,+3.4E+38);
 INSERT INTO t1 VALUES ('-1.1E-37',0),('+3.4E+38','+3.4E+38');
 INSERT INTO t1 (col1) VALUES (3E-46);
@@ -893,6 +909,8 @@ NULL	NULL
 3.40282e38	0
 DROP TABLE t1;
 CREATE TABLE t1 (col1 DOUBLE PRECISION, col2 DOUBLE PRECISION UNSIGNED);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 INSERT INTO t1 VALUES (-2.2E-307,0),(2E-307,0),(+1.7E+308,+1.7E+308);
 INSERT INTO t1 VALUES ('-2.2E-307',0),('-2E-307',0),('+1.7E+308','+1.7E+308');
 INSERT INTO t1 (col1) VALUES (-2.2E-330);
@@ -1023,7 +1041,7 @@ CREATE TABLE t1 (col1 INT NOT NULL default 99, col2 CHAR(6) NOT NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE "t1" (
-  "col1" int(11) NOT NULL DEFAULT '99',
+  "col1" int NOT NULL DEFAULT '99',
   "col2" char(6) NOT NULL
 )
 INSERT INTO t1 VALUES (1, 'hello');
@@ -1116,11 +1134,6 @@ count(*)
 7
 Warnings:
 Warning	1411	Incorrect datetime value: '2004.12.12 10:22:61' for function str_to_date
-Warning	1411	Incorrect datetime value: '2004.12.12 10:22:61' for function str_to_date
-Warning	1411	Incorrect datetime value: '2004.12.12 10:22:61' for function str_to_date
-Warning	1411	Incorrect datetime value: '2004.12.12 10:22:61' for function str_to_date
-Warning	1411	Incorrect datetime value: '2004.12.12 10:22:61' for function str_to_date
-Warning	1411	Incorrect datetime value: '2004.12.12 10:22:61' for function str_to_date
 drop table t1;
 create table t1 (col1 char(3), col2 integer);
 insert into t1 (col1) values (cast(1000 as char(3)));
@@ -1153,9 +1166,9 @@ insert into t1 (col1) values (convert('0000-00-00',date));
 ERROR 22007: Incorrect datetime value: '0000-00-00'
 insert into t1 (col1) values (cast('0000-00-00' as date));
 ERROR 22007: Incorrect datetime value: '0000-00-00'
-set sql_mode='no_zero_date';
+set sql_mode='NO_ZERO_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 insert into t1 values (0,0,0);
 Warnings:
 Warning	1264	Out of range value for column 'col1' at row 1
@@ -1184,9 +1197,17 @@ insert into t1 select * from t1;
 ERROR 22007: Incorrect date value: '0000-00-00' for column 'col1' at row 1
 alter table t1 modify col1 datetime;
 ERROR 22007: Incorrect datetime value: '0000-00-00' for column 'col1' at row 1
-alter ignore table t1 modify col1 datetime;
+select * from t1;
+col1
+0000-00-00
+0000-00-00
+NULL
+drop table t1;
+create table t1 (col1 datetime);
+insert ignore into t1 values ('0000-00-00 00:00:00'),
+('0000-00-00 00:00:00'),
+(NULL);
 Warnings:
-Warning	1681	'IGNORE' is deprecated and will be removed in a future release.
 Warning	1264	Out of range value for column 'col1' at row 1
 Warning	1264	Out of range value for column 'col1' at row 2
 insert into t1 select * from t1;
@@ -1253,7 +1274,7 @@ Warnings:
 Warning	1364	Field 'i' doesn't have a default value
 DROP TABLE t1;
 set @@sql_mode='traditional';
-create table t1(a varchar(65537));
+create table t1(a varchar(65537)) charset latin1;
 ERROR 42000: Column length too big for column 'a' (max = 65535); use BLOB or TEXT instead
 create table t1(a varbinary(65537));
 ERROR 42000: Column length too big for column 'a' (max = 65535); use BLOB or TEXT instead
@@ -1263,9 +1284,9 @@ alter table t1 modify a bigint unsigned not null;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` bigint(20) unsigned NOT NULL,
+  `a` bigint unsigned NOT NULL,
   `b` date NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 set @@sql_mode='traditional';
 create table t1 (d date);
@@ -1286,20 +1307,20 @@ alter table t1 add primary key(a);
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) NOT NULL DEFAULT '0',
+  `a` int NOT NULL,
   `b` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`a`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1(a int, b timestamp not null default 20050102030405);
 alter table t1 add primary key(a);
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) NOT NULL DEFAULT '0',
+  `a` int NOT NULL,
   `b` timestamp NOT NULL DEFAULT '2005-01-02 03:04:05',
   PRIMARY KEY (`a`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 set @@sql_mode='traditional';
 create table t1(a bit(2));
@@ -1315,7 +1336,7 @@ show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
   `date` date NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2,t1;
 set @@sql_mode= @org_mode;
 set @@sql_mode='traditional';
@@ -1388,6 +1409,7 @@ i int comment
  123456789*123456789*123456789*123456789*');
 ERROR HY000: Comment for field 'i' is too long (max = 1024)
 set @@sql_mode= @org_mode;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1
 (i int comment
 '123456789*123456789*123456789*123456789*
@@ -1419,9 +1441,10 @@ create table t1
   123456789*123456789*123456789*123456789*');
 Warnings:
 Warning	1629	Comment for field 'i' is too long (max = 1024)
+SET sql_mode = default;
 select column_name, column_comment from information_schema.columns where
 table_schema = 'test' and table_name = 't1';
-column_name	column_comment
+COLUMN_NAME	COLUMN_COMMENT
 i	123456789*123456789*123456789*123456789*
   123456789*123456789*123456789*123456789*
   123456789*123456789*123456789*123456789*
@@ -1448,20 +1471,22 @@ i	123456789*123456789*123456789*123456789*
   123456789*123456789*123456789*12345
 drop table t1;
 set names utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 create table t1 (i int)
 comment '123456789*123456789*123456789*123456789*123456789*123456789*';
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `i` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 COMMENT='123456789*123456789*123456789*123456789*123456789*123456789*'
+  `i` int DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='123456789*123456789*123456789*123456789*123456789*123456789*'
 drop table t1;
 CREATE TABLE t3 (f1 INT) COMMENT 'כקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחן';
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `f1` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 COMMENT='כקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחן'
+  `f1` int DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='כקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחןכקבהחן'
 DROP TABLE t3;
 set sql_mode= 'traditional';
 create table t1(col1 tinyint, col2 tinyint unsigned, 
@@ -1510,7 +1535,7 @@ create table t1 (f1 enum('a','a'));
 ERROR HY000: Column 'f1' has duplicated value 'a' in ENUM
 set @@sql_mode='NO_ZERO_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 create table t1(a datetime not null);
 select count(*) from t1 where a is null;
 count(*)
@@ -1524,11 +1549,11 @@ End of 5.0 tests
 # WL#946 TIME/TIMESTAMP/DATETIME with fractional seconds: CAST to DATETIME
 #
 #
-# STR_TO_DATE with NO_ZERO_DATE did not return NULL (with warning)
+# STR_TO_DATE  with NO_ZERO_DATE did not return NULL (with warning)
 # in get_date(). Only did in val_str() and val_int().
 SET sql_mode='NO_ZERO_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 SELECT
 STR_TO_DATE('2001','%Y'),
 CONCAT(STR_TO_DATE('2001','%Y')),
@@ -1542,3 +1567,401 @@ Warning	1411	Incorrect datetime value: '2001' for function str_to_date
 #
 # End of 5.6 tests
 #
+#
+# WL#7467 : Deprecate ERROR_FOR_DIVISION_BY_ZERO, NO_ZERO_DATE,
+#             NO_ZERO_IN_DATE SQL MODES and make their
+#             functionality part of STRICT MODE
+#
+# Insertion of ZERO dates gives error if STRICT MODE
+# is enabled with NO_ZERO_DATE and NO_ZERO_IN_DATE modes. Also Division
+# by Zero would cause the statement to fail if STRICT MODE was enabled
+# with ERROR_FOR_DIVISION_BY_ZERO mode.
+#
+SET @@sql_mode = 'ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES';
+CREATE TABLE t1 (a DATE);
+INSERT INTO t1 VALUES('0000-00-00');
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+INSERT IGNORE INTO t1 VALUES('0000-00-00');
+Warnings:
+Warning	1264	Out of range value for column 'a' at row 1
+SELECT * FROM t1;
+a
+0000-00-00
+INSERT INTO t1 VALUES('2004-0-30');
+ERROR 22007: Incorrect date value: '2004-0-30' for column 'a' at row 1
+INSERT IGNORE INTO t1 VALUES('2004-0-30');
+Warnings:
+Warning	1264	Out of range value for column 'a' at row 1
+SELECT * FROM t1;
+a
+0000-00-00
+0000-00-00
+UPDATE t1 SET a = '0000-00-00';
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+UPDATE IGNORE t1 SET a = '0000-00-00';
+Warnings:
+Warning	1264	Out of range value for column 'a' at row 1
+Warning	1264	Out of range value for column 'a' at row 2
+SELECT * FROM t1;
+a
+0000-00-00
+0000-00-00
+UPDATE t1 SET a = '2004-0-30';
+ERROR 22007: Incorrect date value: '2004-0-30' for column 'a' at row 1
+UPDATE IGNORE t1 SET a = '2004-0-30';
+Warnings:
+Warning	1264	Out of range value for column 'a' at row 1
+Warning	1264	Out of range value for column 'a' at row 2
+SELECT * FROM t1;
+a
+0000-00-00
+0000-00-00
+INSERT INTO t1 SELECT * FROM t1;
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+INSERT IGNORE INTO t1 SELECT * FROM t1;
+Warnings:
+Warning	1292	Incorrect date value: '0000-00-00' for column 'a' at row 1
+Warning	1292	Incorrect date value: '0000-00-00' for column 'a' at row 1
+Warning	1264	Out of range value for column 'a' at row 1
+Warning	1264	Out of range value for column 'a' at row 2
+SELECT * FROM t1;
+a
+0000-00-00
+0000-00-00
+0000-00-00
+0000-00-00
+CREATE TABLE t2(b DATE) SELECT a FROM t1;
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+CREATE TABLE t2 (b DATE) IGNORE SELECT a FROM t1;
+Warnings:
+Warning	1264	Out of range value for column 'a' at row 1
+Warning	1264	Out of range value for column 'a' at row 2
+Warning	1264	Out of range value for column 'a' at row 3
+Warning	1264	Out of range value for column 'a' at row 4
+SELECT * FROM t2;
+b	a
+NULL	0000-00-00
+NULL	0000-00-00
+NULL	0000-00-00
+NULL	0000-00-00
+DROP TABLE t2;
+INSERT INTO t1 VALUES(1/0);
+ERROR 22012: Division by 0
+INSERT IGNORE INTO t1 VALUES(1/0);
+Warnings:
+Warning	1365	Division by 0
+SELECT * FROM t1;
+a
+0000-00-00
+0000-00-00
+0000-00-00
+0000-00-00
+NULL
+UPDATE t1 SET a = (1/0);
+ERROR 22012: Division by 0
+UPDATE IGNORE t1 SET a = (1/0);
+Warnings:
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+CREATE TABLE t2(b DATE) SELECT (1/0) FROM t1;
+ERROR 22012: Division by 0
+CREATE TABLE t2 (b DATE) IGNORE SELECT (1/0) FROM t1;
+Warnings:
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+SELECT * FROM t2;
+b	(1/0)
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+# Clean-up
+DROP TABLE t1,t2;
+SET @@sql_mode = 'STRICT_ALL_TABLES,ALLOW_INVALID_DATES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t1 (a1 INT, a2 DATETIME);
+UPDATE t1 SET a2={d '1789-07-14'} WHERE a1=0;
+# Clean-up
+DROP TABLE t1;
+SET sql_mode=@org_mode;
+#
+# BUG 11756690 - ERROR 22012 DIVISION BY 0 HANDLED BY HANDLER FOR SQLSTATE 23000 (ER_DUP_ENTRY)
+#
+SET sql_mode = 'ERROR_FOR_DIVISION_BY_ZERO,STRICT_ALL_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t1 (
+Id INTEGER NOT NULL AUTO_INCREMENT,
+PRIMARY KEY(Id),
+c1 INTEGER NOT NULL,
+c2 INTEGER NOT NULL
+)|
+CREATE PROCEDURE p1()
+BEGIN
+UPDATE t1 SET c1 = c1 / c2;
+END|
+CREATE PROCEDURE p2()
+BEGIN
+DECLARE EXIT HANDLER
+FOR SQLSTATE '23000' # (ER_DUP_ENTRY)
+BEGIN
+SELECT 'Duplication handled!';
+END;
+CALL p1();
+END|
+INSERT INTO t1 (Id, c1, c2) VALUES (1, 1, 0);
+CALL p1();
+ERROR 22012: Division by 0
+CALL p2();
+ERROR 22012: Division by 0
+# Clean-up
+DROP TABLE t1;
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+#
+# Restore mode
+#
+SET sql_mode=@org_mode;
+#
+# BUG#11744940 - TRADITIONAL MODE: CAST ALLOWS INVALID VALUE
+#
+SET sql_mode='traditional';
+CREATE TABLE t1 (col1 char(3));
+INSERT INTO t1 VALUES(1000);
+ERROR 22001: Data too long for column 'col1' at row 1
+SELECT * FROM t1;
+col1
+INSERT INTO t1 VALUES(cast(1000 as char(4)));
+ERROR 22001: Data too long for column 'col1' at row 1
+SELECT * FROM t1;
+col1
+INSERT INTO t1 VALUES(cast(1000 as char(3)));
+ERROR 22007: Truncated incorrect CHAR(3) value: '1000'
+SELECT * FROM t1;
+col1
+# Clean-up
+DROP TABLE t1;
+#
+# Restore mode
+#
+SET sql_mode=@org_mode;
+#
+# BUG#11744941 - TRADITIONAL MODE: BIGINT RANGE NOT CORRECTLY DELIMITED 
+#
+SET sql_mode='traditional';
+CREATE TABLE t1 (col1 bigint) engine=innodb;
+INSERT INTO t1 values(-9223372036854775808);
+INSERT INTO t1 VALUES(-9223372036854775809);
+ERROR 22003: Out of range value for column 'col1' at row 1
+SELECT * FROM t1;
+col1
+-9223372036854775808
+INSERT INTO t1 VALUES(9223372036854775807);
+INSERT INTO t1 VALUES(9223372036854775808);
+ERROR 22003: Out of range value for column 'col1' at row 1
+SELECT * FROM t1;
+col1
+-9223372036854775808
+9223372036854775807
+CREATE TABLE t2 (col1 bigint unsigned);
+INSERT INTO t1 VALUES(9223372036854775808);
+ERROR 22003: Out of range value for column 'col1' at row 1
+# Clean-up
+DROP TABLE t1;
+DROP TABLE t2;
+# Restore mode
+SET sql_mode=@org_mode;
+#
+# WL#6891- Test Coverage for ER_WARN_TOO_FEW_RECORDS in STRICT MODE
+#
+CREATE TABLE t1( a INT);
+CREATE TABLE t2( a INT, b INT);
+INSERT INTO t1 VALUES (1), (2), (3), (4);
+SET sql_mode= STRICT_ALL_TABLES;
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+SELECT * INTO OUTFILE 'MYSQLTEST_VARDIR/tmp/wl6614.txt' FROM t1;
+SELECT LOAD_FILE('MYSQLTEST_VARDIR/tmp/wl6614.txt');
+LOAD_FILE('MYSQLTEST_VARDIR/tmp/wl6614.txt')
+1
+2
+3
+4
+
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/wl6614.txt' INTO TABLE t2;
+ERROR 01000: Row 1 doesn't contain data for all columns
+SELECT * FROM t2;
+a	b
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/wl6614.txt' IGNORE INTO TABLE t2;
+Warnings:
+Warning	1261	Row 1 doesn't contain data for all columns
+Warning	1261	Row 2 doesn't contain data for all columns
+Warning	1261	Row 3 doesn't contain data for all columns
+Warning	1261	Row 4 doesn't contain data for all columns
+SELECT * FROM t2;
+a	b
+1	NULL
+2	NULL
+3	NULL
+4	NULL
+# Clean-up
+DROP TABLE t1;
+DROP TABLE t2;
+# Restore mode
+SET sql_mode=@org_mode;
+#
+# BUG#11751889 - TRIGGERS OVERRIDE STRICT SQL_MODE 
+# Fixed by WL#6891
+#
+SET sql_mode='STRICT_ALL_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t1 (
+id TINYINT UNSIGNED NOT NULL DEFAULT 0
+) ENGINE=MyISAM;
+CREATE TRIGGER t1_BI BEFORE INSERT ON t1
+FOR EACH ROW
+SET NEW.id := -1;
+INSERT INTO t1 VALUES (18);
+ERROR 22003: Out of range value for column 'id' at row 1
+# Clean-up
+DROP trigger t1_BI;
+DROP TABLE t1;
+# Restore mode
+SET sql_mode=@org_mode;
+#
+# BUG#16976939 - FIX ERROR MESSAGE ON DUPLICATE INDEX CREATION AND STRICT MODE
+# Fixed by WL#6891
+#
+SET sql_mode='STRICT_ALL_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t1(c1 varchar(50)) engine=InnoDB;
+ALTER TABLE t1 ADD KEY in_c1(c1);
+# Previously this statement was giving error ER_DUP_INDEX in STRICT MODE
+# In WL#6891, ER_DUP_INDEX is removed from being affected by STRICT MODE
+# So the below statement will give warning only for ER_DUP_INDEX
+ALTER TABLE t1 ADD KEY in_c2(c1);
+Warnings:
+Warning	1831	Duplicate index 'in_c2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1831	Duplicate index 'in_c2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+# Clean-up
+DROP TABLE t1;
+#
+# Bug#18090591: STR_TO_DATE IN TRADITIONAL SQL_MODE FAILS TO PARSE
+# TIME-ONLY FIELD
+#
+CREATE TABLE t1 ( a datetime(2) );
+CREATE TABLE t2 ( a timestamp(2) );
+SELECT str_to_date('09:22', '%H:%i');
+str_to_date('09:22', '%H:%i')
+09:22:00
+SELECT str_to_date('09:22:23.33', '%H:%i:%s.%f');
+str_to_date('09:22:23.33', '%H:%i:%s.%f')
+09:22:23.330000
+INSERT INTO t1 VALUES( str_to_date('09:22', '%H:%i') );
+INSERT INTO t1 VALUES( str_to_date('09:22:23.33', '%H:%i:%s.%f') );
+# We do this to get the test deterministic. The above INSERT's
+# will insert the *current* date with the time added.
+SELECT timediff( a, cast(CURRENT_DATE AS datetime) ) FROM t1;
+timediff( a, cast(CURRENT_DATE AS datetime) )
+09:22:00.00
+09:22:23.33
+DELETE FROM t1;
+INSERT INTO t1 VALUES( str_to_date('2019-12-31', '%Y-%m-%d') );
+SELECT * FROM t1;
+a
+2019-12-31 00:00:00.00
+INSERT INTO t2 VALUES( str_to_date('09:22', '%H:%i') );
+INSERT INTO t2 VALUES( str_to_date('09:22:23.33', '%H:%i:%s.%f') );
+# We do this to get the test deterministic. The above INSERT's
+# will insert the *current* date with the time added.
+SELECT timediff( a, cast(CURRENT_DATE AS datetime) ) FROM t2;
+timediff( a, cast(CURRENT_DATE AS datetime) )
+09:22:00.00
+09:22:23.33
+DELETE FROM t2;
+INSERT INTO t2 VALUES( str_to_date('2019-12-31', '%Y-%m-%d') );
+CREATE TABLE t3 SELECT str_to_date('09:22:23.33', '%H:%i:%s.%f');
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `str_to_date('09:22:23.33', '%H:%i:%s.%f')` time(6) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t2;
+a
+2019-12-31 00:00:00.00
+DROP TABLE t1, t2, t3;
+#
+# Bug#34704094: Mysql str_to_date can correct convert for '2022-11-30'
+#
+SET sql_mode='NO_ZERO_DATE';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+select str_to_date('0000-00-00', '%Y-%m-%d');
+str_to_date('0000-00-00', '%Y-%m-%d')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-00-00' for function str_to_date
+# Not compliant with how CAST works
+select str_to_date('0000-01-00', '%Y-%m-%d');
+str_to_date('0000-01-00', '%Y-%m-%d')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-01-00' for function str_to_date
+# Not compliant with how CAST works
+select str_to_date('0000-00-01', '%Y-%m-%d');
+str_to_date('0000-00-01', '%Y-%m-%d')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-00-01' for function str_to_date
+select str_to_date('2023-02-31', '%Y-%m-%d');
+str_to_date('2023-02-31', '%Y-%m-%d')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2023-02-31' for function str_to_date
+SET sql_mode='NO_ZERO_IN_DATE';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+select str_to_date('0000-00-00', '%Y-%m-%d');
+str_to_date('0000-00-00', '%Y-%m-%d')
+0000-00-00
+select str_to_date('0000-01-00', '%Y-%m-%d');
+str_to_date('0000-01-00', '%Y-%m-%d')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-01-00' for function str_to_date
+select str_to_date('0000-00-01', '%Y-%m-%d');
+str_to_date('0000-00-01', '%Y-%m-%d')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-00-01' for function str_to_date
+select str_to_date('2023-02-31', '%Y-%m-%d');
+str_to_date('2023-02-31', '%Y-%m-%d')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2023-02-31' for function str_to_date
+SET sql_mode='ALLOW_INVALID_DATES';
+select str_to_date('0000-00-00', '%Y-%m-%d');
+str_to_date('0000-00-00', '%Y-%m-%d')
+0000-00-00
+select str_to_date('0000-01-00', '%Y-%m-%d');
+str_to_date('0000-01-00', '%Y-%m-%d')
+0000-01-00
+select str_to_date('0000-00-01', '%Y-%m-%d');
+str_to_date('0000-00-01', '%Y-%m-%d')
+0000-00-01
+select str_to_date('2023-02-31', '%Y-%m-%d');
+str_to_date('2023-02-31', '%Y-%m-%d')
+2023-02-31
+SET sql_mode=@org_mode;

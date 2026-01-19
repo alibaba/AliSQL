@@ -1,0 +1,70 @@
+-- source include/have_multi_ndb.inc
+-- source include/have_binlog_format_mixed_or_row.inc
+
+--connection server1
+--echo Create table
+--echo NoLogging to avoid redo overload issues + increase write rate
+create table t1 (a int primary key, y int, b text, c text, d text, e int) engine=ndb comment='NDB_TABLE=NOLOGGING=1';
+
+--let $rows=500
+
+--let $i=$rows
+--disable_query_log
+while ($i)
+{
+  --eval insert into t1 values ($i, 0, repeat('BJC', 1000), repeat('TSG', 2000), repeat('EIN', 3000), 0)
+  --dec $i
+}
+--enable_query_log
+
+delimiter %;
+create procedure blob_work()
+begin
+  set @x = 0;
+  set @y = 0;
+  repeat
+    update t1 set y=@y+ 0, d=repeat('BJC', 1000), b=repeat('TSG', 2000), c= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 1, c=repeat('BJC', 1000), d=repeat('TSG', 2000), b= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 2, b=repeat('BJC', 1000), c=repeat('TSG', 2000), d= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 3, d=repeat('BJC', 1000), b=repeat('TSG', 2000), c= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 4, c=repeat('BJC', 1000), d=repeat('TSG', 2000), b= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 5, b=repeat('BJC', 1000), c=repeat('TSG', 2000), d= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 6, d=repeat('BJC', 1000), b=repeat('TSG', 2000), c= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 7, c=repeat('BJC', 1000), d=repeat('TSG', 2000), b= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 8, b=repeat('BJC', 1000), c=repeat('TSG', 2000), d= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+ 9, d=repeat('BJC', 1000), b=repeat('TSG', 2000), c= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+10, c=repeat('BJC', 1000), d=repeat('TSG', 2000), b= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+11, b=repeat('BJC', 1000), c=repeat('TSG', 2000), d= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+12, d=repeat('BJC', 1000), b=repeat('TSG', 2000), c= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+13, c=repeat('BJC', 1000), d=repeat('TSG', 2000), b= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    update t1 set y=@y+14, b=repeat('BJC', 1000), c=repeat('TSG', 2000), d= repeat('EIN', 3000), e=e+1 LIMIT 50;
+    set @y = @y+15;
+    select count(1) into @x from t1 where a=10000;
+  until @x > 0
+  end repeat;
+end%
+delimiter ;%
+
+--echo Starting blob work on server 1
+--send call blob_work()
+
+--connection server2
+--echo Starting adding columns to t1 on server 2
+
+--let $cols=100
+
+while ($cols)
+{
+  --eval alter table t1 add column i$cols int column_format dynamic
+  --dec $cols
+}
+
+--echo 100 columns added
+--echo Finish test
+insert into t1 (a) values (10000);
+
+--connection server1
+--reap
+
+drop procedure blob_work;
+drop table test.t1;

@@ -1,28 +1,32 @@
 # Test for 
-# Bug #33931  	assertion at write_ignored_events_info_to_relay_log if init_slave_thread() fails
-# Bug #33932  	assertion at handle_slave_sql if init_slave_thread() fails
+# Bug #33931  	assertion at write_ignored_events_info_to_relay_log if init_replica_thread() fails
+# Bug #33932  	assertion at handle_slave_sql if init_replica_thread() fails
 
+--source include/not_group_replication_plugin.inc
 source include/have_debug.inc;
 source include/master-slave.inc;
 
 connection slave;
 
 # Add suppression for expected warnings in slaves error log
-call mtr.add_suppression("Failed during slave I/O thread initialization");
-call mtr.add_suppression("Slave SQL.*Failed during slave thread initialization.* 1593");
+call mtr.add_suppression("Failed during replica I/O thread initialization");
+call mtr.add_suppression("Replica SQL.*Failed during replica thread initialization.* MY-013117");
 
 --source include/stop_slave.inc
 reset slave;
 
 # Set debug flags on slave to force errors to occur
-SET GLOBAL debug="d,simulate_io_slave_error_on_init,simulate_sql_slave_error_on_init";
+--let $debug_point= simulate_io_replica_error_on_init
+--source include/add_debug_point.inc
+--let $debug_point= simulate_sql_replica_error_on_init
+--source include/add_debug_point.inc
 
 --disable_query_log
 --replace_regex /[0-9]{4}/####/
-eval CHANGE MASTER TO MASTER_USER='root',
-                      MASTER_CONNECT_RETRY=1,
-                      MASTER_HOST='127.0.0.1',
-                      MASTER_PORT=$MASTER_MYPORT;
+eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root',
+                      SOURCE_CONNECT_RETRY=1,
+                      SOURCE_HOST='127.0.0.1',
+                      SOURCE_PORT=$MASTER_MYPORT;
 --enable_query_log
 
 start slave;
@@ -33,19 +37,23 @@ start slave;
 #
 
 # Wait for the SQL thread error
---let $slave_sql_errno= convert_error(ER_SLAVE_FATAL_ERROR)
+--let $slave_sql_errno= convert_error(ER_REPLICA_FATAL_ERROR)
 --let $show_slave_sql_error= 1
 --source include/wait_for_slave_sql_error.inc
 
-# In 5.6 servers, there would be no I/O thread failure reported
-# on SHOW SLAVE STATUS. We should just wait for the IO thread to stop.
---source include/wait_for_slave_io_to_stop.inc
+# Wait for the I/O thread error
+--let $slave_io_errno= convert_error(ER_REPLICA_FATAL_ERROR)
+--let $show_slave_io_error= 1
+--source include/wait_for_slave_io_error.inc
 #
 # Cleanup
 #
-SET GLOBAL debug="";
+--let $debug_point= simulate_io_replica_error_on_init
+--source include/remove_debug_point.inc
+--let $debug_point= simulate_sql_replica_error_on_init
+--source include/remove_debug_point.inc
 
-# Clear Last_SQL_Error
+# Clear Last_SQL_Error and Last_IO_Error
 RESET SLAVE;
 
 --let $rpl_only_running_threads= 1

@@ -1,0 +1,101 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>experimental::parallel_group::async_wait</title>
+<link rel="stylesheet" href="../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../experimental__parallel_group.html" title="experimental::parallel_group">
+<link rel="prev" href="../experimental__parallel_group.html" title="experimental::parallel_group">
+<link rel="next" href="parallel_group.html" title="experimental::parallel_group::parallel_group">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../experimental__parallel_group.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../experimental__parallel_group.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="parallel_group.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h4 class="title">
+<a name="boost_asio.reference.experimental__parallel_group.async_wait"></a><a class="link" href="async_wait.html" title="experimental::parallel_group::async_wait">experimental::parallel_group::async_wait</a>
+</h4></div></div></div>
+<p>
+          <a class="indexterm" name="boost_asio.indexterm.experimental__parallel_group.async_wait"></a> 
+Initiate
+          an asynchronous wait for the group of operations.
+        </p>
+<pre class="programlisting">template&lt;
+    typename CancellationCondition,
+    typename CompletionToken&gt;
+auto async_wait(
+    CancellationCondition cancellation_condition,
+    CompletionToken &amp;&amp; token);
+</pre>
+<p>
+          Launches the group and asynchronously waits for completion.
+        </p>
+<h6>
+<a name="boost_asio.reference.experimental__parallel_group.async_wait.h0"></a>
+          <span class="phrase"><a name="boost_asio.reference.experimental__parallel_group.async_wait.parameters"></a></span><a class="link" href="async_wait.html#boost_asio.reference.experimental__parallel_group.async_wait.parameters">Parameters</a>
+        </h6>
+<div class="variablelist">
+<p class="title"><b></b></p>
+<dl class="variablelist">
+<dt><span class="term">cancellation_condition</span></dt>
+<dd><p>
+                A function object, called on completion of an operation within the
+                group, that is used to determine whether to cancel the remaining
+                operations. The function object is passed the arguments of the completed
+                operation's handler. To trigger cancellation of the remaining operations,
+                it must return a <a class="link" href="../cancellation_type.html" title="cancellation_type"><code class="computeroutput">cancellation_type</code></a>
+                value other than <code class="computeroutput">boost::asio::cancellation_type::none</code>.
+              </p></dd>
+<dt><span class="term">token</span></dt>
+<dd><p>
+                A completion token whose signature is comprised of a <code class="computeroutput">std::array&lt;std::size_t,
+                N&gt;</code> indicating the completion order of the operations, followed
+                by all operations' completion handler arguments.
+              </p></dd>
+</dl>
+</div>
+<p>
+          The library provides the following <code class="computeroutput">cancellation_condition</code>
+          types:
+        </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+              <a class="link" href="../experimental__wait_for_all.html" title="experimental::wait_for_all"><code class="computeroutput">experimental::wait_for_all</code></a>
+            </li>
+<li class="listitem">
+              <a class="link" href="../experimental__wait_for_one.html" title="experimental::wait_for_one"><code class="computeroutput">experimental::wait_for_one</code></a>
+            </li>
+<li class="listitem">
+              <a class="link" href="../experimental__wait_for_one_error.html" title="experimental::wait_for_one_error"><code class="computeroutput">experimental::wait_for_one_error</code></a>
+            </li>
+<li class="listitem">
+              <a class="link" href="../experimental__wait_for_one_success.html" title="experimental::wait_for_one_success"><code class="computeroutput">experimental::wait_for_one_success</code></a>
+            </li>
+</ul></div>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../experimental__parallel_group.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../experimental__parallel_group.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="parallel_group.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

@@ -1,0 +1,144 @@
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+# Supplemental test case for query repreparation. Test what happens if
+# EXECUTE fails to open the secondary tables after PREPARE has
+# successfully opened them, using a debug flag to inject an error in
+# EXECUTE.
+
+--disable_query_log
+eval INSTALL PLUGIN MOCK SONAME '$MOCK_PLUGIN';
+--enable_query_log
+
+CREATE TABLE t(x INT) SECONDARY_ENGINE MOCK;
+INSERT INTO t VALUES (1);
+ALTER TABLE t SECONDARY_LOAD;
+
+# First execute the statement without the debug flag. The statement
+# should be executed on the secondary engine.
+FLUSH STATUS;
+PREPARE ps FROM 'SELECT * FROM t';
+EXECUTE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+
+# Now set the debug flag. Execution fails when preparing the secondary
+# engine. The failure triggers a repreparation against the primary
+# storage engine.
+FLUSH STATUS;
+SET DEBUG = '+d,secondary_engine_mock_prepare_error';
+EXECUTE ps;
+SET DEBUG = '-d,secondary_engine_mock_prepare_error';
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+
+# The statement remembers that the previous execution failed to open
+# the secondary tables, so it will not attempt to use the secondary
+# engine on re-execution.
+FLUSH STATUS;
+EXECUTE ps;
+SHOW SESSION STATUS LIKE 'Secondary_engine_execution_count';
+
+DROP TABLE t;
+
+--echo #
+--echo # WL#12389: Add interface for optimizing queries in secondary engines
+--echo #
+
+CREATE TABLE t1(x INT) SECONDARY_ENGINE MOCK;
+INSERT INTO t1 VALUES (1), (2), (3);
+CREATE TABLE t2(y INT) SECONDARY_ENGINE MOCK;
+INSERT INTO t2 VALUES (3), (4), (5);
+ALTER TABLE t1 SECONDARY_LOAD;
+ALTER TABLE t2 SECONDARY_LOAD;
+ANALYZE TABLE t1, t2;
+
+# Verify that the secondary engine optimization was invoked by
+# injecting an error in the secondary engine optimization. The error
+# prevents the queries from being offloaded to the MOCK engine.
+SET DEBUG = "+d,secondary_engine_mock_optimize_error";
+FLUSH STATUS;
+--sorted_result
+SELECT * FROM t1;
+--error ER_SECONDARY_ENGINE
+SELECT /*+ SET_VAR(use_secondary_engine = FORCED) */ x FROM t1;
+--sorted_result
+SELECT (SELECT y FROM t2 WHERE y = 1) FROM t1;
+--sorted_result
+SELECT * FROM t1 UNION ALL SELECT * FROM t2;
+--sorted_result
+SELECT * FROM t1 UNION DISTINCT SELECT * FROM t2;
+SET DEBUG = "-d,secondary_engine_mock_optimize_error";
+SHOW STATUS LIKE 'Secondary_engine_execution_count'; # Should be 0
+
+# The same queries should use the MOCK engine if no error is injected.
+FLUSH STATUS;
+SELECT * FROM t1;
+SELECT (SELECT y FROM t2 WHERE y = 1) FROM t1;
+SELECT * FROM t1 UNION ALL SELECT * FROM t2;
+SELECT * FROM t1 UNION DISTINCT SELECT * FROM t2;
+SHOW STATUS LIKE 'Secondary_engine_execution_count'; # Should be 4
+
+DROP TABLE t1, t2;
+
+# A query that is killed during secondary engine optimization, should
+# not be retried in the primary engine.
+CREATE TABLE t(x int) SECONDARY_ENGINE MOCK;
+INSERT INTO t VALUES (1), (2), (3);
+ALTER TABLE t SECONDARY_LOAD;
+SET DEBUG_SYNC = 'before_mock_optimize SIGNAL mock WAIT_FOR continue';
+--send SELECT * FROM t
+--connect(conn1,localhost,root,,)
+SET DEBUG_SYNC = 'now WAIT_FOR mock';
+SELECT ID FROM INFORMATION_SCHEMA.PROCESSLIST
+       WHERE INFO = 'SELECT * FROM t' INTO @thread_id;
+KILL QUERY @thread_id;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+--connection default
+--error ER_QUERY_INTERRUPTED
+--reap
+--disconnect conn1
+DROP TABLE t;
+
+--echo #
+--echo # Bug#29615190: SELECTS ON TABLES OFFLOADED TO SECONDARY ENGINE ARE
+--echo #               WRITTEN TWICE TO THE MYSQLD GENERAL LOG
+--echo #
+
+# Test what is written to the general log if a statement is attempted
+# offloaded, but rejected by the secondary engine. It used to be
+# written three times to the general log. Once is enough.
+
+CREATE TABLE t(x INT) SECONDARY_ENGINE MOCK;
+ALTER TABLE t SECONDARY_LOAD;
+
+SET @saved_general_log = @@global.general_log;
+SET @saved_log_output = @@global.log_output;
+SET GLOBAL general_log = 1;
+SET GLOBAL log_output = 'table';
+SET DEBUG = '+d,secondary_engine_mock_optimize_error';
+
+TRUNCATE TABLE mysql.general_log;
+SELECT * FROM t;
+# Expect the query to be written once to the general log (or twice
+# under ps protocol - once for preparation and once for execution).
+--disable_query_log
+eval SELECT COUNT(*) - $PS_PROTOCOL AS statement_count
+     FROM mysql.general_log
+     WHERE argument = 'SELECT * FROM t';
+--enable_query_log
+TRUNCATE TABLE mysql.general_log;
+PREPARE ps FROM 'SELECT * FROM t';
+SELECT COUNT(*) FROM mysql.general_log WHERE argument = 'SELECT * FROM t';
+EXECUTE ps;
+SELECT COUNT(*) FROM mysql.general_log WHERE argument = 'SELECT * FROM t';
+DROP PREPARE ps;
+
+SET GLOBAL general_log = @saved_general_log;
+SET GLOBAL log_output = @saved_log_output;
+SET DEBUG = '-d,secondary_engine_mock_optimize_error';
+
+TRUNCATE TABLE mysql.general_log;
+DROP TABLE t;
+
+--disable_query_log
+UNINSTALL PLUGIN mock;
+--enable_query_log

@@ -1,9 +1,5 @@
 -- source include/have_ndb.inc
 
---disable_warnings
-drop table if exists t1, t2, t3, t4, t5, t6, t7, t8;
---enable_warnings
-
 #
 # Simple test to show use of UNIQUE indexes 
 #
@@ -103,7 +99,8 @@ CREATE TABLE t2 (
   b int unsigned not null,
   c int unsigned,
   UNIQUE (b, c) USING HASH	
-) engine=ndbcluster;
+) engine=ndbcluster
+  comment="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 
 
 insert t2 values(1,1,NULL),(2,2,2),(3,3,NULL),(4,4,4),(5,5,NULL),(6,6,6),(7,7,NULL),(8,3,NULL),(9,3,NULL);
@@ -113,9 +110,58 @@ select * from t2 where b = 3 AND c IS NULL order by a;
 select * from t2 where (b = 3 OR b = 5) AND c IS NULL order by a;
 set @old_os = @@session.optimizer_switch;
 set optimizer_switch = 'engine_condition_pushdown=on';
+--replace_column 10 # 11 #
 explain select * from t2 where (b = 3 OR b = 5) AND c IS NULL AND a < 9 order by a;
 select * from t2 where (b = 3 OR b = 5) AND c IS NULL AND a < 9 order by a;
 set optimizer_switch = @old_os;
+
+##################
+# Bug#33466554 Prevent optimizer from generating range scans on
+#              unique hash indexes.
+#
+# The query plan for some of the above queries set up a range scan
+# using the HASH-index on (b,c) - That is not an available access type
+# on an 'UNIQUE <key> USING HASH'. Even if set up by the optimizer as such,
+# ha_ndbcluster::read_range_first_to_buf detected that we tried to do
+# use an access type not supported by a UNIQUE_INDEX and did multiple
+# 'full_table_scans' instead.
+
+# Explain some of the relevant queries. Should *not* do
+# range scans on the HASH index. Instead do either full table scan,
+# or a range scan on PK.
+
+--replace_regex /  \(cost=.*//
+explain format=tree
+  select * from t2 where (b = 3 OR b = 5) AND c IS NULL order by a;
+--replace_regex /  \(cost=.*//
+explain format=tree
+  select * from t2 where (b = 3 OR b = 5) AND c IS NULL;
+--replace_regex /  \(cost=.*//
+explain format=tree
+  select * from t2 where b in (1,2,3) AND c IS NULL;
+--replace_regex /  \(cost=.*//
+explain format=tree
+  select * from t2 where (b = 3 OR b = 5) AND c IS NULL AND a < 9 order by a;
+--replace_regex /  \(cost=.*//
+explain format=tree
+  select * from t2 where (b = 3 OR b = 5) AND c IS NULL AND a < 9;
+
+###############################
+# Bug#33474345  Avoid NULL-constants as part of REF keys.
+#
+# Explains of some tests above where the optimizer set up REF / Index lookup
+# access with a NULL constant on the ix-HASH key, which handler degraded
+# to full_table_scan.
+# Will now reject the usage of ix-index and do an ordered scan on PK instead.
+# More test cases for this bug further below.
+
+--replace_regex /  \(cost=.*//
+explain format=tree
+select * from t2 where c IS NULL order by a;
+--replace_regex /  \(cost=.*//
+explain format=tree
+select * from t2 where b = 3 AND c IS NULL order by a;
+
 
 drop table t2;
 
@@ -429,8 +475,8 @@ insert into t1 values
 alter table t1 add unique(un);
 
 drop table t1;
-alter tablespace ts1 drop datafile 'datafile.dat' engine=ndb;
-drop tablespace ts1 engine=ndb;
+alter tablespace ts1 drop datafile 'datafile.dat';
+drop tablespace ts1;
 drop logfile group lg1 engine=ndb;
 
 # bug#57032 'NOT NULL' evaluation is incorrect when using an 'unique index
@@ -516,9 +562,11 @@ drop table t1;
 # Bug#58750: 'out of connection objects' due to missing close()
 # of prev. full_table_scan()
 #
-create table t1 (pk int primary key, a int) engine=ndb;
+create table t1 (pk int primary key, a int) engine=ndb
+  comment="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 create table t2 (pk int primary key, uq int, a int, 
-   unique key ix(uq,a) USING HASH) engine=ndb;
+   unique key ix(uq,a) USING HASH) engine=ndb
+  comment="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 
 insert into t2 values
    (0,0,0), (1,1,0), (2,2,0), (3,3,0), (4,4,0),
@@ -541,13 +589,353 @@ from
 #  - Table scan(t1) will 'drive' the case above and eventually
 #    cause all ScanOperations / hupp'ed transactions to have been 
 #    consumed
+#
+# Note that after fixing Bug#33474345, see below, the original test case
+# didn't behave as intended. Thus it was rewritten from using
+# 't2.uq IS NULL' to 't2.uq <=> t1.a+NULL'.
+# I.e. from a known NULL-valued key, to an expression evaluating
+# to NULL at execution time. Note the usage of '<=>' operator which
+# compare NULLs as equal.
+#
+# The original test case became a test case for bug#33474345, where
+# we try to avoid doing such repeated scans whenever possible.
 
 explain
 SELECT STRAIGHT_JOIN count(*) FROM 
-   t1 JOIN t2 ON t2.a=t1.a where t2.uq IS NULL;
+   t1 JOIN t2 ON t2.a=t1.a where t2.uq <=> t1.a+NULL;
 SELECT STRAIGHT_JOIN count(*) FROM 
+   t1 JOIN t2 ON t2.a=t1.a where t2.uq <=> t1.a+NULL;
+
+#
+# Bug#33474345:
+#     Avoid table REF-access in query plan,
+#     when handler does full table scan.
+#
+# There is a known NULL-constant in the key for a potential
+# REF / Index lookup access on t2, using the 'ix' HASH index. Thus the
+# handler would have fallen back to do repeated full table scan.
+# Avoid that when it can be easily detected by the optimizer.
+#
+# Test case below will now do a single table scan on t2 and hash-join(t1,t2),
+# which is about 10x faster for this query
+
+--replace_regex /  \(cost=.*//
+explain format=tree
+SELECT STRAIGHT_JOIN count(*) FROM
+   t1 JOIN t2 ON t2.a=t1.a where t2.uq IS NULL;
+SELECT STRAIGHT_JOIN count(*) FROM
    t1 JOIN t2 ON t2.a=t1.a where t2.uq IS NULL;
 
 drop table t1,t2;
 
-# end of tests
+#
+# Bug #16678033 IN-SUBQUERY WITH TRUE/FALSE/UNKNOWN TEST 
+#               MAY RETURN INCORRECT RESULT OR ASSERT
+#
+CREATE TABLE t1 (
+  i int
+) ENGINE=ndbcluster
+COMMENT="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
+
+INSERT INTO t1 VALUES (1);
+
+CREATE TABLE t2 (
+  col_int_unique int,
+  UNIQUE KEY ix1 (col_int_unique) USING HASH
+) ENGINE=ndbcluster
+COMMENT="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
+
+INSERT INTO t2 VALUES (42);
+
+EXPLAIN SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS TRUE;
+
+# Remember 'row' conter when test started.
+--disable_warnings
+create temporary table row_counts_at_startup 
+       select * 
+       from performance_schema.session_status
+       WHERE variable_name LIKE 'NDB_API_READ_ROW_COUNT';
+--enable_warnings
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS TRUE;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS FALSE;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS UNKNOWN;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS NOT TRUE;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS NOT FALSE;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS NOT UNKNOWN;
+
+# Verify row counter at end:
+# Used to verify that correct hi/low limits was set for
+# the EQ_RANGE checking for col_int_unique NULL values
+--disable_warnings
+create temporary table row_counts_at_end
+       select * 
+       from performance_schema.session_status
+       WHERE variable_name LIKE 'NDB_API_READ_ROW_COUNT';
+--enable_warnings
+
+select row_counts_at_end.VARIABLE_NAME,
+       row_counts_at_end.VARIABLE_VALUE - row_counts_at_startup.VARIABLE_VALUE 
+       from row_counts_at_end, row_counts_at_startup 
+       where row_counts_at_end.VARIABLE_NAME = row_counts_at_startup.VARIABLE_NAME;
+
+drop table row_counts_at_end;
+drop table row_counts_at_startup;
+
+drop table t1,t2;
+
+--echo #
+--echo # Bug#21777589 : UNIQUE KEY IS PARTIALLY DROPPED FROM MYSQLD EVEN WHEN A 'DROP INDEX' FAILS
+--echo # Bug#22104597 : DROP INDEX FAILURE CORRUPTS THE INDEX METADATA IN MYSQLD
+--echo #
+
+--echo # Create table t1 with multiple keys
+create table t1(
+  a int,
+  b int,
+  unique key uk1(a),
+  unique key uk2(b) using hash
+)engine=ndb;
+
+--echo # Create table t2 with a fk based on t1's uk
+create table t2(
+  a int,
+  b int,
+  c int,
+  foreign key fk1(a) references t1(a),
+  unique key uk3(b),
+  unique key uk4(c)
+)engine=ndb;
+
+--echo # Try dropping uk1. should fail with correct uk constraint
+--error ER_DROP_INDEX_FK
+drop index uk1 on t1;
+
+--echo # Perform a select from t1 to verify the index has not been partially dropped
+--echo # also to ensure the ordering in m_index is intact
+select * from t1;
+
+--echo # Try dropping uk2 now. should be dropped without any problem
+drop index uk2 on t1;
+
+--echo # Verify through show create table
+--disable_warnings
+show create table t1;
+--enable_warnings
+
+--echo # Make sure dropping multiple indexes together works
+alter table t2 drop index uk3, drop index uk4;
+
+--echo # Verify through show create table
+--disable_warnings
+show create table t1;
+--enable_warnings
+
+--echo # cleanup
+drop table t2,t1;
+
+--echo #
+--echo # Bug#22110051 : ASSERTION IN PROTOCOL::END_STATEMENT DURING DROP INDEX
+--echo #
+
+--echo # Create table t1 with unique key
+create table t1(
+  a int not null,
+  b int not null,
+  unique key uk1(a),
+  unique key uk2(b)
+)engine=ndb;
+
+--echo # Create table t2 with a fk mapped to t1(a)
+create table t2(
+  a int,
+  constraint fk1 foreign key (a) references t1(a)
+)engine=ndb;
+
+--echo # desc t1 to show the implicit pk
+desc t1;
+
+--echo # Drop index uk1 - it should fail
+--error ER_DROP_INDEX_FK
+drop index uk1 on t1;
+
+--echo # Verify table is intact
+--disable_warnings
+show create table t1;
+--enable_warnings
+
+--echo # Modify column on t1 - remove not null
+alter table t1 modify column a int;
+
+--echo # verify that pk is now on b.
+desc t1;
+--disable_warnings
+show create table t1;
+--enable_warnings
+--echo # Verify that the fk constraint is intact through inserts
+insert into t1 values (1,10), (2,20), (3,30);
+insert into t2 values (1), (2), (3);
+--error ER_NO_REFERENCED_ROW_2
+insert into t2 values (4);
+
+--echo # Try removing uk2. should pass.
+alter table t1 drop index uk2;
+
+--echo # Verify that everything is fine.
+desc t1;
+--disable_warnings
+show create table t1;
+--enable_warnings
+--echo # Verify that the fk constraint is intact through inserts
+insert into t2 values (1), (2), (3);
+--error ER_NO_REFERENCED_ROW_2
+insert into t2 values (4);
+
+--echo #cleanup
+drop table t2, t1;
+
+--echo #
+--echo # Bug#24444899 MYSQLD CRASHED WHILE DROPPING UNIQUE KEY ...
+--echo #  - test read using unique key where keys are specified in
+--echo #    different order than in the NDB table, thus testing
+--echo #    the NDB_INDEX_DATA::Attrid_map mapping
+CREATE TABLE t1 (
+  a int PRIMARY KEY,
+  b int, c int, d int, e int, f int, g int, h int, i int,
+  UNIQUE INDEX unique_hgfedcb (h,f,d,e,g,c,b)
+) engine = ndb;
+CREATE TABLE t2 (
+  a int PRIMARY KEY,
+  b int
+) engine = ndb;
+INSERT INTO t1 VALUES
+  (1,2,3,4,5,6,7,8,40),
+  (2,2,4,4,5,6,7,9,41),
+  (3,2,5,4,5,6,7,10,42);
+INSERT INTO t2 VALUES
+  (1,2);
+
+--echo # Read with pushed join through unique index and use mapping
+SELECT t1.i FROM t1, t2
+  WHERE t2.a = t1.a /* join with t2 to trigger pushed join */ AND
+    t1.b = 2 AND t1.c = 3 AND t1.d = 4 AND
+    t1.e = 5 AND t1.f = 6 AND t1.g = 7 AND
+    t1.h = 8 /* use unique index on t1 */;
+
+DROP TABLE t1, t2;
+
+
+--echo #
+--echo # Bug#33317872 Incorrect Index selected leading to slower execution of queries
+--echo #
+--echo #   When choosing between a Multi-range-read on an unique index,
+--echo #   and a range scan on an ordered index, where few rows are expected
+--echo #   to be returned, prefer the unique index.
+--echo #   (An ordered index scan has higher cost, as all fragments are scanned)
+--echo #
+
+CREATE TABLE t (
+  delivery_id bigint unsigned NOT NULL AUTO_INCREMENT,
+  msg_id int unsigned NOT NULL,
+  auth_login_type char(1) DEFAULT NULL,
+  auth_login_id varchar(64),
+  PRIMARY KEY (delivery_id),
+  UNIQUE KEY msg_id(msg_id,auth_login_type,auth_login_id),
+  KEY auth_login_id(auth_login_id)
+) ENGINE=ndbcluster;
+
+disable_query_log;
+
+insert into t (msg_id, auth_login_type, auth_login_id) values
+(4866, '5', '91774132'), (4869, '5', '91884132');
+insert into t (msg_id, auth_login_type, auth_login_id) values
+(4866, '5', '91774134'), (4869, '5', '91884134');
+
+insert into t (msg_id, auth_login_type, auth_login_id) values
+(4866, '4', '91774133'), (4869, '4', '91884133');
+insert into t (msg_id, auth_login_type, auth_login_id) values
+(4866, '6', '91774133'), (4869, '6', '91884133');
+
+insert into t (msg_id, auth_login_type, auth_login_id) values
+(4865, '5', '91774133'), (4868, '5', '91774133');
+insert into t (msg_id, auth_login_type, auth_login_id) values
+(4867, '5', '91774133'), (4870, '5', '91774133');
+# ^^^ Add some more rows, none will match the query
+
+# Use these as base for filling in more rows
+insert into t (msg_id, auth_login_type, auth_login_id) select
+  msg_id - 4800, auth_login_type, auth_login_id+10 from t;
+
+insert into t  (msg_id, auth_login_type, auth_login_id) select
+  msg_id + 1000, auth_login_type, auth_login_id+20 from t where msg_id < 100;
+insert into t  (msg_id, auth_login_type, auth_login_id) select
+  msg_id + 2000, auth_login_type, auth_login_id+30 from t where msg_id < 100;
+insert into t  (msg_id, auth_login_type, auth_login_id) select
+  msg_id + 3000, auth_login_type, auth_login_id+40 from t where msg_id < 100;
+
+insert into t  (msg_id, auth_login_type, auth_login_id) select
+  msg_id + 5000, auth_login_type, auth_login_id+50 from t where msg_id < 100;
+insert into t  (msg_id, auth_login_type, auth_login_id) select
+  msg_id + 6000, auth_login_type, auth_login_id+60 from t where msg_id < 100;
+insert into t  (msg_id, auth_login_type, auth_login_id) select
+  msg_id + 7000, auth_login_type, auth_login_id+70 from t where msg_id < 100;
+
+
+##########################################
+# Statistics is asynchronous: We can not predict when it
+# is available in the statistics cache, and thus which
+# statistics is being used for the query. Thus we
+# need to cheat:
+#
+# We 'analyze' without the rows to be select yet inserted.
+# -> statistics will predictable contain 0 rows to be returned.
+# Which is 'rounded' up to 2 rows, which are the lowest number of
+# rows allowed to be estimated from non unique indexes.
+#
+# Note that the estimated 2 rows is actually what _is_ in the table
+# as well, when we later insert these rows below!
+
+analyze table t;
+enable_query_log;
+
+##########################################
+# Then insert the rows we want returned, without being part of the statistics
+insert into t (msg_id, auth_login_type, auth_login_id) values
+  (4866, '5', '81774133'),
+  (4869, '5', '81774133');
+# ^^^^ Rows we want from the query
+
+# optimizer trace, For debugging, or understanding of test case + bug:
+#
+# If enabled, we will find that optimizer first calculate the range-access
+# cost, using handler ::cost methods, and correctly find the msg_id to
+# have the lowest cost.
+# Possible REF-accesses are then investigated and estimated: However, these
+# cost estimates was 'pre-patch' based in an entirely different page/cache
+# cost metric, not being compare compatible with the former. A lower cost
+# was found for using REF access on auth_login_id index, incorrectly causing
+# this index to to be used for the table access.
+#
+#SET optimizer_trace_max_mem_size=1048576; # 1MB
+#SET end_markers_in_json=on;
+#SET optimizer_trace="enabled=on,one_line=off";
+
+explain format=tree
+  select * from t
+  where auth_login_type='5' AND auth_login_id = '81774133' AND msg_id IN (4866,4869);
+
+#SELECT * FROM information_schema.optimizer_trace;
+
+drop table t;

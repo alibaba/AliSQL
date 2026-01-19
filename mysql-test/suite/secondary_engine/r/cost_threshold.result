@@ -1,0 +1,171 @@
+#
+# Test cases for the secondary_engine_cost_threshold variable.
+#
+SELECT @@secondary_engine_cost_threshold,
+@@global.secondary_engine_cost_threshold;
+@@secondary_engine_cost_threshold	@@global.secondary_engine_cost_threshold
+0.000000	0.000000
+SET @saved_threshold = @@secondary_engine_cost_threshold;
+SET @@secondary_engine_cost_threshold = -100;
+Warnings:
+Warning	1292	Truncated incorrect secondary_engine_cost_threshold value: '-100'
+SELECT @@secondary_engine_cost_threshold;
+@@secondary_engine_cost_threshold
+0.000000
+CREATE TABLE t1(x INT, y INT);
+INSERT INTO t1 VALUES (1, 2), (2, 3), (3, 4);
+CREATE VIEW v1 AS
+SELECT t1.x x1, t2.x x2, t3.x x3, t4.x x4, t5.x x5, t6.x x6, t7.x x7,
+t8.x x8, t9.x x9, t10.x x10, t11.x x11, t12.x x12, t13.x x13
+FROM t1, t1 t2, t1 t3, t1 t4, t1 t5, t1 t6, t1 t7, t1 t8, t1 t9,
+t1 t10, t1 t11, t1 t12, t1 t13;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+ALTER TABLE t1 SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SET @@secondary_engine_cost_threshold = 0;
+SELECT @@secondary_engine_cost_threshold,
+@@global.secondary_engine_cost_threshold;
+@@secondary_engine_cost_threshold	@@global.secondary_engine_cost_threshold
+0.000000	0.000000
+FLUSH STATUS;
+SELECT * FROM t1;
+x	y
+SELECT (SELECT y FROM t1 WHERE x = 1);
+(SELECT y FROM t1 WHERE x = 1)
+NULL
+SELECT * FROM v1;
+x1	x2	x3	x4	x5	x6	x7	x8	x9	x10	x11	x12	x13
+SELECT * FROM t1 WHERE x = (SELECT COUNT(*) FROM v1);
+x	y
+SELECT * FROM t1 tt WHERE x = (SELECT SUM(x) FROM t1);
+x	y
+# All five queries are offloaded to the secondary engine.
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	5
+SET @@secondary_engine_cost_threshold = 100;
+SELECT @@secondary_engine_cost_threshold,
+@@global.secondary_engine_cost_threshold;
+@@secondary_engine_cost_threshold	@@global.secondary_engine_cost_threshold
+100.000000	0.000000
+FLUSH STATUS;
+SELECT * FROM t1;
+x	y
+1	2
+2	3
+3	4
+SELECT (SELECT y FROM t1 WHERE x = 1);
+(SELECT y FROM t1 WHERE x = 1)
+2
+SELECT * FROM v1;
+x1	x2	x3	x4	x5	x6	x7	x8	x9	x10	x11	x12	x13
+# The first three queries are not offloaded to the secondary engine.
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SELECT * FROM t1 WHERE x = (SELECT COUNT(*) FROM v1);
+x	y
+SELECT * FROM t1 tt WHERE x = (SELECT SUM(x) FROM t1);
+x	y
+# The last two queries are offloaded to the secondary engine.
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+SET @@secondary_engine_cost_threshold = 1000000;
+SELECT @@secondary_engine_cost_threshold,
+@@global.secondary_engine_cost_threshold;
+@@secondary_engine_cost_threshold	@@global.secondary_engine_cost_threshold
+1000000.000000	0.000000
+FLUSH STATUS;
+SELECT * FROM t1;
+SELECT (SELECT y FROM t1 WHERE x = 1);
+SELECT * FROM v1;
+SELECT * FROM t1 WHERE x = (SELECT COUNT(*) FROM v1);
+SELECT * FROM t1 tt WHERE x = (SELECT SUM(x) FROM t1);
+# All queries are executed in the primary storage engine.
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+# Set the threshold in a hint.
+FLUSH STATUS;
+SELECT /*+ SET_VAR(secondary_engine_cost_threshold = 0) */ * FROM t1;
+x	y
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+FLUSH STATUS;
+SELECT /*+ SET_VAR(secondary_engine_cost_threshold = 100) */ * FROM t1;
+x	y
+1	2
+2	3
+3	4
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+# The use_secondary_engine variable overrides the threshold.
+FLUSH STATUS;
+SELECT /*+ SET_VAR(secondary_engine_cost_threshold = 1000000)
+SET_VAR(use_secondary_engine = FORCED) */
+* FROM t1;
+x	y
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+FLUSH STATUS;
+SELECT /*+ SET_VAR(secondary_engine_cost_threshold = 0)
+SET_VAR(use_secondary_engine = OFF) */
+* FROM t1;
+x	y
+1	2
+2	3
+3	4
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	0
+# The threshold is evaluated on each execution.
+FLUSH STATUS;
+PREPARE ps FROM 'SELECT * FROM t1';
+SET @@secondary_engine_cost_threshold = 0;
+EXECUTE ps;
+x	y
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SET @@secondary_engine_cost_threshold = 100;
+EXECUTE ps;
+x	y
+1	2
+2	3
+3	4
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	1
+SET @@secondary_engine_cost_threshold = 0;
+EXECUTE ps;
+x	y
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+SET @@secondary_engine_cost_threshold = 100;
+EXECUTE ps;
+x	y
+1	2
+2	3
+3	4
+SHOW STATUS LIKE 'Secondary_engine_execution_count';
+Variable_name	Value
+Secondary_engine_execution_count	2
+DROP PREPARE ps;
+DROP TABLE t1;
+DROP VIEW v1;
+SET @@secondary_engine_cost_threshold = @saved_threshold;
+SELECT @@secondary_engine_cost_threshold,
+@@global.secondary_engine_cost_threshold;
+@@secondary_engine_cost_threshold	@@global.secondary_engine_cost_threshold
+0.000000	0.000000
+UNINSTALL PLUGIN mock;

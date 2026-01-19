@@ -1,16 +1,37 @@
 /*
- * Summary: Specification of the storage engine interface.
- *
- * Copy: See Copyright for the status of this software.
- *
- * Author: Trond Norbye <trond.norbye@sun.com>
- */
+  Copyright (c) 2017, 2025, Oracle and/or its affiliates.
+  
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License, version 2.0, for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 #ifndef MEMCACHED_DEFAULT_ENGINE_H
 #define MEMCACHED_DEFAULT_ENGINE_H
 
 #include "config.h"
 
 #include <pthread.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <memcached/engine.h>
 #include <memcached/util.h>
@@ -36,10 +57,6 @@ struct default_engine;
 #include "assoc.h"
 #include "hash.h"
 #include "slabs.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
    /* Flags */
 #define ITEM_WITH_CAS 1
@@ -107,6 +124,7 @@ struct vbucket_info {
  *
  * This is currently "work in progress" so it is not as clean as it should be.
  */
+typedef engine_info engine_info_type;
 struct default_engine {
    ENGINE_HANDLE_V1 engine;
    SERVER_HANDLE_V1 server;
@@ -131,7 +149,7 @@ struct default_engine {
    struct engine_stats stats;
    struct engine_scrubber scrubber;
    union {
-       engine_info engine_info;
+       engine_info_type engine_info;
        char buffer[sizeof(engine_info) +
                    (sizeof(feature_info) * LAST_REGISTERED_ENGINE_FEATURE)];
    } info;
@@ -145,4 +163,9 @@ void item_set_cas(ENGINE_HANDLE *handle, const void *cookie,
                   item* item, uint64_t val);
 uint64_t item_get_cas(const hash_item* item);
 uint8_t item_get_clsid(const hash_item* item);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2006, 2008 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,21 @@
 #define READ_NODESCONF_HPP
 
 #include <NodeBitmask.hpp>
+
+#define JAM_FILE_ID 199
+
+class ReadNodesReq {
+  friend class Qmgr;
+  friend class Ndbcntr;
+
+ public:
+  static constexpr Uint32 OldSignalLength = 1;
+  static constexpr Uint32 SignalLength = 2;
+
+ private:
+  Uint32 myRef;
+  Uint32 myVersion;
+};
 
 /**
  * This signals is sent by Qmgr to NdbCntr
@@ -32,12 +54,12 @@ class ReadNodesConf {
    * Sender(s)
    */
   friend class Qmgr;
-  
+
   /**
    * Sender(s) / Reciver(s)
    */
   friend class Ndbcntr;
-  
+
   /**
    * Reciver(s)
    */
@@ -52,16 +74,77 @@ class ReadNodesConf {
   friend class Dbinfo;
   friend class Dbspj;
 
-  friend bool printREAD_NODES_CONF(FILE*, const Uint32 *, Uint32, Uint16);
-public:
-  STATIC_CONST( SignalLength = 3 + 5*NdbNodeBitmask::Size );
-private:
-  
+  friend bool printREAD_NODES_CONF(FILE *, const Uint32 *, Uint32, Uint16);
+
+ public:
+  static constexpr Uint32 SignalLength = 3;
+
+ private:
   Uint32 noOfNodes;
   Uint32 ndynamicId;
 
   /**
-   * 
+   *
+   * NOTE Not valid when send from Qmgr
+   */
+  Uint32 masterNodeId;
+
+  // Below bitmasks are not part of signal.
+  // All five are sent in first section.
+
+  /**
+   * This array defines all the ndb nodes in the system
+   */
+  NdbNodeBitmask definedNodes;
+
+  /**
+   * This array describes whether the nodes are currently active
+   *
+   * NOTE Not valid when send from Qmgr
+   */
+  NdbNodeBitmask inactiveNodes;
+
+  NdbNodeBitmask clusterNodes;   // From Qmgr
+  NdbNodeBitmask startingNodes;  // From Cntr
+  NdbNodeBitmask startedNodes;   // From Cntr
+};
+
+class ReadNodesConf_v1 {
+  /**
+   * Sender(s)
+   */
+  friend class Qmgr;
+
+  /**
+   * Sender(s) / Reciver(s)
+   */
+  friend class Ndbcntr;
+
+  /**
+   * Reciver(s)
+   */
+  friend class Dbdih;
+  friend class Dbdict;
+  friend class Dblqh;
+  friend class Dbtc;
+  friend class Trix;
+  friend class Backup;
+  friend class Suma;
+  friend class LocalProxy;
+  friend class Dbinfo;
+  friend class Dbspj;
+
+  friend bool printREAD_NODES_CONF(FILE *, const Uint32 *, Uint32, Uint16);
+
+ public:
+  static constexpr Uint32 SignalLength = 3 + 5 * NdbNodeBitmask48::Size;
+
+ private:
+  Uint32 noOfNodes;
+  Uint32 ndynamicId;
+
+  /**
+   *
    * NOTE Not valid when send from Qmgr
    */
   Uint32 masterNodeId;
@@ -70,20 +153,22 @@ private:
    * This array defines all the ndb nodes in the system
    */
   union {
-    Uint32 allNodes[NdbNodeBitmask::Size];
-    Uint32 definedNodes[NdbNodeBitmask::Size];
-  };  
+    Uint32 allNodes[NdbNodeBitmask48::Size];
+    Uint32 definedNodes[NdbNodeBitmask48::Size];
+  };
 
   /**
-   * This array describes wheather the nodes are currently active
+   * This array describes whether the nodes are currently active
    *
    * NOTE Not valid when send from Qmgr
    */
-  Uint32 inactiveNodes[NdbNodeBitmask::Size];
+  Uint32 inactiveNodes[NdbNodeBitmask48::Size];
 
-  Uint32 clusterNodes[NdbNodeBitmask::Size];  // From Qmgr
-  Uint32 startingNodes[NdbNodeBitmask::Size]; // From Cntr
-  Uint32 startedNodes[NdbNodeBitmask::Size];  // From Cntr
+  Uint32 clusterNodes[NdbNodeBitmask48::Size];   // From Qmgr
+  Uint32 startingNodes[NdbNodeBitmask48::Size];  // From Cntr
+  Uint32 startedNodes[NdbNodeBitmask48::Size];   // From Cntr
 };
+
+#undef JAM_FILE_ID
 
 #endif

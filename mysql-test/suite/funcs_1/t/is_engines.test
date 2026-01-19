@@ -15,13 +15,9 @@
 #                           testsuite funcs_1
 #
 
-if (`SELECT VERSION() LIKE '%embedded%'`)
-{
-   --skip Bug#37456 funcs_1: Several tests crash when used with embedded server
-}
 
-let $engine_type       = MEMORY;
-let $other_engine_type = MyISAM;
+let $engine_type       = InnoDB;
+let $other_engine_type = InnoDB;
 
 let $is_table = ENGINES;
 

@@ -1,15 +1,23 @@
 /*
-   Copyright (C) 2003, 2005, 2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
+    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,8 +27,8 @@
 #ifndef NDBT_DATA_SET_TRANSACTION_HPP
 #define NDBT_DATA_SET_TRANSACTION_HPP
 
-#include "NDBT_Table.hpp"
 #include <NdbApi.hpp>
+#include "NDBT_Table.hpp"
 
 class NDBT_DataSet;
 
@@ -30,135 +38,111 @@ class NDBT_DataSet;
  * using <b>one</b> transaction
  */
 class NDBT_DataSetTransaction {
-public:
+ public:
   /**
    * Store the data into ndb
    */
-  static void insert(Ndb * theNdbObject,
-		     const NDBT_DataSet *,
-		     bool rollback = false);
-  
+  static void insert(Ndb *theNdbObject, const NDBT_DataSet *,
+                     bool rollback = false);
+
   /**
    * Read data (using pk) from ndb
    */
-  static void readByPk(Ndb * theNdbObject,
-		       NDBT_DataSet *,
-		       bool rollback = false);
-  
+  static void readByPk(Ndb *theNdbObject, NDBT_DataSet *,
+                       bool rollback = false);
+
   /**
    * Update data using pk
    *
    */
-  static void updateByPk(Ndb * theNdbObject,
-			 const NDBT_DataSet *,
-			 bool rollback = false);
+  static void updateByPk(Ndb *theNdbObject, const NDBT_DataSet *,
+                         bool rollback = false);
 
   /**
-   * Delete 
+   * Delete
    */
-  static void deleteByPk(Ndb * theNdbObject,
-			 const NDBT_DataSet *,
-			 bool rollback = false);
+  static void deleteByPk(Ndb *theNdbObject, const NDBT_DataSet *,
+                         bool rollback = false);
 };
 
 class NDBT_DataSetAsyncTransaction {
-public:
-  enum OperationType {
-    OT_Insert,
-    OT_ReadByPk,
-    OT_UpdateByPk,
-    OT_DeleteByPk
-  };
+ public:
+  enum OperationType { OT_Insert, OT_ReadByPk, OT_UpdateByPk, OT_DeleteByPk };
 
   /**
-   * A callback for the NDBT_DataSetAsyncTransaction 
+   * A callback for the NDBT_DataSetAsyncTransaction
    * interface.
    *
    * The callback method returns:
    * - the operation performed
    * - the data set
-   * - if the transaction was commited or aborted
+   * - if the transaction was committed or aborted
    */
-  typedef (* NDBT_DataSetAsyncTransactionCallback)(OperationType,
-						   const NDBT_DataSet *,
-						   bool commit,
-						   void * anyObject);
+  typedef (*NDBT_DataSetAsyncTransactionCallback)(OperationType,
+                                                  const NDBT_DataSet *,
+                                                  bool commit, void *anyObject);
   /**
    * Store the data into ndb
    */
-  static void insert(Ndb * theNdbObject,
-		     const NDBT_DataSet *,
-		     bool rollback = false,
-		     NDBT_DataSetAsyncTransactionCallback fun,
-		     void * anyObject);
-  
+  static void insert(Ndb *theNdbObject, const NDBT_DataSet *,
+                     bool rollback = false,
+                     NDBT_DataSetAsyncTransactionCallback fun, void *anyObject);
+
   /**
    * Read data (using pk) from ndb
    */
-  static void readByPk(Ndb * theNdbObject,
-		       NDBT_DataSet *,
-		       bool rollback = false,
-		       NDBT_DataSetAsyncTransactionCallback fun,
-		       void * anyObject);
+  static void readByPk(Ndb *theNdbObject, NDBT_DataSet *, bool rollback = false,
+                       NDBT_DataSetAsyncTransactionCallback fun,
+                       void *anyObject);
 
-  
   /**
    * Update data using pk
    *
    */
-  static void updateByPk(Ndb * theNdbObject,
-			 const NDBT_DataSet *,
-			 bool rollback = false,
-			 NDBT_DataSetAsyncTransactionCallback fun,
-			 void * anyObject);
-
+  static void updateByPk(Ndb *theNdbObject, const NDBT_DataSet *,
+                         bool rollback = false,
+                         NDBT_DataSetAsyncTransactionCallback fun,
+                         void *anyObject);
 
   /**
-   * Delete 
+   * Delete
    */
-  static void deleteByPk(Ndb * theNdbObject,
-			 const NDBT_DataSet *,
-			 bool rollback = false,
-			 NDBT_DataSetAsyncTransactionCallback fun,
-			 void * anyObject);
-  
+  static void deleteByPk(Ndb *theNdbObject, const NDBT_DataSet *,
+                         bool rollback = false,
+                         NDBT_DataSetAsyncTransactionCallback fun,
+                         void *anyObject);
 };
 
 class NDBT_DataSetBulkOperation {
-public:
+ public:
   /**
    * Store the data into ndb
    */
-  static void insert(Ndb * theNdbObject,
-		     const NDBT_DataSet *,
-		     int parallellTransactions = 1,
-		     int operationsPerTransaction = 10);
-  
+  static void insert(Ndb *theNdbObject, const NDBT_DataSet *,
+                     int parallellTransactions = 1,
+                     int operationsPerTransaction = 10);
+
   /**
    * Read data (using pk) from ndb
    */
-  static void readByPk(Ndb * theNdbObject,
-		       NDBT_DataSet *,
-		       int parallellTransactions = 1,
-		       int operationsPerTransaction = 10);
-  
+  static void readByPk(Ndb *theNdbObject, NDBT_DataSet *,
+                       int parallellTransactions = 1,
+                       int operationsPerTransaction = 10);
+
   /**
    * Update data using pk
    *
    */
-  static void updateByPk(Ndb * theNdbObject,
-			 const NDBT_DataSet *,
-			 int parallellTransactions = 1,
-			 int operationsPerTransaction = 10);
+  static void updateByPk(Ndb *theNdbObject, const NDBT_DataSet *,
+                         int parallellTransactions = 1,
+                         int operationsPerTransaction = 10);
 
   /**
-   * Delete 
+   * Delete
    */
-  static void deleteByPk(Ndb * theNdbObject,
-			 const NDBT_DataSet *,
-			 int parallellTransactions = 1,
-			 int operationsPerTransaction = 10);
+  static void deleteByPk(Ndb *theNdbObject, const NDBT_DataSet *,
+                         int parallellTransactions = 1,
+                         int operationsPerTransaction = 10);
 };
-
 
 #endif

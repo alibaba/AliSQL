@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2007 MySQL AB, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +25,10 @@
 
 #ifndef ATTRIBUTE_DESCRIPTOR_HPP
 #define ATTRIBUTE_DESCRIPTOR_HPP
+
+#include <assert.h>
+
+#define JAM_FILE_ID 5
 
 class AttributeDescriptor {
   friend class Dbdict;
@@ -28,7 +39,7 @@ class AttributeDescriptor {
   friend class Dblqh;
   friend class SimulatedBlock;
 
-public:
+ public:
   static void setType(Uint32 &, Uint32 type);
   static void setSize(Uint32 &, Uint32 size);
   static void setArrayType(Uint32 &, Uint32 arrayType);
@@ -38,7 +49,7 @@ public:
   static void setPrimaryKey(Uint32 &, Uint32 dkey);
   static void setDynamic(Uint32 &, Uint32 dynamicInd);
   static void setDiskBased(Uint32 &, Uint32 val);
-  
+
   static Uint32 getType(const Uint32 &);
   static Uint32 getSize(const Uint32 &);
   static Uint32 getSizeInBytes(const Uint32 &);
@@ -59,7 +70,7 @@ public:
 /**
  *
  * a = Array type            - 2  Bits -> Max 3  (Bit 0-1)
- * t = Attribute type        - 5  Bits -> Max 31  (Bit 2-6)
+ * t = Attribute type        - 6  Bits -> Max 63  (Bit 2-7)
  * s = Attribute size        - 3  Bits -> Max 7  (Bit 8-10)
  *                                0 is for bit types, stored in bitmap
  *                                1-2 unused
@@ -76,100 +87,78 @@ public:
  *
  *           1111111111222222222233
  * 01234567890123456789012345678901
- * aattttt sssdnkpyzzzzzzzzzzzzzzzz
+ * aattttttsssdnkpyzzzzzzzzzzzzzzzz
  * aattsss n d k pyzzzzzzzzzzzzzzzz  [ old format ]
- *               
+ *
  */
 
 #define AD_ARRAY_TYPE_SHIFT (0)
-#define AD_ARRAY_TYPE_MASK  (3)
+#define AD_ARRAY_TYPE_MASK (3)
 
-#define AD_TYPE_SHIFT       (2)
-#define AD_TYPE_MASK        (31)
+#define AD_TYPE_SHIFT (2)
+#define AD_TYPE_MASK (63)
 
-#define AD_SIZE_SHIFT       (8)
-#define AD_SIZE_MASK        (7)
+#define AD_SIZE_SHIFT (8)
+#define AD_SIZE_MASK (7)
 
 #define AD_SIZE_IN_BYTES_SHIFT (3)
 #define AD_SIZE_IN_WORDS_OFFSET (31)
-#define AD_SIZE_IN_WORDS_SHIFT  (5)
+#define AD_SIZE_IN_WORDS_SHIFT (5)
 
-#define AD_DISK_SHIFT        (11)
-#define AD_NULLABLE_SHIFT    (12)
-#define AD_DISTR_KEY_SHIFT   (13)
-#define AD_PRIMARY_KEY       (14)
-#define AD_DYNAMIC           (15)
+#define AD_DISK_SHIFT (11)
+#define AD_NULLABLE_SHIFT (12)
+#define AD_DISTR_KEY_SHIFT (13)
+#define AD_PRIMARY_KEY (14)
+#define AD_DYNAMIC (15)
 
-#define AD_ARRAY_SIZE_SHIFT  (16)
-#define AD_ARRAY_SIZE_MASK   (65535)
+#define AD_ARRAY_SIZE_SHIFT (16)
+#define AD_ARRAY_SIZE_MASK (65535)
 
-inline
-void
-AttributeDescriptor::setType(Uint32 & desc, Uint32 type){
+inline void AttributeDescriptor::setType(Uint32 &desc, Uint32 type) {
   assert(type <= AD_TYPE_MASK);
   desc |= (type << AD_TYPE_SHIFT);
 }
 
-inline
-void
-AttributeDescriptor::setSize(Uint32 & desc, Uint32 size){
+inline void AttributeDescriptor::setSize(Uint32 &desc, Uint32 size) {
   assert(size <= AD_SIZE_MASK);
   desc |= (size << AD_SIZE_SHIFT);
 }
 
-inline
-void
-AttributeDescriptor::setArrayType(Uint32 & desc, Uint32 arrayType){
+inline void AttributeDescriptor::setArrayType(Uint32 &desc, Uint32 arrayType) {
   assert(arrayType <= AD_ARRAY_TYPE_MASK);
   desc |= (arrayType << AD_ARRAY_TYPE_SHIFT);
 }
 
-inline
-void
-AttributeDescriptor::clearArrayType(Uint32 & desc)
-{
+inline void AttributeDescriptor::clearArrayType(Uint32 &desc) {
   desc &= ~Uint32(AD_ARRAY_TYPE_MASK << AD_ARRAY_TYPE_SHIFT);
 }
 
-inline
-void
-AttributeDescriptor::setArraySize(Uint32 & desc, Uint32 arraySize){
+inline void AttributeDescriptor::setArraySize(Uint32 &desc, Uint32 arraySize) {
   assert(arraySize <= AD_ARRAY_SIZE_MASK);
   desc |= (arraySize << AD_ARRAY_SIZE_SHIFT);
 }
 
-inline
-void
-AttributeDescriptor::setNullable(Uint32 & desc, Uint32 nullable){
+inline void AttributeDescriptor::setNullable(Uint32 &desc, Uint32 nullable) {
   assert(nullable <= 1);
   desc |= (nullable << AD_NULLABLE_SHIFT);
 }
 
-inline
-void
-AttributeDescriptor::setDKey(Uint32 & desc, Uint32 dkey){
+inline void AttributeDescriptor::setDKey(Uint32 &desc, Uint32 dkey) {
   assert(dkey <= 1);
   desc |= (dkey << AD_DISTR_KEY_SHIFT);
 }
 
-inline
-void
-AttributeDescriptor::setPrimaryKey(Uint32 & desc, Uint32 dkey){
+inline void AttributeDescriptor::setPrimaryKey(Uint32 &desc, Uint32 dkey) {
   assert(dkey <= 1);
   desc |= (dkey << AD_PRIMARY_KEY);
 }
 
-inline
-void
-AttributeDescriptor::setDynamic(Uint32 & desc, Uint32 dynamic){
+inline void AttributeDescriptor::setDynamic(Uint32 &desc, Uint32 dynamic) {
   assert(dynamic <= 1);
   desc |= (dynamic << AD_DYNAMIC);
 }
 
-inline
-void
-AttributeDescriptor::setDiskBased(Uint32 & desc, Uint32 val)
-{
+inline void AttributeDescriptor::setDiskBased(Uint32 &desc, Uint32 val) {
   assert(val <= 1);
   desc |= (val << AD_DISK_SHIFT);
 }
@@ -177,77 +166,53 @@ AttributeDescriptor::setDiskBased(Uint32 & desc, Uint32 val)
 /**
  * Getters
  */
-inline
-Uint32
-AttributeDescriptor::getType(const Uint32 & desc){
+inline Uint32 AttributeDescriptor::getType(const Uint32 &desc) {
   return (desc >> AD_TYPE_SHIFT) & AD_TYPE_MASK;
 }
 
-inline
-Uint32
-AttributeDescriptor::getSize(const Uint32 & desc){
+inline Uint32 AttributeDescriptor::getSize(const Uint32 &desc) {
   return (desc >> AD_SIZE_SHIFT) & AD_SIZE_MASK;
 }
 
-inline
-Uint32
-AttributeDescriptor::getSizeInBytes(const Uint32 & desc){
-  return (getArraySize(desc) << getSize(desc))
-                             >> AD_SIZE_IN_BYTES_SHIFT;
+inline Uint32 AttributeDescriptor::getSizeInBytes(const Uint32 &desc) {
+  return (getArraySize(desc) << getSize(desc)) >> AD_SIZE_IN_BYTES_SHIFT;
 }
 
-inline
-Uint32
-AttributeDescriptor::getSizeInWords(const Uint32 & desc){
-  return ((getArraySize(desc) << getSize(desc)) 
-          + AD_SIZE_IN_WORDS_OFFSET) 
-                              >> AD_SIZE_IN_WORDS_SHIFT;
+inline Uint32 AttributeDescriptor::getSizeInWords(const Uint32 &desc) {
+  return ((getArraySize(desc) << getSize(desc)) + AD_SIZE_IN_WORDS_OFFSET) >>
+         AD_SIZE_IN_WORDS_SHIFT;
 }
 
-inline
-Uint32
-AttributeDescriptor::getArrayType(const Uint32 & desc){
+inline Uint32 AttributeDescriptor::getArrayType(const Uint32 &desc) {
   return (desc >> AD_ARRAY_TYPE_SHIFT) & AD_ARRAY_TYPE_MASK;
 }
 
-inline
-Uint32
-AttributeDescriptor::getArraySize(const Uint32 & desc){
+inline Uint32 AttributeDescriptor::getArraySize(const Uint32 &desc) {
   return (desc >> AD_ARRAY_SIZE_SHIFT) & AD_ARRAY_SIZE_MASK;
 }
 
-inline
-Uint32
-AttributeDescriptor::getNullable(const Uint32 & desc){
+inline Uint32 AttributeDescriptor::getNullable(const Uint32 &desc) {
   return (desc >> AD_NULLABLE_SHIFT) & 1;
 }
 
-inline
-Uint32
-AttributeDescriptor::getDKey(const Uint32 & desc){
+inline Uint32 AttributeDescriptor::getDKey(const Uint32 &desc) {
   return (desc >> AD_DISTR_KEY_SHIFT) & 1;
 }
 
-inline
-Uint32
-AttributeDescriptor::getPrimaryKey(const Uint32 & desc){
+inline Uint32 AttributeDescriptor::getPrimaryKey(const Uint32 &desc) {
   return (desc >> AD_PRIMARY_KEY) & 1;
 }
 
-inline
-Uint32
-AttributeDescriptor::getDynamic(const Uint32 & desc){
+inline Uint32 AttributeDescriptor::getDynamic(const Uint32 &desc) {
   return (desc >> AD_DYNAMIC) & 1;
 }
 
-inline
-Uint32
-AttributeDescriptor::getDiskBased(const Uint32 & desc)
-{
+inline Uint32 AttributeDescriptor::getDiskBased(const Uint32 &desc) {
   return (desc >> AD_DISK_SHIFT) & 1;
 }
 
-class NdbOut&
-operator<<(class NdbOut&, const AttributeDescriptor&);
+class NdbOut &operator<<(class NdbOut &, const AttributeDescriptor &);
+
+#undef JAM_FILE_ID
 
 #endif

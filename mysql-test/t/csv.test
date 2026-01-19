@@ -1,8 +1,7 @@
 #
 # Test for the CSV engine
 #
-
---source include/have_csv.inc
+### Test is  Being disabled to be executed with Query Cache Enabled until BUG#11757567 is fixed
 
 #
 # Simple select test
@@ -1665,20 +1664,6 @@ select * from float_test;
 
 drop table float_test;
 #
-# Bug #21328 mysqld issues warnings on ALTER CSV table to MyISAM
-#
-
-CREATE TABLE `bug21328` (
-  `col1` int(11) NOT NULL,
-  `col2` int(11) NOT NULL,
-  `col3` int(11) NOT NULL
-) ENGINE=CSV;
-
-insert into bug21328 values (1,0,0);
-alter table bug21328 engine=myisam;
-drop table bug21328;
-
-#
 # BUG#28971 - ALTER TABLE followed by UPDATE for a CSV table make server
 # crash
 #
@@ -1729,6 +1714,7 @@ drop table t1;
 #
 # Bug #31473: does not work with NULL value in datetime field
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1(a datetime not null) engine=csv;
 insert into t1 values();
 select * from t1;
@@ -1763,7 +1749,7 @@ create table t1(a enum('foo','bar') default 'foo' not null) engine=csv;
 insert into t1 values();
 select * from t1;
 drop table t1;
-
+SET sql_mode = default;
 #
 # BUG#32817 - though CSV is marked as supported create table is rejected
 #             with error 1005.
@@ -1807,9 +1793,9 @@ drop table t1;
 CREATE TABLE t1 (e enum('foo','bar') NOT NULL) ENGINE = CSV;
 INSERT INTO t1 VALUES();
 INSERT INTO t1 VALUES(default);
-INSERT INTO t1 VALUES(0);
-INSERT INTO t1 VALUES(3);
-INSERT INTO t1 VALUES(-1);
+INSERT IGNORE INTO t1 VALUES(0);
+INSERT IGNORE INTO t1 VALUES(3);
+INSERT IGNORE INTO t1 VALUES(-1);
 SELECT * FROM t1;
 DROP TABLE t1;
 
@@ -1895,3 +1881,11 @@ SELECT * FROM t1;
 
 DROP TABLE t1;
 --echo End of 5.1 tests
+
+--echo #
+--echo # Bug#32597017: CSV ENGINE (TINA) DOES NOT HANDLE JSON TYPE
+--echo #
+CREATE TABLE t(j JSON NOT NULL) ENGINE = CSV;
+INSERT INTO t VALUES ('{"a": 1, "b": 2}');
+SELECT * FROM t;
+DROP TABLE t;

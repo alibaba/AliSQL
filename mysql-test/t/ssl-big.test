@@ -1,10 +1,12 @@
 # Turn on ssl between the client and server
 # and run a number of tests
 
--- source include/have_ssl_communication.inc
 -- source include/big_test.inc
+-- source include/not_sparc_debug.inc
 # Skiping this test from Valgrind execution as per Bug-14627884
 --source include/not_valgrind.inc
+--source include/not_asan.inc
+--source include/not_ubsan.inc
 
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
@@ -12,6 +14,9 @@
 --disable_warnings
 DROP TABLE IF EXISTS t1, t2;
 --enable_warnings
+
+SET @start_max_connections = @@global.max_connections;
+SET @@global.max_connections = 2500;
 
 #
 # Bug#29579 Clients using SSL can hang the server
@@ -60,6 +65,8 @@ connect (ssl_con,localhost,root,,,,,SSL);
 drop table t1;
 connection default;
 disconnect ssl_con;
+
+SET @@global.max_connections = @start_max_connections;
 
 # Wait till all disconnects are completed
 --source include/wait_until_count_sessions.inc

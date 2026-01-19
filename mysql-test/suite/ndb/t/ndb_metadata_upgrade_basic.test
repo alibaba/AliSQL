@@ -1,0 +1,82 @@
+--source include/have_multi_ndb.inc
+--source suite/ndb/include/backup_restore_setup.inc
+
+#
+# The table structure is as follows:
+# CREATE TABLE t1 (
+#   a INT PRIMARY KEY,
+#   b VARCHAR(30)
+# ) ENGINE NDB;
+#
+# INSERT INTO t1 VALUES
+#  (1, 'a'),
+#  (2, 'bb'),
+#  (3, 'ccc');
+
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 -m -r --disable-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 2 -r $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 --rebuild-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+
+--echo Backup restored
+
+# Test upgrade of the metadata during schema synchronization
+--echo Restart server 1 to trigger schema synchronization
+let $mysqld_name=mysqld.1.1;
+--source include/restart_mysqld.inc
+
+connection server2;
+--echo Restart server 2 to trigger schema synchronization
+let $mysqld_name=mysqld.2.1;
+--source include/restart_mysqld.inc
+
+connection server1;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+
+ALTER TABLE t1 DROP COLUMN b;
+INSERT INTO t1 values (4),(5);
+--sorted_result
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 -m -r --disable-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 2 -r $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 --rebuild-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+
+# Test upgrade of the metadata during discovery from NDB
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+
+ALTER TABLE t1 DROP COLUMN b;
+
+INSERT INTO t1 values (4),(5);
+--sorted_result
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+# Test upgrade of the metadata during automatic sync
+
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 -m -r --disable-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 2 -r $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 --rebuild-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_basic_backup >> $NDB_TOOLS_OUTPUT
+
+# Wait until the changes have been synced
+--let $max_wait = 60
+--source wait_immediate_metadata_sync.inc
+
+--sorted_result
+SELECT * FROM t1;
+
+ALTER TABLE t1 DROP COLUMN b;
+
+INSERT INTO t1 values (4),(5);
+--sorted_result
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--remove_file $NDB_TOOLS_OUTPUT

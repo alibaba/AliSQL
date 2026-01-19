@@ -1,3 +1,31 @@
+--source include/big_test.inc
+
+let BASEDIR=    `select @@basedir`;
+let DDIR=       $MYSQL_TMP_DIR/dd_bootstrap_test;
+let MYSQLD_LOG= $MYSQL_TMP_DIR/lowercase_view.log;
+let extra_args= --no-defaults --innodb_dedicated_server=OFF --log-error=$MYSQLD_LOG --secure-file-priv="" --loose-skip-auto_generate_certs --loose-skip-sha256_password_auto_generate_rsa_keys --skip-ssl --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR;
+let BOOTSTRAP_SQL= $MYSQL_TMP_DIR/tiny_bootstrap.sql;
+
+--echo # Preparation: Shut server down.
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+write_file $BOOTSTRAP_SQL;
+  CREATE SCHEMA test;
+EOF
+
+--echo # 1 First start the server with --initialize and --lower-case-table-names=1.
+--echo #   We need to make sure l-c-t-n is set during database initialization.
+--echo #   Otherwise the mysql.tables.name do not pick right collation.
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --init-file=$BOOTSTRAP_SQL --lower-case-table-names=1
+
+--echo # 2 Restart the server against DDIR
+--exec echo "restart: --datadir=$DDIR --no-console --log-error=$MYSQLD_LOG" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+
 --disable_warnings
 drop table if exists t1Aa,t2Aa,v1Aa,v2Aa;
 drop view if exists t1Aa,t2Aa,v1Aa,v2Aa;
@@ -144,6 +172,7 @@ drop table t1Aa;
 # Bug #31562: HAVING and lower case
 #
 
+--source include/turn_off_only_full_group_by.inc
 CREATE TABLE  t1 (a int, b int);
 
 select X.a from t1 AS X group by X.b having (X.a = 1);
@@ -157,6 +186,7 @@ SHOW CREATE VIEW v1;
 
 SELECT * FROM v1;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP VIEW v1;
 DROP TABLE t1;
 
@@ -172,7 +202,7 @@ DROP TABLE t1;
 CREATE TABLE `ttt` (
   `f1` char(3) NOT NULL,
   PRIMARY KEY (`f1`)
-) ENGINE=myisam DEFAULT CHARSET=latin1;
+)DEFAULT CHARSET=latin1;
 
 SELECT count(COLUMN_NAME) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_NAME =
 'TTT';
@@ -183,3 +213,17 @@ DROP TABLE `ttt`;
 
 --echo End of 5.0 tests.
 
+--echo # Shut server down.
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+--echo #
+--echo # Cleanup: Restarting the server against default datadir.
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--remove_file $MYSQL_TMP_DIR/lowercase_view.log
+--remove_file $MYSQL_TMP_DIR/tiny_bootstrap.sql
+--force-rmdir $MYSQL_TMP_DIR/dd_bootstrap_test

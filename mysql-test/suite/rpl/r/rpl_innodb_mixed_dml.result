@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 ==========MASTER==========
 show global variables like 'binlog_format%';
@@ -13,6 +13,9 @@ binlog_format	MIXED
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 MIXED	MIXED
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ==========SLAVE===========
 show global variables like 'binlog_format%';
 Variable_name	Value
@@ -23,6 +26,9 @@ binlog_format	MIXED
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 MIXED	MIXED
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE DATABASE test_rpl;
 
 ******************** PREPARE TESTING ********************
@@ -331,7 +337,7 @@ DELETE FROM t2;
 ******************** DESCRIBE ********************
 DESCRIBE t1;
 Field	Type	Null	Key	Default	Extra
-a	int(11)	NO	PRI	NULL	auto_increment
+a	int	NO	PRI	NULL	auto_increment
 b	char(254)	YES		NULL	
 DESCRIBE t2 b;
 Field	Type	Null	Key	Default	Extra
@@ -481,74 +487,74 @@ SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 
 ******************** CREATE USER ********************
-CREATE USER 'user_test_rpl'@'localhost' IDENTIFIED BY PASSWORD '*1111111111111111111111111111111111111111';
+CREATE USER 'user_test_rpl'@'localhost' IDENTIFIED WITH 'mysql_native_password' AS '*1111111111111111111111111111111111111111';
 ==========MASTER==========
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
 localhost	user_test_rpl	*1111111111111111111111111111111111111111	N
 ==========SLAVE===========
 USE test_rpl;
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
 localhost	user_test_rpl	*1111111111111111111111111111111111111111	N
 
 ******************** GRANT ********************
 GRANT SELECT ON *.* TO 'user_test_rpl'@'localhost';
 ==========MASTER==========
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
 localhost	user_test_rpl	*1111111111111111111111111111111111111111	Y
 ==========SLAVE===========
 USE test_rpl;
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
 localhost	user_test_rpl	*1111111111111111111111111111111111111111	Y
 
 ******************** REVOKE ********************
 REVOKE SELECT ON *.* FROM 'user_test_rpl'@'localhost';
 ==========MASTER==========
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
 localhost	user_test_rpl	*1111111111111111111111111111111111111111	N
 ==========SLAVE===========
 USE test_rpl;
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
 localhost	user_test_rpl	*1111111111111111111111111111111111111111	N
 
 ******************** SET PASSWORD ********************
 SET PASSWORD FOR 'user_test_rpl'@'localhost' = '*0000000000000000000000000000000000000000';
 ==========MASTER==========
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
-localhost	user_test_rpl	*0000000000000000000000000000000000000000	N
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
+localhost	user_test_rpl	*A38FBE0EB6B1C58EA7C5AAAE654E921DC6CD0007	N
 ==========SLAVE===========
 USE test_rpl;
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
-localhost	user_test_rpl	*0000000000000000000000000000000000000000	N
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
+localhost	user_test_rpl	*A38FBE0EB6B1C58EA7C5AAAE654E921DC6CD0007	N
 
 ******************** RENAME USER ********************
 RENAME USER 'user_test_rpl'@'localhost' TO 'user_test_rpl_2'@'localhost';
 ==========MASTER==========
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
-localhost	user_test_rpl_2	*0000000000000000000000000000000000000000	N
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
+localhost	user_test_rpl_2	*A38FBE0EB6B1C58EA7C5AAAE654E921DC6CD0007	N
 ==========SLAVE===========
 USE test_rpl;
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
-localhost	user_test_rpl_2	*0000000000000000000000000000000000000000	N
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
+localhost	user_test_rpl_2	*A38FBE0EB6B1C58EA7C5AAAE654E921DC6CD0007	N
 
 ******************** DROP USER ********************
 DROP USER 'user_test_rpl_2'@'localhost';
 ==========MASTER==========
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
 ==========SLAVE===========
 USE test_rpl;
-SELECT host, user, password, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
-host	user	password	select_priv
+SELECT host, user, authentication_string, select_priv FROM mysql.user WHERE user LIKE 'user_test_rpl%';
+host	user	authentication_string	select_priv
 INSERT INTO t1 VALUES(100, 'test');
 
 ******************** ANALYZE ********************
@@ -564,7 +570,7 @@ test_rpl.t1	check	status	OK
 ******************** CHECKSUM TABLE ********************
 CHECKSUM TABLE t1;
 Table	Checksum
-test_rpl.t1	1837058639
+test_rpl.t1	3445341981
 
 ******************** OPTIMIZE TABLE ********************
 OPTIMIZE TABLE t1;
@@ -684,12 +690,12 @@ CREATE EVENT e1 ON SCHEDULE EVERY '1' SECOND COMMENT 'e_second_comment' DO DELET
 ==========MASTER==========
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
-test_rpl	e1	root@localhost	SYSTEM	RECURRING	NULL	1	#	#	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+test_rpl	e1	root@localhost	SYSTEM	RECURRING	NULL	1	#	#	NULL	ENABLED	1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 ==========SLAVE===========
 USE test_rpl;
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
-test_rpl	e1	root@localhost	SYSTEM	RECURRING	NULL	1	#	#	NULL	SLAVESIDE_DISABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+test_rpl	e1	root@localhost	SYSTEM	RECURRING	NULL	1	#	#	NULL	SLAVESIDE_DISABLED	1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 ==========MASTER==========
 SELECT COUNT(*) FROM t1;
 COUNT(*)
@@ -744,12 +750,12 @@ ALTER EVENT e1 RENAME TO e2;
 ==========MASTER==========
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
-test_rpl	e2	root@localhost	SYSTEM	RECURRING	NULL	1	#	#	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+test_rpl	e2	root@localhost	SYSTEM	RECURRING	NULL	1	#	#	NULL	ENABLED	1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 ==========SLAVE===========
 USE test_rpl;
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
-test_rpl	e2	root@localhost	SYSTEM	RECURRING	NULL	1	#	#	NULL	SLAVESIDE_DISABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+test_rpl	e2	root@localhost	SYSTEM	RECURRING	NULL	1	#	#	NULL	SLAVESIDE_DISABLED	1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 ==========MASTER==========
 SELECT COUNT(*) FROM t1;
 COUNT(*)
@@ -794,7 +800,7 @@ CREATE VIEW v2 AS SELECT * FROM t1 WHERE b <> UUID();
 ==========MASTER==========
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1` where (`t1`.`a` = 1)	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1` where (`t1`.`a` = 1)	utf8mb4	utf8mb4_0900_ai_ci
 SELECT * FROM v1 ORDER BY a;
 a	b
 1	test1
@@ -802,7 +808,7 @@ a	b
 USE test_rpl;
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1` where (`t1`.`a` = 1)	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1` where (`t1`.`a` = 1)	utf8mb4	utf8mb4_0900_ai_ci
 SELECT * FROM v1 ORDER BY a;
 a	b
 1	test1
@@ -810,7 +816,7 @@ ALTER VIEW v1 AS SELECT * FROM t1 WHERE a = 2;
 ==========MASTER==========
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1` where (`t1`.`a` = 2)	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1` where (`t1`.`a` = 2)	utf8mb4	utf8mb4_0900_ai_ci
 SELECT * FROM v1 ORDER BY a;
 a	b
 2	test2
@@ -818,7 +824,7 @@ a	b
 USE test_rpl;
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1` where (`t1`.`a` = 2)	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1` where (`t1`.`a` = 2)	utf8mb4	utf8mb4_0900_ai_ci
 SELECT * FROM v1 ORDER BY a;
 a	b
 2	test2
@@ -1010,10 +1016,10 @@ master-bin.000001	#	Xid	#	#	COMMIT /* XID */
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Query	#	#	use `test_rpl`; DELETE FROM t2
 master-bin.000001	#	Xid	#	#	COMMIT /* XID */
-master-bin.000001	#	Query	#	#	use `test_rpl`; CREATE USER 'user_test_rpl'@'localhost' IDENTIFIED BY PASSWORD '*1111111111111111111111111111111111111111'
+master-bin.000001	#	Query	#	#	use `test_rpl`; CREATE USER 'user_test_rpl'@'localhost' IDENTIFIED WITH 'mysql_native_password' AS '*1111111111111111111111111111111111111111'
 master-bin.000001	#	Query	#	#	use `test_rpl`; GRANT SELECT ON *.* TO 'user_test_rpl'@'localhost'
 master-bin.000001	#	Query	#	#	use `test_rpl`; REVOKE SELECT ON *.* FROM 'user_test_rpl'@'localhost'
-master-bin.000001	#	Query	#	#	use `test_rpl`; SET PASSWORD FOR 'user_test_rpl'@'localhost'='*0000000000000000000000000000000000000000'
+master-bin.000001	#	Query	#	#	use `test_rpl`; ALTER USER 'user_test_rpl'@'localhost' IDENTIFIED WITH 'mysql_native_password' AS '*A38FBE0EB6B1C58EA7C5AAAE654E921DC6CD0007'
 master-bin.000001	#	Query	#	#	use `test_rpl`; RENAME USER 'user_test_rpl'@'localhost' TO 'user_test_rpl_2'@'localhost'
 master-bin.000001	#	Query	#	#	use `test_rpl`; DROP USER 'user_test_rpl_2'@'localhost'
 master-bin.000001	#	Query	#	#	BEGIN

@@ -1,0 +1,16 @@
+CREATE TABLE table_with_one_index (
+a INT NOT NULL,
+b INT NOT NULL,
+PRIMARY KEY USING HASH (a),
+INDEX (b)
+) ENGINE NDB;
+Check if the stats have been automatically created
+stats_created
+YES
+Insert rows to trigger automatic update of stats
+Wait for stats update
+Stats automatically updated
+Insert more rows to trigger another automatic update of stats
+Wait for stats update
+Stats automatically updated
+DROP TABLE table_with_one_index;

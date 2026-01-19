@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2005, 2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2005, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,27 +28,30 @@
 
 #include "SignalData.hpp"
 
-struct RestoreLcpReq 
-{
+#define JAM_FILE_ID 214
+
+struct RestoreLcpReq {
   Uint32 senderData;
   Uint32 senderRef;
   Uint32 lcpNo;
   Uint32 tableId;
   Uint32 fragmentId;
   Uint32 lcpId;
-  STATIC_CONST( SignalLength = 6 );
+  Uint32 restoreGcpId;
+  Uint32 maxGciCompleted;
+  Uint32 createGci;
+  Uint32 cnewestGci;
+  static constexpr Uint32 SignalLength = 10;
 };
 
-struct RestoreLcpRef
-{
+struct RestoreLcpRef {
   Uint32 senderData;
   Uint32 senderRef;
   Uint32 errorCode;
   Uint32 extra[1];
-  STATIC_CONST( SignalLength = 3 );
+  static constexpr Uint32 SignalLength = 3;
 
-  enum ErrorCode 
-  {
+  enum ErrorCode {
     OK = 0,
     NoFileRecord = 1,
     OutOfDataBuffer = 2,
@@ -50,19 +60,20 @@ struct RestoreLcpRef
   };
 };
 
-struct RestoreLcpConf 
-{
+struct RestoreLcpConf {
   Uint32 senderData;
   Uint32 senderRef;
-  STATIC_CONST( SignalLength = 2 );
+  Uint32 restoredLcpId;
+  Uint32 restoredLocalLcpId;
+  Uint32 maxGciCompleted;
+  Uint32 afterRestore;
+  static constexpr Uint32 SignalLength = 6;
 };
 
 struct RestoreContinueB {
-  
-  enum {
-    RESTORE_NEXT = 0, 
-    READ_FILE = 1
-  };
+  enum { RESTORE_NEXT = 0, READ_FILE = 1, CHECK_EXPAND_SHRINK = 2 };
 };
+
+#undef JAM_FILE_ID
 
 #endif

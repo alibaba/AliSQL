@@ -146,19 +146,20 @@ DROP TABLE t1;
 # Some other simple tests with the current character set
 #
 create table t1 (a varchar(10), key(a), fulltext (a)) ENGINE = InnoDB;
-analyze table t1;
 insert into t1 values ("a"),("abc"),("abcd"),("hello"),("test");
+-- disable_result_log
+ANALYZE TABLE t1;
+-- enable_result_log
 select * from t1 where a like "abc%";
 select * from t1 where a like "test%";
 select * from t1 where a like "te_t";
-# InnoDB_FTS: we don't support the postfix "+0"
 select * from t1 where match a against ("te*" in boolean mode)+0;
 drop table t1;
 
 
 
 --echo # 
---echo # Bug #49734: Crash on EXPLAIN EXTENDED UNION ... ORDER BY 
+--echo # Bug #49734: Crash on EXPLAIN UNION ... ORDER BY 
 --echo #   <any non-const-function>
 --echo # 
 
@@ -168,7 +169,7 @@ CREATE TABLE t2 (b INT) ENGINE = InnoDB;
 INSERT INTO t2 VALUES (1),(2);
 
 --echo # Should not crash
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT * FROM t1 UNION SELECT * FROM t1 ORDER BY a + 12;
 
 --echo # Should not crash
@@ -176,13 +177,13 @@ SELECT * FROM t1 UNION SELECT * FROM t1 ORDER BY a + 12;
 
 
 --echo # Should not crash
---error ER_CANT_USE_OPTION_HERE
-EXPLAIN EXTENDED
+--error ER_TABLE_CANT_HANDLE_FT
+EXPLAIN
 SELECT * FROM t1 UNION SELECT * FROM t1
   ORDER BY MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE);
 
 --echo # Should not crash
---error ER_CANT_USE_OPTION_HERE
+--error ER_TABLE_CANT_HANDLE_FT
 SELECT * FROM t1 UNION SELECT * FROM t1
   ORDER BY MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE);
 
@@ -193,7 +194,7 @@ SELECT * FROM t1 UNION SELECT * FROM t1
 
 
 --echo # Should not crash
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT * FROM t1 UNION SELECT * FROM t1
   ORDER BY (SELECT a FROM t2 WHERE b = 12);
 
@@ -209,89 +210,79 @@ SELECT * FROM t2 UNION SELECT * FROM t2
 
 DROP TABLE t1,t2;
 
+
 --echo End of 5.1 tests
 
---echo # Bug #19950568 WRONG RELEVANCE RANKING FOR INNODB FULL TEXT
---echo #               SEARCHES UNDER CERTAIN CONDITIONS
+--echo #
+--echo # Bug#32979815: WL#14422: ASSERTION `!(USED_TABS & (~READ_TABLES & ~FILTER_FOR_TABLE))' FAILED
 --echo #
 
-CREATE TABLE t1 (
-  id int(11) NOT NULL AUTO_INCREMENT,
-  first_name VARCHAR(50) NOT NULL,
-  last_name VARCHAR(50) NOT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY idx_1 (first_name, last_name),
-  FULLTEXT KEY `idx_2` (first_name)
-) ENGINE=InnoDB;
+CREATE TABLE t (x VARCHAR(10), FULLTEXT (x));
 
-INSERT INTO t1 (id, first_name, last_name) VALUES
-(1, 'Bart', 'Simpson'),
-(2, 'Homer', 'Simpson'),
-(3, 'Marge', 'Simpson'),
-(4, 'Lisa', 'Simpson'),
-(5, 'Maggie', 'Simpson'),
-(6, 'Ned', 'Flanders'),
-(7, 'Nelson', 'Muntz');
+SELECT 1 FROM t
+WHERE x IN
+ (SELECT MATCH (t2.x) AGAINST ('abc')
+  FROM t AS t1 JOIN t AS t2
+       ON t1.x = t2.x
+  GROUP BY t2.x
+  HAVING t2.x = '');
 
-ANALYZE TABLE t1;
+DROP TABLE t;
 
-let $query= SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1;
+--echo #
+--echo # Bug#32980875: WL#14422: ASSERTION `FALSE' FAILED|SQL/BASIC_ROW_ITERATORS.H
+--echo #
 
-eval EXPLAIN $query;
-eval $query;
+CREATE TABLE t (a VARCHAR(10), FULLTEXT (a));
+INSERT INTO t VALUES ('a'), ('b'), ('c');
+ANALYZE TABLE t;
 
-let $query=SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1 ORDER BY id;
+PREPARE prep_stmt FROM '
 
-eval EXPLAIN $query;
-eval $query;
+ SELECT DISTINCT
+   MATCH (t1.a) AGAINST(''x''),
+   MIN(t2.a),
+   t1.a
+ FROM t AS t1 JOIN t AS t2 ON t1.a = t2.a
+ GROUP BY MATCH (t1.a) AGAINST(''x''), t1.a
 
-DROP TABLE t1;
+';
 
-CREATE TABLE t1 (
-  FTS_DOC_ID  BIGINT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
-  id int(11) NOT NULL ,
-  first_name VARCHAR(50) NOT NULL,
-  last_name VARCHAR(50) NOT NULL,
-  PRIMARY KEY (ID),
-  UNIQUE KEY (FTS_DOC_ID),
-  UNIQUE KEY idx_1 (first_name, last_name),
-  FULLTEXT KEY `idx_2` (first_name)
-) ENGINE=InnoDB;
+# The second execution used to fail with the hypergraph optimizer.
+--sorted_result
+EXECUTE prep_stmt;
+--sorted_result
+EXECUTE prep_stmt;
 
-INSERT INTO t1 (id, first_name, last_name) VALUES
-(1, 'Bart', 'Simpson'),
-(2, 'Homer', 'Simpson'),
-(3, 'Marge', 'Simpson'),
-(4, 'Lisa', 'Simpson'),
-(5, 'Maggie', 'Simpson'),
-(6, 'Ned', 'Flanders'),
-(7, 'Nelson', 'Muntz');
+DEALLOCATE PREPARE prep_stmt;
+DROP TABLE t;
 
-ANALYZE TABLE t1;
+--echo #
+--echo # Bug#32990422: WL#14422: RESULT MISMATCH WITH FTS FUNCTION
+--echo #
 
-let $query=SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
- BOOLEAN MODE) AS score FROM t1;
+CREATE TABLE t (i INTEGER, x VARCHAR(10), FULLTEXT (x));
+INSERT INTO t VALUES (0, 'a'), (1, 'b'), (0, 'c');
+--sorted_result
+SELECT i = 0 AS a, MATCH(x) AGAINST('d') AS b FROM t GROUP BY a, b;
+DROP TABLE t;
 
-eval EXPLAIN $query;
-eval $query;
+--echo #
+--echo # Bug#32996515: WL#14422: RESULT MISMATCH WITH DISTINCT AND GROUP BY ON FTS FUNCTION
+--echo #
 
-let $query=SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1 ORDER BY fts_doc_id;
+CREATE TABLE t (a INTEGER, b VARCHAR(10), FULLTEXT(b));
+INSERT INTO t VALUES (1, 'a'), (2, 'b');
+--sorted_result
+SELECT DISTINCT MATCH (b) AGAINST ('x'), a
+FROM t GROUP BY MATCH (b) AGAINST ('x'), a;
+DROP TABLE t;
 
-eval EXPLAIN $query;
-eval $query;
+--echo #
+--echo # Bug#34782389: Assertion `item->hidden == hidden' failed.
+--echo #
 
-DROP TABLE t1;
-
---echo # Adding test case for Bug#20261601
-
-CREATE TABLE t1(a INT PRIMARY KEY)ENGINE=INNODB;
-INSERT INTO t1 VALUES(1),(2);
---error ER_FT_MATCHING_KEY_NOT_FOUND
-SELECT (SELECT MATCH(`a`)AGAINST('1') FROM t1) FROM t1;
-SELECT 1, a IN (SELECT a FROM t1) FROM t1;
-DROP TABLE t1;
-
---echo # End of test for Bug#19950568 and Bug#20261601
+CREATE TABLE t (a VARCHAR(10), FULLTEXT(a));
+INSERT INTO t VALUES ('abc'), ('xyz');
+SELECT 0 IN (SELECT MATCH (a) AGAINST ('abc') FROM t);
+DROP TABLE t;

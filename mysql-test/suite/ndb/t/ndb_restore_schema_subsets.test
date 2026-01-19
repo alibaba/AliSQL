@@ -2,8 +2,8 @@
 # Test restoring backups with in- or excluding tables or databases
 ######################################################################
 
--- source include/have_ndb.inc
--- source include/ndb_default_cluster.inc
+-- source include/have_multi_ndb.inc
+-- source suite/ndb/include/backup_restore_setup.inc
 
 --echo *************************************
 --echo Creating various databases and tables
@@ -52,23 +52,27 @@ select * from tab2 order by a;
 
 drop table db1.tab1, db1.tab2, db2.tab1, db2.tab2;
 
+# Turn off metadata check so it doesn't intefere with table discovery
+--connection server2
+SET @old_ndb_metadata_check_server2 = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
+--connection server1
+SET @old_ndb_metadata_check_server1 = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
+
 --echo **************************************
 --echo Check various include/exclude variants
 --echo **************************************
 --echo Normal full restore
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
 # checksum table tab1, tab2;
 select * from tab1 order by a;
 select * from tab2 order by a;
 
 use db2;
---sorted_result
-show tables;
 # checksum table tab1, tab2;
 select * from tab1 order by a;
 select * from tab2 order by a;
@@ -78,15 +82,15 @@ drop table db1.tab1, db1.tab2, db2.tab1, db2.tab2;
 --echo ****************
 --echo Include only db2
 --echo ****************
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-databases db2>> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-databases db2 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-databases db2>> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-databases db2 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 use db2;
---sorted_result
-show tables;
 # checksum table tab1, tab2;
 select * from tab1 order by a;
 select * from tab2 order by a;
@@ -96,54 +100,55 @@ drop table db2.tab1, db2.tab2;
 --echo ****************
 --echo Exclude only db2
 --echo ****************
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-databases db2>> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-databases db2 >> $NDB_TOOLS_OUTPUT
-
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-databases db2>> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-databases db2 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
 # checksum table tab1, tab2;
 select * from tab1 order by a;
 select * from tab2 order by a;
 
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 
 drop table db1.tab1, db1.tab2;
 
 --echo ************
 --echo Exclude both
 --echo ************
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-databases db2,db1>> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-databases db2,db1 >> $NDB_TOOLS_OUTPUT
-
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-databases db2,db1>> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-databases db2,db1 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 
 --echo **********************************
 --echo Include only db1.tab1 and db2.tab2
 --echo **********************************
 
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-tables db1.tab1,db2.tab2 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-tables db1.tab1,db2.tab2 >> $NDB_TOOLS_OUTPUT
-
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-tables db1.tab1,db2.tab2 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-tables db1.tab1,db2.tab2 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 # checksum table tab1;
 select * from tab1 order by a;
 
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
 # checksum table tab2;
 select * from tab2 order by a;
 
@@ -154,19 +159,18 @@ drop table db1.tab1, db2.tab2;
 --echo Exclude db1.tab1 and db2.tab2
 --echo *****************************
 --echo Should result in db1.tab2 and db2.tab1 being restored
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1,db2.tab2 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1,db2.tab2 >> $NDB_TOOLS_OUTPUT
-
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1,db2.tab2 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1,db2.tab2 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
 # checksum table tab2;
 select * from tab2 order by a;
 
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 # checksum table tab1;
 select * from tab1 order by a;
 
@@ -177,18 +181,20 @@ drop table db1.tab2, db2.tab1;
 --echo *********************************
 
 --echo Should result in only db1.tab1 being restored
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-databases db1 --include-tables db1.tab1 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id  --exclude-databases db1 --include-tables db1.tab1>> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-databases db1 --include-tables db1.tab1 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id  --exclude-databases db1 --include-tables db1.tab1>> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 # checksum table tab1;
 select * from tab1 order by a;
 
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 
 drop table db1.tab1;
 
@@ -196,18 +202,20 @@ drop table db1.tab1;
 --echo Exclude db1.tab1, but include db1
 --echo *********************************
 --echo Should result in only db1.tab2 being restored
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id  --include-databases db1 --exclude-tables db1.tab1 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id  --include-databases db1 --exclude_tables db1.tab1 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id  --include-databases db1 --exclude-tables db1.tab1 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id  --include-databases db1 --exclude_tables db1.tab1 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
 # checksum table tab2;
 select * from tab2 order by a;
 
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 
 drop table db1.tab2;
 
@@ -215,19 +223,20 @@ drop table db1.tab2;
 --echo Exclude db1.tab1, and include db1.tab1
 --echo **************************************
 --echo Should result in db1.tab1 only restored.
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1 --include-tables db1.tab1 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1 --include-tables db1.tab1 >> $NDB_TOOLS_OUTPUT
-
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1 --include-tables db1.tab1 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1 --include-tables db1.tab1 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 # checksum table tab1;
 select * from tab1 order by a;
 
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 
 drop table db1.tab1;
 
@@ -235,16 +244,15 @@ drop table db1.tab1;
 --echo Exclude db2, and include db2
 --echo ****************************
 --echo Should result in db2 only restored.
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-databases db2 --include-databases db2 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-databases db2 --include-databases db2 >> $NDB_TOOLS_OUTPUT
-
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-databases db2 --include-databases db2 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-databases db2 --include-databases db2 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 use db2;
---sorted_result
-show tables;
 # checksum table tab1, tab2;
 select * from tab1 order by a;
 select * from tab2 order by a;
@@ -255,16 +263,15 @@ drop table db2.tab1, db2.tab2;
 --echo Include db1, and include db2.tab1
 --echo *********************************
 --echo Should result in all tables in db1 and db2.tab1 being restored.
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-databases db1 --include-tables db2.tab1 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-databases db1 --include-tables db2.tab1 >> $NDB_TOOLS_OUTPUT
-
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-databases db1 --include-tables db2.tab1 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-databases db1 --include-tables db2.tab1 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+show create table tab1;
+show create table tab2;
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 # checksum table tab1;
 select * from tab1 order by a;
 
@@ -275,35 +282,35 @@ drop table db1.tab1,db1.tab2,db2.tab1;
 --echo Include unknown database
 --echo ************************
 --echo Should result in nothing restored
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-databases unhappy_customer >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-databases unhappy_customer >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-databases unhappy_customer >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-databases unhappy_customer >> $NDB_TOOLS_OUTPUT
 
 show databases like "db%";
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 
 --echo *********************
 --echo Exclude unknown table
 --echo *********************
 --echo Should result in everything restored
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-tables db1.unhappy_customer >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-tables db1.unhappy_customer >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-tables db1.unhappy_customer >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-tables db1.unhappy_customer >> $NDB_TOOLS_OUTPUT
 
 show databases like "db%";
 
 use db1;
---sorted_result
-show tables;
 # checksum table tab1, tab2;
 select * from tab1 order by a;
 select * from tab2 order by a;
 use db2;
---sorted_result
-show tables;
 # checksum table tab1, tab2;
 select * from tab1 order by a;
 select * from tab2 order by a;
@@ -315,18 +322,19 @@ drop table db2.tab1, db2.tab2;
 --echo Check accumulative include arguments
 --echo ************************************
 --echo Should result in both db1.tab1 and db1.tab2 restored.
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-tables db1.tab1 --include-tables db1.tab2 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-tables db1.tab1 --include-tables db1.tab2 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --include-tables db1.tab1 --include-tables db1.tab2 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --include-tables db1.tab1 --include-tables db1.tab2 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+show create table tab1;
 # checksum table tab2;
 select * from tab2 order by a;
 
 use db2;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 
 drop table db1.tab1, db1.tab2;
 
@@ -334,17 +342,28 @@ drop table db1.tab1, db1.tab2;
 --echo Check accumulative exclude arguments
 --echo ************************************
 --echo Should result in both db2.tab1 and db2.tab2 restored.
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1 --exclude-tables db1.tab2 >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE  --no-defaults -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1 --exclude-tables db1.tab2 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r -m  $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1 --exclude-tables db1.tab2 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r     $NDB_BACKUPS-$the_backup_id --exclude-tables db1.tab1 --exclude-tables db1.tab2 >> $NDB_TOOLS_OUTPUT
 
 use db1;
---sorted_result
-show tables;
+--error ER_NO_SUCH_TABLE
+show create table tab1;
+--error ER_NO_SUCH_TABLE
+show create table tab2;
 use db2;
---sorted_result
-show tables;
+show create table tab1;
+show create table tab2;
 
 drop table db2.tab1, db2.tab2;
 
 drop database db1;
 drop database db2;
+
+# Reset metadata check value
+--connection server2
+SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_server2;
+--connection server1
+SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_server1;
+
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT

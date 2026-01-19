@@ -1,0 +1,98 @@
+##############################################################################
+# ==== Purpose ====
+# The purpose of this test is to verify that when a hash collision occurs
+# between two rows in a table, an UPDATE operation on those rows works as
+# expected.
+#
+# ==== Requirement ====
+# The replica must ensure that when a hash collision occurs between two rows
+# in a table, UPDATE operation on those rows execute correctly without
+# errors or inconsistencies.
+#
+# ==== Implementation ====
+# 1. Create source-replica topology
+# 2. Set slave_rows_search_algorithms as HASH_SCAN on the replica
+# 3. For each Scenario [Table with index, Table with out any index],
+#    3.1 On the source, create a table and insert two rows with the same
+#        hash value
+#    3.2 On the source, perform an update on the second row and verify
+#        that the update is successful
+#    3.3 Verify that the update is successful on the replica
+# 4. Clean up
+#
+# ==== References ====
+# Bug#37462058:GTID and binlog record exists but row is missing, replica stops
+#              with error 1032
+###############################################################################
+
+--source include/have_binlog_format_row.inc
+
+--echo #
+--echo # 1. Create source-replica topology
+--source include/master-slave.inc
+
+--echo #
+--echo # 2. Set slave_rows_search_algorithms as HASH_SCAN on the replica
+--source include/rpl_connection_slave.inc
+let $sysvars_to_save= [
+  "GLOBAL.slave_rows_search_algorithms"
+];
+--source include/save_sysvars.inc
+SET GLOBAL slave_rows_search_algorithms= 'HASH_SCAN';
+
+--echo #
+--echo # 3. For each Scenario [Table with index, Table with out index]
+#0. Table with index
+#1. Table with out any index
+--let $i= 0
+while ($i < 2) {
+  --echo #
+  --echo # 3.1 On the source, create a table and insert two rows with
+  --echo #     the same hash value
+  --source include/rpl_connection_master.inc
+  if ($i == 0){
+    CREATE TABLE t1 (
+      a BIGINT UNSIGNED NOT NULL,
+      b BIGINT UNSIGNED NOT NULL,
+      c INT DEFAULT NULL,
+      KEY idx (c)
+    ) ENGINE= InnoDB ;
+  }
+  if ($i == 1){
+    CREATE TABLE t1 (
+      a BIGINT UNSIGNED NOT NULL,
+      b BIGINT UNSIGNED NOT NULL,
+      c INT DEFAULT NULL
+    ) ENGINE= InnoDB ;
+  }
+  # crc32(null_bytes,row[1].a,row[1].b,row[1].c)=crc32(null_bytes,row[2].a,row[2].b,row[2].c)
+  INSERT INTO t1 VALUES(0xa8e8ee744ced7ca8, 0x6850119e455ee4ed, null);
+  INSERT INTO t1 VALUES(0x135cd25c170db910, 0x6916c5057592c796, null);
+
+  --source include/sync_slave_sql_with_master.inc
+
+  --source include/rpl_connection_master.inc
+  --echo #
+  --echo # 3.2 On the source, perform an update on the second row
+  --echo #     and verify that the update is successful
+  UPDATE t1 SET b=1 WHERE a=0x135cd25c170db910;
+  SELECT * FROM t1;
+
+  --echo #
+  --echo # 3.3 Verify that the update is successful on the replica
+  --source include/sync_slave_sql_with_master.inc
+  --let $diff_tables= master:test.t1, slave:test.t1
+  --source include/diff_tables.inc
+
+  # Drop table for the next test
+  --source include/rpl_connection_master.inc
+  DROP TABLE t1;
+  --source include/sync_slave_sql_with_master.inc
+  --inc $i
+}
+
+--echo #
+--echo # 4. Cleanup
+--source include/restore_sysvars.inc
+
+--source include/rpl_end.inc

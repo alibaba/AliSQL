@@ -1,0 +1,23 @@
+"[connection mysqld 1]"
+CREATE USER 'user'@'host';
+GRANT NDB_STORED_USER ON *.* TO 'user'@'host';
+CREATE TABLE t1 (k INT PRIMARY KEY, str VARCHAR(255), bin VARBINARY(1024)) ENGINE = NDB;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+1024
+4 records in table ndb_sql_metadata
+"[shutting down mysqld 1]"
+"[shutting down mysqld 2]"
+Executing RESTART on all nodes.
+Starting shutdown. This may take a while. Please wait...
+All DB nodes are being restarted.
+
+4 records in table ndb_sql_metadata
+# restart
+# restart
+4 records in table ndb_sql_metadata
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+1024
+DROP TABLE t1;
+DROP USER 'user'@'host';

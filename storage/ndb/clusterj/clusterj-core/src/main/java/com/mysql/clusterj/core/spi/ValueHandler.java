@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,16 +25,18 @@
 
 package com.mysql.clusterj.core.spi;
 
+import java.lang.reflect.InvocationHandler;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
 import com.mysql.clusterj.DynamicObjectDelegate;
+import com.mysql.clusterj.core.CacheManager;
 
 /** ValueHandler is the interface that must be implemented for core
  * components to access values of a managed instance.
  *
  */
-public interface ValueHandler extends DynamicObjectDelegate {
+public interface ValueHandler extends DynamicObjectDelegate, InvocationHandler {
 
     public String pkToString(DomainTypeHandler<?> domainTypeHandler);
 
@@ -42,6 +52,8 @@ public interface ValueHandler extends DynamicObjectDelegate {
     byte[] getBytes(int fieldNumber);
     short getShort(int fieldNumber);
     int getInt(int fieldNumber);
+    byte[] getLobBytes(int fieldNumber);
+    String getLobString(int fieldNumber);
     long getLong(int fieldNumber);
     float getFloat(int fieldNumber);
     double getDouble(int fieldNumber);
@@ -69,6 +81,8 @@ public interface ValueHandler extends DynamicObjectDelegate {
     void setLong(int fieldNumber, long value);
     void setFloat(int fieldNumber, float value);
     void setDouble(int fieldNumber, double value);
+    void setLobBytes(int fieldNumber, byte[] value);
+    void setLobString(int fieldNumber, String value);
     void setObjectBoolean(int fieldNumber, Boolean value);
     void setObjectByte(int fieldNumber, Byte value);
     void setObjectShort(int fieldNumber, Short value);
@@ -83,5 +97,8 @@ public interface ValueHandler extends DynamicObjectDelegate {
     void setJavaUtilDate(int fieldNumber, java.util.Date value);
     void setJavaSqlTime(int fieldNumber, java.sql.Time value);
     void setJavaSqlTimestamp(int fieldNumber, java.sql.Timestamp value);
+
+    void setCacheManager(CacheManager cm);
+    void release();
 
 }

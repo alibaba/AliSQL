@@ -1,6 +1,15 @@
+# To disable parts that are not supported by all engines, such as ndbcluster,
+# define corresponding variables as below.
+# Note they will be cleared before exit.
+# let $invisible_indexes_skip_fulltext=1;
+# let $invisible_indexes_skip_spatial=1;
+# let $invisible_indexes_skip_non_pk_autoincrement=1;
+
 --echo #
 --echo # WL#8697: Invisible Indexes
 --echo #
+
+SET SESSION information_schema_stats_expiry=0;
 
 --echo # Test of ALTER INDEX syntax.
 
@@ -52,10 +61,8 @@ CREATE TABLE t1 (
 
 SHOW INDEXES FROM t1;
 
-ALTER TABLE t1 DROP INDEX a;
-ALTER TABLE t1 ADD INDEX a1(a);
-ALTER TABLE t1 DROP INDEX b;
-ALTER TABLE t1 ADD INDEX b1(b) INVISIBLE;
+ALTER TABLE t1 RENAME INDEX a TO a1;
+ALTER TABLE t1 RENAME INDEX b TO b1;
 
 SHOW INDEXES FROM t1;
 
@@ -86,22 +93,9 @@ DROP TABLE t1;
 --error ER_PK_INDEX_CANT_BE_INVISIBLE
 CREATE TABLE t1 ( a INT, PRIMARY KEY (a) INVISIBLE );
 --error ER_PARSE_ERROR
-CREATE TABLE t1 ( a INT PRIMARY KEY INVISIBLE );
---error ER_PARSE_ERROR
-CREATE TABLE t1 ( a INT KEY INVISIBLE );
---error ER_PARSE_ERROR
 ALTER TABLE t1 ALTER INDEX PRIMARY INVISIBLE;
-CREATE TABLE t1 (
-  a INT,
-  b INT,
-  c INT,
-  INDEX (b) INVISIBLE,
-  INDEX (c)
-);
 --error ER_PK_INDEX_CANT_BE_INVISIBLE
 ALTER TABLE t1 ADD PRIMARY KEY (a) INVISIBLE;
-SHOW CREATE TABLE t1;
-DROP TABLE t1;
 
 --echo #
 --echo # Currently we allow to name the primary key index, but the name is
@@ -124,6 +118,8 @@ CREATE TABLE t1 (
 );
 
 --error ER_KEY_DOES_NOT_EXITS
+ALTER TABLE t1 RENAME INDEX no_such_index TO x;
+--error ER_KEY_DOES_NOT_EXITS
 ALTER TABLE t1 ALTER INDEX no_such_index INVISIBLE;
 
 --echo #
@@ -136,14 +132,14 @@ SHOW INDEXES FROM t1;
 --echo #
 --echo # Various combinations of RENAME INDEX and ALTER INDEX ... INVISIBLE.
 --echo #
-# --error ER_KEY_DOES_NOT_EXITS
-# ALTER TABLE t1 RENAME INDEX a TO x, RENAME INDEX x TO a;
-# --error ER_KEY_DOES_NOT_EXITS
-# ALTER TABLE t1 RENAME INDEX a TO x, ALTER INDEX x INVISIBLE;
-# --error ER_KEY_DOES_NOT_EXITS
-# ALTER TABLE t1 RENAME INDEX a TO x, ALTER INDEX a VISIBLE;
-# --error ER_KEY_DOES_NOT_EXITS
-# ALTER TABLE t1 ALTER INDEX a VISIBLE, RENAME INDEX a TO x;
+--error ER_KEY_DOES_NOT_EXITS
+ALTER TABLE t1 RENAME INDEX a TO x, RENAME INDEX x TO a;
+--error ER_KEY_DOES_NOT_EXITS
+ALTER TABLE t1 RENAME INDEX a TO x, ALTER INDEX x INVISIBLE;
+--error ER_KEY_DOES_NOT_EXITS
+ALTER TABLE t1 RENAME INDEX a TO x, ALTER INDEX a VISIBLE;
+--error ER_KEY_DOES_NOT_EXITS
+ALTER TABLE t1 ALTER INDEX a VISIBLE, RENAME INDEX a TO x;
 
 
 --echo #
@@ -163,6 +159,7 @@ ALTER TABLE t1 ALTER INDEX a VISIBLE, ALGORITHM = INPLACE;
 --disable_info
 ANALYZE TABLE t1;
 SHOW INDEXES FROM t1;
+
 
 --enable_info
 ALTER TABLE t1 ALTER INDEX a INVISIBLE, ALGORITHM = DEFAULT;
@@ -270,14 +267,16 @@ EXPLAIN SELECT a FROM t1;
 DROP TABLE t1;
 
 
+if (!$invisible_indexes_skip_spatial)
+{
 --echo #
 --echo # Invisible spatial indexes.
 --echo #
 CREATE TABLE t1 (
   fid INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  g GEOMETRY NOT NULL,
+  g GEOMETRY NOT NULL SRID 0,
   SPATIAL KEY(g)
-) ENGINE=MyISAM;
+);
 
 ANALYZE TABLE t1;
 
@@ -309,12 +308,32 @@ SHOW INDEXES FROM t1;
 --eval $query
 
 DROP TABLE t1;
+}
 
+if ($invisible_indexes_skip_spatial)
+{
+let $is_ndbcluster=
+SELECT 1
+FROM information_schema.tables
+WHERE table_schema = 'test' AND table_name = 't1' AND engine = 'ndbcluster';
 
+if ($is_ndbcluster)
+{
+--error ER_TABLE_CANT_HANDLE_SPKEYS
+CREATE TABLE t1 (
+  fid INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  g GEOMETRY NOT NULL SRID 0,
+  SPATIAL KEY(g)
+);
+}
+}
+
+if (!$invisible_indexes_skip_spatial)
+{
 --echo #
 --echo # Test of invisible fulltext indexes.
 --echo #
-CREATE TABLE t1 (a VARCHAR(200), b TEXT, FULLTEXT (a,b)) ENGINE=MyISAM;
+CREATE TABLE t1 (a VARCHAR(200), b TEXT, FULLTEXT (a,b));
 INSERT INTO t1 VALUES('Some data', 'for full-text search');
 ANALYZE TABLE t1;
 
@@ -334,8 +353,11 @@ SHOW INDEXES FROM t1;
 --enable_abort_on_error
 
 DROP TABLE t1;
+}
 
 
+if (!$invisible_indexes_skip_non_pk_autoincrement)
+{
 --echo #
 --echo # Invisible indexes on AUTO_INCREMENT columns.
 --echo #
@@ -349,6 +371,17 @@ SHOW INDEXES FROM t1;
 EXPLAIN SELECT a FROM t1;
 
 DROP TABLE t1;
+}
+
+if ($invisible_indexes_skip_non_pk_autoincrement)
+{
+--let $ndbcluster_is_default=SELECT @@default_storage_engine = 'ndbcluster';
+if ($ndbcluster_is_default)
+{
+--error ER_CANT_CREATE_TABLE
+CREATE TABLE t1 ( a INT AUTO_INCREMENT, KEY ( a ) );
+}
+}
 
 --echo #
 --echo # Bug#24660093: REMOVING AN INVISIBLE INDEX BREAKS EXPLAIN
@@ -395,3 +428,7 @@ SELECT * FROM t1 IGNORE INDEX FOR GROUP BY (a);
 
 
 DROP TABLE t1;
+
+let $invisible_indexes_skip_fulltext=;
+let $invisible_indexes_skip_spatial=;
+let $invisible_indexes_skip_non_pk_autoincrement=;

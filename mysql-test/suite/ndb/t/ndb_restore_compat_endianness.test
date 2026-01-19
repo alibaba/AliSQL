@@ -2,11 +2,8 @@
 # Test restoring backups of different endianness
 ######################################################################
 
--- source include/have_ndb.inc
--- source include/ndb_default_cluster.inc
-
-# Directory containing the saved backup files
-let $backup_data_dir=$MYSQL_TEST_DIR/suite/ndb/backups;
+-- source include/have_multi_ndb.inc
+-- source suite/ndb/include/backup_restore_setup.inc
 
 #
 # Bug #27543 restore of backup from different endian does not work for blob column
@@ -119,75 +116,105 @@ let $backup_data_dir=$MYSQL_TEST_DIR/suite/ndb/backups;
 # 
 # INSERT INTO t_gis VALUE (
 #   1,
-#   PointFromText('POINT(10 10)'),
-#   LineStringFromText('LINESTRING(10 10,20 10,20 20,10 20,10 10)'),
-#   PolyFromText('POLYGON((0 0,50 0,50 50,0 50,0 0), (10 10,20 10,20 20,10 20,10 10))'),
-#   MPointFromText('MULTIPOINT(1 1,11 11,11 21,21 21)'),
-#   MLineFromText('MULTILINESTRING((10 48,10 21,10 0))'),
-#   MPolyFromText('MULTIPOLYGON(((28 26,28 0,84 0,84 42,28 26),(52 18,66 23,73 9,48 6,52 18)),((59 18,67 18,67 13,59 13,59 18)))'),
-#   GeomCollFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0,10 10))'),
-#   MPolyFromText('MULTIPOLYGON(((28 26,28 0,84 0,84 42,28 26),(52 18,66 23,73 9,48 6,52 18)),((59 18,67 18,67 13,59 13,59 18)))')
+#   ST_PointFromText('POINT(10 10)'),
+#   ST_LineStringFromText('LINESTRING(10 10,20 10,20 20,10 20,10 10)'),
+#   ST_PolyFromText('POLYGON((0 0,50 0,50 50,0 50,0 0), (10 10,20 10,20 20,10 20,10 10))'),
+#   ST_MPointFromText('MULTIPOINT(1 1,11 11,11 21,21 21)'),
+#   ST_MLineFromText('MULTILINESTRING((10 48,10 21,10 0))'),
+#   ST_MPolyFromText('MULTIPOLYGON(((28 26,28 0,84 0,84 42,28 26),(52 18,66 23,73 9,48 6,52 18)),((59 18,67 18,67 13,59 13,59 18)))'),
+#   ST_GeomCollFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0,10 10))'),
+#   ST_MPolyFromText('MULTIPOLYGON(((28 26,28 0,84 0,84 42,28 26),(52 18,66 23,73 9,48 6,52 18)),((59 18,67 18,67 13,59 13,59 18)))')
 # );
 # 
 # INSERT INTO t_gis VALUE (
 #   2,
-#   PointFromWKB(AsWKB(PointFromText('POINT(10 20)'))),
-#   LineStringFromWKB(LineString(Point(10, 10), Point(40, 10))),
-#   PolyFromWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(0, 0)))),
-#   MPointFromWKB(MultiPoint(Point(3, 6), Point(4, 10))),
-#   MLineFromWKB(MultiLineString(LineString(Point(1, 2), Point(3, 5)), LineString(Point(2, 5), Point(5, 8), Point(21, 7)))),
-#   MPolyFromWKB(MultiPolygon(Polygon(LineString(Point(0, 3), Point(3, 3), Point(3, 0), Point(0, 3))))),
-#   GeometryFromWKB(GeometryCollection(Point(44, 6), LineString(Point(3, 6), Point(7, 9)))),
-#   GeometryFromWKB(GeometryCollection(Point(44, 6), LineString(Point(3, 6), Point(7, 9))))
+#   ST_PointFromWKB(ST_AsWKB(ST_PointFromText('POINT(10 20)'))),
+#   ST_LineStringFromWKB(LineString(Point(10, 10), Point(40, 10))),
+#   ST_PolyFromWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(0, 0)))),
+#   ST_MPointFromWKB(MultiPoint(Point(3, 6), Point(4, 10))),
+#   ST_MLineFromWKB(MultiLineString(LineString(Point(1, 2), Point(3, 5)), LineString(Point(2, 5), Point(5, 8), Point(21, 7)))),
+#   ST_MPolyFromWKB(MultiPolygon(Polygon(LineString(Point(0, 3), Point(3, 3), Point(3, 0), Point(0, 3))))),
+#   ST_GeometryFromWKB(GeometryCollection(Point(44, 6), LineString(Point(3, 6), Point(7, 9)))),
+#   ST_GeometryFromWKB(GeometryCollection(Point(44, 6), LineString(Point(3, 6), Point(7, 9))))
 # );
 
+# Turn off metadata check so it doesn't intefere with table discovery
+--connection server2
+SET @old_ndb_metadata_check_mysqld2 = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
+--connection server1
+SET @old_ndb_metadata_check_mysqld1 = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
 
+# Suppress expected warnings in the log due to table with old temporal types
+--disable_query_log
+call mtr.add_suppression("Table upgrade required");
+call mtr.add_suppression("Failed to create entry in DD for table");
+call mtr.add_suppression("Failed to install table");
+--enable_query_log
 
 #
 # Restore backup files (from little endian)
 #
 
---disable_warnings
-USE test;
-DROP TABLE IF EXISTS t_num,t_datetime,t_string_1,t_string_2,t_gis;
---enable_warnings
---exec $NDB_RESTORE --no-defaults -b 1 -n 1 -m -r $backup_data_dir/51_data_le >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b 1 -n 2 -r $backup_data_dir/51_data_le >> $NDB_TOOLS_OUTPUT
---sorted_result
-SHOW TABLES;
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 -m -r $NDB_SAVED_BACKUPS/51_data_le >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 2 -r $NDB_SAVED_BACKUPS/51_data_le >> $NDB_TOOLS_OUTPUT
+
 SHOW CREATE TABLE t_num;
+# The `t_datetime` table is not expected to be usable. It contains old
+# temporal types which have been removed in 8.0. The upgrade of the
+# table metadata is not supported
+--error ER_NO_SUCH_TABLE
 SHOW CREATE TABLE t_datetime;
+SHOW WARNINGS;
 SHOW CREATE TABLE t_string_1;
 SHOW CREATE TABLE t_string_2;
 SHOW CREATE TABLE t_gis;
+--error ER_NO_SUCH_TABLE
 SELECT * FROM t_datetime;
+SHOW WARNINGS;
 SELECT t_pk,hex(t_bit),t_tinyint,t_bool,t_smallint,t_mediumint,t_int,t_bigint,t_float,t_double,t_decimal FROM t_num;
 SELECT t_pk,t_char,t_varchar,hex(t_binary),hex(t_varbinary) FROM t_string_1;
 SELECT * FROM t_string_2;
-SELECT AsText(t_point), AsText(t_linestring),AsText(t_polygon) FROM t_gis ORDER by t_pk;
-SELECT AsText(t_multipoint), AsText(t_multilinestring),AsText(t_multipolygon) FROM t_gis ORDER by t_pk;
-SELECT AsText(t_geometrycollection), AsText(t_geometry) FROM t_gis ORDER by t_pk;
+SELECT ST_AsText(t_point), ST_AsText(t_linestring),ST_AsText(t_polygon) FROM t_gis ORDER by t_pk;
+SELECT ST_AsText(t_multipoint), ST_AsText(t_multilinestring),ST_AsText(t_multipolygon) FROM t_gis ORDER by t_pk;
+SELECT ST_AsText(t_geometrycollection), ST_AsText(t_geometry) FROM t_gis ORDER by t_pk;
+
+# Clean up tables
+DROP TABLE t_num,t_string_1,t_string_2,t_gis;
+--exec $NDB_DROP_TABLE -d test t_datetime >> $NDB_TOOLS_OUTPUT
 
 #
 # Restore backup files (from big endian)
 #
 
-DROP TABLE t_num,t_datetime,t_string_1,t_string_2,t_gis;
---exec $NDB_RESTORE --no-defaults -b 1 -n 1 -m -r $backup_data_dir/51_data_be >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b 1 -n 2 -r $backup_data_dir/51_data_be >> $NDB_TOOLS_OUTPUT
---sorted_result
-SHOW TABLES;
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 -m -r $NDB_SAVED_BACKUPS/51_data_be >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 2 -r $NDB_SAVED_BACKUPS/51_data_be >> $NDB_TOOLS_OUTPUT
+
 SHOW CREATE TABLE t_num;
+--error ER_NO_SUCH_TABLE
 SHOW CREATE TABLE t_datetime;
+SHOW WARNINGS;
 SHOW CREATE TABLE t_string_1;
 SHOW CREATE TABLE t_string_2;
 SHOW CREATE TABLE t_gis;
+--error ER_NO_SUCH_TABLE
 SELECT * FROM t_datetime;
+SHOW WARNINGS;
 SELECT t_pk,hex(t_bit),t_tinyint,t_bool,t_smallint,t_mediumint,t_int,t_bigint,t_float,t_double,t_decimal FROM t_num;
 SELECT t_pk,t_char,t_varchar,hex(t_binary),hex(t_varbinary) FROM t_string_1;
 SELECT * FROM t_string_2;
-SELECT AsText(t_point), AsText(t_linestring),AsText(t_polygon) FROM t_gis ORDER by t_pk;
-SELECT AsText(t_multipoint), AsText(t_multilinestring),AsText(t_multipolygon) FROM t_gis ORDER by t_pk;
-SELECT AsText(t_geometrycollection), AsText(t_geometry) FROM t_gis ORDER by t_pk;
+SELECT ST_AsText(t_point), ST_AsText(t_linestring),ST_AsText(t_polygon) FROM t_gis ORDER by t_pk;
+SELECT ST_AsText(t_multipoint), ST_AsText(t_multilinestring),ST_AsText(t_multipolygon) FROM t_gis ORDER by t_pk;
+SELECT ST_AsText(t_geometrycollection), ST_AsText(t_geometry) FROM t_gis ORDER by t_pk;
 
-DROP TABLE t_num,t_datetime,t_string_1,t_string_2,t_gis;
+DROP TABLE t_num,t_string_1,t_string_2,t_gis;
+--exec $NDB_DROP_TABLE -d test t_datetime >> $NDB_TOOLS_OUTPUT
+
+# Reset metadata check value
+--connection server2
+SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_mysqld2;
+--connection server1
+SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_mysqld1;
+
+--remove_file $NDB_TOOLS_OUTPUT

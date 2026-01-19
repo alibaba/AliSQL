@@ -1,0 +1,33 @@
+# CHECK TABLE for Spatial Index.
+CREATE TABLE gis_geometry (
+id INT PRIMARY KEY,
+geo GEOMETRY NOT NULL SRID 0,
+SPATIAL KEY  `index_geo` (geo)
+)ENGINE=InnoDB;
+INSERT INTO gis_geometry VALUES (1, ST_GeomFromText("linestring(-1.7976931348623157E+308 -1.7976931348623157E+308, 1.7976931348623157E+308 1.7976931348623157E+308)", 0));
+INSERT INTO gis_geometry VALUES (2, ST_GeomFromText("GEOMETRYCOLLECTION EMPTY"));
+INSERT INTO gis_geometry VALUES (3, ST_GeomFromText("linestring(1.7976931348623157E+308 1.7976931348623157E+308, 1.7976931348623157E+308 1.7976931348623157E+308)", 0));
+INSERT INTO gis_geometry VALUES (4, ST_GeomFromText("linestring(-1.7976931348623157E+308 -1.7976931348623157E+308, -1.7976931348623157E+308 -1.7976931348623157E+308)", 0));
+INSERT INTO gis_geometry VALUES (5, ST_GeomFromText("linestring(0 0, 10 10)", 0));
+CHECK TABLE gis_geometry;
+Table	Op	Msg_type	Msg_text
+test.gis_geometry	check	status	OK
+CHECK TABLE gis_geometry EXTENDED;
+Table	Op	Msg_type	Msg_text
+test.gis_geometry	check	status	OK
+DROP TABLE gis_geometry;
+CREATE TABLE gis_geometry (
+id INT PRIMARY KEY,
+geo GEOMETRY NOT NULL SRID 4326,
+SPATIAL KEY  `index_geo` (geo)
+)ENGINE=InnoDB;
+INSERT INTO gis_geometry VALUES (1, ST_GeomFromText("linestring(-90 -179.9999999999999999, 90 180)", 4326));
+INSERT INTO gis_geometry VALUES (2, ST_GeomFromText("GEOMETRYCOLLECTION EMPTY", 4326));
+INSERT INTO gis_geometry VALUES (5, ST_GeomFromText("linestring(0 0, 10 10)", 4326));
+CHECK TABLE gis_geometry;
+Table	Op	Msg_type	Msg_text
+test.gis_geometry	check	status	OK
+CHECK TABLE gis_geometry EXTENDED;
+Table	Op	Msg_type	Msg_text
+test.gis_geometry	check	status	OK
+DROP TABLE gis_geometry;

@@ -1,1 +1,0 @@
---no-console --log-error=$MYSQLTEST_VARDIR/tmp/innodb_file_limit.err

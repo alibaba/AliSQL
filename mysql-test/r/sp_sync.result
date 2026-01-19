@@ -92,16 +92,97 @@ COUNT(f1(a))
 DROP PROCEDURE p1;
 DROP FUNCTION f1;
 DROP TABLES t0, t1;
-#
-# test for bug#11756013
-#
-DROP SCHEMA IF EXISTS s1;
-CREATE SCHEMA s1;
-CREATE PROCEDURE s1.p1() BEGIN END;
-SET DEBUG_SYNC='before_db_dir_check SIGNAL check_db WAIT_FOR dropped_schema';
-CALL s1.p1;
-SET DEBUG_SYNC='now WAIT_FOR check_db';
-DROP SCHEMA s1;
-SET DEBUG_SYNC='now SIGNAL dropped_schema';
-ERROR 42000: Unknown database 's1'
-SET DEBUG_SYNC = 'RESET';
+# Case 1: Test case to verify MDL locking from concurrent SELECT and
+#         DROP FUNCTION operation with case & access insensitive routine
+#         name.
+CREATE FUNCTION mIxEdCaSe() RETURNS INT RETURN 1;
+SET DEBUG_SYNC='after_shared_lock_pname SIGNAL locked WAIT_FOR continue';
+SELECT mIxEdCaSé();
+# At this point we have a shared lock on 'mIxEdCaSé'
+CONNECT  con1, localhost, root;
+SET DEBUG_SYNC='now WAIT_FOR locked';
+DROP FUNCTION mixedcase;;
+# Without fix the shared lock does not prevent us from dropping the SF
+# since the case used in this statement is different. This statement
+# takes exclusive metadata lock on 'mixedcase', not 'mIxEdCaSe'.
+# Drop function mIxEdCaSe will be blocked properly.
+CONNECT  con2, localhost, root;
+SET DEBUG_SYNC='now SIGNAL continue';
+connection default;
+mIxEdCaSé()
+1
+connection con1;
+# Case 2: Test case to verify MDL locking from concurrent SHOW FUNCTION
+#         and DROP FUNCTION operation with case and accent insensitive
+#         function name.
+connection default;
+CREATE FUNCTION mIxEdCaSe() RETURNS INT RETURN 1;
+SET DEBUG_SYNC='after_acquiring_mdl_lock_on_routine SIGNAL locked WAIT_FOR continue';
+DROP FUNCTION mIxEdCaSé;;
+# At this point we have a exclusive lock on 'mIxEdCaSé'
+connection con1;
+SET DEBUG_SYNC='now WAIT_FOR locked';
+SHOW CREATE FUNCTION MiXéDcAsE;
+# This statement request for shared lock and it is blocked till DROP
+# statement releases lock.
+connection con2;
+SET DEBUG_SYNC='now SIGNAL continue';
+connection default;
+connection con1;
+ERROR 42000: FUNCTION MiXéDcAsE does not exist
+# Case 3: Test case to verify MDL locking from concurrent DDL operations
+#         with case and accent insensitive function name.
+connection default;
+CREATE FUNCTION mIxEdCaSe() RETURNS INT RETURN 1;
+SET DEBUG_SYNC='after_acquiring_mdl_lock_on_routine SIGNAL locked WAIT_FOR continue';
+DROP FUNCTION miXEDCAsé;
+# At this point we have a exclusive lock on 'miXEDCAsé'
+connection con1;
+SET DEBUG_SYNC='now WAIT_FOR locked';
+ALTER FUNCTION mixedcase COMMENT "comment_string";;
+# This statement request for exclusive lock and it is blocked till DROP
+# statement releases lock.
+connection con2;
+SET DEBUG_SYNC='now SIGNAL continue';
+connection default;
+connection con1;
+ERROR 42000: FUNCTION test.mixedcase does not exist
+# Case 4: Test case to verify MDL locking from concurrent SHOW PROCEDURE
+#         and DROP PROCEDURE operation with case and accent insensitive
+#         procedure name.
+connection default;
+CREATE PROCEDURE mIxEdCaSe() BEGIN END;
+SET DEBUG_SYNC='after_acquiring_mdl_lock_on_routine SIGNAL locked WAIT_FOR continue';
+DROP PROCEDURE mIxEdCaSé;;
+# At this point we have a exclusive lock on 'mIxEdCaSé'
+connection con1;
+SET DEBUG_SYNC='now WAIT_FOR locked';
+SHOW CREATE PROCEDURE MiXéDcAsE;
+# This statement request for shared lock and it is blocked till DROP
+# statement releases lock.
+connection con2;
+SET DEBUG_SYNC='now SIGNAL continue';
+connection default;
+connection con1;
+ERROR 42000: PROCEDURE MiXéDcAsE does not exist
+# Case 5: Test case to verify MDL locking from concurrent DDL operations
+#         with case & accent insensitive procedure name.
+connection default;
+CREATE PROCEDURE mIxEdCaSe() BEGIN END;
+SET DEBUG_SYNC='after_acquiring_mdl_lock_on_routine SIGNAL locked WAIT_FOR continue';
+DROP PROCEDURE miXEDCAsé;
+# At this point we have a exclusive lock on 'miXEDCAsé'
+connection con1;
+SET DEBUG_SYNC='now WAIT_FOR locked';
+ALTER PROCEDURE mixedcase COMMENT "comment_string";;
+# This statement request for exclusive lock and it is blocked till DROP
+# statement releases lock.
+connection con2;
+SET DEBUG_SYNC='now SIGNAL continue';
+connection default;
+connection con1;
+ERROR 42000: PROCEDURE test.mixedcase does not exist
+connection default;
+SET DEBUG_SYNC='RESET';
+disconnect con1;
+disconnect con2;

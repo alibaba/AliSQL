@@ -1,7 +1,7 @@
+--source include/not_group_replication_plugin.inc
 source include/have_semisync_plugin.inc;
-source include/not_embedded.inc;
+source include/set_privilege_checks_user_as_system_user.inc;
 source include/master-slave.inc;
-source include/have_innodb.inc;
 
 let $engine_type= InnoDB;
 
@@ -9,23 +9,24 @@ let $engine_type= InnoDB;
 disable_query_log;
 connection master;
 call mtr.add_suppression("Timeout waiting for reply of binlog");
-call mtr.add_suppression("Semi-sync master .* waiting for slave reply");
+call mtr.add_suppression("Semi-sync source .* waiting for replica reply");
 call mtr.add_suppression("Read semi-sync reply");
 call mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.");
+call mtr.add_suppression(".*Got an error reading communication packets.*");
 connection slave;
-call mtr.add_suppression("Master server does not support semi-sync");
-call mtr.add_suppression("Semi-sync slave .* reply");
-call mtr.add_suppression("Slave SQL.*Request to stop slave SQL Thread received while applying a group that has non-transactional changes; waiting for completion of the group");
+call mtr.add_suppression("Source server does not support semi-sync");
+call mtr.add_suppression("Semi-sync replica .* reply");
+call mtr.add_suppression("Replica SQL.*Request to stop replica SQL Thread received while applying a group that has non-transactional changes; waiting for completion of the group");
 enable_query_log;
 
 connection master;
 disable_query_log;
-let $value = query_get_value(show variables like 'rpl_semi_sync_master_enabled', Value, 1);
+let $value = query_get_value(show variables like 'rpl_semi_sync_source_enabled', Value, 1);
 if ($value == No such row)
 {
     set sql_log_bin=0;
-    eval INSTALL PLUGIN rpl_semi_sync_master SONAME '$SEMISYNC_MASTER_PLUGIN';
-    SET GLOBAL rpl_semi_sync_master_enabled = 1;
+    eval INSTALL PLUGIN rpl_semi_sync_source SONAME '$SEMISYNC_SOURCE_PLUGIN';
+    SET GLOBAL rpl_semi_sync_source_enabled = 1;
     set sql_log_bin=1;
 }
 enable_query_log;
@@ -34,12 +35,12 @@ connection slave;
 source include/stop_slave.inc;
 
 disable_query_log;
-let $value= query_get_value(show variables like 'rpl_semi_sync_slave_enabled', Value, 1);
+let $value= query_get_value(show variables like 'rpl_semi_sync_replica_enabled', Value, 1);
 if ($value == No such row)
 {
     set sql_log_bin=0;
-    eval INSTALL PLUGIN rpl_semi_sync_slave SONAME '$SEMISYNC_SLAVE_PLUGIN';
-    SET GLOBAL rpl_semi_sync_slave_enabled = 1;
+    eval INSTALL PLUGIN rpl_semi_sync_replica SONAME '$SEMISYNC_REPLICA_PLUGIN';
+    SET GLOBAL rpl_semi_sync_replica_enabled = 1;
     set sql_log_bin=1;
 }
 enable_query_log;
@@ -77,6 +78,7 @@ while ($run)
 }
 
 connection master;
+SET @old_event_scheduler= @@global.event_scheduler;
 SET GLOBAL event_scheduler = OFF;
 
 let $run = 20;
@@ -95,10 +97,11 @@ connection slave;
 source include/stop_slave.inc;
 
 disable_warnings;
-UNINSTALL PLUGIN rpl_semi_sync_slave;
+UNINSTALL PLUGIN rpl_semi_sync_replica;
 
 connection master;
-UNINSTALL PLUGIN rpl_semi_sync_master;
+source include/stop_dump_threads.inc;
+UNINSTALL PLUGIN rpl_semi_sync_source;
 enable_warnings;
 
 connection slave;
@@ -108,5 +111,6 @@ connection master;
 DROP EVENT ev1;
 DROP EVENT ev2;
 DROP TABLE t1;
+SET @@global.event_scheduler= @old_event_scheduler;
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_end.inc

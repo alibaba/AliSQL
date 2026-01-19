@@ -16,7 +16,7 @@ info: Records: 10  Duplicates: 0  Warnings: 0
 update t1 set c = 111, b = 20 where a = 1;
 affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 affected rows: 1
 select * from t1 where a = 1 order by a;
@@ -32,7 +32,7 @@ affected rows: 1
 
 delete from t1 where a = 1;
 affected rows: 1
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 select * from t1 where a = 1 order by a;
@@ -48,7 +48,7 @@ affected rows: 0
 update t1 set c = 1111 where b = 2;
 affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 select * from t1 where b = 2 order by a;
@@ -65,7 +65,7 @@ affected rows: 1
 update t1 set c = 12, b = 19 where b = 2;
 affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 affected rows: 1
 select * from t1 where b = 2 order by a;
@@ -80,7 +80,7 @@ affected rows: 0
 
 delete from t1 where b = 19;
 affected rows: 1
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 select * from t1 where b = 19 order by a;
@@ -96,7 +96,7 @@ affected rows: 0
 update t1 set c = 22 where a = 10 or a >= 10;
 affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 3
 affected rows: 1
 select * from t1 order by a;
@@ -120,7 +120,7 @@ affected rows: 8
 update t1 set c = 23 where a in (8,10);
 affected rows: 2
 info: Rows matched: 2  Changed: 2  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 select * from t1 order by a;
@@ -144,7 +144,7 @@ affected rows: 8
 update t1 set c = 23 where a in (7,8) or a >= 10;
 affected rows: 3
 info: Rows matched: 3  Changed: 3  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 4
 affected rows: 1
 select * from t1 order by a;
@@ -175,10 +175,10 @@ a	b	c
 4	7	11
 affected rows: 2
 
-# expected result 5 roundtrips
+# expected result 4 roundtrips
 # 0 - info call
-# 1 - read the rows
-# 1 - read the row _again_ in complemented read
+# 1 - read complete rows
+# 0 - don't read the row _again_ - included in read above
 # 1 - delete the row (pk update)
 # 1 - insert the row (pk update)
 # 1 - commit the transaction
@@ -186,18 +186,18 @@ affected rows: 2
 update t1 set a = 13, b = 20 where a = 3;
 affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
-5
+ndb_execute_count
+4
 affected rows: 1
 select * from t1 where a = 13 order by a;
 a	b	c
 13	20	11
 affected rows: 1
 
-# expected result 5 roundtrips
+# expected result 4 roundtrips
 # 0 - info call
-# 1 - read the rows
-# 1 - read the row _again_ in complemented read
+# 1 - read complete rows
+# 0 - don't read the row _again_ - included in read above
 # 1 - delete the row (pk update)
 # 1 - insert the row (pk update)
 # 1 - commit the transaction
@@ -205,8 +205,8 @@ affected rows: 1
 update t1 set a = 12, b = 19 where b = 7;
 affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
-5
+ndb_execute_count
+4
 affected rows: 1
 select * from t1 where b = 19 order by a;
 a	b	c
@@ -225,7 +225,7 @@ affected rows: 0
 update t1 set c = 12, b = 29 where a = 5 and b = 6;
 affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 affected rows: 1
 select * from t1 where b = 19 order by a;
@@ -241,18 +241,18 @@ affected rows: 1
 
 delete from t1 where b = 6 and c = 12;
 affected rows: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 affected rows: 1
 select * from t1 where b = 6 order by a;
 a	b	c
 affected rows: 0
 drop table t1;
-affected rows: 0
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 create table t1 (a int primary key,
 b varchar(4))
 engine=ndb;
-affected rows: 0
 insert into t1 values (1, '1'), (2, '2'), (3, '3');
 affected rows: 3
 info: Records: 3  Duplicates: 0  Warnings: 0
@@ -267,7 +267,7 @@ info: Records: 3  Duplicates: 0  Warnings: 0
 update t1 set b='two' where a=2;
 affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 
@@ -281,7 +281,7 @@ affected rows: 1
 update t1 set b='lots' where a=2000;
 affected rows: 0
 info: Rows matched: 0  Changed: 0  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 
@@ -298,7 +298,7 @@ affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 1
 Warnings:
 Warning	1265	Data truncated for column 'b' at row 1
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 
@@ -313,11 +313,9 @@ affected rows: 1
 update t1 set b='two thousand' where a=2000;
 affected rows: 0
 info: Rows matched: 0  Changed: 0  Warnings: 1
-show warnings;
-Level	Code	Message
+Warnings:
 Warning	1265	Data truncated for column 'b' at row 1
-affected rows: 1
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 
@@ -335,7 +333,7 @@ affected rows: 1
 info: Rows matched: 1  Changed: 1  Warnings: 0
 commit;
 affected rows: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 affected rows: 1
 
@@ -353,7 +351,7 @@ affected rows: 0
 info: Rows matched: 0  Changed: 0  Warnings: 0
 commit;
 affected rows: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 affected rows: 1
 
@@ -374,7 +372,7 @@ Warnings:
 Warning	1265	Data truncated for column 'b' at row 1
 commit;
 affected rows: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 affected rows: 1
 
@@ -391,21 +389,18 @@ affected rows: 0
 update t1 set b='two thousand' where a=2000;
 affected rows: 0
 info: Rows matched: 0  Changed: 0  Warnings: 1
+Warnings:
+Warning	1265	Data truncated for column 'b' at row 1
 commit;
 affected rows: 0
-show warnings;
-Level	Code	Message
-Warning	1265	Data truncated for column 'b' at row 1
-affected rows: 1
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 affected rows: 1
 drop table t1;
-affected rows: 0
 create table t1
 (a int not null primary key auto_increment, b int, c varchar(256))
+character set latin1
 engine = ndb;
-affected rows: 0
 insert into t1(b,c) values (1,'this is a test'),
 (2,'this is a test'),(3,'this is a test'),
 (4,'this is a test'),(5,'this is a test'),(6,'this is a test'),
@@ -449,38 +444,37 @@ select count(*) from t1 where a in (...)
 count(*)
 1000
 affected rows: 1
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
-5
+ndb_execute_count
+9
 affected rows: 1
 set autocommit=on;
 affected rows: 0
 update t1 set c = 'kalle' where a in (...)
 affected rows: 1000
 info: Rows matched: 1000  Changed: 1000  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 9
 affected rows: 1
 delete from t1 where a in (...)
 affected rows: 1000
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 3
 affected rows: 1
 delete from t1 where a in (...)
 affected rows: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 3
 affected rows: 1
 update t1 set c = 'kalle' where a in (...)
 affected rows: 0
 info: Rows matched: 0  Changed: 0  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 9
 affected rows: 1
 update t1 set c = 'kalle' where a in (...)
 affected rows: 0
 info: Rows matched: 0  Changed: 0  Warnings: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 9
 affected rows: 1
 drop table t1;
-affected rows: 0

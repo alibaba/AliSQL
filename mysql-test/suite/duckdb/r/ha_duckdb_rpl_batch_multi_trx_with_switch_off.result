@@ -1,0 +1,110 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+###########################################################################
+# 0. Prepare
+###########################################################################
+[connection master]
+SET autocommit = 1;
+CREATE TABLE t1 (
+id BIGINT NOT NULL,
+c0 VARCHAR(20) NOT NULL,
+c1 CHAR(10) DEFAULT 'duckdb',
+PRIMARY KEY(id, c0)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` bigint NOT NULL,
+  `c0` varchar(20) NOT NULL,
+  `c1` char(10) DEFAULT 'duckdb',
+  PRIMARY KEY (`id`,`c0`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/rpl_sync.inc
+[connection slave]
+ALTER TABLE t1 ENGINE=DuckDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` bigint NOT NULL,
+  `c0` varchar(20) NOT NULL,
+  `c1` char(10) DEFAULT 'duckdb',
+  PRIMARY KEY (`id`,`c0`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+###########################################################################
+# Test switch off duckdb_multi_trx_in_batch after start Batch
+###########################################################################
+[connection slave]
+include/stop_slave_sql.inc
+[connection master]
+# 1. Execute three Transactions on Master
+INSERT INTO t1 (id, c0, c1) VALUES (1, 'abc', NULL), (3, 'xxx', 'sgss');
+UPDATE t1 SET id=6, c1='AliSQL' WHERE id=1;
+BEGIN;
+DELETE FROM t1 WHERE id=3;
+INSERT INTO t1 (id, c0, c1) VALUES (3, 'yyy', 'sgss');
+COMMIT;
+# 2. Make SQL Thread stop before the Trx2's Update Event executed
+[connection slave]
+SET GLOBAL debug="+d,debug_sync_before_apply_update_rows_event";
+include/start_slave_sql.inc
+# 3. switch off duckdb_multi_trx_in_batch
+SET debug_sync="now WAIT_FOR apply_signal";
+SET GLOBAL duckdb_multi_trx_in_batch = OFF;
+SET GLOBAL debug="-d,debug_sync_before_apply_update_rows_event";
+SET debug_sync="now SIGNAL resume_signal";
+# 4. Check the result
+include/rpl_sync.inc
+include/rpl_diff.inc
+###########################################################################
+# Test switch off duckdb_multi_trx_in_batch before start Batch
+###########################################################################
+[connection slave]
+include/stop_slave_sql.inc
+SET GLOBAL duckdb_multi_trx_in_batch = ON;
+[connection master]
+# 1. Execute 1 Transaction on Master
+UPDATE t1 SET c1 = 'xxx' WHERE id =3;
+# 2. Make SQL Thread stop before the Trx1's Update Event executed
+[connection slave]
+SET GLOBAL debug="+d,debug_sync_before_apply_update_rows_event";
+include/start_slave_sql.inc
+# 3. switch off duckdb_multi_trx_in_batch
+SET debug_sync="now WAIT_FOR apply_signal";
+SET GLOBAL duckdb_multi_trx_in_batch = OFF;
+SET GLOBAL debug="-d,debug_sync_before_apply_update_rows_event";
+SET debug_sync="now SIGNAL resume_signal";
+# 4. Check the result
+include/rpl_sync.inc
+include/rpl_diff.inc
+###########################################################################
+# Test switch on duckdb_multi_trx_in_batch during parallel replay
+###########################################################################
+[connection slave]
+include/stop_slave_sql.inc
+SET GLOBAL duckdb_multi_trx_in_batch = OFF;
+[connection master]
+# 1. Execute 1 Transaction on Master
+UPDATE t1 SET c1 = 'zzz' WHERE id =3;
+# 2. Make SQL Thread stop before the Trx1's Update Event executed
+[connection slave]
+SET GLOBAL debug="+d,debug_sync_before_apply_update_rows_event";
+include/start_slave_sql.inc
+# 3. switch off duckdb_multi_trx_in_batch
+SET debug_sync="now WAIT_FOR apply_signal";
+SET GLOBAL duckdb_multi_trx_in_batch = ON;
+SET GLOBAL debug="-d,debug_sync_before_apply_update_rows_event";
+SET debug_sync="now SIGNAL resume_signal";
+# 4. Check the result
+include/rpl_sync.inc
+include/rpl_diff.inc
+###########################################################################
+# Cleanup
+###########################################################################
+[connection slave]
+[connection master]
+DROP TABLE t1;
+include/rpl_sync.inc
+include/rpl_end.inc

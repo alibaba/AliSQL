@@ -1,0 +1,98 @@
+################################################################################
+# This test checks correctness of error handling during setting incorrect 
+# primary key using alter table. Setting new PK with duplicated rows should
+# fail and report an error, but should not cause early exit. 
+################################################################################
+
+--source include/have_debug.inc
+
+SET GLOBAL debug = "+d,ddl_buf_add_two";
+
+--echo #
+--echo # Test#1 : Try and fail to rebuild the table's PK from 2 columns to 1 column with duplicates.
+--echo #
+
+CREATE TABLE t1 (
+    id0 int,
+    id1 int,
+    PRIMARY KEY (id0, id1)
+) ENGINE=InnoDB;
+
+INSERT INTO t1(id0, id1) VALUES
+(1, 1),
+(2, 2),
+(2, 3);
+
+--error ER_DUP_ENTRY
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(id0), ALGORITHM = INPLACE;
+
+--echo # Check that records are present.
+SELECT * FROM t1 ORDER BY id0, id1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Test#2 : Try and fail to rebuild the table's PK from 2 columns to 1 column with duplicates.
+--echo #          Then succeed doing it on second set of two columns with unique rows.
+--echo #
+
+CREATE TABLE t2 (
+    id0 int,
+    id1 int,
+    id2 int,
+    PRIMARY KEY (id0, id2)
+) ENGINE=InnoDB;
+
+INSERT INTO t2(id0, id1, id2) VALUES
+(1, 2, 3),
+(1, 2, 4),
+(1, 3, 5);
+
+--error ER_DUP_ENTRY
+ALTER TABLE t2 DROP PRIMARY KEY, ADD PRIMARY KEY(id1), ALGORITHM = INPLACE;
+
+ALTER TABLE t2 DROP PRIMARY KEY, ADD PRIMARY KEY(id1, id2), ALGORITHM = INPLACE;
+
+--echo # Check that records are present.
+SELECT * FROM t2 ORDER BY id0, id1, id2;
+
+DROP TABLE t2;
+
+--echo #
+--echo # Test#3 : Try and fail to rebuild the table's PK from unique 1 column to 
+--echo #          set of 2 columns with duplicate rows.
+--echo #
+
+CREATE TABLE t3 (
+    id0 int,
+    id1 char(2),
+    id2 varchar(3),
+    id3 date,
+    id4 bool,
+    PRIMARY KEY (id0)
+) ENGINE=InnoDB;
+
+INSERT INTO t3(id0, id1, id2, id3, id4) VALUES
+(1, '22', '3', '2020-01-01', true),
+(2, '33', '4', '2020-02-01', false),
+(3, '22', '3', '2020-01-01', true);
+
+--error ER_DUP_ENTRY
+ALTER TABLE t3 DROP PRIMARY KEY, ADD PRIMARY KEY(id1, id2), ALGORITHM = INPLACE;
+
+--echo #
+--echo # Test#4 : Change primary key to all 5 columns. Then fail to change to  
+--echo #          last 4 ones due to duplicates.
+--echo #
+
+ALTER TABLE t3 DROP PRIMARY KEY, ADD PRIMARY KEY(id0, id1, id2, id3, id4), ALGORITHM = INPLACE;
+
+--error ER_DUP_ENTRY
+ALTER TABLE t3 DROP PRIMARY KEY, ADD PRIMARY KEY(id1, id2, id3, id4), ALGORITHM = INPLACE;
+
+--echo # Check that records are present.
+SELECT * FROM t3 ORDER BY id0, id1, id2, id3, id4;
+
+DROP TABLE t3;
+
+SET GLOBAL debug = "-d,ddl_buf_add_two";

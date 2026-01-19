@@ -1,744 +1,714 @@
 /*****************************************************************************
 
-Copyright (c) 2007, 2014, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2007, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file fts/fts0ast.cc
-Full Text Search parser helper file.
+/** @file fts/fts0ast.cc
+ Full Text Search parser helper file.
 
-Created 2007/3/16 Sunny Bains.
-***********************************************************************/
+ Created 2007/3/16 Sunny Bains.
+ ***********************************************************************/
 
-#include "mem0mem.h"
+#include <stdlib.h>
+#include "row0sel.h"
+
 #include "fts0ast.h"
-#include "fts0pars.h"
 #include "fts0fts.h"
+#include "fts0pars.h"
+#include "ha_prototypes.h"
 
 /* The FTS ast visit pass. */
 enum fts_ast_visit_pass_t {
-	FTS_PASS_FIRST,		/*!< First visit pass,
-				process operators excluding
-				FTS_EXIST and FTS_IGNORE */
-	FTS_PASS_EXIST,		/*!< Exist visit pass,
-				process operator FTS_EXIST */
-	FTS_PASS_IGNORE		/*!< Ignore visit pass,
-				process operator FTS_IGNORE */
+  FTS_PASS_FIRST, /*!< First visit pass,
+                  process operators excluding
+                  FTS_EXIST and FTS_IGNORE */
+  FTS_PASS_EXIST, /*!< Exist visit pass,
+                  process operator FTS_EXIST */
+  FTS_PASS_IGNORE /*!< Ignore visit pass,
+                  process operator FTS_IGNORE */
 };
 
-/******************************************************************//**
-Create an empty fts_ast_node_t.
-@return Create a new node */
-static
-fts_ast_node_t*
-fts_ast_node_create(void)
-/*=====================*/
-{
-	fts_ast_node_t*	node;
+/** Create an empty fts_ast_node_t.
+ @return Create a new node */
+static fts_ast_node_t *fts_ast_node_create(void) {
+  fts_ast_node_t *node;
 
-	node = (fts_ast_node_t*) ut_malloc(sizeof(*node));
-	memset(node, 0x0, sizeof(*node));
+  node = (fts_ast_node_t *)ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY,
+                                              sizeof(*node));
 
-	return(node);
+  return (node);
 }
 
-/******************************************************************//**
-Create a operator fts_ast_node_t.
-@return new node */
-UNIV_INTERN
-fts_ast_node_t*
-fts_ast_create_node_oper(
-/*=====================*/
-	void*		arg,			/*!< in: ast state instance */
-	fts_ast_oper_t	oper)			/*!< in: ast operator */
+/** Track node allocations, in case there is an error during parsing. */
+static void fts_ast_state_add_node(
+    fts_ast_state_t *state, /*!< in: ast instance */
+    fts_ast_node_t *node)   /*!< in: node to add to ast */
 {
-	fts_ast_node_t*	node = fts_ast_node_create();
+  if (!state->list.head) {
+    ut_a(!state->list.tail);
 
-	node->type = FTS_AST_OPER;
-	node->oper = oper;
-
-	fts_ast_state_add_node((fts_ast_state_t*) arg, node);
-
-	return(node);
+    state->list.head = state->list.tail = node;
+  } else {
+    state->list.tail->next_alloc = node;
+    state->list.tail = node;
+  }
 }
 
-/******************************************************************//**
-This function takes ownership of the ptr and is responsible
-for free'ing it
-@return new node or a node list with tokenized words */
-UNIV_INTERN
-fts_ast_node_t*
-fts_ast_create_node_term(
-/*=====================*/
-	void*			arg,		/*!< in: ast state instance */
-	const fts_ast_string_t*	ptr)		/*!< in: ast term string */
+/** Create a operator fts_ast_node_t.
+ @return new node */
+fts_ast_node_t *fts_ast_create_node_oper(
+    void *arg,           /*!< in: ast state instance */
+    fts_ast_oper_t oper) /*!< in: ast operator */
 {
-	fts_ast_state_t*	state = static_cast<fts_ast_state_t*>(arg);
-	ulint			len = ptr->len;
-	ulint			cur_pos = 0;
-	fts_ast_node_t*         node = NULL;
-	fts_ast_node_t*		node_list = NULL;
-	fts_ast_node_t*		first_node = NULL;
+  fts_ast_node_t *node = fts_ast_node_create();
 
-	/* Scan the incoming string and filter out any "non-word" characters */
-	while (cur_pos < len) {
-		fts_string_t	str;
-		ulint		offset;
-		ulint		cur_len;
+  node->type = FTS_AST_OPER;
+  node->oper = oper;
 
-		cur_len = innobase_mysql_fts_get_token(
-			state->charset,
-			reinterpret_cast<const byte*>(ptr->str) + cur_pos,
-			reinterpret_cast<const byte*>(ptr->str) + len,
-			&str, &offset);
+  fts_ast_state_add_node((fts_ast_state_t *)arg, node);
 
-		if (cur_len == 0) {
-			break;
-		}
-
-		cur_pos += cur_len;
-
-		if (str.f_n_char > 0) {
-			/* If the subsequent term (after the first one)'s size
-			is less than fts_min_token_size or the term is greater
-			than fts_max_token_size, we shall ignore that. This is
-			to make consistent with MyISAM behavior */
-			if ((first_node && (str.f_n_char < fts_min_token_size))
-			    || str.f_n_char > fts_max_token_size) {
-				continue;
-			}
-
-			node = fts_ast_node_create();
-
-			node->type = FTS_AST_TERM;
-
-			node->term.ptr = fts_ast_string_create(
-						str.f_str, str.f_len);
-
-			fts_ast_state_add_node(
-				static_cast<fts_ast_state_t*>(arg), node);
-
-			if (first_node) {
-				/* There is more than one word, create
-				a list to organize them */
-				if (!node_list) {
-					node_list = fts_ast_create_node_list(
-						static_cast<fts_ast_state_t*>(
-							arg),
-						 first_node);
-				}
-
-				fts_ast_add_node(node_list, node);
-			} else {
-				first_node = node;
-			}
-		}
-	}
-
-	return((node_list != NULL) ? node_list : first_node);
+  return (node);
 }
 
-/******************************************************************//**
-This function takes ownership of the ptr and is responsible
-for free'ing it.
-@return new node */
-UNIV_INTERN
-fts_ast_node_t*
-fts_ast_create_node_text(
-/*=====================*/
-	void*			arg,	/*!< in: ast state instance */
-	const fts_ast_string_t*	ptr)	/*!< in: ast text string */
+/** This function takes ownership of the ptr and is responsible
+ for free'ing it
+ @return new node or a node list with tokenized words */
+fts_ast_node_t *fts_ast_create_node_term(
+    void *arg,                   /*!< in: ast state instance */
+    const fts_ast_string_t *ptr) /*!< in: ast term string */
 {
-	ulint		len = ptr->len;
-	fts_ast_node_t*	node = NULL;
+  fts_ast_state_t *state = static_cast<fts_ast_state_t *>(arg);
+  ulint len = ptr->len;
+  ulint cur_pos = 0;
+  fts_ast_node_t *node = nullptr;
+  fts_ast_node_t *node_list = nullptr;
+  fts_ast_node_t *first_node = nullptr;
 
-	/* Once we come here, the string must have at least 2 quotes ""
-	around the query string, which could be empty. Also the query
-	string may contain 0x00 in it, we don't treat it as null-terminated. */
-	ut_ad(len >= 2);
-	ut_ad(ptr->str[0] == '\"' && ptr->str[len - 1] == '\"');
+  /* Scan the incoming string and filter out any "non-word" characters */
+  while (cur_pos < len) {
+    fts_string_t str;
+    ulint cur_len;
 
-	if (len == 2) {
-		/* If the query string contains nothing except quotes,
-		it's obviously an invalid query. */
-		return(NULL);
-	}
+    cur_len = innobase_mysql_fts_get_token(
+        state->charset, reinterpret_cast<const byte *>(ptr->str) + cur_pos,
+        reinterpret_cast<const byte *>(ptr->str) + len, &str);
 
-	node = fts_ast_node_create();
+    if (cur_len == 0) {
+      break;
+    }
 
-	/*!< We ignore the actual quotes "" */
-	len -= 2;
+    cur_pos += cur_len;
 
-	node->type = FTS_AST_TEXT;
-	/*!< Skip copying the first quote */
-	node->text.ptr = fts_ast_string_create(
-			reinterpret_cast<const byte*>(ptr->str + 1), len);
-	node->text.distance = ULINT_UNDEFINED;
+    if (str.f_n_char > 0) {
+      /* If the subsequent term (after the first one)'s size
+      is less than fts_min_token_size or the term is greater
+      than fts_max_token_size, we shall ignore that. This is
+      to make consistent with MyISAM behavior */
+      if ((first_node && (str.f_n_char < fts_min_token_size)) ||
+          str.f_n_char > fts_max_token_size) {
+        continue;
+      }
 
-	fts_ast_state_add_node((fts_ast_state_t*) arg, node);
+      node = fts_ast_node_create();
 
-	return(node);
+      node->type = FTS_AST_TERM;
+
+      node->term.ptr = fts_ast_string_create(str.f_str, str.f_len);
+
+      fts_ast_state_add_node(static_cast<fts_ast_state_t *>(arg), node);
+
+      if (first_node) {
+        /* There is more than one word, create
+        a list to organize them */
+        if (!node_list) {
+          node_list = fts_ast_create_node_list(
+              static_cast<fts_ast_state_t *>(arg), first_node);
+        }
+
+        fts_ast_add_node(node_list, node);
+      } else {
+        first_node = node;
+      }
+    }
+  }
+
+  return ((node_list != nullptr) ? node_list : first_node);
 }
 
-/******************************************************************//**
-This function takes ownership of the expr and is responsible
-for free'ing it.
-@return new node */
-UNIV_INTERN
-fts_ast_node_t*
-fts_ast_create_node_list(
-/*=====================*/
-	void*		arg,			/*!< in: ast state instance */
-	fts_ast_node_t*	expr)			/*!< in: ast expr instance */
+/** Create an AST term node, makes a copy of ptr for plugin parser
+ @return node */
+fts_ast_node_t *fts_ast_create_node_term_for_parser(
+    void *arg,       /*!< in: ast state */
+    const char *ptr, /*!< in: term string */
+    const ulint len) /*!< in: term string length */
 {
-	fts_ast_node_t*	node = fts_ast_node_create();
+  fts_ast_node_t *node = nullptr;
 
-	node->type = FTS_AST_LIST;
-	node->list.head = node->list.tail = expr;
+  /* '%' as first char is forbidden for LIKE in internal SQL parser;
+  '%' as last char is reserved for wildcard search;*/
+  if (len == 0 || len > FTS_MAX_WORD_LEN || ptr[0] == '%' ||
+      ptr[len - 1] == '%') {
+    return (nullptr);
+  }
 
-	fts_ast_state_add_node((fts_ast_state_t*) arg, node);
+  node = fts_ast_node_create();
 
-	return(node);
+  node->type = FTS_AST_TERM;
+
+  node->term.ptr =
+      fts_ast_string_create(reinterpret_cast<const byte *>(ptr), len);
+
+  fts_ast_state_add_node(static_cast<fts_ast_state_t *>(arg), node);
+
+  return (node);
 }
 
-/******************************************************************//**
-Create a sub-expression list node. This function takes ownership of
-expr and is responsible for deleting it.
-@return new node */
-UNIV_INTERN
-fts_ast_node_t*
-fts_ast_create_node_subexp_list(
-/*============================*/
-	void*		arg,			/*!< in: ast state instance */
-	fts_ast_node_t*	expr)			/*!< in: ast expr instance */
+/** This function takes ownership of the ptr and is responsible
+ for free'ing it.
+ @return new node */
+fts_ast_node_t *fts_ast_create_node_text(
+    void *arg,                   /*!< in: ast state instance */
+    const fts_ast_string_t *ptr) /*!< in: ast text string */
 {
-	fts_ast_node_t*	node = fts_ast_node_create();
+  ulint len = ptr->len;
+  fts_ast_node_t *node = nullptr;
 
-	node->type = FTS_AST_SUBEXP_LIST;
-	node->list.head = node->list.tail = expr;
+  /* Once we come here, the string must have at least 2 quotes ""
+  around the query string, which could be empty. Also the query
+  string may contain 0x00 in it, we don't treat it as null-terminated. */
+  ut_ad(len >= 2);
+  ut_ad(ptr->str[0] == '\"' && ptr->str[len - 1] == '\"');
 
-	fts_ast_state_add_node((fts_ast_state_t*) arg, node);
+  if (len == 2) {
+    /* If the query string contains nothing except quotes,
+    it's obviously an invalid query. */
+    return (nullptr);
+  }
 
-	return(node);
+  node = fts_ast_node_create();
+
+  /*!< We ignore the actual quotes "" */
+  len -= 2;
+
+  node->type = FTS_AST_TEXT;
+  /*!< Skip copying the first quote */
+  node->text.ptr =
+      fts_ast_string_create(reinterpret_cast<const byte *>(ptr->str + 1), len);
+  node->text.distance = ULINT_UNDEFINED;
+
+  fts_ast_state_add_node((fts_ast_state_t *)arg, node);
+
+  return (node);
 }
 
-/******************************************************************//**
-Free an expr list node elements. */
-static
-void
-fts_ast_free_list(
-/*==============*/
-	fts_ast_node_t*	node)			/*!< in: ast node to free */
+/** Create an AST phrase list node for plugin parser
+ @return node */
+fts_ast_node_t *fts_ast_create_node_phrase_list(void *arg) /*!< in: ast state */
 {
-	ut_a(node->type == FTS_AST_LIST
-	     || node->type == FTS_AST_SUBEXP_LIST);
+  fts_ast_node_t *node = fts_ast_node_create();
 
-	for (node = node->list.head;
-	     node != NULL;
-	     node = fts_ast_free_node(node)) {
+  node->type = FTS_AST_PARSER_PHRASE_LIST;
 
-		/*!< No op */
-	}
+  node->text.distance = ULINT_UNDEFINED;
+  node->list.head = node->list.tail = nullptr;
+
+  fts_ast_state_add_node(static_cast<fts_ast_state_t *>(arg), node);
+
+  return (node);
 }
 
-/********************************************************************//**
-Free a fts_ast_node_t instance.
-@return next node to free */
-UNIV_INTERN
-fts_ast_node_t*
-fts_ast_free_node(
-/*==============*/
-	fts_ast_node_t*	node)			/*!< in: the node to free */
+/** This function takes ownership of the expr and is responsible
+ for free'ing it.
+ @return new node */
+fts_ast_node_t *fts_ast_create_node_list(
+    void *arg,            /*!< in: ast state instance */
+    fts_ast_node_t *expr) /*!< in: ast expr instance */
 {
-	fts_ast_node_t*	next_node;
+  fts_ast_node_t *node = fts_ast_node_create();
 
-	switch (node->type) {
-	case FTS_AST_TEXT:
-		if (node->text.ptr) {
-			fts_ast_string_free(node->text.ptr);
-			node->text.ptr = NULL;
-		}
-		break;
+  node->type = FTS_AST_LIST;
+  node->list.head = node->list.tail = expr;
 
-	case FTS_AST_TERM:
-		if (node->term.ptr) {
-			fts_ast_string_free(node->term.ptr);
-			node->term.ptr = NULL;
-		}
-		break;
+  fts_ast_state_add_node((fts_ast_state_t *)arg, node);
 
-	case FTS_AST_LIST:
-	case FTS_AST_SUBEXP_LIST:
-		fts_ast_free_list(node);
-		node->list.head = node->list.tail = NULL;
-		break;
-
-	case FTS_AST_OPER:
-		break;
-
-	default:
-		ut_error;
-	}
-
-	/*!< Get next node before freeing the node itself */
-	next_node = node->next;
-
-	ut_free(node);
-
-	return(next_node);
+  return (node);
 }
 
-/******************************************************************//**
-This AST takes ownership of the expr and is responsible
-for free'ing it.
-@return in param "list" */
-UNIV_INTERN
-fts_ast_node_t*
-fts_ast_add_node(
-/*=============*/
-	fts_ast_node_t*	node,			/*!< in: list instance */
-	fts_ast_node_t*	elem)			/*!< in: node to add to list */
+/** Create a sub-expression list node. This function takes ownership of
+ expr and is responsible for deleting it.
+ @return new node */
+fts_ast_node_t *fts_ast_create_node_subexp_list(
+    void *arg,            /*!< in: ast state instance */
+    fts_ast_node_t *expr) /*!< in: ast expr instance */
 {
-	if (!elem) {
-		return(NULL);
-	}
+  fts_ast_node_t *node = fts_ast_node_create();
 
-	ut_a(!elem->next);
-	ut_a(node->type == FTS_AST_LIST
-	     || node->type == FTS_AST_SUBEXP_LIST);
+  node->type = FTS_AST_SUBEXP_LIST;
+  node->list.head = node->list.tail = expr;
 
-	if (!node->list.head) {
-		ut_a(!node->list.tail);
+  fts_ast_state_add_node((fts_ast_state_t *)arg, node);
 
-		node->list.head = node->list.tail = elem;
-	} else {
-		ut_a(node->list.tail);
-
-		node->list.tail->next = elem;
-		node->list.tail = elem;
-	}
-
-	return(node);
+  return (node);
 }
 
-/******************************************************************//**
-For tracking node allocations, in case there is an error during
-parsing. */
-UNIV_INTERN
-void
-fts_ast_state_add_node(
-/*===================*/
-	fts_ast_state_t*state,			/*!< in: ast instance */
-	fts_ast_node_t*	node)			/*!< in: node to add to ast */
+/** Free an expr list node elements. */
+static void fts_ast_free_list(fts_ast_node_t *node) /*!< in: ast node to free */
 {
-	if (!state->list.head) {
-		ut_a(!state->list.tail);
+  ut_a(node->type == FTS_AST_LIST || node->type == FTS_AST_SUBEXP_LIST ||
+       node->type == FTS_AST_PARSER_PHRASE_LIST);
 
-		state->list.head = state->list.tail = node;
-	} else {
-		state->list.tail->next_alloc = node;
-		state->list.tail = node;
-	}
+  for (node = node->list.head; node != nullptr;
+       node = fts_ast_free_node(node)) {
+    /*!< No op */
+  }
 }
 
-/******************************************************************//**
-Set the wildcard attribute of a term. */
-UNIV_INTERN
-void
-fts_ast_term_set_wildcard(
-/*======================*/
-	fts_ast_node_t*	node)			/*!< in/out: set attribute of
-						a term node */
+/** Free a fts_ast_node_t instance.
+ @return next node to free */
+fts_ast_node_t *fts_ast_free_node(
+    fts_ast_node_t *node) /*!< in: the node to free */
 {
-	if (!node) {
-		return;
-	}
+  fts_ast_node_t *next_node;
 
-	/* If it's a node list, the wildcard should be set to the tail node*/
-	if (node->type == FTS_AST_LIST)	{
-		ut_ad(node->list.tail != NULL);
-		node = node->list.tail;
-	}
+  switch (node->type) {
+    case FTS_AST_TEXT:
+      if (node->text.ptr) {
+        fts_ast_string_free(node->text.ptr);
+        node->text.ptr = nullptr;
+      }
+      break;
 
-	ut_a(node->type == FTS_AST_TERM);
-	ut_a(!node->term.wildcard);
+    case FTS_AST_TERM:
+      if (node->term.ptr) {
+        fts_ast_string_free(node->term.ptr);
+        node->term.ptr = nullptr;
+      }
+      break;
 
-	node->term.wildcard = TRUE;
+    case FTS_AST_LIST:
+    case FTS_AST_SUBEXP_LIST:
+    case FTS_AST_PARSER_PHRASE_LIST:
+      fts_ast_free_list(node);
+      node->list.head = node->list.tail = nullptr;
+      break;
+
+    case FTS_AST_OPER:
+      break;
+
+    default:
+      ut_error;
+  }
+
+  /*!< Get next node before freeing the node itself */
+  next_node = node->next;
+
+  ut::free(node);
+
+  return (next_node);
 }
 
-/******************************************************************//**
-Set the proximity attribute of a text node. */
-UNIV_INTERN
-void
-fts_ast_term_set_distance(
-/*======================*/
-	fts_ast_node_t*	node,			/*!< in/out: text node */
-	ulint		distance)		/*!< in: the text proximity
-						distance */
+/** This AST takes ownership of the expr and is responsible
+ for free'ing it.
+ @return in param "list" */
+fts_ast_node_t *fts_ast_add_node(
+    fts_ast_node_t *node, /*!< in: list instance */
+    fts_ast_node_t *elem) /*!< in: node to add to list */
 {
-	if (node == NULL) {
-		return;
-	}
+  if (!elem) {
+    return (nullptr);
+  }
 
-	ut_a(node->type == FTS_AST_TEXT);
-	ut_a(node->text.distance == ULINT_UNDEFINED);
+  ut_a(!elem->next);
+  ut_a(node->type == FTS_AST_LIST || node->type == FTS_AST_SUBEXP_LIST ||
+       node->type == FTS_AST_PARSER_PHRASE_LIST);
 
-	node->text.distance = distance;
+  if (!node->list.head) {
+    ut_a(!node->list.tail);
+
+    node->list.head = node->list.tail = elem;
+  } else {
+    ut_a(node->list.tail);
+
+    node->list.tail->next = elem;
+    node->list.tail = elem;
+  }
+
+  return (node);
 }
 
-/******************************************************************//**
-Free node and expr allocations. */
-UNIV_INTERN
-void
-fts_ast_state_free(
-/*===============*/
-	fts_ast_state_t*state)			/*!< in: ast state to free */
+/** Set the wildcard attribute of a term. */
+void fts_ast_term_set_wildcard(fts_ast_node_t *node) /*!< in/out: set attribute
+                                                     of a term node */
 {
-	fts_ast_node_t*	node = state->list.head;
+  if (!node) {
+    return;
+  }
 
-	/* Free the nodes that were allocated during parsing. */
-	while (node) {
-		fts_ast_node_t*	next = node->next_alloc;
+  /* If it's a node list, the wildcard should be set to the tail node*/
+  if (node->type == FTS_AST_LIST) {
+    ut_ad(node->list.tail != nullptr);
+    node = node->list.tail;
+  }
 
-		if (node->type == FTS_AST_TEXT && node->text.ptr) {
-			fts_ast_string_free(node->text.ptr);
-			node->text.ptr = NULL;
-		} else if (node->type == FTS_AST_TERM && node->term.ptr) {
-			fts_ast_string_free(node->term.ptr);
-			node->term.ptr = NULL;
-		}
+  ut_a(node->type == FTS_AST_TERM);
+  ut_a(!node->term.wildcard);
 
-		ut_free(node);
-		node = next;
-	}
-
-	state->root = state->list.head = state->list.tail = NULL;
+  node->term.wildcard = true;
 }
 
-/******************************************************************//**
-Print an ast node. */
-UNIV_INTERN
-void
-fts_ast_node_print(
-/*===============*/
-	fts_ast_node_t*	node)			/*!< in: ast node to print */
+/** Set the proximity attribute of a text node. */
+void fts_ast_text_set_distance(fts_ast_node_t *node, /*!< in/out: text node */
+                               ulint distance)       /*!< in: the text proximity
+                                                     distance */
 {
-	switch (node->type) {
-	case FTS_AST_TEXT:
-		printf("TEXT: ");
-		fts_ast_string_print(node->text.ptr);
-		break;
+  if (node == nullptr) {
+    return;
+  }
 
-	case FTS_AST_TERM:
-		printf("TERM: ");
-		fts_ast_string_print(node->term.ptr);
-		break;
+  ut_a(node->type == FTS_AST_TEXT);
+  ut_a(node->text.distance == ULINT_UNDEFINED);
 
-	case FTS_AST_LIST:
-		printf("LIST: ");
-		node = node->list.head;
-
-		while (node) {
-			fts_ast_node_print(node);
-			node = node->next;
-		}
-		break;
-
-	case FTS_AST_SUBEXP_LIST:
-		printf("SUBEXP_LIST: ");
-		node = node->list.head;
-
-		while (node) {
-			fts_ast_node_print(node);
-			node = node->next;
-		}
-	case FTS_AST_OPER:
-		printf("OPER: %d\n", node->oper);
-		break;
-
-	default:
-		ut_error;
-	}
+  node->text.distance = distance;
 }
 
-/******************************************************************//**
-Traverse the AST - in-order traversal, except for the FTX_EXIST and FTS_IGNORE
-nodes, which will be ignored in the first pass of each level, and visited in a
-second and third pass after all other nodes in the same level are visited.
-@return DB_SUCCESS if all went well */
-UNIV_INTERN
-dberr_t
-fts_ast_visit(
-/*==========*/
-	fts_ast_oper_t		oper,		/*!< in: current operator */
-	fts_ast_node_t*		node,		/*!< in: current root node */
-	fts_ast_callback	visitor,	/*!< in: callback function */
-	void*			arg,		/*!< in: arg for callback */
-	bool*			has_ignore)	/*!< out: true, if the operator
-						was ignored during processing,
-						currently we ignore FTS_EXIST
-						and FTS_IGNORE operators */
+/** Free node and expr allocations. */
+void fts_ast_state_free(fts_ast_state_t *state) /*!< in: ast state to free */
 {
-	dberr_t			error = DB_SUCCESS;
-	fts_ast_node_t*		oper_node = NULL;
-	fts_ast_node_t*		start_node;
-	bool			revisit = false;
-	bool			will_be_ignored = false;
-	fts_ast_visit_pass_t	visit_pass = FTS_PASS_FIRST;
+  fts_ast_node_t *node = state->list.head;
 
-	start_node = node->list.head;
+  /* Free the nodes that were allocated during parsing. */
+  while (node) {
+    fts_ast_node_t *next = node->next_alloc;
 
-	ut_a(node->type == FTS_AST_LIST
-	     || node->type == FTS_AST_SUBEXP_LIST);
+    if (node->type == FTS_AST_TEXT && node->text.ptr) {
+      fts_ast_string_free(node->text.ptr);
+      node->text.ptr = nullptr;
+    } else if (node->type == FTS_AST_TERM && node->term.ptr) {
+      fts_ast_string_free(node->term.ptr);
+      node->term.ptr = nullptr;
+    }
 
-	if (oper == FTS_EXIST_SKIP) {
-		visit_pass = FTS_PASS_EXIST;
-	} else if (oper == FTS_IGNORE_SKIP) {
-		visit_pass = FTS_PASS_IGNORE;
-	}
+    ut::free(node);
+    node = next;
+  }
 
-	/* In the first pass of the tree, at the leaf level of the
-	tree, FTS_EXIST and FTS_IGNORE operation will be ignored.
-	It will be repeated at the level above the leaf level.
+  state->root = state->list.head = state->list.tail = nullptr;
+}
 
-	The basic idea here is that when we encounter FTS_EXIST or
-	FTS_IGNORE, we will change the operator node into FTS_EXIST_SKIP
-	or FTS_IGNORE_SKIP, and term node & text node with the operators
-	is ignored in the first pass. We have two passes during the revisit:
-	We process nodes with FTS_EXIST_SKIP in the exist pass, and then
-	process nodes with FTS_IGNORE_SKIP in the ignore pass.
+/** Print the ast string
+@param[in]      ast_str string to print */
+static void fts_ast_string_print(const fts_ast_string_t *ast_str) {
+  for (ulint i = 0; i < ast_str->len; ++i) {
+    printf("%c", ast_str->str[i]);
+  }
 
-	The order should be restrictly followed, or we will get wrong results.
-	For example, we have a query 'a +b -c d +e -f'.
-	first pass: process 'a' and 'd' by union;
-	exist pass: process '+b' and '+e' by intersection;
-	ignore pass: process '-c' and '-f' by difference. */
+  printf("\n");
+}
 
-	for (node = node->list.head;
-	     node && (error == DB_SUCCESS);
-	     node = node->next) {
+/** Print an ast node recursively. */
+static void fts_ast_node_print_recursive(
+    fts_ast_node_t *node, /*!< in: ast node to print */
+    ulint level)          /*!< in: recursive level */
+{
+  /* Print alignment blank */
+  for (ulint i = 0; i < level; i++) {
+    printf("  ");
+  }
 
-		switch(node->type) {
-		case FTS_AST_LIST:
-			if (visit_pass != FTS_PASS_FIRST) {
-				break;
-			}
+  switch (node->type) {
+    case FTS_AST_TEXT:
+      printf("TEXT: ");
+      fts_ast_string_print(node->text.ptr);
+      break;
 
-			error = fts_ast_visit(oper, node, visitor,
-					      arg, &will_be_ignored);
+    case FTS_AST_TERM:
+      printf("TERM: ");
+      fts_ast_string_print(node->term.ptr);
+      break;
 
-			/* If will_be_ignored is set to true, then
-			we encountered and ignored a FTS_EXIST or FTS_IGNORE
-			operator. */
-			if (will_be_ignored) {
-				revisit = true;
-				/* Remember oper for list in case '-abc&def',
-				ignored oper is from previous node of list.*/
-				node->oper = oper;
-			}
+    case FTS_AST_LIST:
+      printf("LIST: \n");
 
-			break;
+      for (node = node->list.head; node; node = node->next) {
+        fts_ast_node_print_recursive(node, level + 1);
+      }
+      break;
 
-		case FTS_AST_OPER:
-			oper = node->oper;
-			oper_node = node;
+    case FTS_AST_SUBEXP_LIST:
+      printf("SUBEXP_LIST: \n");
 
-			/* Change the operator for revisit */
-			if (oper == FTS_EXIST) {
-				oper_node->oper = FTS_EXIST_SKIP;
-			} else if (oper == FTS_IGNORE) {
-				oper_node->oper = FTS_IGNORE_SKIP;
-			}
+      for (node = node->list.head; node; node = node->next) {
+        fts_ast_node_print_recursive(node, level + 1);
+      }
+      break;
 
-			break;
+    case FTS_AST_OPER:
+      printf("OPER: %d\n", node->oper);
+      break;
 
-		default:
-			if (node->visited) {
-				continue;
-			}
+    case FTS_AST_PARSER_PHRASE_LIST:
+      printf("PARSER_PHRASE_LIST: \n");
 
-			ut_a(oper == FTS_NONE || !oper_node
-			     || oper_node->oper == oper
-			     || oper_node->oper == FTS_EXIST_SKIP
-			     || oper_node->oper == FTS_IGNORE_SKIP);
+      for (node = node->list.head; node; node = node->next) {
+        fts_ast_node_print_recursive(node, level + 1);
+      }
+      break;
 
-			if (oper== FTS_EXIST || oper == FTS_IGNORE) {
-				*has_ignore = true;
-				continue;
-			}
+    default:
+      ut_error;
+  }
+}
 
-			/* Process leaf node accroding to its pass.*/
-			if (oper == FTS_EXIST_SKIP
-			    && visit_pass == FTS_PASS_EXIST) {
-				error = visitor(FTS_EXIST, node, arg);
-				node->visited = true;
-			} else if (oper == FTS_IGNORE_SKIP
-				   && visit_pass == FTS_PASS_IGNORE) {
-				error = visitor(FTS_IGNORE, node, arg);
-				node->visited = true;
-			} else if (visit_pass == FTS_PASS_FIRST) {
-				error = visitor(oper, node, arg);
-				node->visited = true;
-			}
-		}
-	}
+/** Print an ast node */
+void fts_ast_node_print(fts_ast_node_t *node) /*!< in: ast node to print */
+{
+  fts_ast_node_print_recursive(node, 0);
+}
 
-	if (revisit) {
-		/* Exist pass processes the skipped FTS_EXIST operation. */
-                for (node = start_node;
-		     node && error == DB_SUCCESS;
-		     node = node->next) {
+/** Check only union operation involved in the node
+@param[in]      node    ast node to check
+@return true if the node contains only union else false. */
+bool fts_ast_node_check_union(fts_ast_node_t *node) {
+  if (node->type == FTS_AST_LIST || node->type == FTS_AST_SUBEXP_LIST) {
+    for (node = node->list.head; node; node = node->next) {
+      if (!fts_ast_node_check_union(node)) {
+        return (false);
+      }
+    }
 
-			if (node->type == FTS_AST_LIST
-			    && node->oper != FTS_IGNORE) {
-				error = fts_ast_visit(FTS_EXIST_SKIP, node,
-					visitor, arg, &will_be_ignored);
-			}
-		}
+  } else if (node->type == FTS_AST_PARSER_PHRASE_LIST) {
+    /* Phrase search for plugin parser */
+    return (false);
+  } else if (node->type == FTS_AST_OPER &&
+             (node->oper == FTS_IGNORE || node->oper == FTS_EXIST)) {
+    return (false);
+  } else if (node->type == FTS_AST_TEXT) {
+    /* Distance or phrase search query. */
+    return (false);
+  }
 
-		/* Ignore pass processes the skipped FTS_IGNORE operation. */
-		for (node = start_node;
-		     node && error == DB_SUCCESS;
-		     node = node->next) {
+  return (true);
+}
 
-			if (node->type == FTS_AST_LIST) {
-				error = fts_ast_visit(FTS_IGNORE_SKIP, node,
-					visitor, arg, &will_be_ignored);
-			}
-		}
-	}
+/** Traverse the AST - in-order traversal, except for the FTX_EXIST and
+ FTS_IGNORE nodes, which will be ignored in the first pass of each level, and
+ visited in a second and third pass after all other nodes in the same level are
+ visited.
+ @return DB_SUCCESS if all went well */
+dberr_t fts_ast_visit(fts_ast_oper_t oper,      /*!< in: current operator */
+                      fts_ast_node_t *node,     /*!< in: current root node */
+                      fts_ast_callback visitor, /*!< in: callback function */
+                      void *arg,                /*!< in: arg for callback */
+                      bool *has_ignore)         /*!< out: true, if the operator
+                                                was ignored during processing,
+                                                currently we ignore FTS_EXIST
+                                                and FTS_IGNORE operators */
+{
+  dberr_t error = DB_SUCCESS;
+  fts_ast_node_t *oper_node = nullptr;
+  fts_ast_node_t *start_node;
+  bool revisit = false;
+  bool will_be_ignored = false;
+  fts_ast_visit_pass_t visit_pass = FTS_PASS_FIRST;
+  trx_t *trx = node->trx;
+  start_node = node->list.head;
 
-	return(error);
+  ut_a(node->type == FTS_AST_LIST || node->type == FTS_AST_SUBEXP_LIST);
+
+  if (oper == FTS_EXIST_SKIP) {
+    visit_pass = FTS_PASS_EXIST;
+  } else if (oper == FTS_IGNORE_SKIP) {
+    visit_pass = FTS_PASS_IGNORE;
+  }
+
+  /* In the first pass of the tree, at the leaf level of the
+  tree, FTS_EXIST and FTS_IGNORE operation will be ignored.
+  It will be repeated at the level above the leaf level.
+
+  The basic idea here is that when we encounter FTS_EXIST or
+  FTS_IGNORE, we will change the operator node into FTS_EXIST_SKIP
+  or FTS_IGNORE_SKIP, and term node & text node with the operators
+  is ignored in the first pass. We have two passes during the revisit:
+  We process nodes with FTS_EXIST_SKIP in the exist pass, and then
+  process nodes with FTS_IGNORE_SKIP in the ignore pass.
+
+  The order should be restrictly followed, or we will get wrong results.
+  For example, we have a query 'a +b -c d +e -f'.
+  first pass: process 'a' and 'd' by union;
+  exist pass: process '+b' and '+e' by intersection;
+  ignore pass: process '-c' and '-f' by difference. */
+
+  for (node = node->list.head; node && (error == DB_SUCCESS);
+       node = node->next) {
+    switch (node->type) {
+      case FTS_AST_LIST:
+        if (visit_pass != FTS_PASS_FIRST) {
+          break;
+        }
+
+        error = fts_ast_visit(oper, node, visitor, arg, &will_be_ignored);
+
+        /* If will_be_ignored is set to true, then
+        we encountered and ignored a FTS_EXIST or FTS_IGNORE
+        operator. */
+        if (will_be_ignored) {
+          revisit = true;
+          /* Remember oper for list in case '-abc&def',
+          ignored oper is from previous node of list.*/
+          node->oper = oper;
+        }
+
+        break;
+
+      case FTS_AST_OPER:
+        oper = node->oper;
+        oper_node = node;
+
+        /* Change the operator for revisit */
+        if (oper == FTS_EXIST) {
+          oper_node->oper = FTS_EXIST_SKIP;
+        } else if (oper == FTS_IGNORE) {
+          oper_node->oper = FTS_IGNORE_SKIP;
+        }
+
+        break;
+
+      default:
+        if (node->visited) {
+          continue;
+        }
+
+        ut_a(oper == FTS_NONE || !oper_node || oper_node->oper == oper ||
+             oper_node->oper == FTS_EXIST_SKIP ||
+             oper_node->oper == FTS_IGNORE_SKIP);
+
+        if (oper == FTS_EXIST || oper == FTS_IGNORE) {
+          *has_ignore = true;
+          continue;
+        }
+
+        /* Process leaf node according to its pass.*/
+        if (oper == FTS_EXIST_SKIP && visit_pass == FTS_PASS_EXIST) {
+          error = visitor(FTS_EXIST, node, arg);
+          node->visited = true;
+        } else if (oper == FTS_IGNORE_SKIP && visit_pass == FTS_PASS_IGNORE) {
+          error = visitor(FTS_IGNORE, node, arg);
+          node->visited = true;
+        } else if (visit_pass == FTS_PASS_FIRST) {
+          error = visitor(oper, node, arg);
+          node->visited = true;
+        }
+    }
+  }
+  if (trx_is_interrupted(trx)) {
+    return (DB_INTERRUPTED);
+  }
+
+  if (revisit) {
+    /* Exist pass processes the skipped FTS_EXIST operation. */
+    for (node = start_node; node && error == DB_SUCCESS; node = node->next) {
+      if (node->type == FTS_AST_LIST && node->oper != FTS_IGNORE) {
+        error =
+            fts_ast_visit(FTS_EXIST_SKIP, node, visitor, arg, &will_be_ignored);
+      }
+    }
+
+    /* Ignore pass processes the skipped FTS_IGNORE operation. */
+    for (node = start_node; node && error == DB_SUCCESS; node = node->next) {
+      if (node->type == FTS_AST_LIST) {
+        error = fts_ast_visit(FTS_IGNORE_SKIP, node, visitor, arg,
+                              &will_be_ignored);
+      }
+    }
+  }
+
+  return (error);
 }
 
 /**
 Create an ast string object, with NUL-terminator, so the string
 has one more byte than len
-@param[in] str		pointer to string
-@param[in] len		length of the string
+@param[in] str          pointer to string
+@param[in] len          length of the string
 @return ast string with NUL-terminator */
-UNIV_INTERN
-fts_ast_string_t*
-fts_ast_string_create(
-	const byte*	str,
-	ulint		len)
-{
-	fts_ast_string_t*	ast_str;
+fts_ast_string_t *fts_ast_string_create(const byte *str, ulint len) {
+  fts_ast_string_t *ast_str;
 
-	ut_ad(len > 0);
+  ut_ad(len > 0);
 
-	ast_str = static_cast<fts_ast_string_t*>
-			(ut_malloc(sizeof(fts_ast_string_t)));
-	ast_str->str = static_cast<byte*>(ut_malloc(len + 1));
+  ast_str = static_cast<fts_ast_string_t *>(
+      ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(fts_ast_string_t)));
 
-	ast_str->len = len;
-	memcpy(ast_str->str, str, len);
-	ast_str->str[len] = '\0';
+  ast_str->str = static_cast<byte *>(
+      ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, len + 1));
 
-	return(ast_str);
+  ast_str->len = len;
+  memcpy(ast_str->str, str, len);
+  ast_str->str[len] = '\0';
+
+  return (ast_str);
 }
 
 /**
 Free an ast string instance
-@param[in,out] ast_str		string to free */
-UNIV_INTERN
-void
-fts_ast_string_free(
-	fts_ast_string_t*	ast_str)
-{
-	if (ast_str != NULL) {
-		ut_free(ast_str->str);
-		ut_free(ast_str);
-	}
+@param[in,out] ast_str          string to free */
+void fts_ast_string_free(fts_ast_string_t *ast_str) {
+  if (ast_str != nullptr) {
+    ut::free(ast_str->str);
+    ut::free(ast_str);
+  }
 }
 
 /**
 Translate ast string of type FTS_AST_NUMB to unsigned long by strtoul
-@param[in] str		string to translate
-@param[in] base		the base
+@param[in]      ast_str string to translate
+@param[in]      base    the base
 @return translated number */
-UNIV_INTERN
-ulint
-fts_ast_string_to_ul(
-	const fts_ast_string_t*	ast_str,
-	int			base)
-{
-	return(strtoul(reinterpret_cast<const char*>(ast_str->str),
-		       NULL, base));
-}
-
-/**
-Print the ast string
-@param[in] str		string to print */
-UNIV_INTERN
-void
-fts_ast_string_print(
-	const fts_ast_string_t*	ast_str)
-{
-	for (ulint i = 0; i < ast_str->len; ++i) {
-		printf("%c", ast_str->str[i]);
-	}
-
-	printf("\n");
+ulint fts_ast_string_to_ul(const fts_ast_string_t *ast_str, int base) {
+  return (strtoul(reinterpret_cast<const char *>(ast_str->str), nullptr, base));
 }
 
 #ifdef UNIV_DEBUG
-const char*
-fts_ast_oper_name_get(fts_ast_oper_t	oper)
-{
-	switch(oper) {
-	case FTS_NONE:
-		return("FTS_NONE");
-	case FTS_IGNORE:
-		return("FTS_IGNORE");
-	case FTS_EXIST:
-		return("FTS_EXIST");
-	case FTS_NEGATE:
-		return("FTS_NEGATE");
-	case FTS_INCR_RATING:
-		return("FTS_INCR_RATING");
-	case FTS_DECR_RATING:
-		return("FTS_DECR_RATING");
-	case FTS_DISTANCE:
-		return("FTS_DISTANCE");
-	case FTS_IGNORE_SKIP:
-		return("FTS_IGNORE_SKIP");
-	case FTS_EXIST_SKIP:
-		return("FTS_EXIST_SKIP");
-	}
-	ut_ad(0);
-}
-
-const char*
-fts_ast_node_type_get(fts_ast_type_t	type)
-{
-	switch (type) {
-	case FTS_AST_OPER:
-		return("FTS_AST_OPER");
-	case FTS_AST_NUMB:
-		return("FTS_AST_NUMB");
-	case FTS_AST_TERM:
-		return("FTS_AST_TERM");
-	case FTS_AST_TEXT:
-		return("FTS_AST_TEXT");
-	case FTS_AST_LIST:
-		return("FTS_AST_LIST");
-	case FTS_AST_SUBEXP_LIST:
-		return("FTS_AST_SUBEXP_LIST");
-	}
-	ut_ad(0);
+const char *fts_ast_node_type_get(fts_ast_type_t type) {
+  switch (type) {
+    case FTS_AST_OPER:
+      return ("FTS_AST_OPER");
+    case FTS_AST_NUMB:
+      return ("FTS_AST_NUMB");
+    case FTS_AST_TERM:
+      return ("FTS_AST_TERM");
+    case FTS_AST_TEXT:
+      return ("FTS_AST_TEXT");
+    case FTS_AST_LIST:
+      return ("FTS_AST_LIST");
+    case FTS_AST_SUBEXP_LIST:
+      return ("FTS_AST_SUBEXP_LIST");
+    case FTS_AST_PARSER_PHRASE_LIST:
+      return ("FTS_AST_PARSER_PHRASE_LIST");
+  }
+  ut_d(ut_error);
+  ut_o(return ("FTS_UNKNOWN"));
 }
 #endif /* UNIV_DEBUG */

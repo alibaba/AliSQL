@@ -1,69 +1,10 @@
+
 #
 # Testing of table locking
 #
 
 # Save the initial number of concurrent sessions.
 --source include/count_sessions.inc
-
---disable_warnings ONCE
-drop table if exists t1,t2,t3;
-CREATE TABLE t1 (  `id` int(11) NOT NULL default '0', `id2` int(11) NOT NULL default '0', `id3` int(11) NOT NULL default '0', `dummy1` char(30) default NULL, PRIMARY KEY  (`id`,`id2`), KEY `index_id3` (`id3`)) ENGINE=MyISAM;
-insert into t1 (id,id2) values (1,1),(1,2),(1,3);
-LOCK TABLE t1 WRITE;
-select dummy1,count(distinct id) from t1 group by dummy1;
-update t1 set id=-1 where id=1;
-LOCK TABLE t1 READ;
---error 1099
-update t1 set id=1 where id=1;
---error 1100
-create table t2 SELECT * from t1;
-create temporary table t2 SELECT * from t1;
-drop table if exists t2;
-unlock tables;
-create table t2 SELECT * from t1;
-LOCK TABLE t1 WRITE,t2 write;
-insert into t2 SELECT * from t1;
-update t1 set id=1 where id=-1;
-drop table t1,t2;
-
-
-#
-# Check bug with INSERT ... SELECT with lock tables
-#
-
-CREATE TABLE t1 (
-  index1 smallint(6) default NULL,
-  nr smallint(6) default NULL,
-  KEY index1(index1)
-) ENGINE=MyISAM;
-
-CREATE TABLE t2 (
-  nr smallint(6) default NULL,
-  name varchar(20) default NULL
-) ENGINE=MyISAM;
-
-INSERT INTO t2 VALUES (1,'item1');
-INSERT INTO t2 VALUES (2,'item2');
-
-# problem begins here!
-lock tables t1 write, t2 read;
-insert into t1 select 1,nr from t2 where name='item1';
-insert into t1 select 2,nr from t2 where name='item2';
-unlock tables;
-check table t1;
-
-# Check error message
-lock tables t1 write;
-check table t2;
---error 1100
-insert into t1 select index1,nr from t1;
-unlock tables;
-lock tables t1 write, t1 as t1_alias read;
-insert into t1 select index1,nr from t1 as t1_alias;
---error ER_TABLE_NOT_LOCKED
-drop table t1,t2;
-unlock tables;
-drop table t1,t2;
 
 #
 # BUG#5390 - problems with merge tables
@@ -107,8 +48,6 @@ drop table t2,t1;
 # Bug#18884 "lock table + global read lock = crash"
 # The bug is not repeatable, just add the test case.
 #
---disable_warnings ONCE
-drop table if exists t1;
 create table t1 (a int);
 lock table t1 write;
 --error ER_LOCK_OR_ACTIVE_TRANSACTION
@@ -121,36 +60,34 @@ drop table t1;
 # Test LOCK TABLE on system tables.  See bug#9953: CONVERT_TZ requires
 # mysql.time_zone_name to be locked.
 #
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1;
 
 CREATE TABLE t1 (i INT);
 
-LOCK TABLES mysql.time_zone READ, mysql.proc READ, t1 READ;
+LOCK TABLES mysql.time_zone READ, mysql.time_zone_name READ, t1 READ;
 UNLOCK TABLES;
 
-LOCK TABLES mysql.time_zone READ, mysql.proc READ, t1 WRITE;
+LOCK TABLES mysql.time_zone READ, mysql.time_zone_name READ, t1 WRITE;
 UNLOCK TABLES;
 
-LOCK TABLES mysql.time_zone READ, mysql.proc READ;
+LOCK TABLES mysql.time_zone READ, mysql.time_zone_name READ;
 UNLOCK TABLES;
 
-LOCK TABLES mysql.time_zone WRITE, mysql.proc WRITE;
+LOCK TABLES mysql.time_zone WRITE, mysql.time_zone_name WRITE;
 UNLOCK TABLES;
 
 # If at least one system table is locked for WRITE, then all other
 # tables should be system tables locked also for WRITE.
 --error ER_WRONG_LOCK_OF_SYSTEM_TABLE
-LOCK TABLES mysql.time_zone READ, mysql.proc WRITE, t1 READ;
+LOCK TABLES mysql.time_zone READ, mysql.time_zone_name WRITE, t1 READ;
 
 --error ER_WRONG_LOCK_OF_SYSTEM_TABLE
-LOCK TABLES mysql.time_zone WRITE, mysql.proc WRITE, t1 READ;
+LOCK TABLES mysql.time_zone WRITE, mysql.time_zone_name WRITE, t1 READ;
 
 --error ER_WRONG_LOCK_OF_SYSTEM_TABLE
-LOCK TABLES mysql.time_zone WRITE, mysql.proc WRITE, t1 WRITE;
+LOCK TABLES mysql.time_zone WRITE, mysql.time_zone_name WRITE, t1 WRITE;
 
 --error ER_WRONG_LOCK_OF_SYSTEM_TABLE
-LOCK TABLES mysql.time_zone READ, mysql.proc WRITE;
+LOCK TABLES mysql.time_zone READ, mysql.time_zone_name WRITE;
 
 DROP TABLE t1;
 
@@ -199,10 +136,13 @@ select * from t1;
 select * from t2;
 --error ER_TABLE_NOT_LOCKED
 select * from t3;
---echo Dropping of implicitly locked table is disallowed.
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
+--echo Dropping of implicitly locked table is allowed.
 drop table t1;
+--echo View becomes invalid.
+--error ER_VIEW_INVALID
+select * from v_bug5719;
 unlock tables;
+create table t1 (a int);
 --echo Now let us also lock table explicitly and drop it.
 lock tables t1 write, v_bug5719 write;
 drop table t1;
@@ -230,8 +170,6 @@ drop table t2, t3;
 --echo #
 --echo # Bug#39843 DELETE requires write access to table in subquery in where clause
 --echo #
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1,t2;
 CREATE TABLE t1 (
 table1_rowid SMALLINT NOT NULL
 );
@@ -263,33 +201,12 @@ DROP TABLE t1,t2;
 --echo # with a temporary one.
 --echo #
 
---disable_warnings ONCE
-drop table if exists t1, t2;
 create table t1 (a int);
 create table t2 (a int);
 lock table t1 write, t2 write;
 create temporary table t1 (a int);
 flush table t1;
 drop temporary table t1;
-select * from t1;
-unlock tables;
-drop table t1, t2;
-
---echo #
---echo # Ensure that REPAIR .. USE_FRM works under LOCK TABLES.
---echo #
-
---disable_warnings ONCE
-drop table if exists t1, t2;
-create table t1 (a int);
-create table t2 (a int);
-lock table t1 write, t2 write;
-repair table t1 use_frm;
-repair table t1 use_frm;
-select * from t1;
-select * from t2;
-repair table t2 use_frm;
-repair table t2 use_frm;
 select * from t1;
 unlock tables;
 drop table t1, t2;
@@ -317,8 +234,6 @@ drop view v1;
 --echo # WL#4284: Transactional DDL locking
 --echo #
 
---disable_warnings ONCE
-drop table if exists t1;
 create table t1 (a int);
 connect(con1,localhost,root,,);
 set autocommit= 0;
@@ -333,8 +248,6 @@ drop table t1;
 
 --echo # Same problem but now for BEGIN
 
---disable_warnings ONCE
-drop table if exists t1;
 create table t1 (a int);
 connect(con1,localhost,root,,);
 begin;
@@ -361,16 +274,11 @@ create table t2 (j int);
 --echo # Try to perform DDL on table which is locked through view.
 create view v1 as select * from t2;
 lock tables t1 write, v1 write;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
 flush table t2;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
-drop table t2;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
 alter table t2 add column k int;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
 create trigger t2_bi before insert on t2 for each row set @a:=1;
---echo # Repair produces error as part of its result set.
 repair table t2;
+drop table t2;
 unlock tables;
 drop view v1;
 --echo #
@@ -382,38 +290,30 @@ begin
   return 0;
 end|
 delimiter ;|
+create table t2 (j int);
 create view v1 as select f1() from t1;
 lock tables v1 read;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
 flush table t2;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
-drop table t2;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
 alter table t2 add column k int;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
 create trigger t2_bi before insert on t2 for each row set @a:=1;
---echo # Repair produces error as part of its result set.
 repair table t2;
+drop table t2;
 unlock tables;
 drop view v1;
 drop function f1;
 --echo #
 --echo # Finally, try DDL on table which is locked thanks to trigger.
 create trigger t1_ai after insert on t1 for each row insert into t2 values (1);
+create table t2 (j int);
 lock tables t1 write;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
-flush table t2;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
-drop table t2;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
 alter table t2 add column k int;
---error ER_TABLE_NOT_LOCKED_FOR_WRITE
 create trigger t2_bi before insert on t2 for each row set @a:=1;
---echo # Repair produces error as part of its result set.
 repair table t2;
+flush table t2;
+drop table t2;
 unlock tables;
 drop trigger t1_ai;
-drop tables t1, t2;
+drop tables t1;
 
 
 --echo #
@@ -425,8 +325,6 @@ drop tables t1, t2;
 --echo # that would lead to a lock conflict. 
 --echo # Check that taking all locks at once works.
 --echo #
---disable_warnings ONCE
-drop table if exists t1;
 create table t1 (i int);
 lock tables t1 write, t1 as a read, t1 as b read;
 alter table t1 add column j int;
@@ -449,9 +347,6 @@ drop table t1;
 --echo # Bug #43272 HANDLER SQL command does not work under LOCK TABLES
 --echo #
 
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1;
-
 CREATE TABLE t1 (a INT);
 LOCK TABLE t1 WRITE;
 
@@ -471,9 +366,6 @@ DROP TABLE t1;
 --echo # Bug#45066 FLUSH TABLES WITH READ LOCK deadlocks against 
 --echo #           LOCK TABLE 
 --echo #
-
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1;
 
 CREATE TABLE t1(a INT);
 
@@ -504,9 +396,6 @@ DROP TABLE t1;
 --echo # CONCURRENT INFILE".
 --echo #
 
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1;
-
 CREATE TABLE t1 (f1 INT, f2 INT) ENGINE = MEMORY;
 CREATE TRIGGER t1_ai AFTER INSERT ON t1 FOR EACH ROW 
   UPDATE LOW_PRIORITY t1 SET f2 = 7; 
@@ -522,9 +411,6 @@ DROP TABLE t1;
 --echo #
 --echo # Bug#43685 Lock table affects other non-related tables
 --echo #
-
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1, t2;
 
 connect (con2, localhost, root);
 CREATE TABLE t1 (id INT);
@@ -569,29 +455,27 @@ DROP TABLE t1;
 
 
 --echo #
---echo # Additional test coverage for WL#5534 - Online ALTER phase 1.
---echo #
-
---disable_warnings
-DROP TABLE IF EXISTS t1, m1;
---enable_warnings
-
-CREATE TABLE t1(a INT);
-CREATE TABLE m1(a INT) engine=merge union(t1);
-
-LOCK TABLES m1 WRITE;
-ALTER TABLE m1 COMMENT 'test';
---echo # This triggered an assert in MDL_ticket::downgrade_lock
-FLUSH TABLE m1;
-
-UNLOCK TABLES;
-DROP TABLE m1, t1;
-
-
---echo #
 --echo # End of 6.0 tests.
 --echo #
 
 # Check that all connections opened by test cases in this file are really
 # gone so execution of other tests won't be affected by their presence.
 --source include/wait_until_count_sessions.inc
+
+call mtr.add_suppression("Can't open and lock privilege tables: Table 'user' was not locked with LOCK TABLES");
+--echo #
+--echo # WL#4284: Transactional DDL locking
+--echo #
+--echo # FLUSH PRIVILEGES should not implicitly unlock locked tables.
+--echo #
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+CREATE TABLE t1 (c1 INT);
+LOCK TABLES t1 READ;
+--error ER_TABLE_NOT_LOCKED
+FLUSH PRIVILEGES;
+UNLOCK TABLES;
+FLUSH PRIVILEGES;
+DROP TABLE t1;
+

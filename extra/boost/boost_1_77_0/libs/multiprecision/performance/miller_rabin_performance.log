@@ -1,0 +1,40 @@
+Time for cpp_int (no Expression templates) = 0.0632349
+Number of primes found = 9
+Time for cpp_int                        = 0.0597808
+Number of primes found = 9
+Time for cpp_int (128-bit cache)        = 0.061515
+Number of primes found = 9
+Time for cpp_int (256-bit cache)        = 0.061159
+Number of primes found = 9
+Time for cpp_int (512-bit cache)        = 0.0521137
+Number of primes found = 9
+Time for cpp_int (1024-bit cache)       = 0.051393
+Number of primes found = 9
+Time for uint1024_t                     = 0.047259
+Number of primes found = 9
+Time for checked_uint1024_t             = 0.0477963
+Number of primes found = 9
+Time for mpz_int (no Expression templates) = 0.00748244
+Number of primes found = 9
+Time for mpz_int                        = 0.00692059
+Number of primes found = 9
+Time for mpz_int (native Miller Rabin Test) = 0.000384121 seconds
+Time for tom_int (no Expression templates) = 0.0288748
+Number of primes found = 9
+Time for tom_int                        = 0.0288394
+Number of primes found = 9
+[table
+[[Integer Type][Relative Performance (Actual time in parenthesis)]]
+[[checked_uint1024_t][6.90638(0.0477963s)]]
+[[cpp_int][8.63811(0.0597808s)]]
+[[cpp_int (1024-bit cache)][7.4261(0.051393s)]]
+[[cpp_int (128-bit cache)][8.88868(0.061515s)]]
+[[cpp_int (256-bit cache)][8.83724(0.061159s)]]
+[[cpp_int (512-bit cache)][7.53024(0.0521137s)]]
+[[cpp_int (no Expression templates)][9.1372(0.0632349s)]]
+[[mpz_int][1(0.00692059s)]]
+[[mpz_int (no Expression templates)][1.08118(0.00748244s)]]
+[[tom_int][4.16719(0.0288394s)]]
+[[tom_int (no Expression templates)][4.1723(0.0288748s)]]
+[[uint1024_t][6.82875(0.047259s)]]
+]

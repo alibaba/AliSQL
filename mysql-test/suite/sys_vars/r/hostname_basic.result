@@ -13,7 +13,7 @@ COUNT(@@GLOBAL.hostname)
 1 Expected
 '#---------------------BS_STVARS_019_03----------------------#'
 SELECT @@GLOBAL.hostname = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='hostname';
 @@GLOBAL.hostname = VARIABLE_VALUE
 1
@@ -23,7 +23,7 @@ COUNT(@@GLOBAL.hostname)
 1
 1 Expected
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='hostname';
 COUNT(VARIABLE_VALUE)
 1
@@ -48,6 +48,6 @@ SELECT COUNT(@@GLOBAL.hostname);
 COUNT(@@GLOBAL.hostname)
 1
 1 Expected
-SELECT hostname = @@SESSION.hostname;
+SELECT hostname;
 ERROR 42S22: Unknown column 'hostname' in 'field list'
-Expected error 'Readonly variable'
+Expected error 'Unknown column'

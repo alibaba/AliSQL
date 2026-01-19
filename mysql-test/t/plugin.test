@@ -1,7 +1,24 @@
-#
---source include/not_windows_embedded.inc
+# The test contains a storage engine limited to statement-based logging, since,
+# 'example' plugin doesn't support binlog_format=ROW. Thus, test now sets
+# binlog_format=STATEMENT when log-bin is enabled and binlog_format=ROW.
+if (`SELECT @@global.log_bin AND @@global.binlog_format = 'ROW'`)
+{
+  --disable_query_log
+  # Avoid warnings since binlog_format is deprecated
+  --disable_warnings
+  SET @saved_binlog_format= @@SESSION.binlog_format;
+  SET SESSION binlog_format= STATEMENT;
+  --enable_warnings
+  --enable_query_log
+}
+
+--source include/not_asan_mac.inc
 --source include/have_example_plugin.inc
+--source include/have_debug.inc
 --source include/have_debug_sync.inc
+
+# Save the initial number of concurrent sessions
+--source include/count_sessions.inc
 
 --error ER_UNKNOWN_STORAGE_ENGINE
 CREATE TABLE t1(a int) ENGINE=EXAMPLE;
@@ -18,9 +35,9 @@ UNINSTALL PLUGIN example;
 eval INSTALL PLUGIN example SONAME '$EXAMPLE_PLUGIN';
 
 --echo # Example engine does not support indexes
---error ER_TOO_MANY_KEY_PARTS
+--error ER_TOO_MANY_KEYS
 CREATE TABLE t1 (a int PRIMARY KEY) ENGINE=EXAMPLE;
---error ER_TOO_MANY_KEY_PARTS
+--error ER_TOO_MANY_KEYS
 CREATE TABLE t1 (a int, KEY (a)) ENGINE=EXAMPLE;
 
 
@@ -45,12 +62,26 @@ DELETE FROM t1 WHERE a = 0;
 --error ER_ILLEGAL_HA
 HANDLER t1 OPEN;
 
+--echo # Try to delete table when plugin is not loaded.
+--echo # Remove table from TDC to allow plugin unload.
+FLUSH TABLE t1;
+UNINSTALL PLUGIN example;
+
+--error ER_UNKNOWN_STORAGE_ENGINE
+DROP TABLE t1;
+
+--replace_regex /\.dll/.so/
+eval INSTALL PLUGIN example SONAME '$EXAMPLE_PLUGIN';
+
 DROP TABLE t1;
 
 # a couple of tests for variables
 set global example_ulong_var=500;
 set global example_enum_var= e1;
-show status like 'example%';
+--disable_warnings
+select * from performance_schema.global_status where variable_name like 'example%' order by variable_name;
+--enable_warnings
+--replace_regex /^Last creation.*t1'$/Last creation 't1'/
 show variables like 'example%';
 
 UNINSTALL PLUGIN example;
@@ -164,116 +195,269 @@ SELECT @@SESSION.example_double_thdvar;
 UNINSTALL PLUGIN example;
 
 --echo #
---echo # BUG#18008907 - DEADLOCK BETWEEN MYSQL_CHANGE_USER(), SHOW VARIABLES AND INSTALL PLUGIN
+--echo # Bug #11759453: UNINSTALL PLUGIN MISLEADING ERROR
+--echo #                MESSAGE FOR NON-DYNAMIC PLUGINS
 --echo #
 
---enable_connect_log
+# Innodb is now builtin plugin and not dynamically loaded
+--error ER_PLUGIN_DELETE_BUILTIN
+UNINSTALL PLUGIN innodb;
 
-delimiter |;
-
-CREATE PROCEDURE p_install()
-BEGIN
-  INSTALL PLUGIN no_such_plugin SONAME 'no_such_object';
-END
-|
-
-CREATE PROCEDURE p_show_vars()
-BEGIN
-  SELECT COUNT(*) FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES;
-END|
-
-delimiter ;|
-
-connect(con1, localhost, root,,);
-
---echo # Case 18008907_1: Deadlock situation cause by
---echo #                  con1: has LOCK_system_variables_hash and waits on LOCK_plugin  AND
---echo #                  default: has LOCK_plugin and waits on LOCK_system_variables_hash.
 --echo #
-SET DEBUG_SYNC='acquired_LOCK_system_variables_hash SIGNAL install_plugin WAIT_FOR cont_show_vars';
---send call p_show_vars();
-
-connection default;
-SET DEBUG_SYNC='now WAIT_FOR install_plugin';
-SET DEBUG_SYNC='acquired_LOCK_plugin SIGNAL cont_show_vars';
---send call p_install();
-
-connection con1;
-# Without fix, reap will hang.
---replace_column 1 #
---reap;
-SET DEBUG_SYNC='RESET';
-
-connection default;
---replace_regex /(Can\'t open shared library).*$/\1/
---error ER_CANT_OPEN_LIBRARY
---reap;
-SET DEBUG_SYNC='RESET';
-
---echo # Case 18008907_2: Deadlock situation caused by
---echo #                  default: has LOCK_system_variables_hash and waits on LOCK_global_system_variables,
---echo #                  con1: has LOCK_plugin and waits on LOCK_system_variables_hash AND
---echo #                  con2: has LOCK_global_system_variables and waits on LOCK_plugin.
-
-SET DEBUG_SYNC='acquired_LOCK_system_variables_hash SIGNAL install_plugin WAIT_FOR nothing TIMEOUT 10';
---send call p_show_vars();
-
-connection con1;
-SET DEBUG_SYNC='now WAIT_FOR install_plugin';
-SET DEBUG_SYNC='acquired_LOCK_plugin SIGNAL create_connection WAIT_FOR nothing TIMEOUT 10';
---send call p_install();
-
-connect(con2, localhost, root,,);
-SET DEBUG_SYNC='now WAIT_FOR create_connection';
-# Without fix, deadlock situation will occur on timeout of debug_syncs in
-# default and con1.  Because of this, change_user operation hangs.
-change_user;
-
-connection con1;
---replace_regex /(Can\'t open shared library).*$/\1/
---error ER_CANT_OPEN_LIBRARY
---reap;
-
-connection default;
---replace_column 1 #
---reap;
-disconnect con2;
-
---echo # Case 18008907_3: Testing Concurrent "Show Variables" and "Plugin Uninstall" operations.
-
-#Installing plugin
+--echo # Bug #19917521: MEMORY LEAK WITH STRING THREAD VARIABLE 
+--echo #                THAT SET MEMALLOC FLAG
+--echo #
 --replace_regex /\.dll/.so/
 eval INSTALL PLUGIN example SONAME '$EXAMPLE_PLUGIN';
 
-connection con1;
-#Acquiring LOCK_system_variables_hash and LOCK_plugin_delete
-SET DEBUG_SYNC='acquired_LOCK_system_variables_hash SIGNAL uninstall_plugin WAIT_FOR go';
---send call p_show_vars();
+SET SESSION example_create_count_thdvar = 0;
+SET SESSION example_last_create_thdvar = '';
 
-connect(con2, localhost, root,,);
+CREATE TABLE t10(a INT) ENGINE=EXAMPLE;
+SELECT @@SESSION.example_create_count_thdvar;
+--replace_regex /^Last creation.*t10'$/Last creation 't10'/
+SELECT @@SESSION.example_last_create_thdvar;
+
+CREATE TABLE t20(a INT) ENGINE=EXAMPLE;
+SELECT @@SESSION.example_create_count_thdvar;
+--replace_regex /^Last creation.*t20'$/Last creation 't20'/
+SELECT @@SESSION.example_last_create_thdvar;
+
+DROP TABLE t10, t20;
+
+UNINSTALL PLUGIN example;
+
+--echo #
+--echo # BUG#24344026 - SIG 11 IN MY_VALID_MBCHARLEN_UTF8 AT STRINGS/CTYPE-UTF8.CC:9437
+--echo #
+SET GLOBAL DEBUG='+d,set_uninstall_sync_point';
+connect(con1, localhost, root,,);
+
+connection default;
+--replace_regex /\.dll/.so/
+eval INSTALL PLUGIN example SONAME '$EXAMPLE_PLUGIN';
+SET DEBUG_SYNC='before_store_plugin_name SIGNAL uninstall_plugin WAIT_FOR plugin_uninstalled';
+--send SELECT * FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME='example';
+
+connection con1;
 SET DEBUG_SYNC='now WAIT_FOR uninstall_plugin';
---send UNINSTALL PLUGIN example;
+UNINSTALL PLUGIN example;
+SET DEBUG_SYNC='now SIGNAL plugin_uninstalled';
 
 connection default;
-#Plugin Uninstall operation will wait until show variables operations releases LOCK_plugin_delete.
-let $wait_condition= SELECT count(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST
-                     WHERE INFO='UNINSTALL PLUGIN example' and
-                     STATE='System lock';
---source include/wait_condition.inc
-SET DEBUG_SYNC='now SIGNAL go';
-
-connection con1;
---replace_column 1 #
 --reap
-
-connection con2;
---reap
-
-connection default;
-DROP PROCEDURE p_show_vars;
-DROP PROCEDURE p_install;
 SET DEBUG_SYNC='RESET';
+SET GLOBAL DEBUG='-d,set_uninstall_sync_point';
 disconnect con1;
-disconnect con2;
 
---disable_connect_log
+# Wait till we reached the initial number of concurrent sessions
+--source include/wait_until_count_sessions.inc
+
+--echo #
+--echo # Bug#51770: UNINSTALL PLUGIN requires no privileges
+--echo #
+
+CREATE USER bug51770@localhost;
+GRANT INSERT ON mysql.plugin TO bug51770@localhost;
+connect(con1,localhost,bug51770,,);
+--replace_regex /\.dll/.so/
+eval INSTALL PLUGIN example SONAME '$EXAMPLE_PLUGIN';
+--error ER_TABLEACCESS_DENIED_ERROR
+UNINSTALL PLUGIN example;
+connection default;
+GRANT DELETE ON mysql.plugin TO bug51770@localhost;
+connection con1;
+UNINSTALL PLUGIN example;
+disconnect con1;
+connection default;
+DROP USER bug51770@localhost;
+
+#
+# BUG#58246: INSTALL PLUGIN not secure & crashable
+#
+# The bug consisted of not recognizing / on Windows, so checking / on
+# all platforms should cover this case.
+
+let $path = `select CONCAT_WS('/', '..', '$EXAMPLE_PLUGIN')`;
+--replace_regex /\.dll/.so/
+--error ER_UDF_NO_PATHS
+eval INSTALL PLUGIN example SONAME '$path';
+
+if (`SELECT @@global.log_bin AND @@global.binlog_format = 'ROW'`)
+{
+  --disable_query_log
+  --disable_warnings
+  SET SESSION binlog_format= @saved_binlog_format;
+  --enable_warnings
+  --enable_query_log
+}
+
+--echo #
+--echo # Bug #28534414: NEGATIVE NUMBERS IN PLUGIN VARIABLES
+--echo #                NOT DISPLAYED CORRECTLY
+--echo #
+
+--replace_regex /\.dll/.so/
+eval INSTALL PLUGIN example SONAME '$EXAMPLE_PLUGIN';
+
+SELECT * FROM performance_schema.global_status WHERE variable_name LIKE 'example_func_example' ORDER BY variable_name;
+
+#Test for signed int plugin global variable
+SHOW VARIABLES LIKE 'example_signed_int_var';
+SELECT @@GLOBAL.example_signed_int_var;
+
+SET GLOBAL example_signed_int_var = -2147483648;
+SELECT @@GLOBAL.example_signed_int_var;
+
+SET GLOBAL example_signed_int_var = -100;
+SELECT @@GLOBAL.example_signed_int_var;
+
+SET GLOBAL example_signed_int_var = 0;
+SELECT @@GLOBAL.example_signed_int_var;
+
+SET GLOBAL example_signed_int_var = 100;
+SELECT @@GLOBAL.example_signed_int_var;
+
+SET GLOBAL example_signed_int_var = 2147483647;
+SELECT @@GLOBAL.example_signed_int_var;
+
+SET GLOBAL example_signed_int_var = -2147483649;
+SELECT @@GLOBAL.example_signed_int_var;
+
+SET GLOBAL example_signed_int_var = 2147483648;
+SELECT @@GLOBAL.example_signed_int_var;
+
+#Test for signed int plugin session variable
+SHOW SESSION VARIABLES LIKE 'example_signed_int_thdvar';
+SELECT @@SESSION.example_signed_int_thdvar;
+
+SET SESSION example_signed_int_thdvar = -2147483648;
+SELECT @@SESSION.example_signed_int_thdvar;
+
+SET SESSION example_signed_int_thdvar = -100;
+SELECT @@SESSION.example_signed_int_thdvar;
+
+SET SESSION example_signed_int_thdvar = 0;
+SELECT @@SESSION.example_signed_int_thdvar;
+
+SET SESSION example_signed_int_thdvar = 100;
+SELECT @@SESSION.example_signed_int_thdvar;
+
+SET SESSION example_signed_int_thdvar = 2147483647;
+SELECT @@SESSION.example_signed_int_thdvar;
+
+SET SESSION example_signed_int_thdvar = -2147483649;
+SELECT @@SESSION.example_signed_int_thdvar;
+
+SET SESSION example_signed_int_thdvar = 2147483648;
+SELECT @@SESSION.example_signed_int_thdvar;
+
+#Test for signed long plugin global variable
+SHOW VARIABLES LIKE 'example_signed_long_var';
+SELECT @@GLOBAL.example_signed_long_var;
+
+--disable_warnings
+
+SET GLOBAL example_signed_long_var = -9223372036854775808;
+SELECT @@GLOBAL.example_signed_long_var IN (-2147483648, -9223372036854775808);
+
+SET GLOBAL example_signed_long_var = -100;
+SELECT @@GLOBAL.example_signed_long_var;
+
+SET GLOBAL example_signed_long_var = 0;
+SELECT @@GLOBAL.example_signed_long_var;
+
+SET GLOBAL example_signed_long_var = 100;
+SELECT @@GLOBAL.example_signed_long_var;
+
+SET GLOBAL example_signed_long_var = 9223372036854775807;
+SELECT @@GLOBAL.example_signed_long_var IN (2147483647, 9223372036854775807);
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET GLOBAL example_signed_long_var = -9223372036854775809;
+SELECT @@GLOBAL.example_signed_long_var IN (2147483647, 9223372036854775807);
+
+SET GLOBAL example_signed_long_var = 9223372036854775808;
+SELECT @@GLOBAL.example_signed_long_var IN (2147483647, 9223372036854775807);
+
+#Test for signed long plugin session variable
+SHOW SESSION VARIABLES LIKE 'example_signed_long_thdvar';
+SELECT @@SESSION.example_signed_long_thdvar;
+
+SET SESSION example_signed_long_thdvar = -9223372036854775808;
+SELECT @@SESSION.example_signed_long_thdvar IN (-2147483648, -9223372036854775808);
+
+SET SESSION example_signed_long_thdvar = -100;
+SELECT @@SESSION.example_signed_long_thdvar;
+
+SET SESSION example_signed_long_thdvar = 0;
+SELECT @@SESSION.example_signed_long_thdvar;
+
+SET SESSION example_signed_long_thdvar = 100;
+SELECT @@SESSION.example_signed_long_thdvar;
+
+SET SESSION example_signed_long_thdvar = 9223372036854775807;
+SELECT @@SESSION.example_signed_long_thdvar IN (2147483647, 9223372036854775807);
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET SESSION example_signed_long_thdvar = -9223372036854775809;
+SELECT @@SESSION.example_signed_long_thdvar IN (2147483647, 9223372036854775807);
+
+SET SESSION example_signed_long_thdvar = 9223372036854775808;
+SELECT @@SESSION.example_signed_long_thdvar IN (2147483647, 9223372036854775807);
+
+--enable_warnings
+
+#Test for signed longlong plugin global variable
+SHOW VARIABLES LIKE 'example_signed_longlong_var';
+SELECT @@GLOBAL.example_signed_longlong_var;
+
+SET GLOBAL example_signed_longlong_var = -9223372036854775808;
+SELECT @@GLOBAL.example_signed_longlong_var;
+
+SET GLOBAL example_signed_longlong_var = -100;
+SELECT @@GLOBAL.example_signed_longlong_var;
+
+SET GLOBAL example_signed_longlong_var = 0;
+SELECT @@GLOBAL.example_signed_longlong_var;
+
+SET GLOBAL example_signed_longlong_var = 100;
+SELECT @@GLOBAL.example_signed_longlong_var;
+
+SET GLOBAL example_signed_longlong_var = 9223372036854775807;
+SELECT @@GLOBAL.example_signed_longlong_var;
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET GLOBAL example_signed_longlong_var = -9223372036854775809;
+SELECT @@GLOBAL.example_signed_longlong_var;
+
+SET GLOBAL example_signed_longlong_var = 9223372036854775808;
+SELECT @@GLOBAL.example_signed_longlong_var;
+
+#Test for signed longlong plugin session variable
+SHOW SESSION VARIABLES LIKE 'example_signed_longlong_thdvar';
+SELECT @@SESSION.example_signed_longlong_thdvar;
+
+SET SESSION example_signed_longlong_thdvar = -9223372036854775808;
+SELECT @@SESSION.example_signed_longlong_thdvar;
+
+SET SESSION example_signed_longlong_thdvar = -100;
+SELECT @@SESSION.example_signed_longlong_thdvar;
+
+SET SESSION example_signed_longlong_thdvar = 0;
+SELECT @@SESSION.example_signed_longlong_thdvar;
+
+SET SESSION example_signed_longlong_thdvar = 100;
+SELECT @@SESSION.example_signed_longlong_thdvar;
+
+SET SESSION example_signed_longlong_thdvar = 9223372036854775807;
+SELECT @@SESSION.example_signed_longlong_thdvar;
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET SESSION example_signed_longlong_thdvar = -9223372036854775809;
+SELECT @@SESSION.example_signed_longlong_thdvar;
+
+SET SESSION example_signed_longlong_thdvar = 9223372036854775808;
+SELECT @@SESSION.example_signed_longlong_thdvar;
+
+UNINSTALL PLUGIN example;

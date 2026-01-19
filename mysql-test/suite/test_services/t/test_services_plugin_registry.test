@@ -1,0 +1,31 @@
+# Restart of server to get deterministic results.
+--let server_log= $MYSQLTEST_VARDIR/log/test_services_plugin_registry.err
+--let $restart_parameters="restart: --log-error=$server_log"
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--source include/restart_mysqld.inc
+
+--echo ------ Run plugin ------------------------------------------------
+--replace_result $TEST_SERVICES_PLUGIN_REGISTRY TEST_SERVICES_PLUGIN_REGISTRY
+eval INSTALL PLUGIN test_services_plugin_registry SONAME '$TEST_SERVICES_PLUGIN_REGISTRY';
+
+--echo ------ Show status of plugin -------------------------------------
+SELECT PLUGIN_STATUS FROM INFORMATION_SCHEMA.PLUGINS
+  WHERE PLUGIN_NAME='test_services_plugin_registry';
+
+--echo ------ Stop plugin -----------------------------------------------
+UNINSTALL PLUGIN test_services_plugin_registry;
+
+CREATE TABLE t1 (c1 varchar(30), c2 TEXT, c3 TEXT, c4 TEXT);
+--disable_warnings ER_WARN_TOO_FEW_RECORDS,ER_WARN_TOO_MANY_RECORDS,WARN_DATA_TRUNCATED
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA LOCAL INFILE '$server_log' INTO TABLE t1
+     FIELDS TERMINATED BY ' [';
+--enable_warnings ER_WARN_TOO_FEW_RECORDS,ER_WARN_TOO_MANY_RECORDS,WARN_DATA_TRUNCATED
+SELECT replace(concat('[',c2,' [',c3,' [',c4),'\r','') AS msg FROM t1 WHERE c4 LIKE '%test_services_plugin_registry %';
+DROP TABLE IF EXISTS t1;
+FLUSH ERROR LOGS;
+
+# restore default options
+--let $restart_parameters = restart:
+--source include/restart_mysqld.inc
+--remove_file $server_log

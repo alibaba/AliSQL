@@ -1,4 +1,3 @@
-call mtr.add_suppression("InnoDB: The log sequence numbers [0-9]+ and [0-9]+ in ibdata files do not match the log sequence number [0-9]+ in the ib_logfiles!");
 CREATE TABLE t1 (a INT PRIMARY KEY, b TEXT) ENGINE=InnoDB;
 CREATE TABLE t2 (a INT PRIMARY KEY) ENGINE=InnoDB;
 CREATE TABLE t3 (a INT PRIMARY KEY, b TEXT, c TEXT) ENGINE=InnoDB;
@@ -22,8 +21,8 @@ BEGIN;
 INSERT INTO t1 VALUES (3,REPEAT('c',50000));
 SET DEBUG_SYNC='now WAIT_FOR rec_not_blob';
 SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-SELECT @@tx_isolation;
-@@tx_isolation
+SELECT @@transaction_isolation;
+@@transaction_isolation
 READ-UNCOMMITTED
 SELECT a, RIGHT(b,20) FROM t1;
 a	RIGHT(b,20)
@@ -44,15 +43,23 @@ test.t1	check	status	OK
 INSERT INTO t3 VALUES
 (1,REPEAT('d',7000),REPEAT('e',100)),
 (2,REPEAT('g',7000),REPEAT('h',100));
-SET DEBUG_SYNC='before_row_upd_extern SIGNAL have_latch WAIT_FOR go';
+SET DEBUG_SYNC='blob_write_middle SIGNAL go_sel WAIT_FOR go_upd';
 UPDATE t3 SET c=REPEAT('f',3000) WHERE a=1;
-SET DEBUG_SYNC='now WAIT_FOR have_latch';
+# Connection con1:
+SET DEBUG_SYNC='now WAIT_FOR go_sel';
 SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-SELECT @@tx_isolation;
-@@tx_isolation
+SELECT @@transaction_isolation;
+@@transaction_isolation
 READ-UNCOMMITTED
 SELECT a, RIGHT(b,20), RIGHT(c,20) FROM t3;
-SET DEBUG_SYNC='now SIGNAL go';
+a	RIGHT(b,20)	RIGHT(c,20)
+1		ffffffffffffffffffff
+2	gggggggggggggggggggg	hhhhhhhhhhhhhhhhhhhh
+set debug_sync='now SIGNAL go_upd';
+# Connection default:
+# reap UPDATE t3 SET c=REPEAT('f',3000) WHERE a=1;
+# Connection con1:
+SELECT a, RIGHT(b,20), RIGHT(c,20) FROM t3;
 a	RIGHT(b,20)	RIGHT(c,20)
 1	dddddddddddddddddddd	ffffffffffffffffffff
 2	gggggggggggggggggggg	hhhhhhhhhhhhhhhhhhhh
@@ -71,6 +78,8 @@ SELECT info FROM information_schema.processlist
 WHERE state = 'debug sync point: before_row_upd_extern';
 info
 UPDATE t3 SET c=REPEAT('i',3000) WHERE a=2
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
 SET DEBUG='+d,crash_commit_before';
 COMMIT;
 ERROR HY000: Lost connection to MySQL server during query
@@ -98,6 +107,8 @@ SELECT info FROM information_schema.processlist
 WHERE state = 'debug sync point: after_row_upd_extern';
 info
 UPDATE t3 SET c=REPEAT('j',3000) WHERE a=2
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
 SET DEBUG='+d,crash_commit_before';
 COMMIT;
 ERROR HY000: Lost connection to MySQL server during query
@@ -118,3 +129,22 @@ a
 SELECT * FROM t2;
 a
 DROP TABLE t1,t2,t3;
+#
+# Bug #29866408	SERVER CRASHES WHEN ADDING LONGTEXT COLUMN
+#
+CREATE TABLE t1 (
+id int(11) COLLATE utf8mb4_unicode_ci NOT NULL,
+data longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+PRIMARY KEY (id),
+UNIQUE KEY unq_id (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t1 VALUES (1,'');
+SET @old_mode=@@sql_mode;
+SET GLOBAL SQL_MODE="";
+ALTER TABLE t1 ADD COLUMN d3 DATETIME NOT NULL;
+ALTER TABLE t1 ADD COLUMN d2 DATETIME NOT NULL;
+ALTER TABLE t1 ADD COLUMN d1 DATETIME NOT NULL;
+SET GLOBAL SQL_MODE=@old_mode;
+DROP TABLE t1;

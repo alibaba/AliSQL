@@ -38,14 +38,15 @@
 # sql thread's positions are not initialized, hence relay log recovery cannot
 # happen.
 ###############################################################################
-# If replicate-same-serverid is used log-slave-updates cannot be set and gtid
-# mode will not work. Hence disabling the test script in gtid mode.
---source include/not_gtid_enabled.inc
 --source include/force_restart.inc
+--source include/not_group_replication_plugin.inc
+# Test requires master-info-repository=TABLE, relay-log-info-repository=TABLE
+--source include/have_slave_repository_type_table.inc
+--source include/not_rpl_gtid_only.inc
 --source include/master-slave.inc
 
 --source include/rpl_connection_slave.inc
-call mtr.add_suppression("Failed to initialize the master info structure");
+call mtr.add_suppression("Failed to initialize the connection metadata structure");
 call mtr.add_suppression("Error during --relay-log-recovery *");
 CREATE TABLE t1 ( n INT);
 RESET MASTER;
@@ -54,7 +55,7 @@ RESET MASTER;
 --source include/stop_slave.inc
 --source include/wait_for_slave_to_stop.inc
 --replace_result $SLAVE_MYPORT SLAVE_PORT
-eval CHANGE MASTER TO MASTER_PORT=$SLAVE_MYPORT;
+eval CHANGE REPLICATION SOURCE TO SOURCE_PORT=$SLAVE_MYPORT;
 START SLAVE IO_THREAD;
 --source include/wait_for_slave_io_to_start.inc
 
@@ -63,22 +64,23 @@ START SLAVE IO_THREAD;
 --source include/rpl_stop_server.inc
 
 --let $rpl_server_number= 2
---let $rpl_server_parameters=--skip_slave_start=FALSE --master-info-repository=TABLE --relay-log-info-repository=TABLE --relay-log-recovery=1
+--let $rpl_server_parameters=--skip_replica_start=FALSE --relay-log-recovery=1
 --source include/rpl_start_server.inc
 
---replace_regex /[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]+/--TIME--/
---let GREP_FILE=$MYSQLTEST_VARDIR/tmp/slave.err
---let GREP_PATTERN=Error during --relay-log-recovery
---source extra/rpl_tests/grep_pattern.inc
+--let $assert_text= One error should match 'Error during --relay-log-recovery'
+--let $assert_file= $MYSQLTEST_VARDIR/tmp/slave.err
+--let $assert_select= Error during --relay-log-recovery
+--let $assert_count= 1
+--source include/assert_grep.inc
 
 # Clean up Server needs to be restarted with relay-log-recovery=0
 --let $rpl_server_number= 2
---let $rpl_server_parameters=--master-info-repository=TABLE --relay-log-info-repository=TABLE --relay-log-recovery=0
+--let $rpl_server_parameters=--relay-log-recovery=0
 --source include/rpl_restart_server.inc
 
 DROP TABLE t1;
 --replace_result $MASTER_MYPORT MASTER_PORT
-eval change master to master_port=$MASTER_MYPORT;
+eval CHANGE REPLICATION SOURCE to SOURCE_PORT=$MASTER_MYPORT;
 --source include/start_slave.inc
 
 --source include/rpl_end.inc

@@ -1,0 +1,214 @@
+--source include/have_debug.inc
+--source include/master-slave.inc
+--source include/have_grep.inc
+
+--echo # Create a table with functional index
+CREATE TABLE t1 (col1 INT, INDEX ((ABS(col1))));
+INSERT INTO t1 VALUES (-12);
+
+--echo # Show the hidden columns so we can see the computed value.
+SET SESSION debug="+d,show_hidden_columns";
+SELECT * FROM t1;
+SET SESSION debug="-d,show_hidden_columns";
+
+--echo # Sync slave with master, and verify that the table exists on the slave.
+--source include/sync_slave_sql_with_master.inc
+
+--echo # Show the hidden columns so we can see that the computed value is
+--echo # reflected on the slave.
+SET SESSION debug="+d,show_hidden_columns";
+SELECT * FROM t1;
+SET SESSION debug="-d,show_hidden_columns";
+
+EXPLAIN SELECT col1 FROM t1 WHERE ABS(col1) = 12;
+
+SET SESSION debug="+d,show_hidden_columns";
+SHOW CREATE TABLE t1;
+SET SESSION debug="-d,show_hidden_columns";
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+
+SET @start_row_image_value= @@session.binlog_row_image;
+
+--echo # Try with various row_image values
+SET @@session.binlog_row_image= MINIMAL;
+CREATE TABLE t1 (col1 INT, INDEX ((ABS(col1))));
+INSERT INTO t1 VALUES (-12);
+--source include/sync_slave_sql_with_master.inc
+
+--echo # Show the hidden columns so we can see that the computed value is
+--echo # reflected on the slave.
+SET SESSION debug="+d,show_hidden_columns";
+SELECT * FROM t1;
+EXPLAIN SELECT col1 FROM t1 WHERE ABS(col1) = 12;
+SHOW CREATE TABLE t1;
+SET SESSION debug="-d,show_hidden_columns";
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+
+
+SET @@session.binlog_row_image= noblob;
+CREATE TABLE t1 (col1 INT, INDEX ((ABS(col1))));
+INSERT INTO t1 VALUES (-12);
+--source include/sync_slave_sql_with_master.inc
+
+--echo # Show the hidden columns so we can see that the computed value is
+--echo # reflected on the slave.
+SET SESSION debug="+d,show_hidden_columns";
+SELECT * FROM t1;
+EXPLAIN SELECT col1 FROM t1 WHERE ABS(col1) = 12;
+SHOW CREATE TABLE t1;
+SET SESSION debug="-d,show_hidden_columns";
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+
+SET @@session.binlog_row_image= @start_row_image_value;
+
+--echo #
+--echo # Bug#28207118 UNIQUE FUNCTIONAL INDEX IS NOT CORRECTLY BEING CONSIDERED
+--echo #              ON SLAVE.
+--echo #
+CREATE TABLE t1 (col1 INT, UNIQUE INDEX idx ((col1 + col1)));
+
+--source include/sync_slave_sql_with_master.inc
+INSERT INTO t1 (col1) VALUES (1);
+
+--source include/rpl_connection_master.inc
+call mtr.add_suppression("Replica SQL for channel '': .*Could not execute Write_rows event on table test.t1");
+call mtr.add_suppression("Replica SQL for channel '': .*Error 'Duplicate entry '2'");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+INSERT INTO t1 (col1) VALUES (1), (2);
+
+--source include/rpl_connection_slave.inc
+--let $slave_sql_errno = convert_error(ER_DUP_ENTRY)
+--let $slave_timeout = 5
+--source include/wait_for_slave_sql_error.inc
+DELETE FROM t1;
+START SLAVE;
+
+--source include/rpl_connection_master.inc
+INSERT INTO t1 (col1) VALUES (3), (4);
+SELECT col1 FROM t1;
+
+--source include/sync_slave_sql_with_master.inc
+SELECT col1 FROM t1;
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#28218073 SLAVE CRASHES WHEN AN UPDATE ON SLAVE REFERS TO COLUMN
+--echo #              USED IN FUNCTIONAL INDEX.
+--echo #
+CREATE TABLE t(a INT, b INT, UNIQUE INDEX c ((a + b)));
+INSERT INTO t VALUES (1, 2);
+INSERT INTO t VALUES (2, 3);
+INSERT INTO t VALUES (3, 4);
+
+--source include/sync_slave_sql_with_master.inc
+SELECT a, b FROM t;
+--error ER_DUP_ENTRY
+UPDATE t SET b = 5 WHERE b - a = 1;
+SELECT a, b FROM t;
+
+--source include/rpl_connection_master.inc
+DROP TABLE t;
+
+--echo #
+--echo # Bug#28218481 UPDATE TABLE ON SLAVE DOESN'T UPDATE WHEN FUNCTIONAL INDEX
+--echo #              MATCH EXPR IN WHERE.
+--echo #
+CREATE TABLE t (a INT, b INT, INDEX c ((a + b)));
+INSERT INTO t VALUES (3, 5);
+INSERT INTO t VALUES (1, 2);
+INSERT INTO t VALUES (2, 7);
+SELECT a, b FROM t;
+UPDATE t SET a = 4 WHERE a + b = 3;
+SELECT a, b FROM t;
+
+--source include/sync_slave_sql_with_master.inc
+SELECT a, b FROM t;
+UPDATE t SET a = 9 WHERE a + b = 8;
+SELECT a, b FROM t;
+
+--source include/rpl_connection_master.inc
+DROP TABLE t;
+
+--echo #
+--echo # Bug#28243453 ASSERTION`MAP->BITMAP&&MAP2->BITMAP&&MAP->N_BITS==MAP2->
+--echo #              N_BITS' FAILED ON SLAVE
+--echo #
+CREATE TABLE t(a INT, b INT);
+
+--source include/sync_slave_sql_with_master.inc
+ALTER TABLE t ADD UNIQUE INDEX i ((a + b));
+
+--source include/rpl_connection_master.inc
+INSERT INTO t VALUES (1, 2);
+
+--source include/sync_slave_sql_with_master.inc
+SELECT a, b FROM t;
+
+--source include/rpl_connection_master.inc
+DROP TABLE t;
+
+--echo #
+--echo # Bug#29317684 REPLICATION IS SENSITIVE TO ORDER OF HIDDEN COLUMNS FOR
+--echo #              FUNCTIONAL INDEXES
+--echo #
+--echo # What we want to see here, is that the order of the columns (both
+--echo # hidden and visible) are the same on master and slave, even though
+--echo # the columns are created in different order.
+--echo #
+--echo # Note that this bug is only visible with row-based replication.
+SET @@session.sql_log_bin = 0;
+CREATE TABLE t (a INT, INDEX ((a+1)));
+ALTER TABLE t ADD COLUMN b INT;
+SET @@session.sql_log_bin = 1;
+--source include/rpl_connection_slave.inc
+SET @@session.sql_log_bin = 0;
+CREATE TABLE t (a INT, b INT, INDEX ((a+1)));
+SET @@session.sql_log_bin = 1;
+--source include/rpl_connection_master.inc
+INSERT INTO t VALUES (1, 2);
+
+--source include/sync_slave_sql_with_master.inc
+
+--let diff_tables= master:test.t,slave:test.t
+--source include/diff_tables.inc
+
+--source include/rpl_connection_master.inc
+DROP TABLE t;
+
+--echo #
+--echo # Bug#107366 REPLICATION ERROR WITH HASH_SCAN ROW SEARCH ALGORITHM FOR
+--echo #            FUNCTIONAL INDEXES
+
+--source include/rpl_connection_master.inc
+
+CREATE TABLE t1 (
+  id INT,
+  c1 JSON NOT NULL,
+  c2 INT,
+  KEY comp ((CAST(c1 AS UNSIGNED ARRAY)))
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES(1,'[1046, 2995]',1);
+
+UPDATE t1 SET c2=2;
+
+--source include/sync_slave_sql_with_master.inc
+
+--let $row_count= `SELECT COUNT(*) FROM t1 WHERE c1->"$[0]"=1046 AND c1->"$[1]"=2995 AND c2=2;`
+--let $assert_text= Table t1 was updated
+--let $assert_cond= $row_count = 1
+--source include/assert.inc
+
+--source include/rpl_connection_master.inc
+
+DROP TABLE t1;
+
+--source include/rpl_end.inc

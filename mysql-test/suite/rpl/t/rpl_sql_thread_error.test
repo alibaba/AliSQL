@@ -29,7 +29,7 @@
 --source include/rpl_connection_slave.inc
 CALL mtr.add_suppression("Relay log read failure");
 SET @save_debug=@@GLOBAL.debug;
-SET GLOBAL debug="d,force_sql_thread_error";
+SET GLOBAL debug="+d,force_sql_thread_error";
 
 # Start SQL thread
 START SLAVE SQL_THREAD;
@@ -37,6 +37,7 @@ START SLAVE SQL_THREAD;
 # Step 2) Wait for SQL thread to go down with the injected error.
 # Before fix, SQL thread would not have released
 # relay_log.log_lock.
+--let $slave_sql_errno= convert_error(ER_REPLICA_RELAY_LOG_READ_FAILURE)
 --source include/wait_for_slave_sql_to_stop.inc
 
 # Step 3) Before fix, when SQL thread is trying to acquire

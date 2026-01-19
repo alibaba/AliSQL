@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -103,7 +111,7 @@ public class MultithreadedTest extends AbstractClusterJModelTest {
         for (int i = 0; i < numberToCreate; ++i) {
             Customer customer = session.newInstance(Customer.class);
             customer.setId(i);
-            customer.setName("Customer number " + i);
+            customer.setName("Customer number " + i + " (initial)");
             customer.setMagic(i * 100);
             customers.add(customer);
         }
@@ -167,14 +175,20 @@ public class MultithreadedTest extends AbstractClusterJModelTest {
         Query<OrderLine> query = session.createQuery(queryOrderType);        
         for (Order order: orders) {
             int orderId = order.getId();
+            if (getDebug()) System.out.println("Read order " + orderId + " total " + order.getValue());
             // replace order with its persistent representation
             order = session.find(Order.class, orderId);
             double expectedTotal = order.getValue();
             double actualTotal = 0.0d;
+            List<OrderLine> orderLines = new ArrayList<OrderLine>();
             for (OrderLine orderLine: getOrderLines(session, query, orderId)) {
+                orderLines.add(orderLine);
+                if (getDebug()) System.out.println("order " + orderLine.getOrderId() +
+                        " orderline " + orderLine.getId() + " value " + orderLine.getTotalValue());
                 actualTotal += orderLine.getTotalValue();
             }
-            errorIfNotEqual("For order " + orderId + ", order value does not equal sum of order line values.",
+            errorIfNotEqual("For order " + orderId + ", order value does not equal sum of order line values."
+                    + " orderLines: " + dump(orderLines),
                     expectedTotal, actualTotal);
         }
         failOnError();
@@ -253,6 +267,8 @@ public class MultithreadedTest extends AbstractClusterJModelTest {
         Double orderValue = 0.0d;
         // now create some order lines
         int numberOfOrderLines = random.nextInt(maximumOrderLinesPerOrder);
+        if (getDebug()) System.out.println("Create Order " + orderid
+                + " with numberOfOrderLines: " + numberOfOrderLines);
         for (int i = 0; i < numberOfOrderLines; ++i) {
             int orderLineNumber = getNextOrderLineId();
             OrderLine orderLine = session.newInstance(OrderLine.class);
@@ -264,8 +280,9 @@ public class MultithreadedTest extends AbstractClusterJModelTest {
             orderLine.setUnitPrice(unitPrice);
             double orderLineValue = unitPrice * quantity;
             orderValue += orderLineValue;
-            if (getDebug()) System.out.println("For order " + orderid + " orderline " + orderLineNumber + 
-                    " order line value " + orderLineValue + " order value " + orderValue);
+            if (getDebug()) System.out.println("Create orderline " + orderLineNumber + " for Order " + orderid
+                    + " quantity " + quantity + " price " + unitPrice
+                    + " order line value " + orderLineValue + " order value " + orderValue);
             orderLine.setTotalValue(orderLineValue);
             addOrderLine(orderLine);
             session.persist(orderLine);
@@ -367,9 +384,9 @@ public class MultithreadedTest extends AbstractClusterJModelTest {
             if (numberOfOrders < 10) {
                 return null;
             }
-            int orderId = random.nextInt(numberOfOrders);
+            int which = random.nextInt(numberOfOrders);
             ++numberOfDeletedOrders;
-            return orders.remove(orderId);
+            return orders.remove(which);
         }
     }
 
@@ -394,7 +411,8 @@ public class MultithreadedTest extends AbstractClusterJModelTest {
      */
     private int getNextCustomerId() {
         synchronized(customers) {
-            return nextCustomerId++;
+            int result = nextCustomerId++;
+            return result;
         }
     }
     
@@ -403,7 +421,8 @@ public class MultithreadedTest extends AbstractClusterJModelTest {
      */
     private int getNextOrderId() {
         synchronized(orders) {
-            return nextOrderId++;
+            int result = nextOrderId++;
+            return result;
         }
     }
 
@@ -412,7 +431,8 @@ public class MultithreadedTest extends AbstractClusterJModelTest {
      */
     private int getNextOrderLineId() {
         synchronized(orderlines) {
-            return nextOrderLineId++;
+            int result = nextOrderLineId++;
+            return result;
         }
     }
     

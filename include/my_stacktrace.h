@@ -1,65 +1,63 @@
-/* Copyright (c) 2001, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#ifndef _my_stacktrace_h_
-#define _my_stacktrace_h_
+#ifndef MY_STACKTRACE_INCLUDED
+#define MY_STACKTRACE_INCLUDED
 
-#include <my_global.h>
+/**
+  @file include/my_stacktrace.h
+*/
 
-#ifdef TARGET_OS_LINUX
-#if defined (__x86_64__) || defined (__i386__) || \
-    (defined(__alpha__) && defined(__GNUC__))
+#include <stddef.h>
+#include <sys/types.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+#include "my_compiler.h"
+#include "my_config.h"
+#include "my_inttypes.h"
+#include "my_macros.h"
+
+/*
+  HAVE_BACKTRACE - Linux, FreeBSD, OSX, Solaris
+  _WIN32 - Windows
+  HAVE_EXT_BACKTRACE - Unixes without backtrace(3)
+*/
+#if defined(HAVE_BACKTRACE) || defined(_WIN32) || defined(HAVE_EXT_BACKTRACE)
 #define HAVE_STACKTRACE 1
-#endif
-#elif defined(__WIN__) || defined(HAVE_PRINTSTACK)
-#define HAVE_STACKTRACE 1
-#endif
-
-#if HAVE_BACKTRACE && (HAVE_BACKTRACE_SYMBOLS || HAVE_BACKTRACE_SYMBOLS_FD)
-#undef HAVE_STACKTRACE
-#define HAVE_STACKTRACE 1
-#endif
-
-#define HAVE_WRITE_CORE
-
-#if HAVE_BACKTRACE && HAVE_BACKTRACE_SYMBOLS && \
-    HAVE_CXXABI_H && HAVE_ABI_CXA_DEMANGLE && \
-    HAVE_WEAK_SYMBOL
-#define BACKTRACE_DEMANGLE 1
-#endif
-
-C_MODE_START
-
-#if defined(HAVE_STACKTRACE) || defined(HAVE_BACKTRACE)
 void my_init_stacktrace();
-void my_print_stacktrace(uchar* stack_bottom, ulong thread_stack);
-void my_safe_print_str(const char* val, int max_len);
-void my_write_core(int sig);
-#if BACKTRACE_DEMANGLE
-char *my_demangle(const char *mangled_name, int *status);
-#endif
-#ifdef __WIN__
+void my_print_stacktrace(const uchar *stack_bottom, ulong thread_stack);
+void my_safe_puts_stderr(const char *val, size_t max_len);
+
+#ifdef _WIN32
 void my_set_exception_pointers(EXCEPTION_POINTERS *ep);
+void my_create_minidump(const char *name, HANDLE process, DWORD pid);
 #endif
-#endif
+#endif /* HAVE_BACKTRACE || _WIN32 || HAVE_EXT_BACKTRACE */
 
-#ifdef HAVE_WRITE_CORE
 void my_write_core(int sig);
-#endif
-
-
 
 /**
   Async-signal-safe utility functions used by signal handler routines.
@@ -100,8 +98,8 @@ char *my_safe_utoa(int base, ulonglong val, char *buf);
   Does not support any width/precision.
   Implemented with simplicity, and async-signal-safety in mind.
 */
-size_t my_safe_snprintf(char* to, size_t n, const char* fmt, ...)
-  ATTRIBUTE_FORMAT(printf, 3, 4);
+size_t my_safe_snprintf(char *to, size_t n, const char *fmt, ...)
+    MY_ATTRIBUTE((format(printf, 3, 4)));
 
 /**
   A (very) limited version of snprintf, which writes the result to STDERR.
@@ -110,8 +108,8 @@ size_t my_safe_snprintf(char* to, size_t n, const char* fmt, ...)
   @note Has an internal buffer capacity of 512 bytes,
   which should suffice for our signal handling routines.
 */
-size_t my_safe_printf_stderr(const char* fmt, ...)
-  ATTRIBUTE_FORMAT(printf, 1, 2);
+size_t my_safe_printf_stderr(const char *fmt, ...)
+    MY_ATTRIBUTE((format(printf, 1, 2)));
 
 /**
   Writes up to count bytes from buffer to STDERR.
@@ -122,6 +120,9 @@ size_t my_safe_printf_stderr(const char* fmt, ...)
 */
 size_t my_write_stderr(const void *buf, size_t count);
 
-C_MODE_END
+/**
+  Writes system time to STDERR without allocating new memory.
+*/
+void my_safe_print_system_time();
 
-#endif /* _my_stacktrace_h_ */
+#endif  // MY_STACKTRACE_INCLUDED

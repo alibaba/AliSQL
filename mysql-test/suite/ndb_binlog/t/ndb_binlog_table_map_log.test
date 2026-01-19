@@ -1,0 +1,125 @@
+--source include/have_debug.inc
+--source include/have_ndb.inc
+--source include/have_multi_ndb.inc
+
+# The "last_epoch" counter need to be reset after test to support --repeat
+--source include/force_restart.inc
+
+--echo ######################################################################
+--echo # Bug#35199996 table map entry for certain table were logged in to the
+--echo # binlogs even though the log_replica_updates is disabled
+--echo ######################################################################
+#
+# Before a Table_map event is injected in the Binlog, there are some
+# checks that need to be performed. One of these relies on a filtered
+# any-value, which is calculated from the accumulation of the
+# any-value on every event for a given table. The unfiltered value can
+# contain an indication that a change is not to be logged (no logging
+# bit) or that it comes from a replica (non zero server id).
+#
+# This test makes the Binlog injector to run a self-test functionality
+# that essentially creates a transaction against a NDB table, setting
+# up specific any-values. These any-values range from no logging bits
+# to server ids (mimicking replicas) that are inversed from one
+# another. Then it exports the generated Binlog, deletes the data and
+# imports once again.
+
+CREATE TABLE test_log_table_maps (id INT PRIMARY KEY, what VARCHAR(128)) ENGINE = NDB;
+SET @save_debug= @@GLOBAL.debug;
+SET @@GLOBAL.debug="+d,ndb_binlog_log_table_maps";
+
+# Wait for dbug_log_table_maps to complete writing data to the table
+--let $ROWS = 16
+while (`SELECT COUNT(*) < $ROWS FROM test_log_table_maps`) {
+  sleep 0.1;
+}
+
+SET @@GLOBAL.debug= @save_debug;
+
+# Make sure we have logged everything up to date
+--save_master_pos
+
+--echo # Show data written
+SELECT * FROM test_log_table_maps ORDER BY id;
+
+--source include/show_binlog_events.inc
+
+--echo # Verify server1 Binlog changes
+--echo # Some rows are not logged because no-logging bit was set
+--let $table_name= test_log_table_maps
+--let $order_by= id
+--source ndb_binlog_verify_table.inc
+
+--echo [connection server2]
+--connection server2
+# Make sure we have logged everything up to date
+--save_master_pos
+--source include/show_binlog_events.inc
+
+--echo # Verify server2 Binlog changes
+--echo # Additional rows are not logged because server2 does NOT log replica updates
+--let $table_name= test_log_table_maps
+--let $order_by= id
+--source ndb_binlog_verify_table.inc
+
+--echo [connection server1]
+--connection server1
+DROP TABLE test_log_table_maps;
+
+
+--echo ######################################################################
+--echo # Bug#37953883  table map entry is logged in binlog for create table
+--echo # statements when sql_log_bin is disabled for the session.
+--echo ######################################################################
+
+# The Table_map event is only injected in the Binlog if the table had
+# any changes to be logged. This is seen from the any-value carried on
+# the data signal from SUMA. But while some changes in the table
+# result from more than 1 NdbOperation, the multiple any-values are
+# merged in the NdbApi and can be filtered. In the Ndb plugin this
+# filtering concludes, from the any-value carried, that the changes
+# can be: a replica applied update or NOT, or the no-logging flag was
+# set prior to the statement or NOT. Statements that include BLOB (and
+# the like) columns, result in subsequent NdbOperations to handle the
+# BLOBs (reads/writes/deletes) and these operations must include the
+# same any-value as the main NdbOperation of the statement.
+
+# This test sets a DBUG flag that turns on verification of Table_map
+# events without table updates to be logged (sql_log_bin=0) to assess
+# that no Table_map event must exist if there are no table
+# updates. This is specially important for subsequent operations, such
+# as BLOBs.
+
+--echo [connection server2]
+--connection server2
+SET sql_log_bin=0;
+SET @save_debug= @@GLOBAL.debug;
+SET @@GLOBAL.debug="+d,ndb_binlog_verify_table_maps";
+
+CREATE TABLE test_blob_log_table_maps (id INT PRIMARY KEY, b BLOB, lb LONGBLOB, lt LONGTEXT) ENGINE = NDB;
+
+INSERT INTO test_blob_log_table_maps VALUES (1, repeat("!", 512), repeat("@", 512), repeat("#", 512)),
+                                            (2, repeat("!", 512), repeat("$", 512), repeat("&", 512)),
+                                            (3, repeat("!", 512), repeat("%", 512), repeat("^", 512)),
+                                            (4, repeat("!", 512), repeat("*", 512), repeat("~", 512));
+--save_master_pos
+--echo # Should not abort
+
+SELECT id FROM test_blob_log_table_maps ORDER by id;
+
+UPDATE test_blob_log_table_maps
+SET lb = repeat("+", 256), lt = repeat("-", 128)
+WHERE id BETWEEN 1 and 4;
+--save_master_pos
+
+SELECT COUNT(lb), COUNT(lt) FROM test_blob_log_table_maps;
+
+DELETE FROM test_blob_log_table_maps;
+--save_master_pos
+
+SELECT COUNT(*) FROM test_blob_log_table_maps;
+
+--echo # Cleanup
+SET @@GLOBAL.debug = @save_debug;
+SET sql_log_bin=1;
+DROP TABLE test_blob_log_table_maps;

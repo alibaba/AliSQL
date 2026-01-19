@@ -1,0 +1,31 @@
+# name: test/sql/copy/csv/test_replacement_scan_alias.test
+# description: Test replacement scan aliases
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# implicit alias is equal to the file name
+
+statement ok
+select * from 'data/csv/test/dateformat.csv';
+
+statement ok
+select * from 'data/csv/test/dateformat.csv', 'data/csv/test/dateformat_2.csv';
+
+# explicit alias
+statement ok
+select mytbl.column0 from 'data/csv/test/dateformat.csv'mytbl;
+
+statement ok
+select mytbl.mycol from 'data/csv/test/dateformat.csv' mytbl(mycol);
+
+require parquet
+
+statement ok
+select blob.ids from 'data/parquet-testing/blob.parquet'
+
+require json
+
+statement ok
+select example_n.id from 'data/json/example_n.ndjson'

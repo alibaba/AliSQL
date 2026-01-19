@@ -1,10 +1,10 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
-CALL mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+CALL mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 ==== Case 1: Killed query on master -> error on slave ====
 include/assert.inc [Test only works if binlog_format is statement]
 [connection master]
@@ -28,6 +28,8 @@ KILL QUERY <CONNECTION_ID>;
 [connection master]
 ERROR 70100: Query execution was interrupted
 SET @@GLOBAL.BINLOG_FORMAT = 'STATEMENT';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 include/assert.inc [At most one row should be inserted in db1.t1]
 include/assert.inc [At least one row should be inserted in db1.trigger_table]
 SET SQL_LOG_BIN=0;
@@ -39,12 +41,14 @@ DROP DATABASE db1;
 USE test;
 ---- Verify there is an error on slave ----
 include/sync_slave_io_with_master.inc
-include/wait_for_slave_sql_error.inc [errno=1317 # ER_QUERY_INTERRUPTED]
+include/wait_for_slave_sql_error.inc [errno=3001]
 ---- Verify that nothing was inserted on slave -----
 include/assert.inc [Nothing should be inserted on slave]
 ---- Clean up ----
 include/stop_slave_io.inc
 RESET SLAVE;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
 RESET MASTER;
 DROP DATABASE db1;
 [connection master]
@@ -75,6 +79,8 @@ KILL QUERY <CONNECTION_ID>;
 [connection master]
 ERROR 70100: Query execution was interrupted
 SET @@GLOBAL.BINLOG_FORMAT = 'STATEMENT';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 include/assert.inc [At most one row should be inserted in ignored_db.t1]
 include/assert.inc [At least one row should be inserted in ignored_db.trigger_table]
 SET SQL_LOG_BIN=0;
@@ -110,6 +116,8 @@ KILL QUERY <CONNECTION_ID>;
 [connection master]
 ERROR 70100: Query execution was interrupted
 SET @@GLOBAL.BINLOG_FORMAT = 'STATEMENT';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 include/assert.inc [At most one row should be inserted in db1.ignored_table]
 include/assert.inc [At least one row should be inserted in db1.trigger_table]
 SET SQL_LOG_BIN=0;

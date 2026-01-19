@@ -1,0 +1,388 @@
+--echo #
+--echo # WL#16949: A mysql command line option to disable all built-in commands
+--echo #
+
+--echo # FR1: --commands boolean option added
+--exec $MYSQL --commands -e "SELECT 1"
+--exec $MYSQL --disable-commands -e "SELECT 2"
+--exec $MYSQL --skip-commands -e "SELECT 3"
+--exec $MYSQL --enable-commands -e "SELECT 4"
+--exec $MYSQL --commands=0 -e "SELECT 5"
+--exec $MYSQL --commands=1 -e "SELECT 6"
+
+--echo # FR1.1: check the default value of --commands
+
+--write_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1.sql
+help;
+EOF
+--echo # test: must not fail
+--exec $MYSQL < $MYSQLTEST_VARDIR/tmp/wl16949_fr1.sql > $MYSQLTEST_VARDIR/tmp/wl16949_fr1.out 2>&1
+--remove_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1.out
+
+--exec $MYSQL --help > $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out 2>&1
+--let $assert_text=FR1.1: checking the default --commands value
+--let $assert_file=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out
+--let $assert_select=^commands[\\ \\t]*TRUE\$
+--let $assert_count=1
+--source include/assert_grep.inc
+--remove_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out
+
+--exec $MYSQL --commands=0 --help > $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out 2>&1
+--let $assert_text=FR1.1: checking the updated --commands value
+--let $assert_file=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out
+--let $assert_select=^commands[\\ \\t]*FALSE\$
+--let $assert_count=1
+--source include/assert_grep.inc
+--remove_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out
+
+--echo # FR1.2.1: help short disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_help_short.sql
+--write_file $filename
+\?
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.2: clear disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_clear.sql
+--write_file $filename
+clear;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.3: connect disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_connect.sql
+--write_file $filename
+connect;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.4: delimier enabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_delimier.sql
+--write_file $filename
+delimiter ;
+EOF
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.5: edit disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_edit.sql
+--write_file $filename
+edit;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.6: ego disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_ego.sql
+--write_file $filename
+SELECT 1\G
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.7: exit disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_exit.sql
+--write_file $filename
+SELECT 1;
+exit;
+SELECT 2;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.8: go enabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_go.sql
+--write_file $filename
+SELECT 1
+go;
+EOF
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.9: help disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_help.sql
+--write_file $filename
+help;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.10: nopager disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_nopager.sql
+--write_file $filename
+nopager;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.11: notee disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_notee.sql
+--write_file $filename
+notee;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.12: pager disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_pager.sql
+--write_file $filename
+pager more;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.13: print disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_print.sql
+--write_file $filename
+print;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.14: prompt disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_prompt.sql
+--write_file $filename
+prompt foo;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.15: quit disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_quit.sql
+--write_file $filename
+quit;
+SELECT 2;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.16: rehash disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_rehash.sql
+--write_file $filename
+rehash;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.17: source disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_source.sql
+--write_file $filename
+source gogo.text;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.18: status disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_status.sql
+--write_file $filename
+status;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.19: system disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_system.sql
+--write_file $filename
+system echo;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.20: tee disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_tee.sql
+--write_file $filename
+tee foo;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.21: use disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_use.sql
+--write_file $filename
+\u test;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.22: charset disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_charset.sql
+--write_file $filename
+charset latin1;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.22.1: \c enabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_uscore_c.sql
+--write_file $filename
+\C latin1;
+EOF
+--exec $MYSQL < $filename 2>$filename.2
+--remove_file $filename
+--remove_file $filename.2
+
+
+--echo # FR1.2.23: warnings disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_warnings.sql
+--write_file $filename
+warnings;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.24: nowarning disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_nowarning.sql
+--write_file $filename
+nowarning;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.25: resetconnection disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_resetconnection.sql
+--write_file $filename
+resetconnection;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.26: query_attributes disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_query_attributes.sql
+--write_file $filename
+query_attributes a b;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.2.27: ssl_session_data_print disabled
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_2_ssl_session_data_print.sql
+--write_file $filename
+ssl_session_data_print foo;
+EOF
+--error 1
+--exec $MYSQL --commands=0 < $filename 2>&1
+--remove_file $filename
+
+
+--echo # FR1.3: system-command ignored when commands=off
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_3.sql
+--write_file $filename
+system cd foo;
+EOF
+--echo # must fail with syntax error
+--error 1
+--exec $MYSQL --commands=0 --system-command=1 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.3: system-command ignored when commands=off in reverse
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_3_reverse.sql
+--write_file $filename
+system cd foo;
+EOF
+--echo # must fail with syntax error
+--error 1
+--exec $MYSQL --system-command=1 --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.4: resetconnection enabled when commands is ON
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_4_resetconnection.sql
+--write_file $filename
+resetconnection;
+EOF
+--exec $MYSQL --commands=1 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.5: system-command=off in effect when commands=on
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_5.sql
+--write_file $filename
+system echo foo;
+EOF
+--echo # must fail with specific error
+--error 1
+--exec $MYSQL --commands=1 --system-command=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.5: system-command=off in effect when commands=on in reverse
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_5_reverse.sql
+--write_file $filename
+system echo foo;
+EOF
+--echo # must fail with specific error
+--error 1
+--exec $MYSQL --system-command=0 --commands=1 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.6: commands in .cnf files work
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_6.cnf
+--write_file $filename
+[mysql]
+commands=1
+EOF
+--exec $EXE_MYSQL --defaults-file=$filename --help > $filename.out 2>&1
+--let $assert_text=FR1.1: the --commands value must be true
+--let $assert_file=$filename.out
+--let $assert_select=^commands[\\ \\t]*TRUE\$
+--let $assert_count=1
+--source include/assert_grep.inc
+--remove_file $filename.out
+--remove_file $filename
+
+--echo # FR1.7: --binary-mode=1 overrides --commands
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_7.sql
+--write_file $filename
+system echo foo;
+EOF
+--echo # must fail with a syntax error
+--error 1
+--exec $MYSQL --commands=1 --binary-mode=1 < $filename 2>&1
+--remove_file $filename
+
+--echo trying in reverse
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_7_reverse.sql
+--write_file $filename
+system echo foo;
+EOF
+--echo # must fail with a syntax error
+--error 1
+--exec $MYSQL --binary-mode=1 --commands=1 < $filename 2>&1
+--remove_file $filename
+
+--echo # FR1.8: --binary-mode=0 enables --commands
+--let $filename=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_8.sql
+--write_file $filename
+system echo foo;
+EOF
+--echo # must fail with a syntax error
+--error 1
+--exec $MYSQL --binary-mode=0 --commands=0 < $filename 2>&1
+--remove_file $filename
+
+--echo # End of tests

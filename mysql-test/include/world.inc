@@ -4,7 +4,7 @@
 
 # Table Country
 
-INSERT INTO Country VALUES
+INSERT INTO country VALUES
 ('AFG','Afghanistan',652090.00,22720000,1),
 ('NLD','Netherlands',41526.00,15864000,5),
 ('ANT','Netherlands Antilles',800.00,217000,33),
@@ -154,7 +154,7 @@ INSERT INTO Country VALUES
 ('NIU','Niue',260.00,2000,2805),
 ('NFK','Norfolk Island',36.00,2000,2806),
 ('NOR','Norway',323877.00,4478500,2807),
-('CIV','Côte dIvoire',322463.00,14786000,2814),
+('CIV','Côte d’Ivoire',322463.00,14786000,2814),
 ('OMN','Oman',309500.00,2542000,2821),
 ('PAK','Pakistan',796095.00,156483000,2831),
 ('PLW','Palau',459.00,19000,2881),
@@ -247,7 +247,7 @@ INSERT INTO Country VALUES
 
 # Table City
 
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (1,'Kabul','AFG',1780000),
 (2,'Qandahar','AFG',237500),
 (3,'Herat','AFG',186800),
@@ -448,7 +448,7 @@ INSERT INTO City VALUES
 (198,'Sucre','BOL',178426),
 (199,'Potosí','BOL',140642),
 (200,'Tarija','BOL',125255);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (201,'Sarajevo','BIH',360000),
 (202,'Banja Luka','BIH',143079),
 (203,'Zenica','BIH',96027),
@@ -649,7 +649,7 @@ INSERT INTO City VALUES
 (398,'Franco da Rocha','BRA',108964),
 (399,'Teixeira de Freitas','BRA',108441),
 (400,'Varginha','BRA',108314);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (401,'Ribeirão Pires','BRA',108121),
 (402,'Sabará','BRA',107781),
 (403,'Catanduva','BRA',107761),
@@ -797,7 +797,7 @@ INSERT INTO City VALUES
 (545,'Pleven','BGR',121952),
 (546,'Sliven','BGR',105530),
 (547,'Dobric','BGR',100399),
-(548,'umen','BGR',94686),
+(548,'Šumen','BGR',94686),
 (549,'Ouagadougou','BFA',824000),
 (550,'Bobo-Dioulasso','BFA',300000),
 (551,'Koudougou','BFA',105000),
@@ -850,7 +850,7 @@ INSERT INTO City VALUES
 (598,'Portoviejo','ECU',176413),
 (599,'Ambato','ECU',169612),
 (600,'Manta','ECU',164739);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (601,'Duran [Eloy Alfaro]','ECU',152514),
 (602,'Ibarra','ECU',130643),
 (603,'Quevedo','ECU',129631),
@@ -1051,7 +1051,7 @@ INSERT INTO City VALUES
 (798,'Cainta','PHL',242511),
 (799,'San Pedro','PHL',231403),
   (800,'Navotas','PHL',230403);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (801,'Cabanatuan','PHL',222859),
 (802,'San Fernando','PHL',221857),
 (803,'Lipa','PHL',218447),
@@ -1252,7 +1252,7 @@ INSERT INTO City VALUES
 (998,'Ciparay','IDN',111500),
 (999,'Lhokseumawe','IDN',109600),
 (1000,'Taman','IDN',107000);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (1001,'Depok','IDN',106800),
 (1002,'Citeureup','IDN',105100),
 (1003,'Pemalang','IDN',103500),
@@ -1453,7 +1453,7 @@ INSERT INTO City VALUES
 (1198,'Aizawl','IND',155240),
 (1199,'Uluberia','IND',155172),
 (1200,'Katihar','IND',154367);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (1201,'Cuddalore','IND',153086),
 (1202,'Hugli-Chinsurah','IND',151806),
 (1203,'Dhanbad','IND',151789),
@@ -1654,7 +1654,7 @@ INSERT INTO City VALUES
 (1398,'Zanjan','IRN',286295),
 (1399,'Sanandaj','IRN',277808),
 (1400,'Bandar-e-Abbas','IRN',273578);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (1401,'Khorramabad','IRN',272815),
 (1402,'Eslamshahr','IRN',265450),
 (1403,'Borujerd','IRN',217804),
@@ -1855,7 +1855,7 @@ INSERT INTO City VALUES
 (1598,'Aomori','JPN',295969),
 (1599,'Hakodate','JPN',294788),
 (1600,'Akashi','JPN',292253);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (1601,'Yokkaichi','JPN',288173),
 (1602,'Fukushima','JPN',287525),
 (1603,'Morioka','JPN',287353),
@@ -2049,14 +2049,14 @@ INSERT INTO City VALUES
 (1791,'Flying Fish Cove','CXR',700),
 (1792,'Beograd','YUG',1204000),
 (1793,'Novi Sad','YUG',179626),
-(1794,'Ni','YUG',175391),
-(1795,'Pritina','YUG',155496),
+(1794,'Niš','YUG',175391),
+(1795,'Priština','YUG',155496),
 (1796,'Kragujevac','YUG',147305),
 (1797,'Podgorica','YUG',135000),
 (1798,'Subotica','YUG',100386),
 (1799,'Prizren','YUG',92303),
 (1800,'Phnom Penh','KHM',570155);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (1801,'Battambang','KHM',129800),
 (1802,'Siem Reap','KHM',105100),
 (1803,'Douala','CMR',1448300),
@@ -2173,7 +2173,7 @@ INSERT INTO City VALUES
 (1914,'Guiyang','CHN',1465200),
 (1915,'Ningbo','CHN',1371200),
 (1916,'Hefei','CHN',1369100),
-(1917,'Urumti [Ürümqi]','CHN',1310100),
+(1917,'Urumtši [Ürümqi]','CHN',1310100),
 (1918,'Anshan','CHN',1200000),
 (1919,'Fushun','CHN',1200000),
 (1920,'Nanning','CHN',1161800),
@@ -2257,7 +2257,7 @@ INSERT INTO City VALUES
 (1998,'Tonghua','CHN',324600),
 (1999,'Siping','CHN',317223),
 (2000,'Changzhi','CHN',317144);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (2001,'Tengzhou','CHN',315083),
 (2002,'Chaozhou','CHN',313469),
 (2003,'Yangzhou','CHN',312892),
@@ -2458,7 +2458,7 @@ INSERT INTO City VALUES
 (2198,'Renqiu','CHN',114256),
 (2199,'Yuyao','CHN',114065),
 (2200,'Guigang','CHN',114025);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (2201,'Kaili','CHN',113958),
 (2202,'Yan´an','CHN',113277),
 (2203,'Beihai','CHN',112673),
@@ -2659,7 +2659,7 @@ INSERT INTO City VALUES
 (2398,'Namwon','KOR',103544),
 (2399,'Tonghae','KOR',95472),
 (2400,'Mun-gyong','KOR',92239);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (2401,'Athenai','GRC',772072),
 (2402,'Thessaloniki','GRC',383967),
 (2403,'Pireus','GRC',182671),
@@ -2709,7 +2709,7 @@ INSERT INTO City VALUES
 (2447,'Vilnius','LTU',577969),
 (2448,'Kaunas','LTU',412639),
 (2449,'Klaipeda','LTU',202451),
-(2450,'iauliai','LTU',146563),
+(2450,'Šiauliai','LTU',146563),
 (2451,'Panevezys','LTU',133695),
 (2452,'Luxembourg [Luxemburg/Lëtzebuerg]','LUX',80700),
 (2453,'El-Aaiún','ESH',169000),
@@ -2860,7 +2860,7 @@ INSERT INTO City VALUES
 (2598,'San Juan del Río','MEX',179300),
 (2599,'San Felipe del Progreso','MEX',177330),
 (2600,'Córdoba','MEX',176952);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (2601,'Tecámac','MEX',172410),
 (2602,'Ocosingo','MEX',171495),
 (2603,'Carmen','MEX',171367),
@@ -3061,7 +3061,7 @@ INSERT INTO City VALUES
 (2798,'Gombe','NGA',107800),
 (2799,'Igboho','NGA',106800),
 (2800,'Ejigbo','NGA',105900);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (2801,'Agege','NGA',105000),
 (2802,'Ise-Ekiti','NGA',103400),
 (2803,'Ugep','NGA',102600),
@@ -3262,7 +3262,7 @@ INSERT INTO City VALUES
 (2998,'Nîmes','FRA',133424),
 (2999,'Tours','FRA',132820),
 (3000,'Villeurbanne','FRA',124215);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (3001,'Metz','FRA',123776),
 (3002,'Besançon','FRA',117733),
 (3003,'Caen','FRA',113987),
@@ -3463,7 +3463,7 @@ INSERT INTO City VALUES
 (3198,'Dakar','SEN',785071),
 (3199,'Thiès','SEN',248000),
 (3200,'Kaolack','SEN',199000);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (3201,'Ziguinchor','SEN',192000),
 (3202,'Rufisque','SEN',150000),
 (3203,'Saint-Louis','SEN',132400),
@@ -3473,8 +3473,8 @@ INSERT INTO City VALUES
 (3207,'Freetown','SLE',850000),
 (3208,'Singapore','SGP',4017733),
 (3209,'Bratislava','SVK',448292),
-(3210,'Koice','SVK',241874),
-(3211,'Preov','SVK',93977),
+(3210,'Košice','SVK',241874),
+(3211,'Prešov','SVK',93977),
 (3212,'Ljubljana','SVN',270986),
 (3213,'Maribor','SVN',115532),
 (3214,'Mogadishu','SOM',997000),
@@ -3664,7 +3664,7 @@ INSERT INTO City VALUES
 (3398,'Çorlu','TUR',123300),
 (3399,'Isparta','TUR',121911),
 (3400,'Karabük','TUR',118285);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (3401,'Kilis','TUR',118245),
 (3402,'Alanya','TUR',117300),
 (3403,'Kiziltepe','TUR',112000),
@@ -3707,46 +3707,46 @@ INSERT INTO City VALUES
 (3440,'Sevastopol','UKR',348000),
 (3441,'Simferopol','UKR',339000),
 (3442,'Pultava [Poltava]','UKR',313000),
-(3443,'Ternigiv','UKR',313000),
-(3444,'Terkasy','UKR',309000),
+(3443,'Tšernigiv','UKR',313000),
+(3444,'Tšerkasy','UKR',309000),
 (3445,'Gorlivka','UKR',299000),
 (3446,'Zytomyr','UKR',297000),
 (3447,'Sumy','UKR',294000),
 (3448,'Dniprodzerzynsk','UKR',270000),
 (3449,'Kirovograd','UKR',265000),
 (3450,'Hmelnytskyi','UKR',262000),
-(3451,'Ternivtsi','UKR',259000),
+(3451,'Tšernivtsi','UKR',259000),
 (3452,'Rivne','UKR',245000),
-(3453,'Krementuk','UKR',239000),
+(3453,'Krementšuk','UKR',239000),
 (3454,'Ivano-Frankivsk','UKR',237000),
 (3455,'Ternopil','UKR',236000),
 (3456,'Lutsk','UKR',217000),
 (3457,'Bila Tserkva','UKR',215000),
 (3458,'Kramatorsk','UKR',186000),
 (3459,'Melitopol','UKR',169000),
-(3460,'Kert','UKR',162000),
+(3460,'Kertš','UKR',162000),
 (3461,'Nikopol','UKR',149000),
 (3462,'Berdjansk','UKR',130000),
 (3463,'Pavlograd','UKR',127000),
 (3464,'Sjeverodonetsk','UKR',127000),
 (3465,'Slovjansk','UKR',127000),
 (3466,'Uzgorod','UKR',127000),
-(3467,'Altevsk','UKR',119000),
-(3468,'Lysytansk','UKR',116000),
+(3467,'Altševsk','UKR',119000),
+(3468,'Lysytšansk','UKR',116000),
 (3469,'Jevpatorija','UKR',112000),
 (3470,'Kamjanets-Podilskyi','UKR',109000),
 (3471,'Jenakijeve','UKR',105000),
-(3472,'Krasnyi Lut','UKR',101000),
+(3472,'Krasnyi Lutš','UKR',101000),
 (3473,'Stahanov','UKR',101000),
 (3474,'Oleksandrija','UKR',99000),
 (3475,'Konotop','UKR',96000),
 (3476,'Kostjantynivka','UKR',95000),
-(3477,'Berdytiv','UKR',90000),
+(3477,'Berdytšiv','UKR',90000),
 (3478,'Izmajil','UKR',90000),
-(3479,'ostka','UKR',90000),
+(3479,'Šostka','UKR',90000),
 (3480,'Uman','UKR',90000),
 (3481,'Brovary','UKR',89000),
-(3482,'Mukateve','UKR',89000),
+(3482,'Mukatševe','UKR',89000),
 (3483,'Budapest','HUN',1811552),
 (3484,'Debrecen','HUN',203648),
 (3485,'Miskolc','HUN',172357),
@@ -3791,15 +3791,15 @@ INSERT INTO City VALUES
 (3524,'Grodno','BLR',302000),
 (3525,'Brest','BLR',286000),
 (3526,'Bobruisk','BLR',221000),
-(3527,'Baranoviti','BLR',167000),
+(3527,'Baranovitši','BLR',167000),
 (3528,'Borisov','BLR',151000),
 (3529,'Pinsk','BLR',130000),
-(3530,'Ora','BLR',124000),
+(3530,'Orša','BLR',124000),
 (3531,'Mozyr','BLR',110000),
 (3532,'Novopolotsk','BLR',106000),
 (3533,'Lida','BLR',101000),
 (3534,'Soligorsk','BLR',101000),
-(3535,'Molodetno','BLR',97000),
+(3535,'Molodetšno','BLR',97000),
 (3536,'Mata-Utu','WLF',1137),
 (3537,'Port-Vila','VUT',33700),
 (3538,'Città del Vaticano','VAT',455),
@@ -3853,7 +3853,7 @@ INSERT INTO City VALUES
 (3586,'Omsk','RUS',1148900),
 (3587,'Kazan','RUS',1101000),
 (3588,'Ufa','RUS',1091200),
-(3589,'Teljabinsk','RUS',1083200),
+(3589,'Tšeljabinsk','RUS',1083200),
 (3590,'Rostov-na-Donu','RUS',1012700),
 (3591,'Perm','RUS',1009700),
 (3592,'Volgograd','RUS',993400),
@@ -3865,7 +3865,7 @@ INSERT INTO City VALUES
 (3598,'Izevsk','RUS',652800),
 (3599,'Krasnodar','RUS',639000),
 (3600,'Jaroslavl','RUS',616700);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (3601,'Habarovsk','RUS',609400),
 (3602,'Vladivostok','RUS',606200),
 (3603,'Irkutsk','RUS',593700),
@@ -3875,7 +3875,7 @@ INSERT INTO City VALUES
 (3607,'Rjazan','RUS',529900),
 (3608,'Orenburg','RUS',523600),
 (3609,'Lipetsk','RUS',521000),
-(3610,'Nabereznyje Telny','RUS',514700),
+(3610,'Nabereznyje Tšelny','RUS',514700),
 (3611,'Tula','RUS',506100),
 (3612,'Tjumen','RUS',503400),
 (3613,'Kemerovo','RUS',492700),
@@ -3883,7 +3883,7 @@ INSERT INTO City VALUES
 (3615,'Tomsk','RUS',482100),
 (3616,'Kirov','RUS',466200),
 (3617,'Ivanovo','RUS',459200),
-(3618,'Teboksary','RUS',459200),
+(3618,'Tšeboksary','RUS',459200),
 (3619,'Brjansk','RUS',457400),
 (3620,'Tver','RUS',454900),
 (3621,'Kursk','RUS',443500),
@@ -3894,19 +3894,19 @@ INSERT INTO City VALUES
 (3626,'Ulan-Ude','RUS',370400),
 (3627,'Kurgan','RUS',364700),
 (3628,'Arkangeli','RUS',361800),
-(3629,'Soti','RUS',358600),
+(3629,'Sotši','RUS',358600),
 (3630,'Smolensk','RUS',353400),
 (3631,'Orjol','RUS',344500),
 (3632,'Stavropol','RUS',343300),
 (3633,'Belgorod','RUS',342000),
 (3634,'Kaluga','RUS',339300),
 (3635,'Vladimir','RUS',337100),
-(3636,'Mahatkala','RUS',332800),
-(3637,'Terepovets','RUS',324400),
+(3636,'Mahatškala','RUS',332800),
+(3637,'Tšerepovets','RUS',324400),
 (3638,'Saransk','RUS',314800),
 (3639,'Tambov','RUS',312000),
 (3640,'Vladikavkaz','RUS',310100),
-(3641,'Tita','RUS',309900),
+(3641,'Tšita','RUS',309900),
 (3642,'Vologda','RUS',302500),
 (3643,'Veliki Novgorod','RUS',299500),
 (3644,'Komsomolsk-na-Amure','RUS',291600),
@@ -3920,17 +3920,17 @@ INSERT INTO City VALUES
 (3652,'Orsk','RUS',273900),
 (3653,'Sterlitamak','RUS',265200),
 (3654,'Angarsk','RUS',264700),
-(3655,'Jokar-Ola','RUS',249200),
+(3655,'Joškar-Ola','RUS',249200),
 (3656,'Rybinsk','RUS',239600),
 (3657,'Prokopjevsk','RUS',237300),
 (3658,'Niznevartovsk','RUS',233900),
-(3659,'Naltik','RUS',233400),
+(3659,'Naltšik','RUS',233400),
 (3660,'Syktyvkar','RUS',229700),
 (3661,'Severodvinsk','RUS',229300),
 (3662,'Bijsk','RUS',225000),
 (3663,'Niznekamsk','RUS',223400),
-(3664,'Blagovetensk','RUS',222000),
-(3665,'ahty','RUS',221800),
+(3664,'Blagoveštšensk','RUS',222000),
+(3665,'Šahty','RUS',221800),
 (3666,'Staryi Oskol','RUS',213800),
 (3667,'Zelenograd','RUS',207100),
 (3668,'Balakovo','RUS',206000),
@@ -3939,12 +3939,12 @@ INSERT INTO City VALUES
 (3671,'Zlatoust','RUS',196900),
 (3672,'Jakutsk','RUS',195400),
 (3673,'Podolsk','RUS',194300),
-(3674,'Petropavlovsk-Kamtatski','RUS',194100),
+(3674,'Petropavlovsk-Kamtšatski','RUS',194100),
 (3675,'Kamensk-Uralski','RUS',190600),
 (3676,'Engels','RUS',189000),
 (3677,'Syzran','RUS',186900),
 (3678,'Grozny','RUS',186000),
-(3679,'Novoterkassk','RUS',184400),
+(3679,'Novotšerkassk','RUS',184400),
 (3680,'Berezniki','RUS',181900),
 (3681,'Juzno-Sahalinsk','RUS',179200),
 (3682,'Volgodonsk','RUS',178200),
@@ -3958,7 +3958,7 @@ INSERT INTO City VALUES
 (3690,'Nahodka','RUS',157700),
 (3691,'Ussurijsk','RUS',157300),
 (3692,'Salavat','RUS',156800),
-(3693,'Mytiti','RUS',155700),
+(3693,'Mytištši','RUS',155700),
 (3694,'Kolomna','RUS',150700),
 (3695,'Elektrostal','RUS',147000),
 (3696,'Murom','RUS',142400),
@@ -3969,25 +3969,25 @@ INSERT INTO City VALUES
 (3701,'Dimitrovgrad','RUS',137000),
 (3702,'Pervouralsk','RUS',136100),
 (3703,'Himki','RUS',133700),
-(3704,'Balaiha','RUS',132900),
+(3704,'Balašiha','RUS',132900),
 (3705,'Nevinnomyssk','RUS',132600),
 (3706,'Pjatigorsk','RUS',132500),
 (3707,'Korolev','RUS',132400),
 (3708,'Serpuhov','RUS',132000),
 (3709,'Odintsovo','RUS',127400),
 (3710,'Orehovo-Zujevo','RUS',124900),
-(3711,'Kamyin','RUS',124600),
-(3712,'Novoteboksarsk','RUS',123400),
-(3713,'Terkessk','RUS',121700),
-(3714,'Atinsk','RUS',121600),
+(3711,'Kamyšin','RUS',124600),
+(3712,'Novotšeboksarsk','RUS',123400),
+(3713,'Tšerkessk','RUS',121700),
+(3714,'Atšinsk','RUS',121600),
 (3715,'Magadan','RUS',121000),
-(3716,'Miturinsk','RUS',120700),
+(3716,'Mitšurinsk','RUS',120700),
 (3717,'Kislovodsk','RUS',120400),
 (3718,'Jelets','RUS',119400),
 (3719,'Seversk','RUS',118600),
 (3720,'Noginsk','RUS',117200),
 (3721,'Velikije Luki','RUS',116300),
-(3722,'Novokuibyevsk','RUS',116200),
+(3722,'Novokuibyševsk','RUS',116200),
 (3723,'Neftekamsk','RUS',115700),
 (3724,'Leninsk-Kuznetski','RUS',113800),
 (3725,'Oktjabrski','RUS',111500),
@@ -4001,17 +4001,17 @@ INSERT INTO City VALUES
 (3733,'Solikamsk','RUS',106000),
 (3734,'Sarapul','RUS',105700),
 (3735,'Ust-Ilimsk','RUS',105200),
-(3736,'tolkovo','RUS',104900),
-(3737,'Mezduretensk','RUS',104400),
+(3736,'Štšolkovo','RUS',104900),
+(3737,'Mezduretšensk','RUS',104400),
 (3738,'Usolje-Sibirskoje','RUS',103500),
 (3739,'Elista','RUS',103300),
-(3740,'Novoahtinsk','RUS',101900),
+(3740,'Novošahtinsk','RUS',101900),
 (3741,'Votkinsk','RUS',101700),
 (3742,'Kyzyl','RUS',101100),
 (3743,'Serov','RUS',100400),
 (3744,'Zelenodolsk','RUS',100200),
 (3745,'Zeleznodoroznyi','RUS',100100),
-(3746,'Kinema','RUS',100000),
+(3746,'Kinešma','RUS',100000),
 (3747,'Kuznetsk','RUS',98200),
 (3748,'Uhta','RUS',98000),
 (3749,'Jessentuki','RUS',97900),
@@ -4019,20 +4019,20 @@ INSERT INTO City VALUES
 (3751,'Neftejugansk','RUS',97400),
 (3752,'Bataisk','RUS',97300),
 (3753,'Nojabrsk','RUS',97300),
-(3754,'Balaov','RUS',97100),
+(3754,'Balašov','RUS',97100),
 (3755,'Zeleznogorsk','RUS',96900),
 (3756,'Zukovski','RUS',96500),
 (3757,'Anzero-Sudzensk','RUS',96100),
 (3758,'Bugulma','RUS',94100),
 (3759,'Zeleznogorsk','RUS',94000),
 (3760,'Novouralsk','RUS',93300),
-(3761,'Pukin','RUS',92900),
+(3761,'Puškin','RUS',92900),
 (3762,'Vorkuta','RUS',92600),
 (3763,'Derbent','RUS',92300),
-(3764,'Kirovo-Tepetsk','RUS',91600),
+(3764,'Kirovo-Tšepetsk','RUS',91600),
 (3765,'Krasnogorsk','RUS',91000),
 (3766,'Klin','RUS',90000),
-(3767,'Taikovski','RUS',90000),
+(3767,'Tšaikovski','RUS',90000),
 (3768,'Novyi Urengoi','RUS',89800),
 (3769,'Ho Chi Minh City','VNM',3980000),
 (3770,'Hanoi','VNM',1410000),
@@ -4066,7 +4066,7 @@ INSERT INTO City VALUES
 (3798,'Phoenix','USA',1321045),
 (3799,'San Diego','USA',1223400),
 (3800,'Dallas','USA',1188580);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (3801,'San Antonio','USA',1144646),
 (3802,'Detroit','USA',951270),
 (3803,'San Jose','USA',894943),
@@ -4267,7 +4267,7 @@ INSERT INTO City VALUES
 (3998,'Springfield','USA',111454),
 (3999,'Simi Valley','USA',111351),
 (4000,'Lafayette','USA',110257);
-INSERT INTO City VALUES
+INSERT INTO city VALUES
 (4001,'Gilbert','USA',109697),
 (4002,'Carrollton','USA',109576),
 (4003,'Bellevue','USA',109569),
@@ -4350,7 +4350,7 @@ INSERT INTO City VALUES
 
 # Table CountryLanguage
 
-INSERT INTO CountryLanguage VALUES 
+INSERT INTO countrylanguage VALUES 
 ('AFG','Pashto',52.4),
 ('NLD','Dutch',95.6),
 ('ANT','Papiamento',86.2),
@@ -4551,7 +4551,7 @@ INSERT INTO CountryLanguage VALUES
 ('TJK','Tadzhik',62.2),
 ('TWN','Min',66.7),
 ('TZA','Nyamwesi',21.1);
-INSERT INTO CountryLanguage VALUES 
+INSERT INTO countrylanguage VALUES 
 ('DNK','Danish',93.5),
 ('THA','Thai',52.6),
 ('TGO','Ewe',23.2),
@@ -4608,7 +4608,7 @@ INSERT INTO CountryLanguage VALUES
 ('BLZ','Spanish',31.6),
 ('BEN','Joruba',12.2),
 ('BTN','Nepali',34.8),
-('BOL','Ketua',8.1),
+('BOL','Ketšua',8.1),
 ('BWA','Shona',12.3),
 ('BRA','German',0.5),
 ('GBR','Kymri',0.9),
@@ -4622,7 +4622,7 @@ INSERT INTO CountryLanguage VALUES
 ('DJI','Afar',34.8),
 ('DMA','Creole French',0.0),
 ('DOM','Creole French',2.0),
-('ECU','Ketua',7.0),
+('ECU','Ketšua',7.0),
 ('EGY','Sinaberberi',0.0),
 ('SLV','Nahua',0.0),
 ('ERI','Tigre',31.7),
@@ -4730,7 +4730,7 @@ INSERT INTO CountryLanguage VALUES
 ('PAN','Creole English',14.0),
 ('PNG','Malenasian Languages',20.0),
 ('PRY','Guaraní',40.1),
-('PER','Ketua',16.4),
+('PER','Ketšua',16.4),
 ('MNP','Chamorro',30.0),
 ('PRI','English',47.4),
 ('POL','German',1.3),
@@ -4752,7 +4752,7 @@ INSERT INTO CountryLanguage VALUES
 ('WSM','Samoan',47.5),
 ('STP','French',0.7),
 ('SEN','Ful',21.7);
-INSERT INTO CountryLanguage VALUES 
+INSERT INTO countrylanguage VALUES 
 ('SYC','English',3.8),
 ('SLE','Temne',31.8),
 ('SGP','Malay',14.1),
@@ -4857,7 +4857,7 @@ INSERT INTO CountryLanguage VALUES
 ('KAZ','Ukrainian',5.0),
 ('KEN','Luo',12.8),
 ('CAF','Mandjia',14.8),
-('CHN','Mantu',0.9),
+('CHN','Mantšu',0.9),
 ('KGZ','Uzbek',14.1),
 ('COL','Creole English',0.1),
 ('COM','Comorian-madagassi',5.5),
@@ -4953,7 +4953,7 @@ INSERT INTO CountryLanguage VALUES
 ('AGO','Luimbe-nganguela',5.4),
 ('ABW','Dutch',5.3),
 ('AUS','Canton Chinese',1.1);
-INSERT INTO CountryLanguage VALUES 
+INSERT INTO countrylanguage VALUES 
 ('AZE','Armenian',2.0),
 ('BGD','Garo',0.1),
 ('BEL','Arabic',1.6),
@@ -4990,7 +4990,7 @@ INSERT INTO CountryLanguage VALUES
 ('AUT','Hungarian',0.4),
 ('JPN','English',0.1),
 ('YUG','Romani',1.4),
-('KHM','Tam',2.4),
+('KHM','Tšam',2.4),
 ('CMR','Ful',9.6),
 ('CAN','Italian',1.7),
 ('KAZ','German',3.1),
@@ -5154,7 +5154,7 @@ INSERT INTO CountryLanguage VALUES
 ('UZB','Karakalpak',2.0),
 ('RUS','Bashkir',0.7),
 ('VNM','Chinese',1.4);
-INSERT INTO CountryLanguage VALUES 
+INSERT INTO countrylanguage VALUES 
 ('EST','Finnish',0.7),
 ('USA','Italian',0.6),
 ('AGO','Chokwe',4.2),
@@ -5340,4 +5340,4 @@ INSERT INTO CountryLanguage VALUES
 ('RUS','Belorussian',0.3),
 ('USA','Portuguese',0.2);
 
-ANALYZE TABLE Country, City, CountryLanguage;
+ANALYZE TABLE country, city, countrylanguage;

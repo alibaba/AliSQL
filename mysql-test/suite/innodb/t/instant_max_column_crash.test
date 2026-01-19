@@ -1,0 +1,338 @@
+--source include/have_debug.inc
+--source include/have_innodb_min_16k.inc
+
+--echo #
+--echo # Bug: #34378513 : Assertion failure: dict0mem.h:2482:pos < n_def thread 140243300361984
+--echo #
+
+--disable_query_log
+# Procedure to create a table with given number of columns
+DELIMITER |;
+
+CREATE PROCEDURE create_table(table_name varchar(50), n_cols INT)
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  SET @sql_text = CONCAT('CREATE TABLE ', table_name, ' (');
+  WHILE (i <= n_cols) DO
+    SET @sql_text = CONCAT(@sql_text, CONCAT('col_', i), ' INTEGER DEFAULT NULL');
+    set i = i + 1;
+    IF (i <= n_cols) THEN
+      SET @sql_text = CONCAT(@sql_text, ', ');
+    END IF;
+  END WHILE;
+  SET @sql_text = CONCAT(@sql_text, ")");
+  PREPARE stmt FROM @sql_text;
+  EXECUTE stmt;
+  DEALLOCATE PREPARE stmt;
+END|
+
+DELIMITER ;|
+--enable_query_log
+
+--echo # Create table with 1017 columns
+call create_table("tb1", 1017);
+
+--echo # Generate row version
+INSERT INTO tb1 (col_1017) VALUES (1);
+
+--echo # Keep a copy for other scenarios
+CREATE TABLE t1 AS SELECT * FROM tb1;
+CREATE TABLE t2 AS SELECT * FROM tb1;
+CREATE TABLE t3 AS SELECT * FROM tb1;
+CREATE TABLE t4 AS SELECT * FROM tb1;
+
+--echo
+--echo # 1017 (user cols) + 3 (system cols) = 1020 (MAX_FIELDS_ALLOWED)
+--echo
+
+--echo ########################################
+--echo # Scenario 1: ADD/DROP single column:
+--echo ########################################
+
+--echo # Current: n_def = (user columns + system columns + n_drop_cols)
+--echo # Current: n_def = 1020 (1017 + 3 + 0)
+
+--echo # -----------------------------------------------------------------------
+--echo # DROP - ADD columns till (n_def + n_col_added < MAX_FIELDS_ALLOWED)
+--echo # -----------------------------------------------------------------------
+
+--echo # DROP COLUMN should pass
+ALTER TABLE tb1 DROP COLUMN col_1017, ALGORITHM=INSTANT;
+
+--echo # Current: n_def = 1020 (1016 + 3 + 1)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/tb1";
+
+--echo # ADD COLUMN should fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE tb1 ADD COLUMN col_1017 INT, ALGORITHM=INSTANT;
+
+--echo # DROP COLUMN should still pass
+ALTER TABLE tb1 DROP COLUMN col_1016, ALGORITHM=INSTANT;
+
+--echo # Current: n_def = 1020 (1015 + 3 + 2)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/tb1";
+
+--echo # ADD COLUMN should still fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE tb1 ADD COLUMN col_1017 INT, ALGORITHM=INSTANT;
+
+--echo # -----------------------------------------------------------------------
+--echo # Verify that ADD is possible without specifying ALGORITHM
+--echo # (should fallback to INPLACE)
+--echo # -----------------------------------------------------------------------
+
+--echo # Table is rebuilt when ALGORITHM=INPLACE is used (internally)
+ALTER TABLE tb1 ADD COLUMN col_1017 INT;
+
+--echo # Current: n_def = 1019 (1016 + 3)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/tb1";
+
+--echo # Cleanup
+DROP TABLE tb1;
+
+--echo ########################################
+--echo # Scenario 2: ADD/DROP two columns:
+--echo ########################################
+
+--echo # Current: n_def = (user columns + system columns + n_drop_cols)
+--echo # Current: n_def = 1020 (1017 + 3 + 0)
+
+--echo # -----------------------------------------------------------------------
+--echo # DROP - ADD columns till (n_def + n_col_added < MAX_FIELDS_ALLOWED)
+--echo # -----------------------------------------------------------------------
+
+--echo # DROP COLUMN for 2 columns should pass
+ALTER TABLE t1
+ DROP COLUMN col_1017,
+ DROP COLUMN col_1016,
+ ALGORITHM=INSTANT;
+
+--echo # Current: n_def = 1020 (1015 + 3 + 2)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t1";
+
+--echo # ADD COLUMN should fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t1
+ ADD COLUMN col_1017 INT,
+ ADD COLUMN col_1016 INT,
+ ALGORITHM=INSTANT;
+
+--echo # DROP COLUMN for 2 columns should still pass
+ALTER TABLE t1
+ DROP COLUMN col_1015,
+ DROP COLUMN col_1014,
+ ALGORITHM=INSTANT;
+
+--echo # Current: n_def = 1020 (1013 + 3 + 4)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t1";
+
+--echo # ADD COLUMN should still fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t1
+ ADD COLUMN col_1017 INT,
+ ADD COLUMN col_1016 INT,
+ ALGORITHM=INSTANT;
+
+--echo # -----------------------------------------------------------------------
+--echo # Verify that ADD is possible without specifying ALGORITHM
+--echo # (should fallback to INPLACE)
+--echo # -----------------------------------------------------------------------
+
+--echo # Table is rebuilt when ALGORITHM=INPLACE is used (internally)
+ALTER TABLE t1
+ ADD COLUMN col_1017 INT,
+ ADD COLUMN col_1016 INT;
+
+--echo # Current: n_def = 1018 (1015 + 3)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t1";
+
+--echo # Cleanup
+DROP TABLE t1;
+
+--echo ########################################
+--echo # Scenario 3: ADD/DROP multiple columns:
+--echo ########################################
+
+--echo # Current: n_def = (user columns + system columns + n_drop_cols)
+--echo # Current: n_def = 1020 (1017 + 3 + 0)
+
+--echo # -----------------------------------------------------------------------
+--echo # ADD/DROP multiple columns and look for failures
+--echo # -----------------------------------------------------------------------
+
+--echo # DROP multiple columns should pass
+ALTER TABLE t2
+ DROP COLUMN col_1016,
+ DROP COLUMN col_1015,
+ DROP COLUMN col_1014,
+ DROP COLUMN col_1013,
+ DROP COLUMN col_1012,
+ DROP COLUMN col_1011,
+ ALGORITHM=INSTANT;
+
+--echo # Current: n_def = 1020 (1011 + 3 + 6)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t2";
+
+--echo # ADD COLUMN should fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t2
+ ADD COLUMN col_1011 INT,
+ DROP COLUMN col_1010,
+ ADD COLUMN col_1012 INT,
+ ADD COLUMN col_1013 INT,
+ DROP COLUMN col_1009,
+ DROP COLUMN col_1008,
+ ADD COLUMN col_1014 INT,
+ ALGORITHM=INSTANT;
+
+--echo # -----------------------------------------------------------------------
+--echo # Fallback to inplace for failed query
+--echo # -----------------------------------------------------------------------
+ALTER TABLE t2
+ ADD COLUMN col_1011 INT,
+ DROP COLUMN col_1010,
+ ADD COLUMN col_1012 INT,
+ ADD COLUMN col_1013 INT,
+ DROP COLUMN col_1009,
+ DROP COLUMN col_1008,
+ ADD COLUMN col_1014 INT;
+
+--echo # Current: n_def = 1018 (1015 + 3 + 0)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t2";
+
+--echo # Cleanup
+DROP TABLE t2;
+
+--echo ########################################
+--echo # Scenario 4: With other ALTER operations:
+--echo ########################################
+
+--echo # Current: n_def = (user columns + system columns + n_drop_cols)
+--echo # Current: n_def = 1020 (1017 + 3 + 0)
+
+--echo # -----------------------------------------------------------------------
+--echo # ADD/DROP with other ALTER operations
+--echo # -----------------------------------------------------------------------
+
+--echo # DROP COLUMN should pass
+ALTER TABLE t3
+ DROP COLUMN col_1016,
+ DROP COLUMN col_1015,
+ DROP COLUMN col_1014,
+ DROP COLUMN col_1013,
+ DROP COLUMN col_1012,
+ DROP COLUMN col_1011,
+ DROP COLUMN col_1010,
+ DROP COLUMN col_1009,
+ ALGORITHM=INSTANT;
+
+--echo Current: n_def = 1020 (1009 + 3 + 8)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t3";
+
+--echo # ADD COLUMN with other operations should fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t3
+ ADD COLUMN col_1009 INT,
+ RENAME COLUMN col_1017 TO col_10177,
+ RENAME COLUMN col_1007 TO col_1007_new,
+ DROP COLUMN col_1008,
+ ALGORITHM=INSTANT;
+
+--echo # ADD COLUMN should fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t3 ADD COLUMN col_1010 INT, ALGORITHM=INSTANT;
+
+--echo # Similarly single column add/drop will fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t3 ADD COLUMN col_1010 INT, DROP COLUMN col_1008, ALGORITHM=INSTANT;
+
+--echo # -----------------------------------------------------------------------
+--echo # Fallback to inplace for failed query
+--echo # -----------------------------------------------------------------------
+
+--echo # ADD COLUMN should fallback to INPLACE and should pass
+ALTER TABLE t3 ADD COLUMN col_1010 INT;
+
+--echo Current: n_def = 1013 (1010 + 3 + 0)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t3";
+
+--echo # Cleanup
+DROP TABLE t3;
+
+--echo ########################################
+--echo # Scenario 5: ADD/DROP few columns:
+--echo ########################################
+
+--echo # Current: n_def = (user columns + system columns + n_drop_cols)
+--echo # Current: n_def = 1020 (1017 + 3 + 0)
+
+--echo # -----------------------------------------------------------------------
+--echo # ADD/DROP few columns together
+--echo # -----------------------------------------------------------------------
+
+--echo # DROP COLUMN should pass
+ALTER TABLE t4
+ DROP COLUMN col_1016,
+ DROP COLUMN col_1015,
+ DROP COLUMN col_1014,
+ DROP COLUMN col_1013,
+ DROP COLUMN col_1012,
+ DROP COLUMN col_1011,
+ DROP COLUMN col_1010,
+ DROP COLUMN col_1009,
+ ALGORITHM=INSTANT;
+
+--echo Current: n_def = 1020 (1009 + 3 + 8)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t4";
+
+--echo # ADD COLUMN should fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t4
+ ADD COLUMN col_1016 INT,
+ DROP COLUMN col_1008,
+ ALGORITHM=INSTANT;
+
+--echo # ADD COLUMN should fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t4
+ ADD COLUMN col_1015 INT, 
+ DROP COLUMN col_1007,
+ DROP COLUMN col_1006,
+ ALGORITHM=INSTANT;
+
+--echo # ADD COLUMN should fail
+--error ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
+ALTER TABLE t4
+ ADD COLUMN col_1014 INT,
+ ADD COLUMN col_1013 INT,
+ DROP COLUMN col_1005, 
+ALGORITHM=INSTANT;
+
+--echo # -----------------------------------------------------------------------
+--echo # Fallback to inplace for failed query
+--echo # -----------------------------------------------------------------------
+
+ALTER TABLE t4
+ ADD COLUMN col_1014 INT,
+ ADD COLUMN col_1013 INT,
+ DROP COLUMN col_1005;
+
+--echo Current: n_def = 1013 (1010 + 3 + 0)
+SELECT TOTAL_ROW_VERSIONS, N_COLS, CURRENT_COLUMN_COUNTS, INITIAL_COLUMN_COUNTS,
+TOTAL_COLUMN_COUNTS FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME="test/t4";
+
+--echo # Cleanup
+DROP TABLE t4;
+
+DROP PROCEDURE create_table;

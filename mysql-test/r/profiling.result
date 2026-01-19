@@ -56,14 +56,14 @@ sum(a)
 6144
 select sum(a) from t1 group by b;
 sum(a)
-2048
 1536
+2048
 2560
 select sum(a) + sum(b) from t1 group by b;
 sum(a) + sum(b)
-NULL
 2048
 4608
+NULL
 select max(x) from (select sum(a) as x from t1 group by b) as teeone;
 max(x)
 2560
@@ -412,11 +412,21 @@ commit;
 select @@profiling;
 @@profiling
 1
-drop table if exists t1, t2, t3;
+drop table if exists t2, t1, t3;
 drop view if exists v1;
 Warnings:
 Note	1051	Unknown table 'test.v1'
 drop function if exists f1;
+End of 5.0 tests
+#
+# Bug#18483776: ASSERTION FAILED: QUERY_SOURCE == 0,
+#               FILE SQL_PROFILE.CC, LINE 297
+#
+SET profiling= 1;
+Warnings:
+Warning	1287	'@@profiling' is deprecated and will be removed in a future release.
+PREPARE s FROM 'DO 1';
+EXECUTE s;
+DEALLOCATE PREPARE s;
 set session profiling = OFF;
 set global profiling_history_size= @start_value;
-End of 5.0 tests

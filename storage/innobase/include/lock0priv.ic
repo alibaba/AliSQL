@@ -1,27 +1,35 @@
 /*****************************************************************************
 
-Copyright (c) 2007, 2009, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2007, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/lock0priv.ic
-Lock module internal inline methods.
+/** @file include/lock0priv.ic
+ Lock module internal inline methods.
 
-Created July 16, 2007 Vasil Dimov
-*******************************************************/
+ Created July 16, 2007 Vasil Dimov
+ *******************************************************/
 
 /* This file contains only methods which are used in
 lock/lock0* files, other than lock/lock0lock.cc.
@@ -32,36 +40,150 @@ methods but they are used only in that file. */
 #error Do not include lock0priv.ic outside of the lock/ module
 #endif
 
-/*********************************************************************//**
-Gets the type of a lock.
-@return	LOCK_TABLE or LOCK_REC */
-UNIV_INLINE
-ulint
-lock_get_type_low(
-/*==============*/
-	const lock_t*	lock)	/*!< in: lock */
+/** Gets the type of a lock.
+ @return LOCK_TABLE or LOCK_REC */
+static inline uint32_t lock_get_type_low(const lock_t *lock) /*!< in: lock */
 {
-	ut_ad(lock);
+  ut_ad(lock);
 
-	return(lock->type_mode & LOCK_TYPE_MASK);
+  return (lock->type_mode & LOCK_TYPE_MASK);
 }
 
-/*********************************************************************//**
-Checks if some transaction has an implicit x-lock on a record in a clustered
-index.
-@return	transaction id of the transaction which has the x-lock, or 0 */
-UNIV_INLINE
-trx_id_t
-lock_clust_rec_some_has_impl(
-/*=========================*/
-	const rec_t*		rec,	/*!< in: user record */
-	const dict_index_t*	index,	/*!< in: clustered index */
-	const ulint*		offsets)/*!< in: rec_get_offsets(rec, index) */
-{
-	ut_ad(dict_index_is_clust(index));
-	ut_ad(page_rec_is_user_rec(rec));
+static inline trx_id_t lock_clust_rec_some_has_impl(const rec_t *rec,
+                                                    const dict_index_t *index,
+                                                    const ulint *offsets) {
+  ut_ad(index->is_clustered());
+  ut_ad(page_rec_is_user_rec(rec));
 
-	return(row_get_rec_trx_id(rec, index, offsets));
+  return (row_get_rec_trx_id(rec, index, offsets));
+}
+
+static inline uint32_t lock_rec_get_n_bits(const lock_t *lock) {
+  return (lock->rec_lock.n_bits);
+}
+
+/** Sets the nth bit of a record lock to true. */
+static inline void lock_rec_set_nth_bit(lock_t *lock, /*!< in: record lock */
+                                        ulint i) /*!< in: index of the bit */
+{
+  ut_ad(lock);
+  auto bitset = lock->bitset();
+  ut_ad(!bitset.test(i));
+  bitset.set(i);
+  lock->trx->lock.n_rec_locks.fetch_add(1, std::memory_order_relaxed);
+}
+
+/** Gets the nth bit of a record lock.
+@param[in]      lock            Record lock
+@param[in]      i               Index of the bit to check
+@return true if bit set also if i == ULINT_UNDEFINED return false */
+static inline bool lock_rec_get_nth_bit(const lock_t *lock, ulint i) {
+  ut_ad(lock);
+  ut_ad(lock_get_type_low(lock) == LOCK_REC);
+  /* When allocating the bitmap we've chosen size good enough at that moment,
+  to fit all heap_no's on the page, plus some margin, but the page can allocate
+  new heap_no's over time, and we should treat bits at these positions as 0 */
+  if (i >= lock->rec_lock.n_bits) {
+    return (false);
+  }
+  return lock->bitset().test(i);
+}
+
+/** Gets the mode of a lock.
+ @return mode */
+static inline enum lock_mode lock_get_mode(const lock_t *lock) /*!< in: lock */
+{
+  ut_ad(lock);
+
+  return (static_cast<enum lock_mode>(lock->type_mode & LOCK_MODE_MASK));
+}
+
+/** Calculates if lock mode 1 is compatible with lock mode 2.
+ @return nonzero if mode1 compatible with mode2 */
+static inline ulint lock_mode_compatible(
+    enum lock_mode mode1, /*!< in: lock mode */
+    enum lock_mode mode2) /*!< in: lock mode */
+{
+  ut_ad((ulint)mode1 < lock_types);
+  ut_ad((ulint)mode2 < lock_types);
+
+  return (lock_compatibility_matrix[mode1][mode2]);
+}
+
+static inline bool lock_mode_stronger_or_eq(enum lock_mode mode1,
+                                            enum lock_mode mode2) {
+  ut_ad((ulint)mode1 < lock_types);
+  ut_ad((ulint)mode2 < lock_types);
+
+  return (lock_strength_matrix[mode1][mode2] != 0);
+}
+
+/** Gets the wait flag of a lock.
+ @return LOCK_WAIT if waiting, 0 if not */
+static inline ulint lock_get_wait(const lock_t *lock) /*!< in: lock */
+{
+  ut_ad(lock);
+
+  return (lock->type_mode & LOCK_WAIT);
+}
+
+/** The back pointer to a waiting lock request in the transaction is set to NULL
+ and the wait bit in lock type_mode is reset. */
+static inline void lock_reset_lock_and_trx_wait(
+    lock_t *lock) /*!< in/out: record lock */
+{
+  ut_ad(locksys::owns_lock_shard(lock));
+  ut_ad(lock_get_wait(lock));
+  ut_ad(lock->trx->lock.wait_lock == lock);
+  /* We intentionally don't clear trx->lock.blocking_trx here, as
+  lock_reset_lock_and_trx_wait() is called also during movements of locks from
+  one page to another, which does not really change the structure of the
+  wait-for graph. Instead the lock_reset_wait_and_release_thread_if_suspended()
+  is responsible for clearing the blocking_trx field once it is sure that
+  we really want to remove the edge from the wait-for graph.*/
+  lock->trx->lock.wait_lock = nullptr;
+
+  /* We intentionally don't clear lock->trx->lock.wait_lock_type here, to make
+  it easier to obtain stats about the last wait in lock_wait_suspend_thread().
+  @see trx_lock_t::wait_lock_type for more detailed explanation. */
+  lock->type_mode &= ~LOCK_WAIT;
+}
+
+static inline bool lock_table_has(const trx_t *trx, const dict_table_t *table,
+                                  lock_mode in_mode) {
+  ut_ad(!trx_mutex_own(trx));
+  trx_mutex_enter(trx);
+  ut_ad(trx_can_be_handled_by_current_thread(trx));
+
+  /* Look for stronger locks the same trx already has on the table */
+  for (const lock_t *lock = UT_LIST_GET_FIRST(trx->lock.trx_locks);
+       lock != nullptr && lock_get_type(lock) == LOCK_TABLE;
+       lock = UT_LIST_GET_NEXT(trx_locks, lock)) {
+    lock_mode mode = lock_get_mode(lock);
+
+    ut_ad(trx == lock->trx);
+    ut_ad(lock->tab_lock.table != nullptr);
+
+    if (table == lock->tab_lock.table &&
+        lock_mode_stronger_or_eq(mode, in_mode)) {
+      // we know it can't be waiting because we are the thread *running* the trx
+      ut_ad(!lock_get_wait(lock));
+
+      trx_mutex_exit(trx);
+      return (true);
+    }
+  }
+
+  trx_mutex_exit(trx);
+  return (false);
+}
+
+/* Check if the rec id matches the lock instance.
+@param[i]       lock            Lock to compare with
+@return true if <space, page_no, heap_no> matches the lock. */
+bool RecID::matches(const lock_t *lock) const {
+  return (lock->rec_lock.page_id == get_page_id() &&
+          lock_rec_get_nth_bit(lock, m_heap_no));
 }
 
 /* vim: set filetype=c: */

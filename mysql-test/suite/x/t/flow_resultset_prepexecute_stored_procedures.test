@@ -1,0 +1,15 @@
+## Test that verifies flow of SP execution through X Protocol-prepare-statement
+
+## Preamble
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+## Test starts here
+
+--source ../include/test_flow_resultset_prepexecute_stored_procedures.inc
+
+exec $MYSQLXTEST
+  -ux_root --password=''
+  --file=$MYSQL_TMP_DIR/prep_stmt_cursor.xpl 2>&1;
+
+## Cleanup
+--source ../include/xplugin_cleanup.inc

@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,43 +29,113 @@
 //===========================================================================
 //
 // .DESCRIPTION
-//      This is the main fuction for the AXE VM emulator.
+//      This is the main function for the AXE VM emulator.
 //      It contains some global objects and a run method.
 //
 //===========================================================================
 #include <kernel_types.h>
-#include <TransporterRegistry.hpp>
 
-extern class  JobTable            globalJobTable;
-extern class  TimeQueue           globalTimeQueue;
-extern class  FastScheduler       globalScheduler;
-extern class  TransporterRegistry globalTransporterRegistry;
-extern struct GlobalData          globalData;
+#define JAM_FILE_ID 260
+
+extern class JobTable globalJobTable;
+extern class TimeQueue globalTimeQueue;
+extern class FastScheduler globalScheduler;
+extern class TransporterRegistry globalTransporterRegistry;
+extern struct GlobalData globalData;
 
 #ifdef VM_TRACE
 extern class SignalLoggerManager globalSignalLoggers;
 #endif
 
-#ifndef NO_EMULATED_JAM
 /* EMULATED_JAM_SIZE must be a power of two, so JAM_MASK will work. */
+#if defined(VM_TRACE) || defined(ERROR_INSERT)
+#define EMULATED_JAM_SIZE 32768
+#else
+// Keep jam buffer small for optimized build to improve locality of reference.
 #define EMULATED_JAM_SIZE 1024
+#endif
 #define JAM_MASK (EMULATED_JAM_SIZE - 1)
 
-struct EmulatedJamBuffer {
-  Uint32 theEmulatedJamIndex;
-  // last block entry, used in dumpJam() if jam contains no block entries
-  Uint32 theEmulatedJamBlockNumber;
-  Uint32 theEmulatedJam[EMULATED_JAM_SIZE];
+/**
+ * JamEvents are used for recording that control passes a given point int the
+ * code, represented by a JAM_FILE_ID value (which uniquely identifies a
+ * source file, and a line number. The reason for using JAM_FILE_ID rather
+ * than the predefined __FILE__ is that is faster to store a 16-bit integer
+ * than a pointer. For a description of how to maintain and debug JAM_FILE_IDs,
+ * please refer to the comments for jamFileNames in Emulator.cpp.
+ */
+class JamEvent {
+ public:
+  /**
+   * This method is used for verifying that JAM_FILE_IDs matches the contents
+   * of the jamFileNames table. The file name may include driectory names,
+   * which will be ignored.
+   * @returns: true if fileId and pathName matches the jamFileNames table.
+   */
+  static bool verifyId(Uint32 fileId, const char *pathName);
+
+  explicit JamEvent() : m_jamVal(0x7fffffff) {}
+
+  explicit JamEvent(Uint32 fileId, Uint32 lineNo)
+      : m_jamVal(fileId << 16 | lineNo) {}
+
+  Uint32 getFileId() const { return (m_jamVal >> 16) & 0x7fff; }
+
+  // Get the name of the source file, or NULL if unknown.
+  const char *getFileName() const;
+
+  Uint32 getLineNo() const { return m_jamVal & 0xffff; }
+
+  bool isEmpty() const { return m_jamVal == 0x7fffffff; }
+
+  /*
+    True if the next JamEvent is the first in the execution of an incoming
+    signal.
+  */
+  bool isEndOfSig() const { return (m_jamVal >> 31) == 1; }
+
+  /*
+    Mark this event as the last one before the execution of the next incoming
+    signal. (We mark the last event before a signal instead of the fist event
+    in a signal since this makes jam() more efficient, by eliminating the need
+    to preserve bit 31 in the event that it accesses.)
+  */
+  void setEndOfSig(bool isEnd) { m_jamVal |= (isEnd << 31); }
+
+ private:
+  /*
+    Bit 0-15:  line number.
+    Bit 16-30: JAM_FILE_ID.
+    Bit 31:    True if next JamEvent is the beginning of an incoming signal.
+  */
+  Uint32 m_jamVal;
 };
-#endif
+
+/***
+ * This is a ring buffer of JamEvents for a thread.
+ */
+struct EmulatedJamBuffer {
+  // Index of the next entry.
+  Uint32 theEmulatedJamIndex;
+  JamEvent theEmulatedJam[EMULATED_JAM_SIZE];
+
+  // Mark current JamEvent as the last one before processing a new signal.
+  void markEndOfSigExec() {
+    const Uint32 eventNo = (theEmulatedJamIndex - 1) & JAM_MASK;
+    theEmulatedJam[eventNo].setEndOfSig(true);
+  }
+};
 
 struct EmulatorData {
-  class Configuration * theConfiguration;
-  class WatchDog      * theWatchDog;
-  class ThreadConfig  * theThreadConfig;
-  class SimBlockList  * theSimBlockList;
-  class SocketServer  * m_socket_server;
-  class Ndbd_mem_manager * m_mem_manager;
+  class Configuration *theConfiguration;
+  class WatchDog *theWatchDog;
+  class ThreadConfig *theThreadConfig;
+  class SimBlockList *theSimBlockList;
+  class SocketServer *m_socket_server;
+  class Ndbd_mem_manager *m_mem_manager;
+
+  // Single threaded only
+  EmulatedJamBuffer *m_st_jam_buffer;
 
   /**
    * Constructor
@@ -65,12 +143,12 @@ struct EmulatorData {
    *  Sets all the pointers to NULL
    */
   EmulatorData();
-  
+
   /**
    * Create all the objects
    */
   void create();
-  
+
   /**
    * Destroys all the objects
    */
@@ -80,8 +158,16 @@ struct EmulatorData {
 extern struct EmulatorData globalEmulatorData;
 
 /**
+ * Get number of extra send buffer pages to use
+ */
+Uint32 mt_get_extra_send_buffer_pages(Uint32 curr_num_pages,
+                                      Uint32 extra_mem_pages);
+
+/**
  * Compute no of pages to be used as job-buffer
  */
-Uint32 compute_jb_pages(struct EmulatorData* ed);
+Uint32 compute_jb_pages(struct EmulatorData *ed);
 
-#endif 
+#undef JAM_FILE_ID
+
+#endif

@@ -3,7 +3,6 @@
 # Access Type: Static                                                         #
 # Data Type: numeric                                                          #
 
---source include/have_innodb.inc
 
 SELECT @@GLOBAL.innodb_max_purge_lag_delay;
 --echo 0 Expected
@@ -13,9 +12,11 @@ SET @@GLOBAL.innodb_max_purge_lag_delay=1;
 SELECT COUNT(@@GLOBAL.innodb_max_purge_lag_delay);
 --echo 1 Expected
 
+--disable_warnings
 SELECT VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_max_purge_lag_delay';
+--enable_warnings
 --echo 1 Expected
 
 SELECT @@innodb_max_purge_lag_delay = @@GLOBAL.innodb_max_purge_lag_delay;
@@ -33,7 +34,7 @@ SELECT COUNT(@@SESSION.innodb_max_purge_lag_delay);
 --echo Expected error 'Variable is a GLOBAL variable'
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_max_purge_lag_delay = @@SESSION.innodb_max_purge_lag_delay;
+SELECT innodb_max_purge_lag_delay;
 
 set global innodb_max_purge_lag_delay = -1;
 set global innodb_max_purge_lag_delay = 1000000;

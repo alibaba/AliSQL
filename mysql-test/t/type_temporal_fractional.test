@@ -1,3 +1,4 @@
+--source include/no_valgrind_without_big.inc
 
 #SET @@default_storage_engine=InnoDB;
 
@@ -163,7 +164,7 @@ DROP TABLE t1;
 --echo #
 CREATE TABLE t1 (a DECIMAL(23,4));
 INSERT INTO t1 VALUES (NULL),(101010.9999),(-101010.9999);
-INSERT INTO t1 VALUES (9999999999999999999999.1), (999999.1);
+INSERT IGNORE INTO t1 VALUES (9999999999999999999999.1), (999999.1);
 SELECT a, CAST(a AS TIME(3)) FROM t1;
 DROP TABLE t1;
 
@@ -275,28 +276,6 @@ SELECT a, CAST(a AS TIME) FROM t1;
 UPDATE t1 SET a=-a;
 SELECT a, CAST(a AS TIME) FROM t1;
 DROP TABLE t1;
-
---echo #
---echo # Testing rounding with FROM_UNIXTIME
---echo #
-SET time_zone='+00:00';
-CREATE TABLE t1 (a DECIMAL(20,7));
-INSERT INTO t1 VALUES
-  (2147483647.999999),
-  (2147483647.9999990),
-  (2147483647.9999991),
-  (2147483647.9999992),
-  (2147483647.9999993),
-  (2147483647.9999994),
-  (2147483647.9999995),
-  (2147483647.9999996),
-  (2147483647.9999997),
-  (2147483647.9999998),
-  (2147483647.9999999);
-SELECT a, FROM_UNIXTIME(a) FROM t1;
-DROP TABLE t1;
-SET time_zone=DEFAULT;
-
 
 --echo #
 --echo # Testing internal representation format for TIME(N)
@@ -504,6 +483,7 @@ ALTER TABLE t1 ADD KEY(a);
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t1 ORDER BY a DESC;
 
+analyze table t1;
 EXPLAIN SELECT * FROM t1 WHERE a='01:02:03.456700';
 SELECT * FROM t1 WHERE a='01:02:03.456700';
 SELECT * FROM t1 WHERE a BETWEEN '01:02:00' AND '01:03:00';
@@ -532,6 +512,7 @@ DROP TABLE t1;
 --echo #
 --echo # Testing bad values
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a TIME(6));
 INSERT INTO t1 VALUES (106060);
 INSERT INTO t1 VALUES (106060.0);
@@ -539,7 +520,7 @@ INSERT INTO t1 VALUES (106060e0);
 INSERT INTO t1 VALUES ('106060');
 SELECT * FROM t1;
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo #
 --echo # Testing bad values with TRADITIONAL mode
 --echo #
@@ -597,6 +578,7 @@ DROP TABLE t1;
 --echo #
 --echo # Testing huge values
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a TIME(6));
 INSERT INTO t1 VALUES (CAST(0xFFFFFFFF00000000 AS SIGNED));
 INSERT INTO t1 VALUES (CAST(0xFFFFFFFF00000000 AS UNSIGNED));
@@ -616,7 +598,7 @@ CREATE TABLE t1 (a TIME(6));
 INSERT INTO t1 VALUES ('00:00:00.111111 xxx');
 SELECT * FROM t1;
 DROP TABLE t1;
-
+SET sql_mode = default;
 
 --echo #
 --echo # Testing IN
@@ -642,7 +624,8 @@ SELECT * FROM t1 WHERE a IN (0.000001, -990000.000001, 990000.000001);
 --echo #
 --echo # Testing Item_temporal_with_ref::print
 --echo #
-EXPLAIN EXTENDED SELECT * FROM t1 WHERE a IN (990000,0);
+analyze table t1;
+EXPLAIN SELECT * FROM t1 WHERE a IN (990000,0);
 
 --echo #
 --echo # Testing IN with index: field->store_packed
@@ -830,6 +813,7 @@ DROP TABLE t1;
 --echo #
 --echo # Testing INSERT with near-maximum and near-minimum supported values.
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a TIME(6));
 INSERT INTO t1 VALUES ('838:59:59.999999');
 INSERT INTO t1 VALUES ('838:59:59');
@@ -938,7 +922,7 @@ INSERT INTO t1 VALUES (-8385959.999999e0);
 INSERT INTO t1 VALUES (-8390000.0e0);
 SELECT * FROM t1;
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo #
 --echo # Testing UPDATE between TIME(6) and TIME/INT/DECIMAL/FLOAT
 --echo #
@@ -1193,10 +1177,10 @@ SELECT SUBTIME(TIME'00:00:00.000000', TIME'00:00:00');
 --echo # Testing TIME + INTERVAL
 --echo #
 SELECT CAST('00:00:00' AS TIME) + INTERVAL 2000 HOUR;
-SELECT CAST('00:00:00' AS TIME) + INTERVAL 34 DAY;
-SELECT CAST('00:00:00' AS TIME) + INTERVAL 35 DAY;
-SELECT CAST('00:00:00' AS TIME) + INTERVAL 1 MONTH;
-SELECT CAST('00:00:00' AS TIME) + INTERVAL 1 YEAR;
+SELECT TIME(CAST('00:00:00' AS TIME) + INTERVAL 34 DAY);
+SELECT TIME(CAST('00:00:00' AS TIME) + INTERVAL 35 DAY);
+SELECT TIME(CAST('00:00:00' AS TIME) + INTERVAL 1 MONTH);
+SELECT TIME(CAST('00:00:00' AS TIME) + INTERVAL 1 YEAR);
 SET @@timestamp=UNIX_TIMESTAMP('2001-01-01 00:00:00');
 SELECT CAST(CAST('00:00:00.123456' AS TIME(6)) + INTERVAL 1 DAY AS DATETIME(6)); 
 SET @@timestamp=default;
@@ -1337,16 +1321,16 @@ SET @@timestamp=default;
 
 
 --echo #
---echo # Testing EXPLAIN EXTENDED SELECT for CAST(TIME(N))
+--echo # Testing EXPLAIN SELECT for CAST(TIME(N))
 --echo #
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS TIME);
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS TIME(0));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS TIME(1));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS TIME(2));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS TIME(3));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS TIME(4));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS TIME(5));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS TIME(6));
+EXPLAIN SELECT CAST('10:10:10' AS TIME);
+EXPLAIN SELECT CAST('10:10:10' AS TIME(0));
+EXPLAIN SELECT CAST('10:10:10' AS TIME(1));
+EXPLAIN SELECT CAST('10:10:10' AS TIME(2));
+EXPLAIN SELECT CAST('10:10:10' AS TIME(3));
+EXPLAIN SELECT CAST('10:10:10' AS TIME(4));
+EXPLAIN SELECT CAST('10:10:10' AS TIME(5));
+EXPLAIN SELECT CAST('10:10:10' AS TIME(6));
 
 
 --echo #
@@ -1697,6 +1681,7 @@ SELECT MAKETIME(838, 59, 59.00000056789);
 --echo #
 --echo # Testing CAST to TIME and TIME(6)
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 AS SELECT
 CAST(1 AS TIME),
 CAST(100000000 AS TIME),
@@ -1715,7 +1700,7 @@ CAST('1' AS TIME(6)),
 CAST(1e0 AS TIME(6));
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
-
+SET sql_mode = default;
 CREATE TABLE t1 (a TIME, b TIME(6));
 INSERT INTO t1 VALUES ('11:22:33', '11:22:33.123456');
 CREATE TABLE t2 AS SELECT CAST(a AS TIME), CAST(b AS TIME) FROM t1;
@@ -1729,14 +1714,14 @@ SHOW CREATE TABLE t2;
 DROP TABLE t2;
 
 --echo #
---echo # Testing Item_time_typecast::val_str
+--echo # Testing Item_typecast_time::val_str
 --echo #
 SELECT CONCAT(CAST(a AS TIME(0))), CONCAT(CAST(b AS TIME(0))) FROM t1;
 SELECT CONCAT(CAST(a AS TIME(6))), CONCAT(CAST(b AS TIME(6))) FROM t1;
 SELECT CONCAT(CAST(a AS TIME)), CONCAT(CAST(b AS TIME)) FROM t1;
 
 --echo #
---echo # Testing Item_time_typecast::get_time
+--echo # Testing Item_typecast_time::get_time
 --echo #
 SELECT CAST(a AS TIME(0)), CAST(b AS TIME(0)) FROM t1;
 SELECT CAST(a AS TIME(6)), CAST(b AS TIME(6)) FROM t1;
@@ -1744,12 +1729,12 @@ SELECT CAST(a AS TIME), CAST(b AS TIME) FROM t1;
 DROP TABLE t1;
 
 --echo #
---echo # Testing Item_time_typecast::val_int
+--echo # Testing Item_typecast_time::val_int
 --echo #
 SELECT CAST('10:11:12' AS TIME(0)) + 1;
 
 --echo #
---echo # Testing Item_time_typecast::val_decimal
+--echo # Testing Item_typecast_time::val_decimal
 --echo #
 SELECT CAST('10:11:12' AS TIME(6)) + 1;
 
@@ -1815,7 +1800,7 @@ SELECT CAST(101112.123 AS TIME(0)) = 101112;
 SELECT CAST(101112.123e0 AS TIME(0)) = 101112;
 
 --echo #
---echo # Testing Item_time_typecast::val_int_packed()
+--echo # Testing Item_typecast_time::val_int_packed()
 --echo #
 CREATE TABLE t1 (a TIME, b TIME(6));
 INSERT INTO t1 VALUES ('24:00:00', '24:00:00.123456');
@@ -2234,6 +2219,7 @@ ALTER TABLE t1
   ADD d0 DATETIME(0),
   ADD d1 DATETIME(1), ADD d2 DATETIME(2), ADD d3 DATETIME(3),
   ADD d4 DATETIME(4), ADD d5 DATETIME(5), ADD d6 DATETIME(6);
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t1 SET
   a0= LEFT(a6, LENGTH(a6) - 6),
   a1= LEFT(a6, LENGTH(a6) - 5),
@@ -2241,7 +2227,7 @@ UPDATE t1 SET
   a3= LEFT(a6, LENGTH(a6) - 3),
   a4= LEFT(a6, LENGTH(a6) - 2),
   a5= LEFT(a6, LENGTH(a6) - 1);
-UPDATE t1 SET d0= a0, d1= a1, d2= a2, d3= a3, d4= a4, d5= a5, d6= a6;
+UPDATE IGNORE t1 SET d0= a0, d1= a1, d2= a2, d3= a3, d4= a4, d5= a5, d6= a6;
 SELECT a6, d6, HEX(WEIGHT_STRING(d6)) FROM t1 ORDER BY d6;
 SELECT a5, d5, HEX(WEIGHT_STRING(d5)) FROM t1 ORDER BY d5, a6;
 SELECT a4, d4, HEX(WEIGHT_STRING(d4)) FROM t1 ORDER BY d4, a6;
@@ -2262,6 +2248,7 @@ FROM t1;
 --query_vertical SELECT * FROM  v1 WHERE a6 LIKE '%.999999' ORDER BY a6, d6;
 --query_vertical SELECT * FROM  v1 WHERE a6 LIKE '%.000000' ORDER BY a6, d6;
 --query_vertical SELECT * FROM  v1 WHERE a6 LIKE '%.100000' ORDER BY a6, d6;
+SET sql_mode = default;
 DROP VIEW v1;
 DROP TABLE t1;
 
@@ -2297,6 +2284,7 @@ SELECT NOW(31);
 --echo #
 --echo # Testing INSERT, ORDER, KEY, BETWEEN, comparison
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a DATETIME(6) NOT NULL);
 INSERT INTO t1 VALUES ('0000-00-00 00:00:00.000000');
 INSERT INTO t1 VALUES ('0000-00-00 23:59:59.999999');
@@ -2320,6 +2308,7 @@ ALTER TABLE t1 ADD KEY(a);
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t1 ORDER BY a DESC;
 
+analyze table t1;
 EXPLAIN SELECT * FROM t1 WHERE a='2000-01-01 01:02:03.456700';
 SELECT * FROM t1 WHERE a='2000-01-01 01:02:03.456700';
 SELECT * FROM t1 WHERE a BETWEEN '2000-01-01 01:02:00' AND '2000-01-01 01:03:00';
@@ -2388,11 +2377,11 @@ INSERT INTO t1 VALUES (-100000000000000000.1);
 INSERT INTO t1 VALUES (-100000000000000000.1e0);
 SELECT * FROM t1;
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo #
 --echo # Testing values with zeros in dates
 --echo #
-SET sql_mode=no_zero_in_date;
+SET sql_mode='NO_ZERO_IN_DATE';
 CREATE TABLE t1 (a DATETIME, b DATETIME(6));
 INSERT INTO t1 VALUES ('1999-00-00 00:00:00', '1999-00-00 00:00:00');
 SELECT * FROM t1;
@@ -2449,6 +2438,7 @@ SET sql_mode=default;
 --echo #
 --echo # Testing rounding
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a DATETIME(6));
 INSERT INTO t1 VALUES (20010101100000.1234567);
 INSERT INTO t1 VALUES (20010228235959.9999997);
@@ -2601,6 +2591,7 @@ INSERT INTO t1 VALUES ('2000-01-01 10:00:00.000002');
 INSERT INTO t1 VALUES ('2000-01-01 23:00:00.000000');
 INSERT INTO t1 VALUES ('2000-01-01 23:00:00.000001');
 INSERT INTO t1 VALUES ('2000-01-01 23:00:00.000002');
+--skip_if_hypergraph   # Different warnings.
 SELECT * FROM t1 WHERE a IN ('2000-01-01 00:00:00', '0000-00-00 00:00:00.000001', '2000-01-01 23:00:00.000002');
 SELECT * FROM t1 WHERE a IN (0, 20000101000000, 20000101230000);
 SELECT * FROM t1 WHERE a IN (0.000001, 20000101000000.000001, 20000101230000.000001);
@@ -2608,11 +2599,13 @@ SELECT * FROM t1 WHERE a IN (0e0, 0.000001e0);
 --echo #
 --echo # Testing Item_temporal_with_ref::print
 --echo #
-EXPLAIN EXTENDED SELECT * FROM t1 WHERE a IN (0.000001,0);
+analyze table t1;
+EXPLAIN SELECT * FROM t1 WHERE a IN (0.000001,0);
 --echo #
 --echo # Testing IN with index: involves field->store_packed()
 --echo #
 ALTER TABLE t1 ADD KEY(a);
+--skip_if_hypergraph   # Different warnings.
 SELECT * FROM t1 WHERE a IN ('2000-01-01 00:00:00', '0000-00-00 00:00:00.000001','2000-01-01 23:00:00.000002');
 SELECT * FROM t1 WHERE a IN (0, 20000101000000, 20000101230000);
 SELECT * FROM t1 WHERE a IN (0.000001, 20000101000000.000001, 20000101230000.000001);
@@ -3035,7 +3028,7 @@ FROM t1;
 SHOW CREATE TABLE t2;
 DROP TABLE t2;
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo #
 --echo # Testing functions ADDTIME, SUBTIME, TIMESTAMP, TIMEDIFF, DATE_ADD/SUB
 --echo #
@@ -3143,6 +3136,7 @@ DROP TABLE t1;
 --echo #
 --echo # Testing copy from DATETIME to DATETIME(6) and vice versa
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a DATETIME(6), b DATETIME);
 INSERT INTO t1 VALUES ('2001-01-01 01:02:03.123456','0000-00-00 00:00:00');
 UPDATE t1 SET b=a;
@@ -3214,16 +3208,16 @@ DROP TABLE t1;
 
 
 --echo #
---echo # Testing EXPLAIN EXTENDED SELECT for CAST(DATETIME(N))
+--echo # Testing EXPLAIN SELECT for CAST(DATETIME(N))
 --echo #
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS DATETIME);
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS DATETIME(0));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS DATETIME(1));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS DATETIME(2));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS DATETIME(3));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS DATETIME(4));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS DATETIME(5));
-EXPLAIN EXTENDED SELECT CAST('10:10:10' AS DATETIME(6));
+EXPLAIN SELECT CAST('10:10:10' AS DATETIME);
+EXPLAIN SELECT CAST('10:10:10' AS DATETIME(0));
+EXPLAIN SELECT CAST('10:10:10' AS DATETIME(1));
+EXPLAIN SELECT CAST('10:10:10' AS DATETIME(2));
+EXPLAIN SELECT CAST('10:10:10' AS DATETIME(3));
+EXPLAIN SELECT CAST('10:10:10' AS DATETIME(4));
+EXPLAIN SELECT CAST('10:10:10' AS DATETIME(5));
+EXPLAIN SELECT CAST('10:10:10' AS DATETIME(6));
 
 --echo #
 --echo # Testing CAST with bad FSPs
@@ -3698,14 +3692,14 @@ SHOW CREATE TABLE t2;
 DROP TABLE t2;
 
 --echo #
---echo # Testing Item_datetime_typecast::val_str
+--echo # Testing Item_typecast_datetime::val_str
 --echo #
 SELECT CONCAT(CAST(a AS DATETIME(0))), CONCAT(CAST(b AS DATETIME(0))) FROM t1;
 SELECT CONCAT(CAST(a AS DATETIME(6))), CONCAT(CAST(b AS DATETIME(6))) FROM t1;
 SELECT CONCAT(CAST(a AS DATETIME)), CONCAT(CAST(b AS DATETIME)) FROM t1;
 
 --echo #
---echo # Testing Item_datetime_typecast::get_time
+--echo # Testing Item_typecast_datetime::get_time
 --echo #
 SELECT CAST(a AS DATETIME(0)), CAST(b AS DATETIME(0)) FROM t1;
 SELECT CAST(a AS DATETIME(6)), CAST(b AS DATETIME(6)) FROM t1;
@@ -3713,12 +3707,12 @@ SELECT CAST(a AS DATETIME), CAST(b AS DATETIME) FROM t1;
 DROP TABLE t1;
 
 --echo #
---echo # Testing Item_datetime_typecast::val_int
+--echo # Testing Item_typecast_datetime::val_int
 --echo #
 SELECT CAST('2001-01-01 10:11:12' AS DATETIME(0)) + 1;
 
 --echo #
---echo # Testing Item_time_typecast::val_decimal
+--echo # Testing Item_typecast_time::val_decimal
 --echo #
 SELECT CAST('2001-01-01 10:11:12' AS DATETIME(6)) + 1;
 
@@ -3763,7 +3757,7 @@ SELECT CAST(20010101101112.123 AS DATETIME(0))        = 20010101101112;
 SELECT CAST(00010101101112.123e0 AS DATETIME(0))      = 20010101101112;
 
 --echo #
---echo # Testing Item_time_typecast::val_int_packed()
+--echo # Testing Item_typecast_time::val_int_packed()
 --echo #
 CREATE TABLE t1 (a DATETIME, b DATETIME(6));
 INSERT INTO t1 VALUES ('2001-01-01 23:00:00', '2001-01-01 23:00:00.123456');
@@ -4374,6 +4368,7 @@ ALTER TABLE t1 ADD KEY(a);
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t1 ORDER BY a DESC;
 
+analyze table t1;
 EXPLAIN SELECT * FROM t1 WHERE a='2000-01-01 01:02:03.456700';
 SELECT * FROM t1 WHERE a='2000-01-01 01:02:03.456700';
 SELECT * FROM t1 WHERE a BETWEEN '2000-01-01 01:02:00' AND '2000-01-01 01:03:00';
@@ -4478,13 +4473,14 @@ INSERT INTO t1 VALUES ('2000-01-01 23:00:00.000000');
 INSERT INTO t1 VALUES ('2000-01-01 23:00:00.000001');
 INSERT INTO t1 VALUES ('2000-01-01 23:00:00.000002');
 SELECT * FROM t1;
+--skip_if_hypergraph   # Different warnings.
 SELECT * FROM t1 WHERE a IN ('2000-01-01 00:00:00', '0000-00-00 00:00:00.000001', '2000-01-01 23:00:00.000002');
 SELECT * FROM t1 WHERE a IN (0, 20000101000000, 20000101230000);
 # This returns an empty set with a warning:
 SELECT * FROM t1 WHERE a=0.1;
 # So does this:
 SELECT * FROM t1 WHERE a IN (0.1);
-# Perhaps it's fine, as INSERT INTO t1 VALUES (0.1) stores '0000-00-00 00:00:00'
+# Perhaps it is fine, as INSERT INTO t1 VALUES (0.1) stores '0000-00-00 00:00:00'
 # "IN (0.000001)" also returns '0000-00-00 00:00:00' for the same reasons
 SELECT * FROM t1 WHERE a IN (20000101000000.000001, 20000101230000.000001);
 # The following query returns an empty set with a warning
@@ -4499,6 +4495,7 @@ SELECT * FROM t1 WHERE a IN (0e0, 0.000001e0);
 --echo # Testing IN with index: involves field->store_packed()
 --echo #
 ALTER TABLE t1 ADD KEY(a);
+--skip_if_hypergraph   # Different warnings.
 SELECT * FROM t1 WHERE a IN ('2000-01-01 00:00:00', '0000-00-00 00:00:00.000001', '2000-01-01 23:00:00.000002');
 SELECT * FROM t1 WHERE a IN (0, 20000101000000, 20000101230000);
 SELECT * FROM t1 WHERE a IN (0.000001, 20000101000000.000001, 20000101230000.000001);
@@ -5611,7 +5608,6 @@ SET @a=20010101112233.123456;
 SELECT * FROM t1 WHERE a=@a;
 SET @a=20010101000000.1e0;
 SELECT @a;
-# Nothing is found, not enough precision for DOUBLE
 SELECT * FROM t1 WHERE a=@a;
 SET @a=NULL;
 SELECT a INTO @a FROM t1 LIMIT 1;
@@ -6213,14 +6209,11 @@ INSERT INTO t1 VALUES ('1000-00-01 00:00:00');
 INSERT INTO t1 VALUES (TIMESTAMP'1000-00-01 00:00:00');
 SELECT * FROM t1;
 DROP TABLE t1;
-SET sql_mode=default;
 
 # SYSDATE(n) post-decimal digits are not zeros
 # Disable warnings, see Bug#61216: Incorrect warning for "datetime LIKE string"
---disable_warnings
 SELECT SYSDATE(6) LIKE '____-__-__ __:__:__.______';
 SELECT SYSDATE(6) NOT LIKE '%.000000' || SYSDATE(6) NOT LIKE '%.000000';
---enable_warnings
 
 CREATE TABLE t1 (s1 DATETIME(2));
 INSERT INTO t1 VALUES ('1970-01-01 11:11:11.1234');
@@ -6366,6 +6359,7 @@ CREATE TABLE t1 (
   col_datetime_4_not_null_key datetime(4) NOT NULL,
   KEY col_time_3_not_null_key (col_time_3_not_null_key),
   KEY col_datetime_4_not_null_key (col_datetime_4_not_null_key));
+--skip_if_hypergraph   # Different warnings.
 SELECT col_time_3_not_null_key 
 FROM t1 
 WHERE col_datetime_4_not_null_key > 7;
@@ -6420,6 +6414,8 @@ CREATE TABLE t1 (
   KEY col_time_not_null_key (col_time_not_null_key),
   KEY col_time_4_not_null_key (col_time_4_not_null_key))
 /*!50100 PARTITION BY KEY (pk)PARTITIONS 2 */;
+--source include/turn_off_only_full_group_by.inc
+
 SELECT col_datetime_3_key , COUNT( col_timestamp_5_key )
 FROM t1 FORCE KEY
   (PRIMARY, col_datetime_5_not_null_key, col_datetime_6_key, col_time_5_key, col_time_2_key) 
@@ -6452,6 +6448,8 @@ AND
 AND
 (col_datetime_4_not_null_key IS NULL OR col_time_5_key BETWEEN '20051201163954.001782' AND '0000-00-00 00:00:00')
 GROUP BY col_datetime_6_not_null_key;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1;
 
 
@@ -6515,6 +6513,8 @@ INSERT INTO t1 VALUES
   ('0000-00-00 00:00:00.00','0000-00-00 00:00:00.00000','00:20:04','23:19:52','2011-07-19 17:37:13.26725'),
   ('0000-00-00 00:00:00.00','2008-06-04 23:05:50.03642','00:20:03','22:28:03','2011-07-19 17:37:14.26725'),
   ('2000-10-22 23:52:09.01',NULL,'00:20:07','00:20:07','2011-07-19 17:37:15.26725');
+# Different warnings in the hypergraph optimizer.
+--disable_warnings
 SELECT col_datetime_2_not_null_key AS c1, col_time_not_null AS c2
 FROM t1
 WHERE
@@ -6525,6 +6525,7 @@ WHERE
 OR
   col_datetime_5 = CURRENT_DATE()
 ORDER BY 1;
+--enable_warnings
 DROP TABLE t1;
 SET timestamp=DEFAULT;
 
@@ -6737,7 +6738,7 @@ CREATE TABLE t1 (
   KEY col_timestamp_4_not_null_key (col_timestamp_4_not_null_key),
   KEY col_date_key (col_date_key),
   KEY col_time_3_not_null_key (col_time_3_not_null_key)
-) ENGINE=MEMORY /*!50100 PARTITION BY KEY (pk)PARTITIONS 2 */;
+) ENGINE=InnoDB /*!50100 PARTITION BY KEY (pk)PARTITIONS 2 */;
 INSERT INTO t1 VALUES (
   CURRENT_TIME(5),
   CURRENT_TIMESTAMP(4),
@@ -6932,6 +6933,7 @@ INSERT INTO t1 VALUES (
   CURRENT_TIME(1),
   CURRENT_TIMESTAMP(),
   CURRENT_TIMESTAMP(4));
+--skip_if_hypergraph  # Different warnings.
 SELECT col_datetime_5_not_null AS c1, col_time_1_not_null_key AS c2 
 FROM t1 
 WHERE
@@ -7003,14 +7005,11 @@ CREATE TABLE t1 (
   KEY col_time_2_key (col_time_2_key)
 )/*!50100 PARTITION BY KEY (pk)PARTITIONS 2 */;
 INSERT INTO t1 VALUES ('00:20:02','2007-08-09 05:14:12.05054','2007-06-20 21:00:00.000000','06:16:36.0','2011-09-09 21:37:45.2','19:15:37.02'),('18:00:14','0000-00-00 00:00:00.00000','2000-12-10 12:35:01.029761','00:20:04.0','2011-09-09 21:37:46.2','06:21:03.03');
-# different warnings in server and embedded run
---disable_warnings
 SELECT col_time_1 AS c1 
 FROM t1 
 WHERE col_time_not_null_key <= col_timestamp_6_key
 AND col_time_2_key > SUBTIME('2006-07-16', '05:05:02.040778')
 ORDER BY col_datetime_5_not_null_key, col_time_1;
---enable_warnings
 DROP TABLE t1;
 
 #
@@ -7054,7 +7053,7 @@ CREATE TABLE t1 (
   KEY col_time_1_not_null_key (col_time_1_not_null_key),
   KEY col_datetime_3_not_null_key (col_datetime_3_not_null_key),
   KEY col_time_2_key (col_time_2_key)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) DEFAULT CHARSET=latin1
 /*!50100 PARTITION BY KEY (pk)PARTITIONS 2 */;
 INSERT INTO t1 VALUES ('00:20:05.0','1999-12-31 21:00:01','0000-00-00 00:00:00.000','04:25:59.01');
 INSERT INTO t1 VALUES ('00:15:56.0','1999-12-31 21:00:03','0000-00-00 00:00:00.000','00:20:06.00');
@@ -7136,8 +7135,8 @@ CREATE TABLE t1 (
   col_date_not_null_key date NOT NULL,
   KEY col_date_not_null_key (col_date_not_null_key));
 INSERT INTO t1 VALUES ('0000-00-00'), ('2000-11-20'); 
-SELECT ADDTIME(GREATEST(col_date_not_null_key, '2007-03-11 08:51:19.009408'),
-               '12:20:40.029940')
+SELECT ADDTIME(GREATEST(col_date_not_null_key, TIMESTAMP '2007-03-11 08:51:19.009408'),
+              '12:20:40.029940')
 FROM t1; 
 DROP TABLE t1;
 
@@ -7373,6 +7372,7 @@ CREATE TABLE t1 (
 key (col_datetime_6_not_null_key),
 key (col_datetime_3_key)) ENGINE=innodb;
 CREATE OR REPLACE VIEW v1 AS SELECT * FROM t1;
+--skip_if_hypergraph   # Different warnings.
 SELECT col_datetime_3_key AS c1 FROM v1
 WHERE SYSDATE() IS NULL
 OR col_datetime_6_not_null_key < TIMEDIFF('0000-00-00','2002-11-24' )
@@ -7474,7 +7474,7 @@ CREATE TABLE t1 (
   PRIMARY KEY (pk),
   KEY col_datetime_1_key (col_datetime_1_key),
   KEY col_datetime_6_not_null_key (col_datetime_6_not_null_key))
-ENGINE=MyISAM DEFAULT CHARSET=latin1;
+  DEFAULT CHARSET=latin1;
 INSERT INTO t1 VALUES ('19:14:35.36','0000-00-00 00:00:00.000','0000-00-00 00:00:00.0','2000-08-28 07:34:20.051690','2009-09-20 07:32:39.06');
 INSERT INTO t1 VALUES ('19:14:37.36','2005-07-04 08:03:50.051','0000-00-00 00:00:00.0','0000-00-00 00:00:00.000000','0000-00-00 00:00:00.00');
 INSERT INTO t1 VALUES ('19:14:39.36','0000-00-00 00:00:00.000',NULL,'2005-10-11 07:24:45.059064','2009-11-19 00:00:00.00');
@@ -7543,7 +7543,7 @@ SELECT TIMESTAMP'2001-01-01 00:00:00' = TIME(NULL);
 
 ## TS-TODO-QA: foreign keys
 ## TS-TODO-QA: complex queries with keys, JOIN, ORDER, many tables
-## TS-TODO-QA: EXPLAIN, EXPLAIN EXTENDED, to fix that we correctly use keys for queries
+## TS-TODO-QA: EXPLAIN, EXPLAIN, to fix that we correctly use keys for queries
 ## TS-TODO-QA: (and not only for SELECT).
 ## TS-TODO-QA: tests with auto_increment, auto update, other subselects
 
@@ -7647,26 +7647,26 @@ INSERT INTO t1 VALUES ('2000-07-16 05:58:04.035');
 INSERT INTO t1 VALUES ('2008-08-21 00:00:00.000');
 INSERT INTO t1 VALUES ('0000-00-00 00:00:00.000');
 --echo # Testing INT number
-SELECT GREATEST(a, 1323) FROM t1;
-(SELECT GREATEST(a, 1323) FROM t1) UNION ALL (SELECT GREATEST(a, 1323) FROM t1 LIMIT 0);
-SELECT LEAST(a, 1323) FROM t1;
-(SELECT LEAST(a, 1323) FROM t1) UNION ALL (SELECT LEAST(a, 1323) FROM t1 LIMIT 0);
+SELECT GREATEST(a, 20010101120000) FROM t1;
+(SELECT GREATEST(a, 20010101120000) FROM t1) UNION ALL (SELECT GREATEST(a, 20010101120000) FROM t1 LIMIT 0);
+SELECT LEAST(a, 20010101120000) FROM t1;
+(SELECT LEAST(a, 20010101120000) FROM t1) UNION ALL (SELECT LEAST(a, 20010101120000) FROM t1 LIMIT 0);
 --echo # Testing DECIMAL number 
-SELECT GREATEST(a, 1323.123456) FROM t1;
-(SELECT GREATEST(a, 1323.123456) FROM t1) UNION ALL (SELECT GREATEST(a, 1323.123456) FROM t1 LIMIT 0);
-SELECT LEAST(a, 1323.123456) FROM t1;
-(SELECT LEAST(a, 1323.123456) FROM t1) UNION ALL (SELECT LEAST(a, 1323.123456) FROM t1 LIMIT 0);
+SELECT GREATEST(a, 20010101120000.123456) FROM t1;
+(SELECT GREATEST(a, 20010101120000.123456) FROM t1) UNION ALL (SELECT GREATEST(a, 20010101120000.123456) FROM t1 LIMIT 0);
+SELECT LEAST(a, 20010101120000.123456) FROM t1;
+(SELECT LEAST(a, 20010101120000.123456) FROM t1) UNION ALL (SELECT LEAST(a, 20010101120000.123456) FROM t1 LIMIT 0);
 --echo # Testing REAL number
-SELECT GREATEST(a, 1323e0) FROM t1;
-(SELECT GREATEST(a, 1323e0) FROM t1) UNION ALL (SELECT GREATEST(a, 1323e0) FROM t1 LIMIT 0);
-SELECT LEAST(a, 1323e0) FROM t1;
-(SELECT LEAST(a, 1323e0) FROM t1) UNION ALL (SELECT LEAST(a, 1323e0) FROM t1 LIMIT 0);
+SELECT GREATEST(a, 20010101120000e0) FROM t1;
+(SELECT GREATEST(a, 20010101120000e0) FROM t1) UNION ALL (SELECT GREATEST(a, 20010101120000e0) FROM t1 LIMIT 0);
+SELECT LEAST(a, 20010101120000e0) FROM t1;
+(SELECT LEAST(a, 20010101120000e0) FROM t1) UNION ALL (SELECT LEAST(a, 20010101120000e0) FROM t1 LIMIT 0);
 DROP TABLE t1;
 
 --echo # Make sure precision of 6 fractional digits does not get lost
 CREATE TABLE t1 (a DATETIME(6));
 INSERT INTO t1 VALUES ('2001-01-01 01:01:01.123456');
-SELECT GREATEST(a,10), LEAST(a,10) FROM t1;
+SELECT GREATEST(a,20010101120000), LEAST(a,20010101120000) FROM t1;
 DROP TABLE t1;
 
 --echo #
@@ -7822,6 +7822,148 @@ INSERT INTO t VALUES (1, '0102031'), (2, '01020312'), (3, '010203123'), (4, '010
 (9, '01:02:0312.3');
 SELECT * FROM t ORDER BY key1;
 DROP TABLE t;
-
+SET sql_mode = default;
 
 --echo # End of 5.6 tests
+
+--echo #
+--echo # Bug#20565160 ASSERTION `SORT_FIELD->LENGTH >= LENGTH' FAILED
+--echo #
+
+SET NAMES utf8;
+
+CREATE TABLE t1 (
+  c datetime(1) NOT NULL,
+  KEY(c)
+)
+;
+
+INSERT INTO t1 VALUES
+('2002-08-12 22:00:00.0'),('2002-08-12 22:00:00.1'),('2002-08-12 22:00:00.2');
+
+SELECT LEAST(c , '2005-05-14' ) AS c1
+FROM t1
+ORDER BY 1;
+
+DROP TABLE t1;
+SET NAMES default;
+
+--echo # Bug#19900900 ASSERTION `!CHECK_DATETIME_RANGE(LTIME)' FAILED
+--echo #              TIME_TO_LONGLONG_DATETIME_PACKED
+--echo #
+
+SET @@session.sql_buffer_result=TRUE;
+CREATE TABLE t1(a DATETIME) engine=innodb;
+INSERT INTO t1 VALUES('9999-12-31 23:59:58.000015');
+SELECT ADDTIME(a, 100000) FROM t1;
+SET @@session.sql_buffer_result=default;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#29120569 SETTING OUT OF RANGE FRACTIONAL PART PRODUCES
+--echo #              INCORRECT TIMESTAMPS
+--echo #
+
+SET time_zone='+00:00';
+
+SET SESSION TIMESTAMP=1.9999996;
+SELECT CURRENT_TIMESTAMP(6);
+
+CREATE TABLE t0( ts TIMESTAMP(0) not null, dt DATETIME(0) not null);
+CREATE TABLE t1( ts TIMESTAMP(1) not null, dt DATETIME(1) not null);
+CREATE TABLE t2( ts TIMESTAMP(2) not null, dt DATETIME(2) not null);
+CREATE TABLE t3( ts TIMESTAMP(3) not null, dt DATETIME(3) not null);
+CREATE TABLE t4( ts TIMESTAMP(4) not null, dt DATETIME(4) not null);
+CREATE TABLE t5( ts TIMESTAMP(5) not null, dt DATETIME(5) not null);
+CREATE TABLE t6( ts TIMESTAMP(6) not null, dt DATETIME(6) not null);
+
+INSERT INTO t0 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t1 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t2 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t3 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t4 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t5 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t6 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+
+SELECT * FROM t0;
+SELECT * FROM t1;
+SELECT * FROM t2;
+SELECT * FROM t3;
+SELECT * FROM t4;
+SELECT * FROM t5;
+SELECT * FROM t6;
+
+DROP TABLE t0, t1, t2, t3, t4, t5, t6;
+
+SET sql_mode=time_truncate_fractional;
+
+SET SESSION TIMESTAMP=1.9999996;
+
+CREATE TABLE t0( ts TIMESTAMP(0) not null, dt DATETIME(0) not null);
+CREATE TABLE t1( ts TIMESTAMP(1) not null, dt DATETIME(1) not null);
+CREATE TABLE t2( ts TIMESTAMP(2) not null, dt DATETIME(2) not null);
+CREATE TABLE t3( ts TIMESTAMP(3) not null, dt DATETIME(3) not null);
+CREATE TABLE t4( ts TIMESTAMP(4) not null, dt DATETIME(4) not null);
+CREATE TABLE t5( ts TIMESTAMP(5) not null, dt DATETIME(5) not null);
+CREATE TABLE t6( ts TIMESTAMP(6) not null, dt DATETIME(6) not null);
+
+INSERT INTO t0 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t1 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t2 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t3 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t4 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t5 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+INSERT INTO t6 values (CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6));
+
+SELECT * FROM t0;
+SELECT * FROM t1;
+SELECT * FROM t2;
+SELECT * FROM t3;
+SELECT * FROM t4;
+SELECT * FROM t5;
+SELECT * FROM t6;
+
+DROP TABLE t0, t1, t2, t3, t4, t5, t6;
+
+SET sql_mode=default;
+SET SESSION TIMESTAMP=default;
+SET time_zone=default;
+
+--echo #
+--echo # Bug#29594951 DECIMAL2LLDIV_T REFERS TO UNINITIALIZED VALUES!
+--echo #
+
+CREATE TABLE t1 (c1 LONGTEXT);
+INSERT INTO t1 VALUES('2018-10-15 01:29:55');
+
+--error ER_INVALID_JSON_CHARSET
+SELECT * FROM t1 WHERE
+'2018-10-15 01:29:55'=(c1 + INTERVAL(json_keys(0xceedc36e,'$$')) SECOND);
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#29587536 UBSAN: SIGNED INTEGER OVERFLOW IN
+--echo #              ITEM_DATE_ADD_INTERVAL::GET_TIME_INTERNAL
+--echo #
+
+do date_add(utc_time(), interval(oct(-11779)) microsecond);
+
+--echo #
+--echo # Bug #31054071 UBSAN: SIGNED INTEGER OVERFLOW IN
+--echo #               ITEM_DATE_ADD_INTERVAL::GET_TIME_INTERNAL
+--echo #
+
+CREATE TABLE t(a TIME(1), b DECIMAL(55,13));
+INSERT INTO t(a,b) VALUES
+('-765:38:03.6',999999999999999999999999999999999999999999.9999999999999);
+SELECT a - INTERVAL(b) MICROSECOND FROM t;
+DROP TABLE t;
+
+--echo #
+--echo # Bug #30324587 	ASSERTION FAILED: (*REF)->IS_TEMPORAL()
+--echo #
+
+SELECT current_date IN ( MAX(NULL), 1 );
+SELECT current_time IN ( MAX(NULL), 1 );

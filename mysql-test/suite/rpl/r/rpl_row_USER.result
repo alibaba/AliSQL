@@ -1,12 +1,12 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 DROP DATABASE IF EXISTS mysqltest1;
 CREATE DATABASE mysqltest1;
-CREATE USER tester IDENTIFIED BY 'test';
-GRANT ALL ON mysqltest1.* TO 'tester'@'%' IDENTIFIED BY 'test';
+CREATE USER tester IDENTIFIED BY 'test', ''@'localhost%';
+GRANT ALL ON mysqltest1.* TO 'tester'@'%';
 GRANT ALL ON mysqltest1.* TO ''@'localhost%';
 FLUSH PRIVILEGES;
 CREATE TABLE mysqltest1.t1 (a INT, users VARCHAR(255), PRIMARY KEY(a));
@@ -40,7 +40,7 @@ include/sync_slave_sql_with_master.inc
 DROP DATABASE IF EXISTS mysqltest1;
 CREATE DATABASE mysqltest1;
 CREATE USER 'tester1'@'' IDENTIFIED BY 'test';
-GRANT ALL ON mysqltest1.* TO 'tester1'@'' IDENTIFIED BY 'test';
+GRANT ALL ON mysqltest1.* TO 'tester1'@'';
 FLUSH PRIVILEGES;
 CREATE TABLE mysqltest1.t1 (a INT, users VARCHAR(255), PRIMARY KEY(a));
 INSERT INTO mysqltest1.t1 VALUES(1,USER());

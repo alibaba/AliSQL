@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2009, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -23,6 +31,8 @@ import com.mysql.clusterj.Constants;
 import com.mysql.clusterj.Session;
 import com.mysql.clusterj.SessionFactory;
 import com.mysql.clusterj.Transaction;
+import com.mysql.clusterj.core.util.Logger;
+import com.mysql.clusterj.core.util.LoggerFactoryService;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -37,6 +47,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.SQLWarning;
 import java.sql.Statement;
 
 import java.util.ArrayList;
@@ -44,11 +55,15 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Properties;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
 
@@ -56,6 +71,14 @@ import junit.framework.TestCase;
  *
  */
 public abstract class AbstractClusterJTest extends TestCase {
+    /** My logger */
+    static final Logger logger = LoggerFactoryService.getFactory()
+            .getInstance("com.mysql.clusterj.test");
+
+    /** My class loader */
+    private static ClassLoader ABSTRACT_CLUSTERJ_TEST_CLASS_LOADER =
+            AbstractClusterJTest.class.getClassLoader();
+
     protected static final String JDBC_DRIVER_NAME = "jdbc.driverName";
     protected static final String JDBC_URL = "jdbc.url";
     protected static Connection connection;
@@ -71,11 +94,14 @@ public abstract class AbstractClusterJTest extends TestCase {
     protected Session session;
     protected SessionFactory sessionFactory;
     protected Transaction tx;
+    /** Set of all SessionFactories created by the tests */
+    private static Set<SessionFactory> existingSessionFactories = new HashSet<SessionFactory>();
+
     /**
      *
      * Error messages collected during a test.
      */
-    private StringBuffer errorMessages;
+    protected StringBuffer errorMessages;
     /**
      *
      * A list of registered pc classes.
@@ -86,6 +112,7 @@ public abstract class AbstractClusterJTest extends TestCase {
      *
      * A list of registered oid instances.
      * Corresponding pc instances are deleted in <code>localTearDown</code>.
+     *
      */
     private Collection<Object> tearDownInstances = new LinkedList<Object>();
 
@@ -121,8 +148,22 @@ public abstract class AbstractClusterJTest extends TestCase {
             Properties modifiedProperties = modifyProperties();
             if (debug) System.out.println("createSessionFactory props: " + modifiedProperties);
             sessionFactory = ClusterJHelper.getSessionFactory(modifiedProperties);
+            existingSessionFactories.add(sessionFactory);
             loadSchema();
         }
+    }
+
+    /** Close any open session factories.
+     * Tests can call this function to close any open session factories,
+     * to prevent them from causing any interference with their testing.
+     */
+    protected static void closeAllExistingSessionFactories () {
+        for (SessionFactory sessionFactory : existingSessionFactories) {
+            if (sessionFactory.currentState() != SessionFactory.State.Closed) {
+                sessionFactory.close();
+            }
+        }
+        existingSessionFactories.clear();
     }
 
     protected Properties modifyProperties() {
@@ -221,6 +262,20 @@ public abstract class AbstractClusterJTest extends TestCase {
         }
     }
 
+    protected void verifyException(String message, Exception ex, String exceptionPattern) {
+        if(ex == null) {
+            error(message + ", didn't fail.");
+            return;
+        }
+        // Some exception messages have multiple lines.
+        // Enable single line mode in the expectedPattern regex to get a proper match.
+        exceptionPattern = "(?s)" + exceptionPattern;
+        if(!ex.getMessage().matches(exceptionPattern)) {
+            error(message + ", failed with wrong exception :");
+            error(ex.getMessage());
+        }
+    }
+
     protected void failOnError() {
         if (errorMessages != null) {
             fail(errorMessages.toString());
@@ -242,38 +297,15 @@ public abstract class AbstractClusterJTest extends TestCase {
         }
     }
 
-    /** Get a connection with special properties. If the connection is open,
-     * close it and get a new one.
-     * 
-     */
-    protected void getConnection(Properties extraProperties) {
-        // characterEncoding = utf8 property is especially useful
-        Properties properties = new Properties();
-        properties.put("user", jdbcUsername);
-        properties.put("password", jdbcPassword);
-        properties.putAll(extraProperties);
-        try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-                connection = null;
-            }
-            if (debug) System.out.println("Getting new connection with properties " + properties);
-            connection = DriverManager.getConnection(jdbcURL, properties);
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-            throw new ClusterJException("Exception getting connection to " + jdbcURL + "; username " + jdbcUsername, ex);
-            // TODO Auto-generated catch block
-        }
-    }
-
     /** Get a connection with properties from the Properties instance.
      * 
      */
     protected Connection getConnection() {
+        Properties props = modifyProperties();
         if (connection == null) {
             try {
-                Class.forName(jdbcDriverName, true, Thread.currentThread().getContextClassLoader());
-                connection = DriverManager.getConnection(jdbcURL, jdbcUsername, jdbcPassword);
+                Class.forName(jdbcDriverName, true, ABSTRACT_CLUSTERJ_TEST_CLASS_LOADER);
+                connection = DriverManager.getConnection(jdbcURL, props);
             } catch (SQLException ex) {
                 throw new ClusterJException("Exception getting connection to " + jdbcURL + "; username " + jdbcUsername, ex);
             } catch (ClassNotFoundException ex) {
@@ -281,22 +313,6 @@ public abstract class AbstractClusterJTest extends TestCase {
             }
         }
         return connection;
-    }
-
-    /** Get a connection with properties from a file.
-     * 
-     * @param propertiesFileName the name of the properties file
-     */
-    protected void getConnection(String propertiesFileName) {
-        loadProperties(propertiesFileName);
-        loadDriver();
-        String url = props.getProperty(JDBC_URL);
-        try {
-            connection = DriverManager.getConnection(url);
-            setAutoCommit(connection, false);
-        } catch (SQLException e) {
-            throw new RuntimeException("Could not get Connection: " + url, e);
-        }
     }
 
     /**
@@ -319,6 +335,77 @@ public abstract class AbstractClusterJTest extends TestCase {
         }
     }
 
+    /** Execute the sql in its own statement. If the connection is not
+     * currently autocommit, set autocommit to true and restore it after
+     * the statement is executed.
+     * @param sql the sql to execute
+     */
+    protected void executeSQL(String sql) {
+        Statement statement = null;
+        try {
+            boolean autoCommit = connection.getAutoCommit();
+            if (!autoCommit) {
+                connection.setAutoCommit(true);
+            }
+            statement = connection.createStatement();
+            statement.execute(sql);
+            if (!autoCommit) {
+                connection.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException e) {
+            error("Caught " + e.getClass() + " trying: " + sql);
+            if (statement == null) {
+                error(analyzeWarnings(connection));
+            } else {
+                error(analyzeWarnings(statement));
+            }
+        } finally {
+            if (statement != null) {
+                try {
+                    statement.close();
+                } catch (SQLException e) {
+                    // nothing can be done here
+                    error("Error closing statement " + sql);
+                }
+            }
+        }
+    }
+
+    protected String analyzeWarnings(Connection connection) {
+        SQLWarning warning = null;
+        StringBuilder builder = new StringBuilder();
+        try {
+            warning = connection.getWarnings();
+            analyzeWarnings(warning, builder);
+        } catch (SQLException e) {
+            builder.append("Error getting warnings from connection:\n");
+            builder.append(e.getMessage());
+        }
+        return builder.toString();
+    }
+
+    protected String analyzeWarnings(Statement statement) {
+        SQLWarning warning = null;
+        StringBuilder builder = new StringBuilder();
+        try {
+            warning = statement.getWarnings();
+            analyzeWarnings(warning, builder);
+        } catch (SQLException e) {
+            builder.append("Error getting warnings from statement:\n");
+            builder.append(e.getMessage());
+        }
+        return builder.toString();
+    }
+
+    protected StringBuilder analyzeWarnings(SQLWarning warning, StringBuilder builder) {
+        if (warning != null) {
+            builder.append(warning.getMessage());
+            builder.append("\n");
+            analyzeWarnings(warning.getNextWarning(), builder);
+        }
+        return builder;
+    }
+
     Properties getProperties(String fileName) {
         Properties result = null;
         try {
@@ -334,8 +421,7 @@ public abstract class AbstractClusterJTest extends TestCase {
         if (result == null) {
             try {
                 // try to load the resource from the class loader
-                ClassLoader cl = this.getClass().getClassLoader();
-                InputStream stream = cl.getResourceAsStream(fileName);
+                InputStream stream = ABSTRACT_CLUSTERJ_TEST_CLASS_LOADER.getResourceAsStream(fileName);
                 result = new Properties();
                 result.load(stream);
                 return result;
@@ -387,16 +473,30 @@ public abstract class AbstractClusterJTest extends TestCase {
         }
     }
 
-    /** Load properties from clusterj.properties */
-    protected void loadProperties() {
-        loadProperties(PROPS_FILE_NAME);
+    /** Generate the timezone in UTC offset of format +/-HH:MM */
+    private static String getTimeZoneInUTCOffset() {
+        long now = System.currentTimeMillis();
+        long timeZoneOffset = TimeZone.getDefault().getOffset(now);
+        long offsetHours = TimeUnit.MILLISECONDS.toHours(timeZoneOffset);
+        long offsetMinutes = TimeUnit.MILLISECONDS.toMinutes(timeZoneOffset -
+                               TimeUnit.HOURS.toMillis(offsetHours));
+        // prevent cases like -02:-02
+        offsetMinutes = Math.abs(offsetMinutes);
+        String timeZoneUTCOffset = "";
+        if (timeZoneOffset >= 0) {
+            timeZoneUTCOffset += "+";
+        }
+        timeZoneUTCOffset += String.format("%02d:%02d", offsetHours, offsetMinutes);
+        return timeZoneUTCOffset;
     }
 
-    /** Load properties from an arbitrary file name */
-    protected void loadProperties(String propsFileName) {
-//        if (props == null) {
-            props = getProperties(propsFileName);
-//        }
+    /** Load properties from clusterj.properties */
+    protected void loadProperties() {
+        if (props != null) {
+            // Properties have been loaded already
+            return;
+        }
+        props = getProperties(PROPS_FILE_NAME);
         jdbcDriverName = props.getProperty(Constants.PROPERTY_JDBC_DRIVER_NAME);
         jdbcURL = props.getProperty(Constants.PROPERTY_JDBC_URL);
         jdbcUsername = props.getProperty(Constants.PROPERTY_JDBC_USERNAME);
@@ -404,6 +504,11 @@ public abstract class AbstractClusterJTest extends TestCase {
         if (jdbcPassword == null) {
             jdbcPassword = "";
         }
+        // Set the time zone of the current session through sessionVariables
+        props.put("sessionVariables", "time_zone='" + getTimeZoneInUTCOffset() + "'");
+        props.put("useSSL", "false");
+        props.put("user", jdbcUsername);
+        props.put("password",jdbcPassword);
     }
 
     /** Load the schema for tests */
@@ -422,11 +527,11 @@ public abstract class AbstractClusterJTest extends TestCase {
         StringBuffer buffer = new StringBuffer();
         String line;
         try {
-            inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream("schema.sql");
+            inputStream = ABSTRACT_CLUSTERJ_TEST_CLASS_LOADER.getResourceAsStream("schema.sql");
             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
             while (reader.ready()) {
                 line = reader.readLine();
-                if (line.contains("#")) {
+                if (line.contains("#") || line.startsWith("--")) {
                     // comment line; ignore
                     continue;
                 }
@@ -468,6 +573,7 @@ public abstract class AbstractClusterJTest extends TestCase {
 
     @Override
     protected final void setUp() throws Exception {
+        System.out.println(this.getClass().getName());
         localSetUp();
     }
 
@@ -500,6 +606,8 @@ public abstract class AbstractClusterJTest extends TestCase {
         }
         session = null;
         sessionFactory = null;
+        // close the jdbc connection
+        closeConnection();
     }
 
     protected void removeAll(Class<?> cls) {
@@ -554,6 +662,63 @@ public abstract class AbstractClusterJTest extends TestCase {
             result.append('\n');
         }
         return result.toString();
+    }
+
+    /** Compare one byte array with another.
+     * @param expected the expected byte array
+     * @param actual the actual byte array
+     * @return String identifying the differences, or null if identical
+     */
+    public String compareBytes(byte[] expected, byte[] actual) {
+        StringBuffer mismatches = new StringBuffer();
+        if (expected == null && actual == null) {
+            return null;
+        }
+        if (expected != null && actual == null) {
+            return "compareBytes mismatch; expected: " + dumpBytes(expected) + "; actual: null";
+        }
+        if (expected.length != actual.length) {
+            return "compareBytes mismatch; expected: " + dumpBytes(expected) + "; actual: " + dumpBytes(actual);
+        }
+        // lengths are equal; compare values
+        for (int i = 0; i < expected.length; ++i) {
+            if (expected[i] != actual[i]) {
+                mismatches.append(i);
+                mismatches.append(' ');
+            }
+        }
+        if (mismatches.length() != 0) {
+            return "compareBytes mismatch; expected: " + dumpBytes(expected) + "; actual: " + dumpBytes(actual);
+        }
+        return null;
+    }
+
+    /** Convert the byte[] into a String to be used for logging and debugging.
+     * 
+     * @param bytes the byte[] to be dumped
+     * @return the String representation
+     */
+    public static String dumpBytes (byte[] bytes) {
+        if (bytes == null) {
+            return "(byte[])null";
+        }
+        StringBuffer buffer = new StringBuffer("byte[");
+        buffer.append(bytes.length);
+        buffer.append("]: [");
+        for (int i = 0; i < bytes.length; ++i) {
+            buffer.append((int)bytes[i]);
+            buffer.append(" ");
+        }
+        buffer.append("]");
+        return buffer.toString();
+    }
+
+    public static String dump(Object object) {
+        if (object instanceof byte[]) {
+            return dumpBytes((byte[])object);
+        } else {
+            return object.toString();
+        }
     }
 
     /** Catch otherwise uncaught exceptions and maintain a list of them.

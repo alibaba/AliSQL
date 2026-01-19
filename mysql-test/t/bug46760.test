@@ -1,5 +1,3 @@
--- source include/have_innodb.inc
-
 --echo #
 --echo # Bug#46760: Fast ALTER TABLE no longer works for InnoDB
 --echo #
@@ -22,17 +20,6 @@ ALTER TABLE t1 ALTER COLUMN a SET DEFAULT 10;
 --disable_info
 SHOW CREATE TABLE t1;
 
-DROP TABLE t1;
-
---echo #
---echo # MySQL Bug#39200: optimize table does not recognize 
---echo # ROW_FORMAT=COMPRESSED
---echo #
-
-CREATE TABLE t1 (a INT) ROW_FORMAT=compressed, ENGINE=MyISAM;
-SHOW CREATE TABLE t1;
-OPTIMIZE TABLE t1;
-SHOW CREATE TABLE t1;
 DROP TABLE t1;
 
 --echo End of 5.1 tests

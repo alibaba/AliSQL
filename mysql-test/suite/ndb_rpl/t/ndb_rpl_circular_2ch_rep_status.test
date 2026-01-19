@@ -15,11 +15,11 @@ select count(1) from mysql.ndb_apply_status;
 
 --echo Cluster A servers have no max replicated epoch value
 --echo Master(1)
-select variable_name, variable_value from information_schema.global_status
+select variable_name, variable_value from performance_schema.global_status
   where variable_name='Ndb_slave_max_replicated_epoch';
 --connection master1
 --echo Master1(3)
-select variable_name, variable_value from information_schema.global_status
+select variable_name, variable_value from performance_schema.global_status
   where variable_name='Ndb_slave_max_replicated_epoch';
 
 --echo Make a change originating at Cluster A
@@ -47,7 +47,7 @@ insert into t1 values (2, "Death");
 select server_id from mysql.ndb_apply_status order by server_id;
 
 --echo Non-slave server on Cluster A will have no value for Max Replicated Epoch
-select variable_name, variable_value from information_schema.global_status
+select variable_name, variable_value from performance_schema.global_status
   where variable_name='Ndb_slave_max_replicated_epoch';
 
 --echo Slave server on Cluster A has current value for Max Replicated Epoch
@@ -59,7 +59,7 @@ select variable_name, variable_value from information_schema.global_status
 select
     count(1)
   from
-    information_schema.global_status,
+    performance_schema.global_status,
     mysql.ndb_apply_status
   where
     server_id = 1
@@ -69,6 +69,15 @@ select
     variable_value = epoch;
 
 --echo Now wait for all replication to quiesce
+
+# Ensure that already slave-applied events from Cluster B 
+# are in-binlog before allowing the switchover. 
+# Otherwise we can setup replication from a binlog
+# pos before the already-applied events.
+# Symptom is that we get an extra ndb_apply_status line
+# for server_id 3.
+#
+--source include/wait_for_ndb_committed_to_binlog.inc
 
 --echo Now swap replication channels around
 --source include/rpl_stop_slaves.inc
@@ -107,10 +116,10 @@ select
 #let $cluster_b_master_log_pos = query_get_value("SELECT Position from mysql.ndb_binlog_index WHERE epoch >= $max_applied_cluster_b_epoch", Position, 1);
 #--echo Now change new Slave servers to new Master file + pos
 #--connection master
-#--echo Changing master to $cluster_b_master_log_file, $cluster_b_master_log_pos
+#--echo Changing replication source to $cluster_b_master_log_file, $cluster_b_master_log_pos
 #eval CHANGE MASTER TO MASTER_LOG_FILE="$cluster_b_master_log_file", MASTER_LOG_POS=$cluster_b_master_log_pos;
 #--connection slave1
-#--echo Changing master to $cluster_a_master_log_file, $cluster_a_master_log_pos
+#--echo Changing replication source to $cluster_a_master_log_file, $cluster_a_master_log_pos
 #eval CHANGE MASTER TO MASTER_LOG_FILE="$cluster_a_master_log_file", MASTER_LOG_POS=$cluster_a_master_log_pos;
 
 --echo Get current master status on Cluster A new master (next pos in Binlog)
@@ -125,7 +134,7 @@ let $cluster_a_master_log_pos = query_get_value("SHOW MASTER STATUS", "Position"
 --connection slave1
 --echo Slave1 (4)
 --disable_query_log
-eval CHANGE MASTER TO MASTER_LOG_FILE="$cluster_a_master_log_file", MASTER_LOG_POS=$cluster_a_master_log_pos;
+eval CHANGE REPLICATION SOURCE TO SOURCE_LOG_FILE="$cluster_a_master_log_file", SOURCE_LOG_POS=$cluster_a_master_log_pos;
 --enable_query_log
 
 --echo Get current master status on Cluster B new master (next pos in Binlog)
@@ -140,13 +149,13 @@ let $cluster_b_master_log_pos = query_get_value("SHOW MASTER STATUS", "Position"
 --connection master
 --echo Master (1)
 --disable_query_log
-eval CHANGE MASTER TO MASTER_LOG_FILE="$cluster_b_master_log_file", MASTER_LOG_POS=$cluster_b_master_log_pos;
+eval CHANGE REPLICATION SOURCE TO SOURCE_LOG_FILE="$cluster_b_master_log_file", SOURCE_LOG_POS=$cluster_b_master_log_pos;
 --enable_query_log
 
 --connection master
 --echo Master (1)
 --echo Show that Cluster A Slave server (old master) has no Max replicated epoch before receiving data
-select variable_name, variable_value from information_schema.global_status
+select variable_name, variable_value from performance_schema.global_status
   where variable_name='Ndb_slave_max_replicated_epoch';
 
 --connection master1
@@ -155,7 +164,7 @@ select variable_name, variable_value from information_schema.global_status
 select
     count(1)
   from
-    information_schema.global_status,
+    performance_schema.global_status,
     mysql.ndb_apply_status
   where
     server_id = 1
@@ -186,14 +195,82 @@ select server_id from mysql.ndb_apply_status order by server_id;
 select
     count(1)
   from
-    information_schema.global_status,
+    performance_schema.global_status,
     mysql.ndb_apply_status
   where
     server_id = 1
     and
     variable_name='Ndb_slave_max_replicated_epoch'
     and
-    variable_value = epoch;
+    variable_value = epoch into @result;
+select @result;
+
+# BEGIN TRANSIENT FAILURE DEBUGGING
+--disable_query_log
+--disable_result_log
+
+--let $res=query_get_value("SELECT @result AS r", r, 1)
+
+if (!$res)
+{
+  --echo I GOT PROBLEMS
+  --echo IF IN DOUBT, USE BRUTE FORCE
+  --enable_result_log
+  show variables like 'server_id';
+  show status like 'Ndb_slave_max_replicated_epoch';
+  select * from mysql.ndb_apply_status order by server_id;
+  select * from mysql.ndb_binlog_index;
+  SHOW SLAVE STATUS;
+  SHOW BINARY LOGS;
+  SHOW BINLOG EVENTS IN 'master-bin.000001';
+#  SHOW BINLOG EVENTS IN 'master-bin.000002';
+  let $MYSQLD_DATADIR= `select @@datadir;`;
+  --exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/master-bin.000001
+#  --exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/master-bin.000002
+  --connection master1
+  show variables like 'server_id';
+  show status like 'Ndb_slave_max_replicated_epoch';
+  select * from mysql.ndb_apply_status order by server_id;
+  select * from mysql.ndb_binlog_index;
+  SHOW SLAVE STATUS;
+  SHOW BINARY LOGS;
+  SHOW BINLOG EVENTS IN 'master-bin.000001';
+  SHOW BINLOG EVENTS IN 'master-bin.000002';
+  let $MYSQLD_DATADIR= `select @@datadir;`;
+  --exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/master-bin.000001
+  --exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/master-bin.000002
+  --connection slave
+  show variables like 'server_id';
+  show status like 'Ndb_slave_max_replicated_epoch';
+  select * from mysql.ndb_apply_status order by server_id;
+  select * from mysql.ndb_binlog_index;
+  SHOW SLAVE STATUS;
+  SHOW BINARY LOGS;
+  SHOW BINLOG EVENTS IN 'master-bin.000001';
+  SHOW BINLOG EVENTS IN 'master-bin.000002';
+  let $MYSQLD_DATADIR= `select @@datadir;`;
+  --exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/master-bin.000001
+  --exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/master-bin.000002
+  --connection slave1
+  show variables like 'server_id';
+  show status like 'Ndb_slave_max_replicated_epoch';
+  select * from mysql.ndb_apply_status order by server_id;
+  select * from mysql.ndb_binlog_index;
+  SHOW SLAVE STATUS;
+  SHOW BINARY LOGS;
+  SHOW BINLOG EVENTS IN 'master-bin.000001';
+#  SHOW BINLOG EVENTS IN 'master-bin.000002';
+  let $MYSQLD_DATADIR= `select @@datadir;`;
+  --exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/master-bin.000001
+#  --exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/master-bin.000002
+  --connection master
+  --disable_result_log
+}
+
+--enable_result_log
+--enable_query_log
+
+# END TRANSIENT FAILURE DEBUGGING
 
 --echo Now make a new Cluster A change and see that the Max Replicated Epoch advances
 --echo once it has propagated
@@ -221,7 +298,7 @@ select server_id from mysql.ndb_apply_status order by server_id;
 select
     count(1)
   from
-    information_schema.global_status,
+    performance_schema.global_status,
     mysql.ndb_apply_status
   where
     server_id = 3

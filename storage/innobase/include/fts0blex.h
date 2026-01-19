@@ -3,8 +3,46 @@
 #define fts0bIN_HEADER 1
 
 #line 6 "../include/fts0blex.h"
+#line 2 "fts0blex.l"
+/*****************************************************************************
 
-#line 8 "../include/fts0blex.h"
+Copyright (c) 2007, 2025, Oracle and/or its affiliates.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+*****************************************************************************/
+
+/**
+ * @file fts/fts0blex.l
+ * FTS parser lexical analyzer
+ *
+ * Created 2007/5/9 Sunny Bains
+ */
+
+#include "univ.i"
+
+
+
+#line 37 "../include/fts0blex.h"
 
 #define  YY_INT_ALIGNED short int
 
@@ -13,7 +51,7 @@
 #define FLEX_SCANNER
 #define YY_FLEX_MAJOR_VERSION 2
 #define YY_FLEX_MINOR_VERSION 5
-#define YY_FLEX_SUBMINOR_VERSION 35
+#define YY_FLEX_SUBMINOR_VERSION 39
 #if YY_FLEX_SUBMINOR_VERSION > 0
 #define FLEX_BETA
 #endif
@@ -97,15 +135,15 @@ typedef unsigned int flex_uint32_t;
 /* The "const" storage-class-modifier is valid. */
 #define YY_USE_CONST
 
-#else	/* ! __cplusplus */
+#else   /* ! __cplusplus */
 
 /* C99 requires __STDC__ to be defined as 1. */
 #if defined (__STDC__)
 
 #define YY_USE_CONST
 
-#endif	/* defined (__STDC__) */
-#endif	/* ! __cplusplus */
+#endif  /* defined (__STDC__) */
+#endif  /* ! __cplusplus */
 
 #ifdef YY_USE_CONST
 #define yyconst const
@@ -156,52 +194,52 @@ typedef size_t yy_size_t;
 #ifndef YY_STRUCT_YY_BUFFER_STATE
 #define YY_STRUCT_YY_BUFFER_STATE
 struct yy_buffer_state
-	{
-	FILE *yy_input_file;
+        {
+        FILE *yy_input_file;
 
-	char *yy_ch_buf;		/* input buffer */
-	char *yy_buf_pos;		/* current position in input buffer */
+        char *yy_ch_buf;                /* input buffer */
+        char *yy_buf_pos;               /* current position in input buffer */
 
-	/* Size of input buffer in bytes, not including room for EOB
-	 * characters.
-	 */
-	yy_size_t yy_buf_size;
+        /* Size of input buffer in bytes, not including room for EOB
+         * characters.
+         */
+        yy_size_t yy_buf_size;
 
-	/* Number of characters read into yy_ch_buf, not including EOB
-	 * characters.
-	 */
-	int yy_n_chars;
+        /* Number of characters read into yy_ch_buf, not including EOB
+         * characters.
+         */
+        yy_size_t yy_n_chars;
 
-	/* Whether we "own" the buffer - i.e., we know we created it,
-	 * and can realloc() it to grow it, and should free() it to
-	 * delete it.
-	 */
-	int yy_is_our_buffer;
+        /* Whether we "own" the buffer - i.e., we know we created it,
+         * and can realloc() it to grow it, and should free() it to
+         * delete it.
+         */
+        int yy_is_our_buffer;
 
-	/* Whether this is an "interactive" input source; if so, and
-	 * if we're using stdio for input, then we want to use getc()
-	 * instead of fread(), to make sure we stop fetching input after
-	 * each newline.
-	 */
-	int yy_is_interactive;
+        /* Whether this is an "interactive" input source; if so, and
+         * if we're using stdio for input, then we want to use getc()
+         * instead of fread(), to make sure we stop fetching input after
+         * each newline.
+         */
+        int yy_is_interactive;
 
-	/* Whether we're considered to be at the beginning of a line.
-	 * If so, '^' rules will be active on the next match, otherwise
-	 * not.
-	 */
-	int yy_at_bol;
+        /* Whether we're considered to be at the beginning of a line.
+         * If so, '^' rules will be active on the next match, otherwise
+         * not.
+         */
+        int yy_at_bol;
 
     int yy_bs_lineno; /**< The line count. */
     int yy_bs_column; /**< The column count. */
     
-	/* Whether to try to fill the input buffer when we reach the
-	 * end of it.
-	 */
-	int yy_fill_buffer;
+        /* Whether to try to fill the input buffer when we reach the
+         * end of it.
+         */
+        int yy_fill_buffer;
 
-	int yy_buffer_status;
+        int yy_buffer_status;
 
-	};
+        };
 #endif /* !YY_STRUCT_YY_BUFFER_STATE */
 
 void fts0brestart (FILE *input_file ,yyscan_t yyscanner );
@@ -214,7 +252,7 @@ void fts0bpop_buffer_state (yyscan_t yyscanner );
 
 YY_BUFFER_STATE fts0b_scan_buffer (char *base,yy_size_t size ,yyscan_t yyscanner );
 YY_BUFFER_STATE fts0b_scan_string (yyconst char *yy_str ,yyscan_t yyscanner );
-YY_BUFFER_STATE fts0b_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
+YY_BUFFER_STATE fts0b_scan_bytes (yyconst char *bytes,yy_size_t len ,yyscan_t yyscanner );
 
 void *fts0balloc (yy_size_t ,yyscan_t yyscanner );
 void *fts0brealloc (void *,yy_size_t ,yyscan_t yyscanner );
@@ -222,7 +260,7 @@ void fts0bfree (void * ,yyscan_t yyscanner );
 
 /* Begin user sect3 */
 
-#define fts0bwrap(n) 1
+#define fts0bwrap(yyscanner) 1
 #define YY_SKIP_YYWRAP
 
 #define yytext_ptr yytext_r
@@ -269,13 +307,17 @@ FILE *fts0bget_out (yyscan_t yyscanner );
 
 void fts0bset_out  (FILE * out_str ,yyscan_t yyscanner );
 
-int fts0bget_leng (yyscan_t yyscanner );
+yy_size_t fts0bget_leng (yyscan_t yyscanner );
 
 char *fts0bget_text (yyscan_t yyscanner );
 
 int fts0bget_lineno (yyscan_t yyscanner );
 
 void fts0bset_lineno (int line_number ,yyscan_t yyscanner );
+
+int fts0bget_column  (yyscan_t yyscanner );
+
+void fts0bset_column (int column_no ,yyscan_t yyscanner );
 
 /* Macros after this point can all be overridden by user definitions in
  * section 1.
@@ -341,9 +383,9 @@ extern int fts0blex (yyscan_t yyscanner);
 #undef YY_DECL
 #endif
 
-#line 73 "fts0blex.l"
+#line 76 "fts0blex.l"
 
 
-#line 348 "../include/fts0blex.h"
+#line 381 "../include/fts0blex.h"
 #undef fts0bIN_HEADER
 #endif /* fts0bHEADER_H */

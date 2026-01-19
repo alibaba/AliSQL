@@ -1,0 +1,319 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>execution::mapping_t</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="execution__mapping.html" title="execution::mapping">
+<link rel="next" href="execution__mapping_t/is_applicable_property_v.html" title="execution::mapping_t::is_applicable_property_v">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="execution__mapping.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="execution__mapping_t/is_applicable_property_v.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.execution__mapping_t"></a><a class="link" href="execution__mapping_t.html" title="execution::mapping_t">execution::mapping_t</a>
+</h3></div></div></div>
+<p>
+        <a class="indexterm" name="boost_asio.indexterm.execution__mapping_t"></a>
+      </p>
+<p>
+        A property to describe what guarantees an executor makes about the mapping
+        of execution agents on to threads of execution.
+      </p>
+<pre class="programlisting">struct mapping_t
+</pre>
+<h5>
+<a name="boost_asio.reference.execution__mapping_t.h0"></a>
+        <span class="phrase"><a name="boost_asio.reference.execution__mapping_t.types"></a></span><a class="link" href="execution__mapping_t.html#boost_asio.reference.execution__mapping_t.types">Types</a>
+      </h5>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Name
+                </p>
+              </th>
+<th>
+                <p>
+                  Description
+                </p>
+              </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t__new_thread_t.html" title="execution::mapping_t::new_thread_t"><span class="bold"><strong>new_thread_t</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  A sub-property that indicates that execution agents are mapped
+                  on to new threads of execution.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t__other_t.html" title="execution::mapping_t::other_t"><span class="bold"><strong>other_t</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  A sub-property that indicates that the mapping of execution agents
+                  is implementation-defined.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t__thread_t.html" title="execution::mapping_t::thread_t"><span class="bold"><strong>thread_t</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  A sub-property that indicates that execution agents are mapped
+                  on to threads of execution.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/polymorphic_query_result_type.html" title="execution::mapping_t::polymorphic_query_result_type"><span class="bold"><strong>polymorphic_query_result_type</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  The type returned by queries against an any_executor.
+                </p>
+              </td>
+</tr>
+</tbody>
+</table></div>
+<h5>
+<a name="boost_asio.reference.execution__mapping_t.h1"></a>
+        <span class="phrase"><a name="boost_asio.reference.execution__mapping_t.member_functions"></a></span><a class="link" href="execution__mapping_t.html#boost_asio.reference.execution__mapping_t.member_functions">Member
+        Functions</a>
+      </h5>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Name
+                </p>
+              </th>
+<th>
+                <p>
+                  Description
+                </p>
+              </th>
+</tr></thead>
+<tbody><tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/mapping_t.html" title="execution::mapping_t::mapping_t"><span class="bold"><strong>mapping_t</strong></span></a> <span class="silver">[constructor]</span>
+                </p>
+              </td>
+<td>
+                <p>
+                  Default constructor. <br> <span class="silver"> —</span><br> Construct from a sub-property
+                  value.
+                </p>
+              </td>
+</tr></tbody>
+</table></div>
+<h5>
+<a name="boost_asio.reference.execution__mapping_t.h2"></a>
+        <span class="phrase"><a name="boost_asio.reference.execution__mapping_t.data_members"></a></span><a class="link" href="execution__mapping_t.html#boost_asio.reference.execution__mapping_t.data_members">Data Members</a>
+      </h5>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Name
+                </p>
+              </th>
+<th>
+                <p>
+                  Description
+                </p>
+              </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/is_applicable_property_v.html" title="execution::mapping_t::is_applicable_property_v"><span class="bold"><strong>is_applicable_property_v</strong></span></a> <span class="silver">[static]</span>
+                </p>
+              </td>
+<td>
+                <p>
+                  The mapping_t property applies to executors, senders, and schedulers.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/is_preferable.html" title="execution::mapping_t::is_preferable"><span class="bold"><strong>is_preferable</strong></span></a> <span class="silver">[static]</span>
+                </p>
+              </td>
+<td>
+                <p>
+                  The top-level mapping_t property cannot be preferred.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/is_requirable.html" title="execution::mapping_t::is_requirable"><span class="bold"><strong>is_requirable</strong></span></a> <span class="silver">[static]</span>
+                </p>
+              </td>
+<td>
+                <p>
+                  The top-level mapping_t property cannot be required.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/new_thread.html" title="execution::mapping_t::new_thread"><span class="bold"><strong>new_thread</strong></span></a> <span class="silver">[static]</span>
+                </p>
+              </td>
+<td>
+                <p>
+                  A special value used for accessing the mapping_t::new_thread_t
+                  property.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/other.html" title="execution::mapping_t::other"><span class="bold"><strong>other</strong></span></a> <span class="silver">[static]</span>
+                </p>
+              </td>
+<td>
+                <p>
+                  A special value used for accessing the mapping_t::other_t property.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/thread.html" title="execution::mapping_t::thread"><span class="bold"><strong>thread</strong></span></a> <span class="silver">[static]</span>
+                </p>
+              </td>
+<td>
+                <p>
+                  A special value used for accessing the mapping_t::thread_t property.
+                </p>
+              </td>
+</tr>
+</tbody>
+</table></div>
+<h5>
+<a name="boost_asio.reference.execution__mapping_t.h3"></a>
+        <span class="phrase"><a name="boost_asio.reference.execution__mapping_t.friends"></a></span><a class="link" href="execution__mapping_t.html#boost_asio.reference.execution__mapping_t.friends">Friends</a>
+      </h5>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Name
+                </p>
+              </th>
+<th>
+                <p>
+                  Description
+                </p>
+              </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/operator_not__eq_.html" title="execution::mapping_t::operator!="><span class="bold"><strong>operator!=</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  Compare property values for inequality.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="execution__mapping_t/operator_eq__eq_.html" title="execution::mapping_t::operator=="><span class="bold"><strong>operator==</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  Compare property values for equality.
+                </p>
+              </td>
+</tr>
+</tbody>
+</table></div>
+<h5>
+<a name="boost_asio.reference.execution__mapping_t.h4"></a>
+        <span class="phrase"><a name="boost_asio.reference.execution__mapping_t.requirements"></a></span><a class="link" href="execution__mapping_t.html#boost_asio.reference.execution__mapping_t.requirements">Requirements</a>
+      </h5>
+<p>
+        <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/execution/mapping.hpp</code>
+      </p>
+<p>
+        <span class="emphasis"><em>Convenience header: </em></span><code class="literal">boost/asio/execution.hpp</code>
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="execution__mapping.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="execution__mapping_t/is_applicable_property_v.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

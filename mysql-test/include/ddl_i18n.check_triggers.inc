@@ -3,12 +3,16 @@
 --echo
 --echo
 
+--replace_column 7 CREATED
 SHOW CREATE TRIGGER trg1|
 --echo
+--replace_column 7 CREATED
 SHOW CREATE TRIGGER trg2|
 --echo
+--replace_column 7 CREATED
 SHOW CREATE TRIGGER mysqltest2.trg3|
 --echo
+--replace_column 7 CREATED
 SHOW CREATE TRIGGER mysqltest2.trg4|
 
 #   - Check SHOW statement;
@@ -16,6 +20,7 @@ SHOW CREATE TRIGGER mysqltest2.trg4|
 --echo
 --echo
 
+--replace_column 6 CREATED
 SHOW TRIGGERS|
 
 --echo
@@ -24,6 +29,7 @@ use mysqltest2|
 
 --echo
 
+--replace_column 6 CREATED
 SHOW TRIGGERS|
 
 use mysqltest1|
@@ -70,6 +76,7 @@ INSERT INTO t1 VALUES(1)|
 
 --echo
 --echo ---> Log:
+--sorted_result
 SELECT msg FROM log|
 
 --echo
@@ -91,6 +98,7 @@ INSERT INTO mysqltest2.t1 VALUES(1)|
 
 --echo
 --echo ---> Log:
+--sorted_result
 SELECT msg FROM mysqltest2.log|
 
 --echo

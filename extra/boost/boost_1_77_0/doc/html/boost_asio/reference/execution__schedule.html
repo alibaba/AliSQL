@@ -1,0 +1,85 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>execution::schedule</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="execution__relationship_t__fork_t/value.html" title="execution::relationship_t::fork_t::value">
+<link rel="next" href="execution__sender_base.html" title="execution::sender_base">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="execution__relationship_t__fork_t/value.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="execution__sender_base.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.execution__schedule"></a><a class="link" href="execution__schedule.html" title="execution::schedule">execution::schedule</a>
+</h3></div></div></div>
+<p>
+        <a class="indexterm" name="boost_asio.indexterm.execution__schedule"></a> 
+A customisation
+        point that is used to obtain a sender from a scheduler.
+      </p>
+<pre class="programlisting">constexpr unspecified schedule = unspecified;
+</pre>
+<p>
+        The name <code class="computeroutput">execution::schedule</code> denotes a customisation point object.
+        For some subexpression <code class="computeroutput">s</code>, let <code class="computeroutput">S</code> be a type such
+        that <code class="computeroutput">decltype((s))</code> is <code class="computeroutput">S</code>. The expression <code class="computeroutput">execution::schedule(s)</code>
+        is expression-equivalent to:
+      </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+            <code class="computeroutput">s.schedule()</code>, if that expression is valid and its type models
+            <code class="computeroutput">sender</code>.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">schedule(s)</code>, if that expression is valid and
+            its type models <code class="computeroutput">sender</code> with overload resolution performed
+            in a context that includes the declaration <code class="computeroutput">void schedule();</code>
+            and that does not include a declaration of <code class="computeroutput">execution::schedule</code>.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">S</code> if <code class="computeroutput">S</code> satisfies <code class="computeroutput">executor</code>.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">execution::schedule(s)</code> is ill-formed.
+          </li>
+</ul></div>
+<h5>
+<a name="boost_asio.reference.execution__schedule.h0"></a>
+        <span class="phrase"><a name="boost_asio.reference.execution__schedule.requirements"></a></span><a class="link" href="execution__schedule.html#boost_asio.reference.execution__schedule.requirements">Requirements</a>
+      </h5>
+<p>
+        <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/execution/schedule.hpp</code>
+      </p>
+<p>
+        <span class="emphasis"><em>Convenience header: </em></span><code class="literal">boost/asio/execution.hpp</code>
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="execution__relationship_t__fork_t/value.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="execution__sender_base.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

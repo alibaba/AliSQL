@@ -1,0 +1,209 @@
+########### ../t/crud_debug.test                             #########
+##                                                                   #
+## This test aims to run crud message with debug sync point.         #
+## debug sync point from server code will be set for crash and       #
+#  xmessage which touches this debug sync point will be run through  #
+#  mysqlxtest client.                                                #
+##  - DEBUG='+d,crash_commit_before'                                 #
+##  - DEBUG='+d,crash_commit_after'                                  #
+#######################################################################
+
+
+# # 1. Need to create table with Innodb
+# # 2. Valgrind would complain about memory leaks when we crash on purpose.
+# # 3. DEBUG_SYNC must be compiled in.
+# # 4. Avoid CrashReporter popup on Mac
+--source include/not_valgrind.inc
+--source include/have_debug_sync.inc
+--source include/not_crashrep.inc
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+
+## Test starts here
+--write_file $MYSQL_TMP_DIR/mysqlx-in.xpl
+-->sql
+#-- "Creating database for testcase"
+DROP DATABASE IF EXISTS xplugintest;
+CREATE DATABASE xplugintest;
+USE xplugintest;
+CREATE TABLE table1 ( _id INT PRIMARY KEY, doc JSON ) ;
+-->endsql
+
+#-- "Create table table2 in xplugintest "
+
+-->stmtadmin create_collection	{"schema":"xplugintest","name":"table2"}
+-->recvresult
+
+#-- "Set debyg sync point in server code to crash before committing record"
+Mysqlx.Sql.StmtExecute {
+   stmt : "SET DEBUG='+d,crash_commit_before'";
+}
+-->recvresult
+
+#-- "Insert will cause commit point to hit and server crashes"
+#-- "Records not saved as DEBUG='+d,crash_commit_before'"
+-->echo Insert multiple rows into a Document column
+Mysqlx.Crud.Insert {
+  collection {
+    name: "table2"
+    schema: "xplugintest"
+  }
+  data_model: DOCUMENT
+  row {
+    field {
+    type: LITERAL
+    literal {
+        type: V_STRING
+        v_string {
+          value: "\n{\n         \"_id\": \"1\",\n         \"name\": \"Omar Bras\", \"id\": \"1\"\n}"
+        }
+    }
+  }}
+  row {
+    field {
+    type: LITERAL
+    literal {
+        type: V_STRING
+        v_string {
+          value: "\n{\n         \"_id\": \"2\",\n         \"name\": \"Omar Mex\", \"id\": \"2\"\n}"
+        }
+    }}
+  }
+}
+-->recvresult
+-->sql
+SELECT * FROM xplugintest.table2;
+-->endsql
+
+EOF
+
+# Request a crash, and restart the server.
+# Write file to make mysql-test-run.pl restart the server
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/xplugin_wait_for_interfaces.inc
+--error 1
+--exec $MYSQLXTEST -u x_root --password='' --file=$MYSQL_TMP_DIR/mysqlx-in.xpl >$MYSQL_TMP_DIR/mysqlx-out.xpl 2>&1
+#--cat_file $MYSQL_TMP_DIR/mysqlx-out.xpl
+--remove_file $MYSQL_TMP_DIR/mysqlx-in.xpl
+--remove_file $MYSQL_TMP_DIR/mysqlx-out.xpl
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+# No rows
+SELECT * FROM xplugintest.table2;
+
+--write_file $MYSQL_TMP_DIR/mysqlx-in.xpl
+#-- "Index with  unique(true), index column NOT NULL (true)"
+-->stmtadmin create_collection_index	{"schema":"xplugintest", "collection":"table2", "name":"name_index" , "unique":true, "fields":{"field":"$.name", "type":"TEXT(50)","required":true}}
+-->recvresult
+
+-->echo Insert multiple rows into a Document column
+Mysqlx.Crud.Insert {
+  collection {
+    name: "table2"
+    schema: "xplugintest"
+  }
+  data_model: DOCUMENT
+  row {
+    field {
+    type: LITERAL
+    literal {
+        type: V_STRING
+        v_string {
+          value: "\n{\n         \"_id\": \"1\",\n         \"name\": \"Omar Bras\", \"id\": \"1\"\n}"
+        }
+    }
+  }}
+  row {
+    field {
+    type: LITERAL
+    literal {
+        type: V_STRING
+        v_string {
+          value: "\n{\n         \"_id\": \"2\",\n         \"name\": \"Omar Mex\", \"id\": \"2\"\n}"
+        }
+    }}
+  }
+}
+-->recvresult
+
+-->sql
+SHOW CREATE TABLE xplugintest.table2;
+SELECT * FROM xplugintest.table2;
+-->endsql
+#-- "Set crash point after commit. Update will hit this point"
+Mysqlx.Sql.StmtExecute {
+   stmt : "SET DEBUG='+d,crash_commit_after'";
+}
+-->recvresult
+#-- "Update will cause commit point to hit and server crashes"
+#-- "Records not saved as DEBUG='+d,crash_commit_before'"
+-->echo Update decimal value with a corner value plus 1
+Mysqlx.Crud.Update {
+  collection {
+    name: "table2"
+    schema: "xplugintest"
+  }
+  data_model: DOCUMENT
+  criteria {
+    type: OPERATOR
+    operator {
+      name: "=="
+      param {
+        type: IDENT
+        identifier {
+            name: "_id"
+        }
+      }
+      param {
+        type: LITERAL
+        literal {
+               type: V_SINT
+               v_signed_int: 2
+        }
+      }
+    }
+  }
+  operation {
+    source {
+      document_path {
+        type: MEMBER
+        value: "name"
+      }
+    }
+    operation: ITEM_SET
+    value {
+      type: LITERAL
+      literal {
+          type: V_STRING
+          v_string {
+            value: "\"Omar Argentina\""
+          }
+      }
+    }
+  }
+
+
+}
+-->recvresult
+
+EOF
+
+# Request a crash, and restart the server.
+# Write file to make mysql-test-run.pl restart the server
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/xplugin_wait_for_interfaces.inc
+--error 1
+--exec $MYSQLXTEST -u x_root --password='' --file=$MYSQL_TMP_DIR/mysqlx-in.xpl >$MYSQL_TMP_DIR/mysqlx-out.xpl 2>&1
+#--cat_file $MYSQL_TMP_DIR/mysqlx-out.xpl
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+USE xplugintest;
+SHOW TABLES;
+# Updated record found
+SELECT * FROM xplugintest.table2;
+
+## Cleanup
+DROP DATABASE IF EXISTS xplugintest;
+--source ../include/xplugin_cleanup.inc

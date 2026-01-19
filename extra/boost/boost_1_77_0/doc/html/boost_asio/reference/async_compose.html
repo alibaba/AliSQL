@@ -1,0 +1,157 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>async_compose</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="async_completion/result.html" title="async_completion::result">
+<link rel="next" href="async_connect.html" title="async_connect">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="async_completion/result.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="async_connect.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.async_compose"></a><a class="link" href="async_compose.html" title="async_compose">async_compose</a>
+</h3></div></div></div>
+<p>
+        <a class="indexterm" name="boost_asio.indexterm.async_compose"></a> 
+Launch an asynchronous operation
+        with a stateful implementation.
+      </p>
+<pre class="programlisting">template&lt;
+    typename CompletionToken,
+    typename Signature,
+    typename Implementation,
+    typename... IoObjectsOrExecutors&gt;
+<a class="link" href="asynchronous_operations.html#boost_asio.reference.asynchronous_operations.automatic_deduction_of_initiating_function_return_type"><span class="emphasis"><em>DEDUCED</em></span></a> async_compose(
+    Implementation &amp;&amp; implementation,
+    CompletionToken &amp; token,
+    IoObjectsOrExecutors &amp;&amp;... io_objects_or_executors);
+</pre>
+<p>
+        The async_compose function simplifies the implementation of composed asynchronous
+        operations automatically wrapping a stateful function object with a conforming
+        intermediate completion handler.
+      </p>
+<h5>
+<a name="boost_asio.reference.async_compose.h0"></a>
+        <span class="phrase"><a name="boost_asio.reference.async_compose.parameters"></a></span><a class="link" href="async_compose.html#boost_asio.reference.async_compose.parameters">Parameters</a>
+      </h5>
+<div class="variablelist">
+<p class="title"><b></b></p>
+<dl class="variablelist">
+<dt><span class="term">implementation</span></dt>
+<dd><p>
+              A function object that contains the implementation of the composed
+              asynchronous operation. The first argument to the function object is
+              a non-const reference to the enclosing intermediate completion handler.
+              The remaining arguments are any arguments that originate from the completion
+              handlers of any asynchronous operations performed by the implementation.
+            </p></dd>
+<dt><span class="term">token</span></dt>
+<dd><p>
+              The completion token.
+            </p></dd>
+<dt><span class="term">io_objects_or_executors</span></dt>
+<dd><p>
+              Zero or more I/O objects or I/O executors for which outstanding work
+              must be maintained.
+            </p></dd>
+</dl>
+</div>
+<h5>
+<a name="boost_asio.reference.async_compose.h1"></a>
+        <span class="phrase"><a name="boost_asio.reference.async_compose.example_"></a></span><a class="link" href="async_compose.html#boost_asio.reference.async_compose.example_">Example:</a>
+      </h5>
+<pre class="programlisting">struct async_echo_implementation
+{
+  tcp::socket&amp; socket_;
+  boost::asio::mutable_buffer buffer_;
+  enum { starting, reading, writing } state_;
+
+  template &lt;typename Self&gt;
+  void operator()(Self&amp; self,
+      boost::system::error_code error = {},
+      std::size_t n = 0)
+  {
+    switch (state_)
+    {
+    case starting:
+      state_ = reading;
+      socket_.async_read_some(
+          buffer_, std::move(self));
+      break;
+    case reading:
+      if (error)
+      {
+        self.complete(error, 0);
+      }
+      else
+      {
+        state_ = writing;
+        boost::asio::async_write(socket_, buffer_,
+            boost::asio::transfer_exactly(n),
+            std::move(self));
+      }
+      break;
+    case writing:
+      self.complete(error, n);
+      break;
+    }
+  }
+};
+
+template &lt;typename CompletionToken&gt;
+auto async_echo(tcp::socket&amp; socket,
+    boost::asio::mutable_buffer buffer,
+    CompletionToken&amp;&amp; token) -&gt;
+  typename boost::asio::async_result&lt;
+    typename std::decay&lt;CompletionToken&gt;::type,
+      void(boost::system::error_code, std::size_t)&gt;::return_type
+{
+  return boost::asio::async_compose&lt;CompletionToken,
+    void(boost::system::error_code, std::size_t)&gt;(
+      async_echo_implementation{socket, buffer,
+        async_echo_implementation::starting},
+      token, socket);
+}
+</pre>
+<h5>
+<a name="boost_asio.reference.async_compose.h2"></a>
+        <span class="phrase"><a name="boost_asio.reference.async_compose.requirements"></a></span><a class="link" href="async_compose.html#boost_asio.reference.async_compose.requirements">Requirements</a>
+      </h5>
+<p>
+        <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/compose.hpp</code>
+      </p>
+<p>
+        <span class="emphasis"><em>Convenience header: </em></span><code class="literal">boost/asio.hpp</code>
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="async_completion/result.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="async_connect.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 CREATE TABLE tmyisam (a int) ENGINE = MYISAM;
 CREATE TABLE tinnodb (a int) ENGINE = INNODB;
@@ -6,18 +9,18 @@ CREATE TABLE tndb (a int) ENGINE = NDB;
 SHOW CREATE TABLE tmyisam;
 Table	Create Table
 tmyisam	CREATE TABLE `tmyisam` (
-  `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` int DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SHOW CREATE TABLE tinnodb;
 Table	Create Table
 tinnodb	CREATE TABLE `tinnodb` (
-  `a` int(11) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SHOW CREATE TABLE tndb;
 Table	Create Table
 tndb	CREATE TABLE `tndb` (
-  `a` int(11) DEFAULT NULL
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
+  `a` int DEFAULT NULL
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 [on master]
 ==== Single-engine transactions ====
 ---- autocommitted ----

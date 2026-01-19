@@ -1,49 +1,55 @@
 /*****************************************************************************
 
-Copyright (c) 1997, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1997, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file row/row0undo.cc
-Row undo
+/** @file row/row0undo.cc
+ Row undo
 
-Created 1/8/1997 Heikki Tuuri
-*******************************************************/
+ Created 1/8/1997 Heikki Tuuri
+ *******************************************************/
 
-#include "row0undo.h"
-
-#ifdef UNIV_NONINL
-#include "row0undo.ic"
-#endif
+#include <stddef.h>
 
 #include "fsp0fsp.h"
+#include "ha_prototypes.h"
 #include "mach0data.h"
-#include "trx0rseg.h"
-#include "trx0trx.h"
-#include "trx0roll.h"
-#include "trx0undo.h"
-#include "trx0purge.h"
-#include "trx0rec.h"
 #include "que0que.h"
+#include "row0mysql.h"
 #include "row0row.h"
 #include "row0uins.h"
 #include "row0umod.h"
+#include "row0undo.h"
 #include "row0upd.h"
-#include "row0mysql.h"
 #include "srv0srv.h"
+#include "trx0purge.h"
+#include "trx0rec.h"
+#include "trx0roll.h"
+#include "trx0rseg.h"
+#include "trx0trx.h"
+#include "trx0undo.h"
 
 /* How to undo row operations?
 (1) For an insert, we have stored a prefix of the clustered index record
@@ -120,257 +126,256 @@ doing the purge. Similarly, during a rollback, a record can be removed
 if the stored roll ptr in the undo log points to a trx already (being) purged,
 or if the roll ptr is NULL, i.e., it was a fresh insert. */
 
-/********************************************************************//**
-Creates a row undo node to a query graph.
-@return	own: undo node */
-UNIV_INTERN
-undo_node_t*
-row_undo_node_create(
-/*=================*/
-	trx_t*		trx,	/*!< in: transaction */
-	que_thr_t*	parent,	/*!< in: parent node, i.e., a thr node */
-	mem_heap_t*	heap)	/*!< in: memory heap where created */
-{
-	undo_node_t*	undo;
+undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent,
+                                  mem_heap_t *heap, bool partial_rollback) {
+  undo_node_t *undo;
 
-	ut_ad(trx && parent && heap);
+  ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE) ||
+        trx_state_eq(trx, TRX_STATE_PREPARED));
+  ut_ad(parent);
 
-	undo = static_cast<undo_node_t*>(
-		mem_heap_alloc(heap, sizeof(undo_node_t)));
+  undo = static_cast<undo_node_t *>(mem_heap_alloc(heap, sizeof(undo_node_t)));
 
-	undo->common.type = QUE_NODE_UNDO;
-	undo->common.parent = parent;
+  undo->common.type = QUE_NODE_UNDO;
+  undo->common.parent = parent;
 
-	undo->state = UNDO_NODE_FETCH_NEXT;
-	undo->trx = trx;
+  undo->state = UNDO_NODE_FETCH_NEXT;
+  undo->trx = trx;
 
-	btr_pcur_init(&(undo->pcur));
+  undo->partial = partial_rollback;
+  undo->pcur.init();
 
-	undo->heap = mem_heap_create(256);
+  undo->heap = mem_heap_create(256, UT_LOCATION_HERE);
 
-	return(undo);
+  return (undo);
 }
 
-/***********************************************************//**
-Looks for the clustered index record when node has the row reference.
-The pcur in node is used in the search. If found, stores the row to node,
-and stores the position of pcur, and detaches it. The pcur must be closed
-by the caller in any case.
-@return TRUE if found; NOTE the node->pcur must be closed by the
-caller, regardless of the return value */
-UNIV_INTERN
-ibool
-row_undo_search_clust_to_pcur(
-/*==========================*/
-	undo_node_t*	node)	/*!< in: row undo node */
+/** Looks for the clustered index record when node has the row reference.
+ The pcur in node is used in the search. If found, stores the row to node,
+ and stores the position of pcur, and detaches it. The pcur must be closed
+ by the caller in any case.
+ @return true if found; NOTE the node->pcur must be closed by the
+ caller, regardless of the return value */
+bool row_undo_search_clust_to_pcur(
+    undo_node_t *node) /*!< in/out: row undo node */
 {
-	dict_index_t*	clust_index;
-	ibool		found;
-	mtr_t		mtr;
-	ibool		ret;
-	rec_t*		rec;
-	mem_heap_t*	heap		= NULL;
-	ulint		offsets_[REC_OFFS_NORMAL_SIZE];
-	ulint*		offsets		= offsets_;
-	rec_offs_init(offsets_);
+  dict_index_t *clust_index;
+  bool found;
+  mtr_t mtr;
+  row_ext_t **ext;
+  const rec_t *rec;
+  mem_heap_t *heap = nullptr;
+  ulint offsets_[REC_OFFS_NORMAL_SIZE];
+  ulint *offsets = offsets_;
+  rec_offs_init(offsets_);
 
-	mtr_start(&mtr);
+  ut_ad(!node->table->skip_alter_undo);
 
-	clust_index = dict_table_get_first_index(node->table);
+  mtr_start(&mtr);
+  dict_disable_redo_if_temporary(node->table, &mtr);
 
-	found = row_search_on_row_ref(&(node->pcur), BTR_MODIFY_LEAF,
-				      node->table, node->ref, &mtr);
+  clust_index = node->table->first_index();
 
-	rec = btr_pcur_get_rec(&(node->pcur));
+  found = row_search_on_row_ref(&node->pcur, BTR_MODIFY_LEAF, node->table,
+                                node->ref, &mtr);
 
-	offsets = rec_get_offsets(rec, clust_index, offsets,
-				  ULINT_UNDEFINED, &heap);
+  if (!found) {
+    goto func_exit;
+  }
 
-	if (!found || node->roll_ptr
-	    != row_get_rec_roll_ptr(rec, clust_index, offsets)) {
+  rec = node->pcur.get_rec();
 
-		/* We must remove the reservation on the undo log record
-		BEFORE releasing the latch on the clustered index page: this
-		is to make sure that some thread will eventually undo the
-		modification corresponding to node->roll_ptr. */
+  offsets = rec_get_offsets(rec, clust_index, offsets, ULINT_UNDEFINED,
+                            UT_LOCATION_HERE, &heap);
 
-		/* fputs("--------------------undoing a previous version\n",
-		stderr); */
+  found = row_get_rec_roll_ptr(rec, clust_index, offsets) == node->roll_ptr;
 
-		ret = FALSE;
-	} else {
-		row_ext_t**	ext;
+  if (found) {
+    ut_ad(row_get_rec_trx_id(rec, clust_index, offsets) == node->trx->id);
 
-		if (dict_table_get_format(node->table) >= UNIV_FORMAT_B) {
-			/* In DYNAMIC or COMPRESSED format, there is
-			no prefix of externally stored columns in the
-			clustered index record. Build a cache of
-			column prefixes. */
-			ext = &node->ext;
-		} else {
-			/* REDUNDANT and COMPACT formats store a local
-			768-byte prefix of each externally stored
-			column. No cache is needed. */
-			ext = NULL;
-			node->ext = NULL;
-		}
+    if (dict_table_has_atomic_blobs(node->table)) {
+      /* There is no prefix of externally stored
+      columns in the clustered index record. Build a
+      cache of column prefixes. */
+      ext = &node->ext;
+    } else {
+      /* REDUNDANT and COMPACT formats store a local
+      768-byte prefix of each externally stored
+      column. No cache is needed. */
+      ext = nullptr;
+      node->ext = nullptr;
+    }
 
-		node->row = row_build(ROW_COPY_DATA, clust_index, rec,
-				      offsets, NULL,
-				      NULL, NULL, ext, node->heap);
-		if (node->rec_type == TRX_UNDO_UPD_EXIST_REC) {
-			node->undo_row = dtuple_copy(node->row, node->heap);
-			row_upd_replace(node->undo_row, &node->undo_ext,
-					clust_index, node->update, node->heap);
-		} else {
-			node->undo_row = NULL;
-			node->undo_ext = NULL;
-		}
+    node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr,
+                          nullptr, nullptr, ext, node->heap);
 
-		btr_pcur_store_position(&(node->pcur), &mtr);
+    /* We will need to parse out virtual column info from undo
+    log, first mark them DATA_MISSING. So we will know if the
+    value gets updated */
+    if (node->table->n_v_cols && node->state != UNDO_NODE_INSERT &&
+        !(node->cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
+      for (ulint i = 0; i < dict_table_get_n_v_cols(node->table); i++) {
+        dfield_get_type(dtuple_get_nth_v_field(node->row, i))->mtype =
+            DATA_MISSING;
+      }
+    }
 
-		ret = TRUE;
-	}
+    if (node->rec_type == TRX_UNDO_UPD_EXIST_REC) {
+      node->undo_row = dtuple_copy(node->row, node->heap);
+      row_upd_replace(node->undo_row, &node->undo_ext, clust_index,
+                      node->update, node->heap);
+    } else {
+      node->undo_row = nullptr;
+      node->undo_ext = nullptr;
+    }
 
-	btr_pcur_commit_specify_mtr(&(node->pcur), &mtr);
+    node->pcur.store_position(&mtr);
+  }
 
-	if (UNIV_LIKELY_NULL(heap)) {
-		mem_heap_free(heap);
-	}
-	return(ret);
+  if (heap) {
+    mem_heap_free(heap);
+  }
+
+func_exit:
+  node->pcur.commit_specify_mtr(&mtr);
+  return (found);
 }
 
-/***********************************************************//**
-Fetches an undo log record and does the undo for the recorded operation.
-If none left, or a partial rollback completed, returns control to the
-parent node, which is always a query thread node.
-@return	DB_SUCCESS if operation successfully completed, else error code */
-static MY_ATTRIBUTE((nonnull, warn_unused_result))
-dberr_t
-row_undo(
-/*=====*/
-	undo_node_t*	node,	/*!< in: row undo node */
-	que_thr_t*	thr)	/*!< in: query thread */
+/** Fetches an undo log record and does the undo for the recorded operation.
+ If none left, or a partial rollback completed, returns control to the
+ parent node, which is always a query thread node.
+ @return DB_SUCCESS if operation successfully completed, else error code */
+[[nodiscard]] static dberr_t row_undo(
+    undo_node_t *node, /*!< in: row undo node */
+    que_thr_t *thr)    /*!< in: query thread */
 {
-	dberr_t		err;
-	trx_t*		trx;
-	roll_ptr_t	roll_ptr;
-	ibool		locked_data_dict;
+  dberr_t err;
+  trx_t *trx;
+  roll_ptr_t roll_ptr;
 
-	ut_ad(node != NULL);
-	ut_ad(thr != NULL);
+  ut_ad(node != nullptr);
+  ut_ad(thr != nullptr);
 
-	trx = node->trx;
+  trx = node->trx;
+  ut_ad(trx->in_rollback);
 
-	if (node->state == UNDO_NODE_FETCH_NEXT) {
+  if (node->state == UNDO_NODE_FETCH_NEXT) {
+    node->undo_rec = trx_roll_pop_top_rec_of_trx(trx, trx->roll_limit,
+                                                 &roll_ptr, node->heap);
 
-		node->undo_rec = trx_roll_pop_top_rec_of_trx(trx,
-							     trx->roll_limit,
-							     &roll_ptr,
-							     node->heap);
-		if (!node->undo_rec) {
-			/* Rollback completed for this query thread */
+    if (!node->undo_rec) {
+      /* Rollback completed for this query thread */
 
-			thr->run_node = que_node_get_parent(node);
+      thr->run_node = que_node_get_parent(node);
 
-			return(DB_SUCCESS);
-		}
+      /* Mark any partial rollback completed, so
+      that if the transaction object is committed
+      and reused later, the roll_limit will remain
+      at 0. trx->roll_limit will be nonzero during a
+      partial rollback only. */
+      trx->roll_limit = 0;
+      ut_d(trx->in_rollback = false);
 
-		node->roll_ptr = roll_ptr;
-		node->undo_no = trx_undo_rec_get_undo_no(node->undo_rec);
+      return (DB_SUCCESS);
+    }
 
-		if (trx_undo_roll_ptr_is_insert(roll_ptr)) {
+    node->roll_ptr = roll_ptr;
+    node->undo_no = trx_undo_rec_get_undo_no(node->undo_rec);
 
-			node->state = UNDO_NODE_INSERT;
-		} else {
-			node->state = UNDO_NODE_MODIFY;
-		}
-	}
+    if (trx_undo_roll_ptr_is_insert(roll_ptr)) {
+      node->state = UNDO_NODE_INSERT;
+    } else {
+      node->state = UNDO_NODE_MODIFY;
+    }
+  }
 
-	/* Prevent DROP TABLE etc. while we are rolling back this row.
-	If we are doing a TABLE CREATE or some other dictionary operation,
-	then we already have dict_operation_lock locked in x-mode. Do not
-	try to lock again, because that would cause a hang. */
+  /* During rollback, trx is holding at least LOCK_IX on each
+  modified table. It may also hold MDL. A concurrent DROP TABLE
+  or ALTER TABLE should be impossible, because it should be
+  holding both LOCK_X and MDL_EXCLUSIVE on the table. */
+  if (node->state == UNDO_NODE_INSERT) {
+    err = row_undo_ins(node, thr);
 
-	locked_data_dict = (trx->dict_operation_lock_mode == 0);
+    node->state = UNDO_NODE_FETCH_NEXT;
+  } else {
+    ut_ad(node->state == UNDO_NODE_MODIFY);
+    err = row_undo_mod(node, thr);
+  }
 
-	if (locked_data_dict) {
+  /* Do some cleanup */
+  node->pcur.close();
 
-		row_mysql_freeze_data_dictionary(trx);
-	}
+  mem_heap_empty(node->heap);
 
-	if (node->state == UNDO_NODE_INSERT) {
+  thr->run_node = node;
 
-		err = row_undo_ins(node);
-
-		node->state = UNDO_NODE_FETCH_NEXT;
-	} else {
-		ut_ad(node->state == UNDO_NODE_MODIFY);
-		err = row_undo_mod(node, thr);
-	}
-
-	if (locked_data_dict) {
-
-		row_mysql_unfreeze_data_dictionary(trx);
-	}
-
-	/* Do some cleanup */
-	btr_pcur_close(&(node->pcur));
-
-	mem_heap_empty(node->heap);
-
-	thr->run_node = node;
-
-	return(err);
+  return (err);
 }
 
-/***********************************************************//**
-Undoes a row operation in a table. This is a high-level function used
-in SQL execution graphs.
-@return	query thread to run next or NULL */
-UNIV_INTERN
-que_thr_t*
-row_undo_step(
-/*==========*/
-	que_thr_t*	thr)	/*!< in: query thread */
+void row_convert_impl_to_expl_if_needed(btr_cur_t *cursor, undo_node_t *node) {
+  /* In case of partial rollback implicit lock on the
+  record is released in the middle of transaction, which
+  can break the serializability of IODKU and REPLACE
+  statements. Normal rollback is not affected by this
+  because we release the locks after the rollback. So
+  to prevent any other transaction modifying the record
+  in between the partial rollback we convert the implicit
+  lock on the record to explicit. When the record is actually
+  deleted this lock will be inherited by the next record.  */
+
+  if (!node->partial || (node->trx == nullptr) ||
+      node->trx->isolation_level < trx_t::REPEATABLE_READ) {
+    return;
+  }
+
+  ut_ad(node->trx->in_rollback);
+  auto index = cursor->index;
+  auto rec = btr_cur_get_rec(cursor);
+  auto block = btr_cur_get_block(cursor);
+  auto heap_no = page_rec_get_heap_no(rec);
+
+  if (heap_no != PAGE_HEAP_NO_SUPREMUM && !dict_index_is_spatial(index) &&
+      !index->table->is_temporary() && !index->table->is_intrinsic()) {
+    lock_rec_convert_impl_to_expl(block, rec, index,
+                                  Rec_offsets().compute(rec, index));
+  }
+}
+
+/** Undoes a row operation in a table. This is a high-level function used
+ in SQL execution graphs.
+ @return query thread to run next or NULL */
+que_thr_t *row_undo_step(que_thr_t *thr) /*!< in: query thread */
 {
-	dberr_t		err;
-	undo_node_t*	node;
-	trx_t*		trx;
+  dberr_t err;
+  undo_node_t *node;
+  trx_t *trx;
 
-	ut_ad(thr);
+  ut_ad(thr);
 
-	srv_inc_activity_count();
+  srv_inc_activity_count();
 
-	trx = thr_get_trx(thr);
+  trx = thr_get_trx(thr);
 
-	node = static_cast<undo_node_t*>(thr->run_node);
+  node = static_cast<undo_node_t *>(thr->run_node);
 
-	ut_ad(que_node_get_type(node) == QUE_NODE_UNDO);
+  ut_ad(que_node_get_type(node) == QUE_NODE_UNDO);
 
-	err = row_undo(node, thr);
+  err = row_undo(node, thr);
 
-	trx->error_state = err;
+  trx->error_state = err;
 
-	if (err != DB_SUCCESS) {
-		/* SQL error detected */
+  if (err != DB_SUCCESS) {
+    /* SQL error detected */
 
-		fprintf(stderr, "InnoDB: Fatal error (%s) in rollback.\n",
-			ut_strerr(err));
+    if (err == DB_OUT_OF_FILE_SPACE) {
+      ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_1041)
+          << "Out of tablespace during rollback."
+             " Consider increasing your tablespace.";
+    }
 
-		if (err == DB_OUT_OF_FILE_SPACE) {
-			fprintf(stderr,
-				"InnoDB: Out of tablespace.\n"
-				"InnoDB: Consider increasing"
-				" your tablespace.\n");
+    ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_1042)
+        << "Error (" << ut_strerr(err) << ") in rollback.";
+  }
 
-			exit(1);
-		}
-
-		ut_error;
-
-		return(NULL);
-	}
-
-	return(thr);
+  return (thr);
 }

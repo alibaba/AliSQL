@@ -1,3 +1,7 @@
+--source include/have_myisam.inc 
+#Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 ###############################################
 #                                             #
 #  Prepared Statements test on MERGE tables   #
@@ -49,7 +53,7 @@ INSERT_METHOD=FIRST;
 # -- source include/ps_modify1.inc
 -- source include/ps_conv.inc
 
-# Lets's try the same tests with INSERT_METHOD=LAST
+# Let us try the same tests with INSERT_METHOD=LAST
 drop table t1, t9 ;
 create table t1
 (

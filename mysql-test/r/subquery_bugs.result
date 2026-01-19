@@ -1,0 +1,2335 @@
+# Bug#26436185 Assertion 'buf_is_inside_another(data_in_mysql_buf, ...)
+CREATE TABLE t1 (
+pk int NOT NULL,
+col_int_key int DEFAULT NULL,
+col_int int DEFAULT NULL,
+col_varchar varchar(1) DEFAULT NULL,
+PRIMARY KEY (pk),
+KEY col_int_key (col_int_key)
+);
+INSERT INTO t1 VALUES (10,7,5,'l'), (12,7,4,'o');
+CREATE TABLE t2 (
+col_date_key date DEFAULT NULL,
+col_datetime_key datetime DEFAULT NULL,
+col_int_key int(11) DEFAULT NULL,
+col_varchar_key varchar(1) DEFAULT NULL,
+col_varchar varchar(1) DEFAULT NULL,
+col_time time DEFAULT NULL,
+pk int NOT NULL,
+col_date date DEFAULT NULL,
+col_time_key time DEFAULT NULL,
+col_datetime datetime DEFAULT NULL,
+col_int int DEFAULT NULL,
+PRIMARY KEY (pk),
+KEY col_date_key (col_date_key),
+KEY col_datetime_key (col_datetime_key),
+KEY col_int_key (col_int_key),
+KEY col_varchar_key (col_varchar_key),
+KEY col_time_key (col_time_key)
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t2(col_int_key,col_varchar_key,col_varchar,pk,col_int)  VALUES
+(8,'a','w',1,5),
+(9,'y','f',7,0),
+(9,'z','i',11,9),
+(9,'r','s',12,3),
+(7,'n','i',13,6),
+(9,'j','v',17,9),
+(240,'u','k',20,6);
+CREATE TABLE t3 (
+col_int int DEFAULT NULL,
+col_int_key int(11) DEFAULT NULL,
+pk int NOT NULL,
+PRIMARY KEY (pk),
+KEY col_int_key (col_int_key)
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t3 VALUES (8,4,1);
+ANALYZE TABLE t1, t2, t3;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+EXPLAIN SELECT table2.col_int_key AS field1
+FROM (SELECT sq1_t1.*
+FROM t1 AS sq1_t1 RIGHT OUTER JOIN t2 AS sq1_t2
+ON sq1_t2.col_varchar_key = sq1_t1.col_varchar
+) AS table1
+LEFT JOIN t1 AS table2
+RIGHT JOIN t2 AS table3
+ON table3.pk = table2.col_int_key
+ON table3.col_int_key = table2.col_int
+WHERE table3.col_int_key >= ALL
+(SELECT sq2_t1.col_int AS sq2_field1
+FROM t2 AS sq2_t1 STRAIGHT_JOIN t3 AS sq2_t2
+ON sq2_t2.col_int = sq2_t1.pk AND
+sq2_t1.col_varchar IN
+(SELECT sq21_t1.col_varchar AS sq21_field1
+FROM t2 AS sq21_t1 STRAIGHT_JOIN t1 AS sq21_t2
+ON sq21_t2.col_int_key = sq21_t1.pk
+WHERE sq21_t1.pk = 7
+)
+WHERE sq2_t2.col_int_key >= table2.col_int AND
+sq2_t1.col_int_key <= table2.col_int_key
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	sq1_t2	NULL	index	NULL	col_varchar_key	7	NULL	7	100.00	Using index
+1	PRIMARY	sq1_t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where; Using join buffer (hash join)
+1	PRIMARY	table2	NULL	ALL	col_int_key	NULL	NULL	NULL	2	100.00	NULL
+1	PRIMARY	table3	NULL	eq_ref	PRIMARY,col_int_key	PRIMARY	4	test.table2.col_int_key	1	100.00	Using where
+3	DEPENDENT SUBQUERY	<subquery4>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	NULL
+3	DEPENDENT SUBQUERY	sq2_t1	NULL	ALL	PRIMARY,col_int_key	NULL	NULL	NULL	7	14.29	Range checked for each record (index map: 0x9)
+3	DEPENDENT SUBQUERY	sq2_t2	NULL	ALL	col_int_key	NULL	NULL	NULL	1	100.00	Range checked for each record (index map: 0x2)
+4	MATERIALIZED	sq21_t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+4	MATERIALIZED	sq21_t2	NULL	ref	col_int_key	col_int_key	5	const	2	100.00	Using index
+Warnings:
+Note	1276	Field or reference 'test.table2.col_int' of SELECT #3 was resolved in SELECT #1
+Note	1276	Field or reference 'test.table2.col_int_key' of SELECT #3 was resolved in SELECT #1
+Note	1003	/* select#1 */ select `test`.`table2`.`col_int_key` AS `field1` from `test`.`t2` `sq1_t2` left join `test`.`t1` `sq1_t1` on((`test`.`sq1_t1`.`col_varchar` = `test`.`sq1_t2`.`col_varchar_key`)) left join (`test`.`t2` `table3` join `test`.`t1` `table2`) on(((`test`.`table3`.`pk` = `test`.`table2`.`col_int_key`) and (`test`.`table3`.`col_int_key` = `test`.`table2`.`col_int`))) where <not>(<in_optimizer>(`test`.`table3`.`col_int_key`,<exists>(/* select#3 */ select `test`.`sq2_t1`.`col_int` AS `sq2_field1` from `test`.`t2` `sq2_t1` straight_join `test`.`t3` `sq2_t2` semi join (`test`.`t2` `sq21_t1` straight_join `test`.`t1` `sq21_t2`) where ((`test`.`sq2_t2`.`col_int` = `test`.`sq2_t1`.`pk`) and (`test`.`sq2_t1`.`col_varchar` = `<subquery4>`.`sq21_field1`) and (`test`.`sq21_t1`.`pk` = 7) and (`test`.`sq21_t2`.`col_int_key` = 7) and (`test`.`sq2_t2`.`col_int_key` >= `test`.`table2`.`col_int`) and (`test`.`sq2_t1`.`col_int_key` <= `test`.`table2`.`col_int_key`) and <if>(outer_field_is_not_null, ((<cache>(`test`.`table3`.`col_int_key`) < `test`.`sq2_t1`.`col_int`) or (`test`.`sq2_t1`.`col_int` is null)), true)) having <if>(outer_field_is_not_null, <is_not_null_test>(`test`.`sq2_t1`.`col_int`), true))))
+SELECT table2.col_int_key AS field1
+FROM (SELECT sq1_t1.*
+FROM t1 AS sq1_t1 RIGHT OUTER JOIN t2 AS sq1_t2
+ON sq1_t2.col_varchar_key = sq1_t1.col_varchar
+) AS table1
+LEFT JOIN t1 AS table2
+RIGHT JOIN t2 AS table3
+ON table3.pk = table2.col_int_key
+ON table3.col_int_key = table2.col_int
+WHERE table3.col_int_key >= ALL
+(SELECT sq2_t1.col_int AS sq2_field1
+FROM t2 AS sq2_t1 STRAIGHT_JOIN t3 AS sq2_t2
+ON sq2_t2.col_int = sq2_t1.pk AND
+sq2_t1.col_varchar IN
+(SELECT sq21_t1.col_varchar AS sq21_field1
+FROM t2 AS sq21_t1 STRAIGHT_JOIN t1 AS sq21_t2
+ON sq21_t2.col_int_key = sq21_t1.pk
+WHERE sq21_t1.pk = 7
+)
+WHERE sq2_t2.col_int_key >= table2.col_int AND
+sq2_t1.col_int_key <= table2.col_int_key
+);
+field1
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+DROP TABLE t1, t2, t3;
+#
+# Bug#24713879 ASSERTION `MAYBE_NULL' FAILED. HANDLE_FATAL_SIGNAL IN TEM_FUNC_CONCAT::VAL_STR
+#
+CREATE TABLE t1(k VARCHAR(10) PRIMARY KEY);
+CREATE TABLE t2(k VARCHAR(10) PRIMARY KEY);
+SET SQL_MODE='';
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+FROM t1
+WHERE k ='X';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	no matching row in const table
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Not optimized, outer query is empty
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select ((/* select#2 */ select 'X' from `test`.`t2` where (`test`.`t2`.`k` = concat(NULL,'X'))) = 'XXX') AS `(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'` from `test`.`t1` where multiple equal('X', NULL)
+SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+FROM t1
+WHERE k ='X';
+(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX',
+SUM(k)
+FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	PRIMARY	42	NULL	1	100.00	Using index
+2	DEPENDENT SUBQUERY	t2	NULL	eq_ref	PRIMARY	PRIMARY	42	func	1	100.00	Using where; Using index
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select ((/* select#2 */ select 'X' from `test`.`t2` where (`test`.`t2`.`k` = concat(`test`.`t1`.`k`,'X'))) = 'XXX') AS `(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'`,sum(`test`.`t1`.`k`) AS `SUM(k)` from `test`.`t1`
+SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX',
+SUM(k)
+FROM t1;
+(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'	SUM(k)
+NULL	NULL
+EXPLAIN SELECT SUM(k), k
+FROM t1
+HAVING (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	PRIMARY	42	NULL	1	100.00	Using index
+2	DEPENDENT SUBQUERY	t2	NULL	eq_ref	PRIMARY	PRIMARY	42	func	1	100.00	Using where; Using index
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`k`) AS `SUM(k)`,`test`.`t1`.`k` AS `k` from `test`.`t1` having ((/* select#2 */ select 'X' from `test`.`t2` where (`test`.`t2`.`k` = concat(`test`.`t1`.`k`,'X'))) = 'XXX')
+SELECT SUM(k), k
+FROM t1
+HAVING (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX';
+SUM(k)	k
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'
+FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	PRIMARY	42	NULL	1	100.00	Using index
+2	DEPENDENT SUBQUERY	t2	NULL	eq_ref	PRIMARY	PRIMARY	42	func	1	100.00	Using where; Using index
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select ((/* select#2 */ select 'X' from `test`.`t2` where ((`test`.`t2`.`k` = concat(`test`.`t1`.`k`,'X')) and (0 <> sum(`test`.`t1`.`k`)))) = 'XXX') AS `(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'` from `test`.`t1`
+SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'
+FROM t1;
+(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'
+NULL
+SET SQL_MODE=ONLY_FULL_GROUP_BY;
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+FROM t1
+WHERE k ='X';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	no matching row in const table
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Not optimized, outer query is empty
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select ((/* select#2 */ select 'X' from `test`.`t2` where (`test`.`t2`.`k` = concat(NULL,'X'))) = 'XXX') AS `(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'` from `test`.`t1` where multiple equal('X', NULL)
+SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+FROM t1
+WHERE k ='X';
+(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX',
+SUM(k)
+FROM t1;
+ERROR 42000: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'test.t1.k'; this is incompatible with sql_mode=only_full_group_by
+EXPLAIN SELECT SUM(k), k
+FROM t1
+HAVING (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX';
+ERROR 42000: In aggregated query without GROUP BY, expression #2 of SELECT list contains nonaggregated column 'test.t1.k'; this is incompatible with sql_mode=only_full_group_by
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'
+FROM t1;
+ERROR 42000: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'test.t1.k'; this is incompatible with sql_mode=only_full_group_by
+SET SQL_MODE=STRICT_TRANS_TABLES;
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+FROM t1
+WHERE k ='X';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	no matching row in const table
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Not optimized, outer query is empty
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select ((/* select#2 */ select 'X' from `test`.`t2` where (`test`.`t2`.`k` = concat(NULL,'X'))) = 'XXX') AS `(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'` from `test`.`t1` where multiple equal('X', NULL)
+SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+FROM t1
+WHERE k ='X';
+(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX',
+SUM(k)
+FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	PRIMARY	42	NULL	1	100.00	Using index
+2	DEPENDENT SUBQUERY	t2	NULL	eq_ref	PRIMARY	PRIMARY	42	func	1	100.00	Using where; Using index
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select ((/* select#2 */ select 'X' from `test`.`t2` where (`test`.`t2`.`k` = concat(`test`.`t1`.`k`,'X'))) = 'XXX') AS `(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'`,sum(`test`.`t1`.`k`) AS `SUM(k)` from `test`.`t1`
+SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX',
+SUM(k)
+FROM t1;
+(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'	SUM(k)
+NULL	NULL
+EXPLAIN SELECT SUM(k), k
+FROM t1
+HAVING (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	PRIMARY	42	NULL	1	100.00	Using index
+2	DEPENDENT SUBQUERY	t2	NULL	eq_ref	PRIMARY	PRIMARY	42	func	1	100.00	Using where; Using index
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`k`) AS `SUM(k)`,`test`.`t1`.`k` AS `k` from `test`.`t1` having ((/* select#2 */ select 'X' from `test`.`t2` where (`test`.`t2`.`k` = concat(`test`.`t1`.`k`,'X'))) = 'XXX')
+SELECT SUM(k), k
+FROM t1
+HAVING (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX';
+SUM(k)	k
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'
+FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	PRIMARY	42	NULL	1	100.00	Using index
+2	DEPENDENT SUBQUERY	t2	NULL	eq_ref	PRIMARY	PRIMARY	42	func	1	100.00	Using where; Using index
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select ((/* select#2 */ select 'X' from `test`.`t2` where ((`test`.`t2`.`k` = concat(`test`.`t1`.`k`,'X')) and (0 <> sum(`test`.`t1`.`k`)))) = 'XXX') AS `(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'` from `test`.`t1`
+SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'
+FROM t1;
+(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'
+NULL
+SET SQL_MODE=DEFAULT;
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+FROM t1
+WHERE k ='X';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	no matching row in const table
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Not optimized, outer query is empty
+Warnings:
+Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select ((/* select#2 */ select 'X' from `test`.`t2` where (`test`.`t2`.`k` = concat(NULL,'X'))) = 'XXX') AS `(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'` from `test`.`t1` where multiple equal('X', NULL)
+SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+FROM t1
+WHERE k ='X';
+(SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX'
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX',
+SUM(k)
+FROM t1;
+ERROR 42000: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'test.t1.k'; this is incompatible with sql_mode=only_full_group_by
+EXPLAIN SELECT SUM(k), k
+FROM t1
+HAVING (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')) = 'XXX';
+ERROR 42000: In aggregated query without GROUP BY, expression #2 of SELECT list contains nonaggregated column 'test.t1.k'; this is incompatible with sql_mode=only_full_group_by
+EXPLAIN SELECT (SELECT 'X' FROM t2
+WHERE t2.k = CONCAT(t1.k, 'X')
+AND SUM(t1.k)) = 'XXX'
+FROM t1;
+ERROR 42000: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'test.t1.k'; this is incompatible with sql_mode=only_full_group_by
+DROP TABLE t1,t2;
+#
+# Bug#27665085 ASSERTION FAILED: JOIN == 0.
+#
+SET sql_mode='';
+CREATE TABLE a(d INT,e BIGINT, KEY(e));
+INSERT a VALUES (0,0);
+CREATE TABLE b(f TIME);
+INSERT b VALUES (null),(null),(null);
+CREATE TABLE c(g DATETIME(6) NOT NULL);
+INSERT c(g) VALUES (now()+interval 1 day);
+INSERT c(g) VALUES (now()-interval 1 day);
+SELECT 1 FROM a WHERE (SELECT f FROM b WHERE (SELECT 1 FROM c)) <=> e GROUP BY d;
+ERROR 21000: Subquery returns more than 1 row
+SET sql_mode=default;
+DROP TABLES a, b, c;
+#
+# Bug#27182010 SUBQUERY INCORRECTLY SHOWS DUPLICATE VALUES ON SUBQUERIES
+#
+CREATE TABLE p (Id INT,PRIMARY KEY (Id));
+INSERT INTO p VALUES (1);
+# Test UNIQUE KEY with NULL values
+CREATE TABLE s (Id INT, u INT, UNIQUE KEY o(Id, u) );
+INSERT INTO s VALUES (1, NULL),(1, NULL);
+ANALYZE TABLE s;
+Table	Op	Msg_type	Msg_text
+test.s	analyze	status	OK
+EXPLAIN SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s.Id FROM s WHERE Id=1 AND u IS NULL)ORDER BY Id DESC;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	s	NULL	ref	o	o	10	const,const	2	100.00	Using where; Using index; FirstMatch(p)
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `Id` from `test`.`p` semi join (`test`.`s`) where ((`test`.`s`.`Id` = 1) and (`test`.`s`.`u` is null)) order by '1' desc
+EXPLAIN SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s.Id FROM s WHERE Id=1 AND u IS NOT NULL) ORDER BY Id DESC;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	s	NULL	range	o	o	10	NULL	1	100.00	Using where; Using index; FirstMatch(p)
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `Id` from `test`.`p` semi join (`test`.`s`) where ((`test`.`s`.`Id` = 1) and (`test`.`s`.`u` is not null)) order by '1' desc
+SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s.Id FROM s WHERE Id=1 AND u IS NULL)ORDER BY Id DESC;
+Id
+1
+SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s.Id FROM s WHERE Id=1 AND u IS NOT NULL) ORDER BY Id DESC;
+Id
+# UNIQUE KEY without NULL values
+CREATE TABLE s1 (Id INT, u INT, UNIQUE KEY o(Id, u) );
+INSERT INTO s1 VALUES (1, 2),(1, 3);
+ANALYZE TABLE s1;
+Table	Op	Msg_type	Msg_text
+test.s1	analyze	status	OK
+EXPLAIN SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s1.Id FROM s1 WHERE Id=1 AND u IS NOT NULL) ORDER BY Id DESC;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	s1	NULL	index	o	o	10	NULL	2	100.00	Using where; Using index; FirstMatch(p)
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `Id` from `test`.`p` semi join (`test`.`s1`) where ((`test`.`s1`.`Id` = 1) and (`test`.`s1`.`u` is not null)) order by '1' desc
+EXPLAIN SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s1.Id FROM s1 WHERE Id=1 AND u != 1) ORDER BY Id DESC;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	s1	NULL	index	o	o	10	NULL	2	100.00	Using where; Using index; FirstMatch(p)
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `Id` from `test`.`p` semi join (`test`.`s1`) where ((`test`.`s1`.`Id` = 1) and (`test`.`s1`.`u` <> 1)) order by '1' desc
+SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s1.Id FROM s1 WHERE Id=1 AND u IS NOT NULL) ORDER BY Id DESC;
+Id
+1
+SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s1.Id FROM s1 WHERE Id=1 AND u != 1) ORDER BY Id DESC;
+Id
+1
+# NON UNIQUE KEY Scenario
+CREATE TABLE s2 (Id INT, u INT, KEY o(Id, u) );
+INSERT INTO s2 VALUES (1, NULL),(1, NULL);
+ANALYZE TABLE s2;
+Table	Op	Msg_type	Msg_text
+test.s2	analyze	status	OK
+#UNIQUE KEY with NON NULL FIELDS
+CREATE TABLE s3 (Id INT NOT NULL, u INT NOT NULL, UNIQUE KEY o(Id, u));
+INSERT INTO s3 VALUES (1, 2),(1, 3);
+ANALYZE TABLE s3;
+Table	Op	Msg_type	Msg_text
+test.s3	analyze	status	OK
+EXPLAIN SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s.Id FROM s2 s WHERE Id=1 AND u IS NULL) ORDER BY Id DESC;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	s	NULL	ref	o	o	10	const,const	2	100.00	Using where; Using index; FirstMatch(p)
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `Id` from `test`.`p` semi join (`test`.`s2` `s`) where ((`test`.`s`.`Id` = 1) and (`test`.`s`.`u` is null)) order by '1' desc
+EXPLAIN SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s.Id FROM s3 s WHERE Id=1 AND u IS NOT NULL)
+ORDER BY Id DESC;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	s	NULL	ref	o	o	4	const	2	100.00	Using index; FirstMatch(p)
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `Id` from `test`.`p` semi join (`test`.`s3` `s`) where (`test`.`s`.`Id` = 1) order by '1' desc
+SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s.Id FROM s2 s WHERE Id=1 AND u IS NULL) ORDER BY Id DESC;
+Id
+1
+SELECT p.Id FROM (p) WHERE p.Id IN (
+SELECT s.Id FROM s3 s WHERE Id=1 AND u IS NOT NULL)
+ORDER BY Id DESC;
+Id
+1
+DROP TABLE p, s, s1, s2, s3;
+#
+# Bug#28239008: WL#9571: SIG11 IN ITEM_FIELD::RESULT_TYPE() AT SQL/ITEM.H
+#
+CREATE TABLE t1 (f1 varchar(1) DEFAULT NULL);
+INSERT INTO t1 VALUES ('5');
+CREATE TABLE t2 (f1 varchar(1) DEFAULT NULL);
+INSERT INTO t2 VALUES ('Y');
+PREPARE prep_stmt FROM "SELECT t2.f1 FROM (t2 LEFT JOIN t1
+ ON (1 = ANY (SELECT f1 FROM t1 WHERE 1 IS NULL)))" ;
+EXECUTE prep_stmt ;
+f1
+Y
+DROP TABLE t1,t2;
+CREATE TABLE t1 (f1 varchar(1) DEFAULT NULL);
+INSERT INTO t1 VALUES ('Z') ;
+CREATE TABLE t2 (f1 varchar(1) DEFAULT NULL);
+INSERT INTO t2 VALUES ('Z') ;
+PREPARE prep_stmt FROM "
+SELECT t2.f1 FROM t2 LEFT OUTER JOIN
+(SELECT  * FROM t2 WHERE ('y',1)
+ IN (SELECT alias1.f1 , 0 FROM t1 AS alias1 LEFT JOIN t2 ON 0)) AS alias ON 0";
+EXECUTE prep_stmt ;
+f1
+Z
+PREPARE prep_stmt FROM "
+SELECT t2.f1 FROM (t2 LEFT OUTER JOIN (SELECT  * FROM t2 WHERE ('y',1)
+ IN (SELECT alias1.f1 , 0 FROM
+     (t1 INNER JOIN  (t1 AS alias1 LEFT JOIN t2 ON 0) ON 0))) AS alias ON 0)";
+EXECUTE prep_stmt ;
+f1
+Z
+DROP TABLE t1,t2;
+#
+# Bug#28805105: Sig11 in calc_length_and_keyparts
+#
+CREATE TABLE t1 (cv VARCHAR(1) DEFAULT NULL);
+INSERT INTO t1 VALUES ('h'), ('Q'), ('I'), ('q'), ('W');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN SELECT cv
+FROM t1
+WHERE EXISTS (SELECT alias1.cv AS field1
+FROM t1 AS alias1 RIGHT JOIN t1 AS alias2
+ON alias1.cv = alias2.cv
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	5	100.00	NULL
+1	SIMPLE	<subquery2>	NULL	const	<auto_distinct_key>	<auto_distinct_key>	8	const	1	100.00	NULL
+2	MATERIALIZED	alias2	NULL	ALL	NULL	NULL	NULL	NULL	5	100.00	NULL
+2	MATERIALIZED	alias1	NULL	ALL	NULL	NULL	NULL	NULL	5	100.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`cv` AS `cv` from `test`.`t1` semi join (`test`.`t1` `alias2` left join `test`.`t1` `alias1` on((`test`.`alias1`.`cv` = `test`.`alias2`.`cv`))) where true
+SELECT cv
+FROM t1
+WHERE EXISTS (SELECT alias1.cv AS field1
+FROM t1 AS alias1 RIGHT JOIN t1 AS alias2
+ON alias1.cv = alias2.cv
+);
+cv
+h
+Q
+I
+q
+W
+DROP TABLE t1;
+# Bug#28970261: Sig6 in decorrelate_equality()
+CREATE TABLE t1 (col_varchar_key varchar(1) DEFAULT NULL);
+EXPLAIN SELECT *
+FROM t1
+WHERE col_varchar_key IN
+(SELECT col_varchar_key
+FROM t1
+WHERE col_varchar_key =
+(SELECT col_varchar_key
+FROM t1
+WHERE col_varchar_key > @var1
+)
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; FirstMatch(t1); Using join buffer (hash join)
+3	UNCACHEABLE SUBQUERY	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`col_varchar_key` AS `col_varchar_key` from `test`.`t1` semi join (`test`.`t1`) where ((`test`.`t1`.`col_varchar_key` = `test`.`t1`.`col_varchar_key`) and (`test`.`t1`.`col_varchar_key` = (/* select#3 */ select `test`.`t1`.`col_varchar_key` from `test`.`t1` where (`test`.`t1`.`col_varchar_key` > <cache>((@`var1`))))))
+SELECT *
+FROM t1
+WHERE col_varchar_key IN
+(SELECT col_varchar_key
+FROM t1
+WHERE col_varchar_key =
+(SELECT col_varchar_key
+FROM t1
+WHERE col_varchar_key > @var1
+)
+);
+col_varchar_key
+EXPLAIN SELECT *
+FROM t1
+WHERE col_varchar_key IN
+(SELECT col_varchar_key
+FROM t1
+WHERE col_varchar_key =
+(SELECT col_varchar_key
+FROM t1
+WHERE col_varchar_key = RAND()
+)
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; FirstMatch(t1); Using join buffer (hash join)
+3	UNCACHEABLE SUBQUERY	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`col_varchar_key` AS `col_varchar_key` from `test`.`t1` semi join (`test`.`t1`) where ((`test`.`t1`.`col_varchar_key` = `test`.`t1`.`col_varchar_key`) and (`test`.`t1`.`col_varchar_key` = (/* select#3 */ select `test`.`t1`.`col_varchar_key` from `test`.`t1` where (cast(`test`.`t1`.`col_varchar_key` as double) = rand()))))
+SELECT *
+FROM t1
+WHERE col_varchar_key IN
+(SELECT col_varchar_key
+FROM t1
+WHERE col_varchar_key =
+(SELECT col_varchar_key
+FROM t1
+WHERE col_varchar_key = RAND()
+)
+);
+col_varchar_key
+DROP TABLE t1;
+#
+# Bug #29193761: WL#12470: SIG 11 IN MARKUNHANDLEDDUPLICATES() AT SQL/SQL_EXECUTOR.CC
+#
+CREATE TABLE t1 (
+pk integer NOT NULL PRIMARY KEY,
+f1 varchar(1),
+KEY k1 (f1)
+);
+CREATE TABLE t2 ( pk integer NOT NULL PRIMARY KEY );
+CREATE VIEW v2 AS select * FROM t2;
+INSERT INTO t1 VALUES (1, 'G');
+INSERT INTO t1 VALUES (2, 'j');
+INSERT INTO t1 VALUES (3, 'K');
+INSERT INTO t1 VALUES (4, 'v');
+INSERT INTO t1 VALUES (5, 'E');
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE pk IN ( SELECT pk FROM t1 LEFT JOIN v2 USING (pk) WHERE f1 >= 'o' );
+EXPLAIN
+-> Nested loop inner join  (cost=3.77 rows=1)
+    -> Table scan on <subquery2>  (cost=3.42..3.42 rows=1)
+        -> Materialize with deduplication  (cost=0.91..0.91 rows=1)
+            -> Nested loop left join  (cost=0.81 rows=1)
+                -> Filter: (t1.f1 >= 'o')  (cost=0.46 rows=1)
+                    -> Covering index range scan on t1 using k1 over ('o' <= f1)  (cost=0.46 rows=1)
+                -> Single-row covering index lookup on t2 using PRIMARY (pk=t1.pk)  (cost=0.35 rows=1)
+    -> Single-row index lookup on t1 using PRIMARY (pk=`<subquery2>`.pk)  (cost=0.35 rows=1)
+
+DROP TABLE t1, t2;
+DROP VIEW v2;
+#
+# Bug #29236241: WL#12470: SIG 6 IN TEMPTABLE::HANDLER::POSITION AT SRC/HANDLER.CC
+#
+CREATE TABLE t1 (
+f1 varchar(1),
+KEY k1 (f1)
+);
+INSERT INTO t1 VALUES ('6'),('6');
+EXPLAIN FORMAT=tree SELECT 1 WHERE (
+SELECT 1
+FROM t1 LEFT JOIN t1 AS t2 ON 'f' IN ( SELECT f1 FROM t1 )
+WHERE EXISTS ( SELECT * FROM t1 LEFT JOIN t1 AS t3 ON t3.f1='a' )
+);
+DROP TABLE t1;
+#
+# Bug #29231551: WL#12470: SIG 6 QEP_TAB->LAST_INNER() == (-2) CONNECTJOINS()|SQL/SQL_EXECUTOR.CC
+#
+CREATE TABLE t1 (
+pk integer PRIMARY KEY,
+f1 integer,
+f2 varchar(1)
+);
+INSERT INTO t1 VALUES (1,100,'x'),(2,200,'y');
+CREATE TABLE t2 (
+f2 varchar(1)
+);
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 LEFT JOIN t1 AS t3 ON t1.pk = t3.pk AND t1.f2 IN ( SELECT f2 FROM t2 )
+WHERE EXISTS ( SELECT * FROM t1 AS t4, t2 AS t5 ) AND t1.f1 = 80 AND t1.pk > t1.f1;
+EXPLAIN
+-> Nested loop left join  (cost=0.91 rows=1)
+    -> Nested loop semijoin  (cost=0.685 rows=1)
+        -> Filter: ((t1.f1 = 80) and (t1.pk > 80))  (cost=0.46 rows=0.5)
+            -> Index range scan on t1 using PRIMARY over (80 < pk)  (cost=0.46 rows=1)
+        -> Nested loop inner join  (cost=0.775 rows=2)
+            -> Table scan on t5  (cost=0.45 rows=1)
+            -> Index scan on t4 using PRIMARY  (cost=1.3 rows=2)
+    -> Nested loop semijoin  (cost=0.8 rows=1)
+        -> Single-row index lookup on t3 using PRIMARY (pk=t1.pk)  (cost=0.45 rows=1)
+        -> Filter: (t2.f2 = t1.f2)  (cost=0.7 rows=1)
+            -> Table scan on t2  (cost=0.7 rows=1)
+
+DROP TABLE t1, t2;
+#
+# Bug#29356132:OPTIMIZED-AWAY SUBQUERY IN PREPARED STATEMENT CAUSES ASSERT FAILURE IN EXECUTION
+#
+CREATE TABLE t1 (f1 varchar(1));
+INSERT INTO t1 VALUES ('5');
+CREATE TABLE t2 (f1 varchar(1));
+INSERT INTO t2 VALUES ('Y');
+PREPARE prep_stmt FROM "SELECT t2.f1 FROM (t2 LEFT JOIN t1
+ ON 1 IN (SELECT f1 FROM t1 WHERE FALSE))" ;
+EXECUTE prep_stmt ;
+f1
+Y
+DROP TABLE t1,t2;
+# Bug#28955216: Assertion 'keyparts > 0' failed
+set optimizer_switch='derived_merge=off';
+CREATE TABLE t1 (
+pk INTEGER,
+col_int_key INTEGER,
+col_datetime_gckey DATETIME,
+col_time_gckey TIME,
+col_varchar_key VARCHAR(15)
+);
+CREATE TABLE t2 (
+pk INTEGER,
+col_int_key INTEGER,
+col_varchar_key VARCHAR(15)
+);
+EXPLAIN SELECT alias1.col_time_gckey AS field1,
+alias1.col_datetime_gckey AS field2
+FROM t1 AS alias1,
+(SELECT DISTINCT sq1_alias2.*
+FROM t1 AS sq1_alias1, t1 AS sq1_alias2
+) AS alias2,
+(SELECT sq2_alias1.*
+FROM t1 AS sq2_alias1 RIGHT OUTER JOIN
+t1 AS sq2_alias2 INNER JOIN t2 AS sq2_alias3
+ON sq2_alias3.col_int_key = sq2_alias2.col_int_key
+ON sq2_alias3.col_varchar_key = sq2_alias2.col_varchar_key
+) AS alias3
+WHERE alias2.col_int_key = SOME
+(WITH qn AS
+(SELECT sq3_alias1.pk AS sq3_field1
+FROM t1 AS sq3_alias1
+WHERE sq3_alias1.col_int_key = alias3.pk
+)
+SELECT /*+ MERGE(qn) */ * FROM qn
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	alias1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+1	PRIMARY	<subquery4>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	Using where; Using join buffer (hash join)
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	5	<subquery4>.sq3_field1	2	100.00	NULL
+1	PRIMARY	<derived3>	NULL	ref	<auto_key0>	<auto_key0>	5	<subquery4>.col_int_key	2	100.00	NULL
+4	MATERIALIZED	sq3_alias1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+3	DERIVED	sq2_alias2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+3	DERIVED	sq2_alias3	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Using join buffer (hash join)
+3	DERIVED	sq2_alias1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Using join buffer (hash join)
+2	DERIVED	sq1_alias1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using temporary
+2	DERIVED	sq1_alias2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using join buffer (hash join)
+Warnings:
+Note	1276	Field or reference 'alias3.pk' of SELECT #5 was resolved in SELECT #1
+Note	1003	/* select#1 */ select /*+ MERGE(`qn`@`select#4`) */ `test`.`alias1`.`col_time_gckey` AS `field1`,`test`.`alias1`.`col_datetime_gckey` AS `field2` from `test`.`t1` `alias1` join (/* select#2 */ select distinct `test`.`sq1_alias2`.`pk` AS `pk`,`test`.`sq1_alias2`.`col_int_key` AS `col_int_key`,`test`.`sq1_alias2`.`col_datetime_gckey` AS `col_datetime_gckey`,`test`.`sq1_alias2`.`col_time_gckey` AS `col_time_gckey`,`test`.`sq1_alias2`.`col_varchar_key` AS `col_varchar_key` from `test`.`t1` `sq1_alias1` join `test`.`t1` `sq1_alias2`) `alias2` join (/* select#3 */ select `test`.`sq2_alias1`.`pk` AS `pk`,`test`.`sq2_alias1`.`col_int_key` AS `col_int_key`,`test`.`sq2_alias1`.`col_datetime_gckey` AS `col_datetime_gckey`,`test`.`sq2_alias1`.`col_time_gckey` AS `col_time_gckey`,`test`.`sq2_alias1`.`col_varchar_key` AS `col_varchar_key` from `test`.`t1` `sq2_alias2` join `test`.`t2` `sq2_alias3` left join `test`.`t1` `sq2_alias1` on((`test`.`sq2_alias3`.`col_varchar_key` = `test`.`sq2_alias2`.`col_varchar_key`)) where (`test`.`sq2_alias3`.`col_int_key` = `test`.`sq2_alias2`.`col_int_key`)) `alias3` semi join (`test`.`t1` `sq3_alias1`) where ((`alias3`.`pk` = `<subquery4>`.`col_int_key`) and (`alias2`.`col_int_key` = `<subquery4>`.`sq3_field1`))
+SELECT alias1.col_time_gckey AS field1,
+alias1.col_datetime_gckey AS field2
+FROM t1 AS alias1,
+(SELECT DISTINCT sq1_alias2.*
+FROM t1 AS sq1_alias1, t1 AS sq1_alias2
+) AS alias2,
+(SELECT sq2_alias1.*
+FROM t1 AS sq2_alias1 RIGHT OUTER JOIN
+t1 AS sq2_alias2 INNER JOIN t2 AS sq2_alias3
+ON sq2_alias3.col_int_key = sq2_alias2.col_int_key
+ON sq2_alias3.col_varchar_key = sq2_alias2.col_varchar_key
+) AS alias3
+WHERE alias2.col_int_key = SOME
+(WITH qn AS
+(SELECT sq3_alias1.pk AS sq3_field1
+FROM t1 AS sq3_alias1
+WHERE sq3_alias1.col_int_key = alias3.pk
+)
+SELECT /*+ MERGE(qn) */ * FROM qn
+);
+field1	field2
+DROP TABLE t1, t2;
+set optimizer_switch=default;
+#
+# Bug #29493026: INCORRECT RESULT FROM QUERY CONTAINING AN IN-SUBQUERY
+#
+CREATE TABLE t1 (
+pk INTEGER
+);
+INSERT INTO t1 VALUES (1);
+CREATE TABLE t2 (
+pk INTEGER PRIMARY KEY
+);
+INSERT INTO t2 VALUES(1);
+CREATE TABLE t3 (
+col_int_key INTEGER,
+pk INTEGER
+);
+INSERT INTO t3 VALUES (31,4),(2,5),(17,3),(5,2),(17,1);
+CREATE TABLE t4 (
+col_int_key INTEGER,
+col_int_unique INTEGER,
+UNIQUE KEY ix2 (col_int_key,col_int_unique)
+);
+INSERT INTO t4 VALUES (6,2),(34,3);
+ANALYZE TABLE t1, t2, t3, t4;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+test.t4	analyze	status	OK
+set optimizer_switch='firstmatch=off';
+EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE pk IN (
+SELECT t2.pk FROM
+t4
+RIGHT JOIN t3 ON t4.col_int_key = t3.pk
+RIGHT JOIN t2 ON t3.col_int_key <> t2.pk
+);
+EXPLAIN
+-> Nested loop inner join  (cost=0.95 rows=5)
+    -> Filter: (t1.pk is not null)  (cost=0.35 rows=1)
+        -> Table scan on t1  (cost=0.35 rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (pk=t1.pk)  (cost=1.64..1.64 rows=1)
+        -> Materialize with deduplication  (cost=1.6..1.6 rows=5)
+            -> Nested loop left join  (cost=1.1 rows=5)
+                -> Index scan on t2 using PRIMARY  (cost=0.35 rows=1)
+                -> Nested loop left join  (cost=2.5 rows=5)
+                    -> Filter: (t3.col_int_key <> t2.pk)  (cost=0.75 rows=5)
+                        -> Table scan on t3  (cost=0.75 rows=5)
+                    -> Covering index lookup on t4 using ix2 (col_int_key=t3.pk)  (cost=0.27 rows=1)
+
+SELECT * FROM t1 WHERE pk IN (
+SELECT t2.pk FROM
+t4
+RIGHT JOIN t3 ON t4.col_int_key = t3.pk
+RIGHT JOIN t2 ON t3.col_int_key <> t2.pk
+);
+pk
+1
+DROP TABLE t1, t2, t3, t4;
+set optimizer_switch=default;
+#
+# Bug #29693294: ASSERTION FAILURE M_INDEX_CURSOR.IS_POSITIONED() | SRC/HANDLER.CC
+#
+CREATE TABLE t1 ( pk integer, f1 varchar(1) );
+INSERT INTO t1 VALUES (1,'D'), (20,'G');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=TREE SELECT d0.f1, d0.pk, t1.pk, t1.f1 FROM ( SELECT DISTINCT * FROM t1 ) AS d0 LEFT JOIN t1 ON d0.pk IN ( SELECT 1 FROM t1 ) ORDER BY d0.f1;
+EXPLAIN
+-> Sort: d0.f1
+    -> Stream results  (cost=6.95 rows=8)
+        -> Nested loop left join  (cost=6.95 rows=8)
+            -> Table scan on d0  (cost=4.64..5.9 rows=2)
+                -> Materialize  (cost=3.38..3.38 rows=2)
+                    -> Table scan on <temporary>  (cost=1.91..3.18 rows=2)
+                        -> Temporary table with deduplication  (cost=0.65..0.65 rows=2)
+                            -> Table scan on t1  (cost=0.45 rows=2)
+            -> Nested loop semijoin  (cost=0.875 rows=4)
+                -> Filter: (d0.pk = 1)  (cost=0.225 rows=2)
+                    -> Table scan on t1  (cost=0.225 rows=2)
+                -> Table scan on t1  (cost=0.225 rows=2)
+
+SELECT d0.f1, d0.pk, t1.pk, t1.f1 FROM ( SELECT DISTINCT * FROM t1 ) AS d0 LEFT JOIN t1 ON d0.pk IN ( SELECT 1 FROM t1 ) ORDER BY d0.f1;
+f1	pk	pk	f1
+D	1	1	D
+D	1	20	G
+G	20	NULL	NULL
+DROP TABLE t1;
+#
+# Bug#29664504 REGRESSION: CRASHING FROM ITEM_FUNC_AS_WKT::VAL_STR_ASCII()
+#
+CREATE TABLE t1(a TINYBLOB);
+INSERT INTO t1 VALUES('aaa'),('bbb'),(''),('ccc');
+SELECT DISTINCT * FROM t1
+ORDER BY UUID_TO_BIN(
+ST_ISEMPTY(
+ST_POINTFROMTEXT(
+ST_ASWKT(
+NOT EXISTS(
+SELECT 1 FROM t1
+WHERE IS_UUID(CAST(SHA(a>>0xA7FE1B22)AS JSON)) WINDOW w1 AS()
+),'AXIS-ORDER=SRID-DEFINED'
+      ),1,'AXIS-ORDER=LONG-LAT'
+    )
+)
+);
+ERROR 22032: Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+DROP TABLE t1;
+#
+# Bug#29669840 REGRESSION: CRASH IN DECIMAL_ADD()
+#
+CREATE TABLE t1(a DATETIME(2));
+INSERT INTO t1 VALUES(NOW(2)),(NOW(2));
+SELECT STD(IS_FREE_LOCK(0x2ADA5C38)),1 FROM t1 WHERE a+(EXISTS(SELECT 1));
+ERROR 42000: Incorrect user-level lock name '*\xDA\8'. The name is empty, NULL, or can not be expressed in the current character-set.
+DROP TABLE t1;
+#
+# Bug#29668446 REGRESSION: CRASH IN DO_DIV_MOD()
+#
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES(1),(2),(3);
+SELECT 1 FROM t1 WHERE
+(EXISTS(SELECT 1 FROM t1 WHERE (SELECT 1 FROM t1 WINDOW w1 AS())))/1;
+ERROR 21000: Subquery returns more than 1 row
+DROP TABLE t1;
+# Bug#29525304 Sig 6 at Item_in_subselect::val_int()
+CREATE TABLE t1 (vc varchar(1) NOT NULL);
+CREATE VIEW v1 AS SELECT * FROM t1 WHERE 5 IN (SELECT 1) IS UNKNOWN;
+DROP VIEW v1;
+DROP TABLE t1;
+#
+# Bug #29889223: SIG 6 AT TEMPTABLE::HANDLER::UPDATE_ROW | SRC/HANDLER.CC
+#
+set optimizer_switch='block_nested_loop=off,batched_key_access=off';
+CREATE TABLE t1 (
+field1 integer
+);
+INSERT INTO t1 VALUES (13);
+CREATE TABLE t2 (
+field2 integer
+);
+INSERT INTO t2 VALUES (18);
+CREATE TABLE t3 (
+field3 integer
+);
+INSERT INTO t3 VALUES (1);
+UPDATE t3 SET field3 = 9 WHERE field3 IN (
+SELECT 1
+FROM ( SELECT * FROM t2 ) AS alias1
+WHERE EXISTS ( SELECT * FROM t1 WHERE field1 <> alias1.field2 )
+);
+DROP TABLE t1, t2, t3;
+set optimizer_switch=default;
+#
+# Bug #29836364: WL#13000: SIG 11 AT COST_SKIP_SCAN() | SQL/OPT_RANGE.CC
+#
+CREATE TABLE t1 (
+f1 integer NOT NULL PRIMARY KEY,
+f2 varchar(1),
+KEY f2_idx (f2)
+);
+INSERT INTO t1 VALUES (20,'2');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+explain format=tree SELECT (
+SELECT t2.f2 FROM t1 JOIN (
+t1 AS t2 LEFT JOIN t1 AS t3 USING (f2)
+) ON t3.f2 = t2.f2
+WHERE t2.f1 > table1.f2
+) FROM t1 AS table1;
+EXPLAIN
+-> Index scan on table1 using f2_idx  (cost=0.35 rows=1)
+-> Select #2 (subquery in projection; dependent)
+    -> Nested loop inner join  (cost=1.05 rows=1)
+        -> Nested loop inner join  (cost=0.7 rows=1)
+            -> Index scan on t1 using f2_idx  (cost=0.35 rows=1)
+            -> Filter: (cast(t2.f1 as double) > cast(table1.f2 as double))  (cost=0.35 rows=1)
+                -> Index range scan on t2 (re-planned for each iteration)  (cost=0.35 rows=1)
+        -> Covering index lookup on t3 using f2_idx (f2=t2.f2)  (cost=0.35 rows=1)
+
+Warnings:
+Note	1276	Field or reference 'test.table1.f2' of SELECT #2 was resolved in SELECT #1
+SELECT (
+SELECT t2.f2 FROM t1 JOIN (
+t1 AS t2 LEFT JOIN t1 AS t3 USING (f2)
+) ON t3.f2 = t2.f2
+WHERE t2.f1 > table1.f2
+) FROM t1 AS table1;
+(
+SELECT t2.f2 FROM t1 JOIN (
+t1 AS t2 LEFT JOIN t1 AS t3 USING (f2)
+) ON t3.f2 = t2.f2
+WHERE t2.f1 > table1.f2
+)
+2
+DROP TABLE t1;
+# Bug#28941154: Executing query does not return a result the first time
+CREATE TABLE t1 (
+pk int NOT NULL,
+col_int int,
+col_time_key time,
+col_varchar_key varchar(1),
+PRIMARY KEY (pk),
+KEY idx_CC_col_time_key (col_time_key),
+KEY idx_CC_col_varchar_key (col_varchar_key)
+);
+INSERT INTO t1 VALUES
+(1,1244696008,'15:54:41','u'),
+(2,893471119,'16:03:34','e'),
+(3,462275345,'06:57:11','g'),
+(4,2067212400,'06:56:19','E'),
+(5,-270339471,'03:38:07','d'),
+(6,-734590502,'03:18:29','Q'),
+(7,-1230000720,'15:56:21','C'),
+(8,-1086526061,'19:08:49','B'),
+(9,-1620913518,'22:44:04','3'),
+(10,1210237478,'11:18:51','i'),
+(11,-886894023,'20:28:00','A'),
+(12,-1490912666,'17:51:14','H'),
+(13,149282252,'16:51:14','Z'),
+(14,1451237940,'09:13:29','L'),
+(15,1933327447,'11:14:05','2'),
+(16,-693463421,'05:29:04','V'),
+(17,333204980,'16:24:13','O'),
+(18,279626907,'09:45:54','t'),
+(19,-1372487638,'17:45:04','a'),
+(20,-150563684,'15:32:40','D');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+explain SELECT table2.col_time_key AS field1
+FROM t1 AS table1 LEFT JOIN t1 AS table2
+ON table1.col_varchar_key = table2.col_varchar_key
+WHERE 1 IN (SELECT 1 FROM t1 AS subq
+WHERE subq.pk <= (SELECT DISTINCT MIN(subq.col_int)
+FROM t1 as alias1
+)
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	subq	NULL	ALL	NULL	NULL	NULL	NULL	20	100.00	Using where; FirstMatch
+1	PRIMARY	table1	NULL	index	NULL	idx_CC_col_varchar_key	7	NULL	20	100.00	Using index; Using join buffer (hash join)
+1	PRIMARY	table2	NULL	ref	idx_CC_col_varchar_key	idx_CC_col_varchar_key	7	test.table1.col_varchar_key	1	100.00	NULL
+3	DEPENDENT SUBQUERY	alias1	NULL	index	NULL	idx_CC_col_time_key	4	NULL	20	100.00	Using index
+Warnings:
+Note	1276	Field or reference 'test.subq.col_int' of SELECT #3 was resolved in SELECT #2
+Note	1003	/* select#1 */ select `test`.`table2`.`col_time_key` AS `field1` from `test`.`t1` `table1` left join `test`.`t1` `table2` on((`test`.`table2`.`col_varchar_key` = `test`.`table1`.`col_varchar_key`)) semi join (`test`.`t1` `subq`) where (`test`.`subq`.`pk` <= (/* select#3 */ select min(`test`.`subq`.`col_int`) from `test`.`t1` `alias1`))
+SELECT table2.col_time_key AS field1
+FROM t1 AS table1 LEFT JOIN t1 AS table2
+ON table1.col_varchar_key = table2.col_varchar_key
+WHERE 1 IN (SELECT 1 FROM t1 AS subq
+WHERE subq.pk <= (SELECT DISTINCT MIN(subq.col_int)
+FROM t1 as alias1
+)
+);
+field1
+03:18:29
+03:38:07
+03:38:07
+05:29:04
+06:56:19
+06:56:19
+06:57:11
+09:13:29
+09:45:54
+11:14:05
+11:18:51
+15:32:40
+15:32:40
+15:54:41
+15:56:21
+16:03:34
+16:03:34
+16:24:13
+16:51:14
+17:45:04
+17:45:04
+17:51:14
+19:08:49
+20:28:00
+20:28:00
+22:44:04
+DROP TABLE t1;
+# Bug#28910365 Segfault at Item_cache::walk() on 2nd execution
+CREATE TABLE t1 (
+pk int NOT NULL,
+col_int int DEFAULT NULL
+);
+CREATE TABLE t2 (
+pk int NOT NULL,
+col_int int DEFAULT NULL
+);
+INSERT INTO t2 VALUES (1, 2);
+PREPARE st FROM
+"DELETE outr1.*
+ FROM t1 AS outr1 RIGHT OUTER JOIN t2 AS outr2
+      ON outr1.col_int = outr2.col_int
+ WHERE (0, 3) NOT IN (SELECT innr1.pk AS x, innr1.col_int AS y
+                      FROM t2 AS innr1
+                      WHERE outr1.col_int = 25)";
+EXECUTE st;
+EXECUTE st;
+DEALLOCATE PREPARE st;
+DROP TABLE t1, t2;
+#
+# Bug #30250091: CONDITIONS WITHIN MATERIALIZED SEMIJOINS ARE FLOATING UP
+#
+CREATE TABLE t1 (
+f1 INTEGER
+);
+INSERT INTO t1 VALUES (1), (2), (3);
+CREATE TABLE t2 (
+f2 VARCHAR(10)
+);
+CREATE TABLE t3 (
+f3 INTEGER UNIQUE NOT NULL
+);
+CREATE TABLE t4 (
+f4 INTEGER
+);
+INSERT INTO t4 VALUES (13), (14), (NULL);
+ANALYZE TABLE t1, t2, t3, t4;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+test.t4	analyze	status	OK
+explain format=tree SELECT * FROM t1
+WHERE NOT EXISTS (
+SELECT *
+FROM t4 LEFT JOIN t3 ON t4.f4 = t3.f3
+WHERE 'abc' IN (
+SELECT t2.f2 FROM t2 WHERE t3.f3 = 1 HAVING t2.f2 = 'xyz'
+     )
+);
+EXPLAIN
+-> Table scan on t1  (cost=0.55 rows=3)
+
+Warnings:
+Note	1276	Field or reference 'test.t3.f3' of SELECT #3 was resolved in SELECT #2
+SELECT * FROM t1
+WHERE NOT EXISTS (
+SELECT *
+FROM t4 LEFT JOIN t3 ON t4.f4 = t3.f3
+WHERE 'abc' IN (
+SELECT t2.f2 FROM t2 WHERE t3.f3 = 1 HAVING t2.f2 = 'xyz'
+     )
+);
+f1
+1
+2
+3
+DROP TABLE t1, t2, t3, t4;
+#
+# Bug #30289052: MYSQL PRODUCES DIFFERENT RESULT FOR MATERIALIZED SUBQUERY IF INDEX EXISTS OR NOT
+#
+CREATE TABLE table_city (id int NOT NULL PRIMARY KEY);
+CREATE TABLE table_user (id int NOT NULL PRIMARY KEY);
+CREATE TABLE table_city_user (city int NOT NULL, user int NOT NULL, KEY city (city));
+INSERT INTO table_city (id) VALUES (1),(2),(3),(4),(5),(6);
+INSERT INTO table_user (id) VALUES (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO table_city_user (city, user) VALUES
+(1,1),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8),(2,1),(2,2),(2,3),(2,4),
+(2,5),(3,2),(3,5),(4,5),(4,2),(4,3),(4,8),(4,1);
+ANALYZE TABLE table_city, table_user, table_city_user;
+Table	Op	Msg_type	Msg_text
+test.table_city	analyze	status	OK
+test.table_user	analyze	status	OK
+test.table_city_user	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT id, (
+SELECT GROUP_CONCAT(id) FROM (
+SELECT table_user.id FROM table_user WHERE id IN (
+SELECT user FROM table_city_user WHERE table_city_user.city = table_city.id
+)
+GROUP BY table_user.id
+) AS d
+) AS users FROM table_city;
+EXPLAIN
+-> Index scan on table_city using PRIMARY  (rows=6)
+-> Select #2 (subquery in projection; dependent)
+    -> Aggregate: group_concat(d.id separator ',')  (rows=1)
+        -> Table scan on d  (rows=5)
+            -> Materialize  (rows=5)
+                -> Table scan on <temporary>  (rows=5)
+                    -> Temporary table with deduplication  (rows=5)
+                        -> Nested loop inner join  (rows=5)
+                            -> Filter: (table_city.id = `<subquery4>`.city)  (rows=5)
+                                -> Table scan on <subquery4>  (rows=5.25)
+                                    -> Materialize with deduplication  (rows=5.25)
+                                        -> Index lookup on table_city_user using city (city=table_city.id)  (rows=5.25)
+                            -> Single-row covering index lookup on table_user using PRIMARY (id=`<subquery4>`.`user`)  (rows=1)
+
+Warnings:
+Note	1276	Field or reference 'test.table_city.id' of SELECT #4 was resolved in SELECT #1
+SELECT id, (
+SELECT GROUP_CONCAT(id) FROM (
+SELECT table_user.id FROM table_user WHERE id IN (
+SELECT user FROM table_city_user WHERE table_city_user.city = table_city.id
+)
+GROUP BY table_user.id
+) AS d
+) AS users FROM table_city;
+id	users
+1	1,2,3,4,5,6,7,8
+2	1,2,3,4,5
+3	2,5
+4	1,2,3,5,8
+5	NULL
+6	NULL
+DROP TABLE table_city, table_user, table_city_user;
+#
+# Bug#30267889 ASSERTION `M_INDEX_CURSOR.IS_POSITIONED()' FAILED | TEMPTABLE::HANDLER::POSITION
+#
+CREATE TABLE b (c INTEGER, KEY idx_b (c));
+CREATE TABLE c (c INTEGER, KEY idx_c (c));
+CREATE TABLE d (c INTEGER, KEY idx_d (c));
+INSERT INTO b VALUES (1), (2);
+INSERT INTO c VALUES (1), (2);
+INSERT INTO d VALUES (1), (2);
+ANALYZE TABLE b, c, d;
+Table	Op	Msg_type	Msg_text
+test.b	analyze	status	OK
+test.c	analyze	status	OK
+test.d	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT /*+ JOIN_ORDER(b, c_inner, c_inner_inner, d, c) */ d.c
+FROM d JOIN c
+WHERE d.c IN (
+SELECT
+b.c
+FROM
+b LEFT JOIN c AS c_inner ON c_inner.c = b.c
+WHERE
+EXISTS ( SELECT c FROM c AS c_inner_inner )
+) ORDER BY d.c;
+EXPLAIN
+-> Sort: d.c
+    -> Stream results  (cost=1.55 rows=4)
+        -> Inner hash join (no condition)  (cost=1.55 rows=4)
+            -> Index scan on c using idx_c  (cost=0.45 rows=2)
+            -> Hash
+                -> Nested loop inner join  (cost=0.9 rows=2)
+                    -> Filter: (`<subquery2>`.c is not null)  (cost=1.2..0.2 rows=2)
+                        -> Table scan on <subquery2>  (cost=2.84..4.75 rows=4)
+                            -> Materialize with deduplication  (cost=2.2..2.2 rows=4)
+                                -> Filter: (b.c is not null)  (cost=1.8 rows=4)
+                                    -> Inner hash join (no condition)  (cost=1.8 rows=4)
+                                        -> Index scan on c_inner_inner using idx_c  (cost=0.225 rows=2)
+                                        -> Hash
+                                            -> Nested loop left join  (cost=1.15 rows=2)
+                                                -> Index scan on b using idx_b  (cost=0.45 rows=2)
+                                                -> Covering index lookup on c_inner using idx_c (c=b.c)  (cost=0.3 rows=1)
+                    -> Covering index lookup on d using idx_d (c=`<subquery2>`.c)  (cost=0.6 rows=1)
+
+SELECT /*+ JOIN_ORDER(b, c_inner, c_inner_inner, d, c) */ d.c
+FROM d JOIN c
+WHERE d.c IN (
+SELECT
+b.c
+FROM
+b LEFT JOIN c AS c_inner ON c_inner.c = b.c
+WHERE
+EXISTS ( SELECT c FROM c AS c_inner_inner )
+) ORDER BY d.c;
+c
+1
+1
+2
+2
+DROP TABLE b, c, d;
+CREATE TABLE t1(pk INT PRIMARY KEY, col_int_nokey INT);
+INSERT INTO t1 VALUES(26, 12);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN SELECT /*+ JOIN_ORDER(t3,t1) */ *
+FROM
+t1 WHERE 3 IN (SELECT t3.col_int_nokey FROM t1 AS t3);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t3	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; FirstMatch
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select /*+ JOIN_ORDER(@`select#1` `t3`,`t1`) */ `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`col_int_nokey` AS `col_int_nokey` from `test`.`t1` semi join (`test`.`t1` `t3`) where (`test`.`t3`.`col_int_nokey` = 3)
+EXPLAIN FORMAT=TREE SELECT /*+ JOIN_ORDER(t3,t1) */ *
+FROM
+t1 WHERE 3 IN (SELECT t3.col_int_nokey FROM t1 AS t3);
+EXPLAIN
+-> Inner hash join (no condition)  (cost=0.7 rows=1)
+    -> Table scan on t1  (cost=0.35 rows=1)
+    -> Hash
+        -> Limit: 1 row(s)  (cost=0.35 rows=1)
+            -> Filter: (t3.col_int_nokey = 3)  (cost=0.35 rows=1)
+                -> Table scan on t3  (cost=0.35 rows=1)
+
+EXPLAIN SELECT /*+ JOIN_ORDER(t1,t3,t2) */ *
+FROM
+t1 LEFT JOIN t1 AS t2
+ON 3 IN (SELECT t3.col_int_nokey FROM t1 AS t3)
+WHERE t1.pk=26;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+1	SIMPLE	t3	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Start temporary
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	End temporary
+Warnings:
+Note	1003	/* select#1 */ select /*+ JOIN_ORDER(@`select#1` `t1`,`t3`,`t2`) */ '26' AS `pk`,'12' AS `col_int_nokey`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`col_int_nokey` AS `col_int_nokey` from `test`.`t1` left join (`test`.`t1` `t2` semi join (`test`.`t1` `t3`)) on(((`test`.`t3`.`col_int_nokey` = 3))) where true
+EXPLAIN FORMAT=TREE SELECT /*+ JOIN_ORDER(t1,t3,t2) */ *
+FROM
+t1 LEFT JOIN t1 AS t2
+ON 3 IN (SELECT t3.col_int_nokey FROM t1 AS t3)
+WHERE t1.pk=26;
+EXPLAIN
+-> Remove duplicate (t1, t2) rows using temporary table (weedout)  (cost=0.35 rows=1)
+    -> Nested loop left join  (cost=0.35 rows=1)
+        -> Rows fetched before execution  (cost=0..0 rows=1)
+        -> Nested loop inner join  (cost=0.7 rows=1)
+            -> Filter: (t3.col_int_nokey = 3)  (cost=0.35 rows=1)
+                -> Table scan on t3  (cost=0.35 rows=1)
+            -> Table scan on t2  (cost=0.35 rows=1)
+
+DROP TABLE t1;
+#
+# Bug#30273827: SIG6 IN SELECT_LEX_UNIT::EXCLUDE_LEVEL() AT
+#               SQL/SQL_LEX.CC
+#
+CREATE TABLE t1(f1 varchar(1)) ;
+SELECT 1 FROM t1 AS table2 LEFT JOIN (SELECT 'c') AS table3(f1)
+ON table3.f1 = table2.f1 WHERE table2.f1
+IN (SELECT 1 FROM (SELECT 1314830897) AS t1(pk)
+WHERE t1.pk <= ANY(SELECT 5)) AND FALSE;
+1
+DROP TABLE t1;
+# Bug#30309982: Sig6 in Item_subselect::exec()
+CREATE VIEW v1 AS
+SELECT 1
+FROM (SELECT 1) AS table1(pk) JOIN
+(SELECT 1) AS table2
+ON table1.pk = (SELECT 1)
+WHERE table1.pk IN ((SELECT 1), 2);
+SELECT * FROM v1;
+1
+1
+DROP VIEW v1;
+#
+# Bug#30515233 DISTINCT INSIDE LATERAL DERIVED TABLE BREAKS IN ITERATOR EXECUTOR
+#
+CREATE TABLE t(a INT);
+INSERT INTO t VALUES (1),(2),(3);
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+SELECT * FROM
+t AS upper JOIN LATERAL
+(SELECT DISTINCT ROW_NUMBER() OVER () AS rn FROM t
+WHERE (t.a > upper.a)) der ;
+a	rn
+1	1
+1	2
+2	1
+DROP TABLE t;
+#
+# Verify that decorrelation works for WHERE outer_col=constant
+#
+CREATE TABLE t1 (a INTEGER, b INTEGER);
+CREATE TABLE t2 (a INTEGER);
+INSERT INTO t1 VALUES(1,10),(2,10),(3,30);
+INSERT INTO t2 VALUES(2),(3),(2),(4);
+ANALYZE TABLE t1,t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+set optimizer_switch='semijoin=on,materialization=on,loosescan=off,firstmatch=off,duplicateweedout=off';
+EXPLAIN SELECT * FROM t1 WHERE (t1.a,t1.b) IN (SELECT t2.a,10 FROM t2);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+1	SIMPLE	<subquery2>	NULL	eq_ref	<auto_distinct_key>	<auto_distinct_key>	9	test.t1.a,test.t1.b	1	100.00	NULL
+2	MATERIALIZED	t2	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` semi join (`test`.`t2`) where ((`test`.`t1`.`b` = 10) and (`<subquery2>`.`a` = `test`.`t1`.`a`))
+SELECT * FROM t1 WHERE (t1.a,t1.b) IN (SELECT t2.a,10 FROM t2);
+a	b
+2	10
+EXPLAIN SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2 WHERE 10=t1.b);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+1	SIMPLE	<subquery2>	NULL	eq_ref	<auto_distinct_key>	<auto_distinct_key>	9	test.t1.a,test.t1.b	1	100.00	NULL
+2	MATERIALIZED	t2	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+Warnings:
+Note	1276	Field or reference 'test.t1.b' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` semi join (`test`.`t2`) where ((`test`.`t1`.`b` = 10) and (`<subquery2>`.`a` = `test`.`t1`.`a`))
+SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2 WHERE 10=t1.b);
+a	b
+2	10
+EXPLAIN SELECT * FROM t1 WHERE EXISTS (SELECT * FROM t2 WHERE 10=t1.b AND t1.a=t2.a);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+1	SIMPLE	<subquery2>	NULL	eq_ref	<auto_distinct_key>	<auto_distinct_key>	9	test.t1.b,test.t1.a	1	100.00	NULL
+2	MATERIALIZED	t2	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+Warnings:
+Note	1276	Field or reference 'test.t1.b' of SELECT #2 was resolved in SELECT #1
+Note	1276	Field or reference 'test.t1.a' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` semi join (`test`.`t2`) where ((`<subquery2>`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`b` = 10))
+SELECT * FROM t1 WHERE EXISTS (SELECT * FROM t2 WHERE 10=t1.b AND t1.a=t2.a);
+a	b
+2	10
+DROP TABLE t1,t2;
+set optimizer_switch=default;
+#
+# Bug #30717861: WL#13377 REGRESSION, ITEM REFS ARE SUBSTITUTED TO REFER TABLES NOT YET AVAILABLE
+#
+CREATE TABLE t1 (
+col_int INTEGER,
+pk INTEGER
+);
+INSERT INTO t1 VALUES (6,24),(7,0),(8,2),(0,15);
+CREATE TABLE t2 (
+pk INTEGER,
+UNIQUE ( pk )
+);
+INSERT INTO t2 VALUES (6),(27),(41);
+CREATE TABLE t3 (
+pk INTEGER
+);
+INSERT INTO t3 VALUES (4),(40),(46);
+CREATE TABLE t4 (
+col_int INTEGER
+);
+ANALYZE TABLE t1, t2, t3, t4;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+test.t4	analyze	status	OK
+EXPLAIN FORMAT=tree
+SELECT * FROM
+t1
+JOIN t2 ON t1.pk = t2.pk
+JOIN t3 ON t2.pk = t3.pk
+WHERE (t1.col_int + t2.pk) IN ( SELECT col_int FROM t4 );
+EXPLAIN
+-> Nested loop inner join  (cost=5.51 rows=3)
+    -> Inner hash join (t1.pk = t3.pk), ((t1.col_int + t1.pk) = `<subquery2>`.col_int)  (cost=4.96 rows=3)
+        -> Table scan on t1  (cost=0.117 rows=4)
+        -> Hash
+            -> Inner hash join (no condition)  (cost=3.51 rows=3)
+                -> Filter: (t3.pk is not null)  (cost=0.55 rows=3)
+                    -> Table scan on t3  (cost=0.55 rows=3)
+                -> Hash
+                    -> Table scan on <subquery2>  (cost=2.96..2.96 rows=1)
+                        -> Materialize with deduplication  (cost=0.45..0.45 rows=1)
+                            -> Filter: (t4.col_int is not null)  (cost=0.35 rows=1)
+                                -> Table scan on t4  (cost=0.35 rows=1)
+    -> Single-row covering index lookup on t2 using pk (pk=t3.pk)  (cost=0.117 rows=1)
+
+DROP TABLE t1, t2, t3, t4;
+CREATE TABLE t1 (
+col1 CHAR(16),
+UNIQUE KEY col1_idx (col1)
+);
+CREATE TABLE t2 (
+col1 INTEGER,
+col2 INTEGER,
+UNIQUE KEY ix1 (col1)
+);
+CREATE TABLE t3 (
+col1 INTEGER,
+col2 INTEGER NOT NULL,
+UNIQUE KEY ix1 (col1)
+);
+ANALYZE TABLE t1,t2,t3;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+EXPLAIN FORMAT=tree
+SELECT /*+ JOIN_ORDER(t3,t2,t1) */ * FROM t1
+WHERE t1.col1 = ANY (
+SELECT t1.col1 + t2.col2
+FROM t2 JOIN t3 ON t2.col2 = t3.col2 AND t2.col1 =  t3.col1
+WHERE t2.col2 BETWEEN 2 AND 9
+);
+EXPLAIN
+-> Remove duplicate t1 rows using temporary table (weedout)  (cost=1.05 rows=1)
+    -> Filter: (cast(t1.col1 as double) = (t1.col1 + t2.col2))  (cost=1.05 rows=1)
+        -> Inner hash join (no condition)  (cost=1.05 rows=1)
+            -> Index scan on t1 using col1_idx  (cost=0.35 rows=1)
+            -> Hash
+                -> Nested loop inner join  (cost=0.7 rows=1)
+                    -> Filter: ((t3.col2 between 2 and 9) and (t3.col1 is not null))  (cost=0.35 rows=1)
+                        -> Table scan on t3  (cost=0.35 rows=1)
+                    -> Filter: (t2.col2 = t3.col2)  (cost=0.35 rows=1)
+                        -> Single-row index lookup on t2 using ix1 (col1=t3.col1)  (cost=0.35 rows=1)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.col1' of SELECT #2 was resolved in SELECT #1
+DROP TABLE t1, t2, t3;
+#
+# Bug#30659623 ASSERT IN SQL/ITEM_SUBSELECT.CC:3571: SUBSELECT_HASH_SJ_ENGINE::EXEC()
+#
+CREATE TABLE t1 (col_int_key INT);
+INSERT INTO t1 VALUES (NULL);
+CREATE TABLE t2 (
+col_int_key INT, col_int_unique INT,
+UNIQUE KEY (col_int_unique), KEY (col_int_key)
+);
+INSERT INTO t2 VALUES (26,14),(3,46),(45,2),(18,30),(11,22),(19,8),(41,3),(1,5),
+(1,9),(38,4),(13,38),(32,12),(11,7),(2,26),(5,10),(16,45);
+CREATE TABLE t3 (pk INT NOT NULL PRIMARY KEY);
+ANALYZE TABLE t1,t2,t3;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+explain format = tree SELECT *
+FROM t1
+LEFT JOIN t2 ON t1.col_int_key = t2.col_int_key
+JOIN t3 ON t1.col_int_key =  t3.pk
+WHERE t3.pk+6 NOT IN (
+SELECT /*+ subquery(materialization) */
+table1s.col_int_unique AS field4 FROM t2 AS table1s);
+EXPLAIN
+-> Nested loop left join  (cost=1.1 rows=1.14)
+    -> Nested loop inner join  (cost=0.7 rows=1)
+        -> Filter: (<in_optimizer>((t1.col_int_key + 6),(t1.col_int_key + 6) in (select #2) is false) and (t1.col_int_key is not null))  (cost=0.35 rows=1)
+            -> Table scan on t1  (cost=0.35 rows=1)
+            -> Select #2 (subquery in condition; run only once)
+                -> Filter: (((t1.col_int_key + 6) = `<materialized_subquery>`.field4))  (cost=3.55..3.55 rows=1)
+                    -> Limit: 1 row(s)  (cost=3.45..3.45 rows=1)
+                        -> Index lookup on <materialized_subquery> using <auto_distinct_key> (field4=(t1.col_int_key + 6))
+                            -> Materialize with deduplication  (cost=3.45..3.45 rows=16)
+                                -> Index scan on table1s using col_int_unique  (cost=1.85 rows=16)
+        -> Single-row covering index lookup on t3 using PRIMARY (pk=t1.col_int_key)  (cost=0.35 rows=1)
+    -> Index lookup on t2 using col_int_key (col_int_key=t1.col_int_key)  (cost=0.4 rows=1.14)
+
+SELECT *
+FROM t1
+LEFT JOIN t2 ON t1.col_int_key = t2.col_int_key
+JOIN t3 ON t1.col_int_key =  t3.pk
+WHERE t3.pk+6 NOT IN (
+SELECT /*+ subquery(materialization) */
+table1s.col_int_unique AS field4 FROM t2 AS table1s);
+col_int_key	col_int_key	col_int_unique	pk
+DROP TABLE t1,t2,t3;
+# Bug#30837240 Assertion 'item->is_bool_func()' failed
+CREATE TABLE t1 (
+col_datetime datetime DEFAULT NULL,
+col_varchar_key varchar(1) DEFAULT NULL,
+col_char char(1) DEFAULT NULL,
+col_char_key char(1) DEFAULT NULL,
+col_tinyint tinyint DEFAULT NULL,
+col_tinyint_key tinyint DEFAULT NULL
+);
+CREATE TABLE t2 (
+col_real_key double DEFAULT NULL,
+col_mediumint mediumint DEFAULT NULL
+);
+CREATE TABLE t3 (
+col_varchar varchar(1) DEFAULT NULL,
+col_varchar_key varchar(1) DEFAULT NULL
+);
+explain SELECT COUNT(table1.col_datetime) AS field1
+FROM t1 AS table1 RIGHT JOIN t1 AS table2
+ON table1.col_varchar_key = table2.col_char
+WHERE table1.col_char_key IN
+(SELECT sq2_t1.col_real_key
+FROM t2 AS sq2_t1 JOIN
+t3 AS sq2_t2 JOIN t1 AS sq2_t3
+ON INSTR(sq2_t3.col_tinyint, 'K') = sq2_t2.col_varchar
+ON sq2_t3.col_varchar_key = sq2_t2.col_varchar_key
+WHERE sq2_t1.col_mediumint IN
+(SELECT sq1_t1.col_varchar_key
+FROM t1 AS sq1_t1 JOIN t1 AS sq1_t2
+ON sq1_t2.col_tinyint_key = table1.col_tinyint_key
+)
+) OR
+RTRIM(table1.col_tinyint_key) IS NOT NULL;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	table2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+1	PRIMARY	table1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Using join buffer (hash join)
+2	DEPENDENT SUBQUERY	sq2_t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where
+2	DEPENDENT SUBQUERY	sq2_t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using join buffer (hash join)
+2	DEPENDENT SUBQUERY	sq2_t3	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Using join buffer (hash join)
+2	DEPENDENT SUBQUERY	sq1_t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where
+2	DEPENDENT SUBQUERY	sq1_t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; FirstMatch(sq2_t3)
+Warnings:
+Note	1276	Field or reference 'test.table1.col_tinyint_key' of SELECT #3 was resolved in SELECT #1
+Note	1003	/* select#1 */ select count(`test`.`table1`.`col_datetime`) AS `field1` from `test`.`t1` `table2` join `test`.`t1` `table1` where ((<in_optimizer>(`test`.`table1`.`col_char_key`,<exists>(/* select#2 */ select `test`.`sq2_t1`.`col_real_key` from `test`.`t2` `sq2_t1` join `test`.`t3` `sq2_t2` join `test`.`t1` `sq2_t3` semi join (`test`.`t1` `sq1_t1` join `test`.`t1` `sq1_t2`) where ((`test`.`sq2_t3`.`col_varchar_key` = `test`.`sq2_t2`.`col_varchar_key`) and (<cache>(`test`.`table1`.`col_char_key`) = `test`.`sq2_t1`.`col_real_key`) and (cast(`test`.`sq2_t1`.`col_mediumint` as double) = cast(`test`.`sq1_t1`.`col_varchar_key` as double)) and (`test`.`table1`.`col_tinyint_key` = `test`.`sq1_t2`.`col_tinyint_key`) and (cast(locate('K',`test`.`sq2_t3`.`col_tinyint`) as double) = cast(`test`.`sq2_t2`.`col_varchar` as double))))) or (rtrim(`test`.`table1`.`col_tinyint_key`) is not null)) and (`test`.`table1`.`col_varchar_key` = `test`.`table2`.`col_char`))
+SELECT COUNT(table1.col_datetime) AS field1
+FROM t1 AS table1 RIGHT JOIN t1 AS table2
+ON table1.col_varchar_key = table2.col_char
+WHERE table1.col_char_key IN
+(SELECT sq2_t1.col_real_key
+FROM t2 AS sq2_t1 JOIN
+t3 AS sq2_t2 JOIN t1 AS sq2_t3
+ON INSTR(sq2_t3.col_tinyint, 'K') = sq2_t2.col_varchar
+ON sq2_t3.col_varchar_key = sq2_t2.col_varchar_key
+WHERE sq2_t1.col_mediumint IN
+(SELECT sq1_t1.col_varchar_key
+FROM t1 AS sq1_t1 JOIN t1 AS sq1_t2
+ON sq1_t2.col_tinyint_key = table1.col_tinyint_key
+)
+) OR
+RTRIM(table1.col_tinyint_key) IS NOT NULL;
+field1
+0
+DROP TABLE t1, t2, t3;
+#
+# Bug #30912972 ASSERTION KEYLEN == M_START_KEY.LENGTH FAILED|PARTITION_HANDLER.CC
+#
+CREATE TABLE t1 (
+col_int_key bigint DEFAULT NULL,
+KEY(col_int_key)
+) PARTITION BY KEY(col_int_key) PARTITIONS 10;
+INSERT INTO t1 VALUES
+(NULL);
+SELECT 42
+WHERE 11 NOT IN
+(SELECT col_int_key FROM t1);
+42
+DROP TABLE t1;
+# Bug#30753397 ASSERTION `!TR->DERIVED_WHERE_COND || TR->DERIVED_WHERE_COND->FIXED' FAILED.
+#
+CREATE TABLE t(a INT);
+SELECT 1=
+(
+SELECT 1 FROM
+(
+SELECT 1 FROM t
+LEFT JOIN
+(
+SELECT 1 FROM t
+WHERE NOT EXISTS
+(
+SELECT 1 FROM t WINDOW w1 AS (PARTITION BY a)
+)
+) AS x
+ON 1 > 2
+) AS z
+);
+1=
+(
+SELECT 1 FROM
+(
+SELECT 1 FROM t
+LEFT JOIN
+(
+SELECT 1 FROM t
+WHERE NOT EXISTS
+(
+SELECT 1 FROM t WINDOW w1 AS (PARTITION BY a)
+)
+) AS x
+ON 1 > 2
+) AS z
+)
+NULL
+DROP TABLE t;
+# Bug#30899681 Mysqld got signal 11 at Item::walk() 
+CREATE TABLE t1 (
+col_varchar varchar(1),
+col_varchar_key varchar (1),
+key (col_varchar_key)
+);
+CREATE TABLE t2 (
+col_varchar varchar(1),
+col_int_key int,
+key (col_int_key)
+);
+INSERT INTO t2 VALUES ('t', 2);
+CREATE TABLE t3 (
+pk integer auto_increment,
+col_int int,
+col_varchar_key varchar(1),
+primary key (pk),
+key (col_varchar_key)
+);
+INSERT INTO t3 (col_int, col_varchar_key) VALUES
+(2, 'e'), (NULL, 'n'), (2, NULL), (0, 'a'), (NULL, 'd'), (1, 's'),
+(NULL, 'v'), (7, 'l'), (118, NULL), (NULL, 'l'), (8, 'c'), (4, 'a'),
+(8, 'r'), (1, 'q'), (3, 'o'), (NULL, 'q'), (2, 'j'), (6, 'f'),
+(5, 'e'), (7, 'p');
+CREATE TABLE t4 (
+col_int_key int,
+col_varchar varchar(1),
+key (col_int_key)
+);
+INSERT INTO t4 VALUES
+(5, 'k'), (5, 'g'), (5, 'k'), (1, 'e'), (9, 'b'), (NULL, 'b'),
+(141, 'w'), (0, 'i'), (240, 'x'), (1, 'h'), (NULL, 'p'), (201, 'v'),
+(5, 'e'), (NULL, 'e'), (2, 'a'), (3, 'r'), (NULL, 'f'), (8, 's'),
+(7, 'k'), (6, 'k');
+CREATE TABLE t5 (
+col_int int,
+col_varchar_key varchar(1),
+pk integer auto_increment,
+primary key(pk)
+);
+INSERT INTO t5 (col_int, col_varchar_key) VALUES
+(9, 'g'), (8, 'c'), (2, 'k'), (3, 'g'), (NULL, 'm'), (2, 'c'),
+(1, 'o'), (NULL, 'r'), (0, 'u'), (7, 'z'), (4, 'd'), (1, 'q'),
+(3, 't'), (NULL, 'x'), (1, 'g'), (8, 'e'), (2, 'f'), (9, NULL),
+(229, 't'), (2, 'i'), (127, 'x'), (75, 'u'), (4, 'r'), (4, 'y'),
+(NULL, 'y'), (7, 'n'), (8, 'h'), (0, 'e'), (9, 'h'), (4, 'v'),
+(4, 'o'), (0, 'w'), (9, NULL), (7, NULL), (7, 'd'), (74, 's'),
+(1, 'j'), (9, 'k'), (5, 'g'), (3, 'o'), (5, 'b'), (1, 'l'),
+(3, 'u'), (0, 'v'), (7, 'y'), (9, 'g'), (6, 'i'), (9, 'f'),
+(3, 'u'), (4, 'q'), (NULL, NULL), (0, 'k'), (NULL, 'l'), (2, 'q'),
+(7, 'r'), (5, 't'), (2, 'h'), (2, NULL), (NULL, 'z'), (7, 'c'),
+(NULL, 'd'), (242, 'h'), (7, 'e'), (5, 'e'), (7, 's'), (9, 'u'),
+(250, 'z'), (9, 'n'), (7, 'j'), (3, 's'), (8, 'e'), (6, NULL),
+(NULL, 'i'),  (1, 'n'), (3, 'k'), (7, 'n'), (1, 'w'), (8, 'x'),
+(1, 'b'), (9, NULL), (4, 'o'), (3, 'i'), (9, 'n'), (91, 'c'),
+(5, 'j'), (8, 'g'), (7, 'c'), (9, NULL), (8, 'd'), (NULL, 'h'),
+(4, 'k'), (1, 'r'), (33, 'k'), (8, 'n'), (4, 'h'), (2, 'q'),
+(9, 'p'), (1, NULL), (8, 'n'), (0, 'j');
+SET @var1 = 'h', @var2 =  66 ;
+PREPARE ps FROM '
+SELECT (SELECT SUM(sq1_t1.col_int) AS sq1_field1
+        FROM t3 AS sq1_t1 INNER JOIN t1 AS sq1_t2
+             ON sq1_t2.col_varchar_key = sq1_t1.col_varchar_key
+        WHERE sq1_t2.col_varchar < sq1_t2.col_varchar OR
+              sq1_t2.col_varchar <>  ?
+       ) AS field1
+FROM t5 AS table1 LEFT OUTER JOIN t4 AS table2
+     ON table2.col_int_key = table1.col_int
+WHERE table1.pk > ANY
+       (SELECT sq2_t1.pk AS sq2_field1
+        FROM t3 AS sq2_t1 STRAIGHT_JOIN t2 AS sq2_t2
+             ON sq2_t2.col_int_key = sq2_t1.pk
+        WHERE sq2_t2.col_varchar >= table2.col_varchar AND
+              sq2_t2.col_varchar <= table1.col_varchar_key
+       ) AND
+      table1.pk = ?';
+EXECUTE ps USING @var1, @var2;
+field1
+NULL
+EXECUTE ps USING @var1, @var2;
+field1
+NULL
+DROP TABLE t1, t2, t3, t4, t5;
+Bug#31119132 Semijoin with condition of type column=constant breaks
+if different character sets
+CREATE TABLE t1(
+pk INTEGER,
+col_int INTEGER,
+col_varchar VARCHAR(1),
+col_int_key INTEGER,
+col_datetime_key DATETIME,
+col_varchar_key VARCHAR(1)
+) DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+CREATE PROCEDURE p1() LANGUAGE SQL
+SELECT DISTINCT MIN(outr.col_varchar) AS x
+FROM t1 AS outr2 LEFT JOIN t1 AS outr
+ON outr2.col_int_key <> outr.pk
+WHERE outr.col_int IN
+(SELECT innr.col_int_key AS y
+FROM t1 AS innr
+WHERE outr.col_varchar_key = 'z') AND
+outr.col_datetime_key = '2003-12-04'
+ORDER BY outr.pk, outr.pk;
+CALL p1;
+x
+NULL
+CALL p1;
+x
+NULL
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# Bug#31359965 ASSERTION `!TABLE || (!TABLE->READ_SET || BITMAP_IS_SET(TABLE->READ_SET, FIELD_INDEX))' FAILED. IN FIELD_NEW_DECIMAL::VAL_DECIMAL
+#
+CREATE TABLE t (a DECIMAL(61,14),KEY(a));
+INSERT INTO t VALUES(0),(-1);
+SELECT
+(
+SELECT 1 FROM
+(
+SELECT a FROM (SELECT 1) u
+) z
+)
+FROM t GROUP BY 1;
+(
+SELECT 1 FROM
+(
+SELECT a FROM (SELECT 1) u
+) z
+)
+1
+DROP TABLE t;
+#
+# Bug #31530529: SERVER CRASH SEEN - (MY_PRINT_STACKTRACE(UNSIGNED CHAR CONST*, UNSIGNED LONG)
+#
+CREATE TABLE t1 (
+pk INTEGER NOT NULL,
+a VARCHAR(1),
+PRIMARY KEY (pk)
+);
+INSERT INTO t1 VALUES (3,'N');
+INSERT INTO t1 VALUES (4,'e');
+INSERT INTO t1 VALUES (5,'7');
+INSERT INTO t1 VALUES (6,'7');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SELECT * FROM t1 AS table1, t1 AS table2
+WHERE table1.pk = 6
+HAVING table1.a IN (SELECT a FROM t1);
+pk	a	pk	a
+6	7	3	N
+6	7	4	e
+6	7	5	7
+6	7	6	7
+DROP TABLE t1;
+# Bug#20794575: Assertion failed: bit < map->n_bits
+SET optimizer_switch="semijoin=off";
+CREATE TABLE t1(a INTEGER, b INTEGER);
+CREATE TABLE t2(c INTEGER);
+SELECT b FROM t1 HAVING 1 IN
+(SELECT b FROM t2 WHERE c = 1);
+b
+SET optimizer_switch=DEFAULT;
+DROP TABLE t1, t2;
+# Bug#30753397: Assertion `!tr->derived_where_cond || tr->derived_where_cond->fixed' failed
+CREATE TABLE t(a INTEGER);
+INSERT INTO t VALUES(1),(2),(3);
+SELECT 1 = (SELECT 1
+FROM (SELECT 1
+FROM t LEFT JOIN
+(SELECT 1
+FROM t
+WHERE NOT EXISTS (SELECT 1
+FROM t
+WINDOW w1 AS(PARTITION BY a)
+)
+) AS x
+ON 1 > 2
+) AS z
+);
+ERROR 21000: Subquery returns more than 1 row
+DROP TABLE t;
+#
+# Bug #31559978: REGRESSION: HEAP BUFFER OVERFLOW & ASSERTION FAILURE: ROW0SEL.CC:5574:PREBUILT->CAN_PREFETCH_RECORDS() || RECORD_BUFFER == NULLPTR
+#
+CREATE TABLE t1 (
+a INTEGER,
+d VARCHAR(255) NOT NULL,
+PRIMARY KEY (d)
+);
+INSERT INTO t1 VALUES (1,'1'), (2,'2');
+EXPLAIN FORMAT=tree SELECT 1 FROM t1 WHERE d IN (SELECT a FROM t1);
+EXPLAIN
+-> Remove duplicate t1 rows using temporary table (weedout)  (cost=1.1 rows=2)
+    -> Inner hash join (cast(t1.d as double) = cast(t1.a as double))  (cost=1.1 rows=2)
+        -> Index scan on t1 using PRIMARY  (cost=0.35 rows=2)
+        -> Hash
+            -> Table scan on t1  (cost=0.45 rows=2)
+
+Warnings:
+Warning	1739	Cannot use ref access on index 'PRIMARY' due to type or collation conversion on field 'd'
+Warning	1739	Cannot use range access on index 'PRIMARY' due to type or collation conversion on field 'd'
+SELECT 1 FROM t1 WHERE d IN (SELECT a FROM t1);
+1
+1
+1
+DROP TABLE t1;
+#
+# Bug#31096309 - 8.0.16+ DIFFERENT RESULTSET THAN 5.7 AND <=8.0.15
+#
+CREATE TABLE t1 (c1 int, c2 char(10));
+INSERT INTO t1 VALUES (1, 'name1');
+INSERT INTO t1 VALUES (2, 'name2');
+SET optimizer_switch='semijoin=on';
+explain format = tree SELECT a.c2 FROM  t1 AS a WHERE
+EXISTS (SELECT 1 FROM  t1 AS b WHERE b.c2 = a.c2 LIMIT 1,1);
+EXPLAIN
+-> Filter: exists(select #2)  (cost=0.45 rows=2)
+    -> Table scan on a  (cost=0.45 rows=2)
+    -> Select #2 (subquery in condition; dependent)
+        -> Limit/Offset: 1/1 row(s)  (cost=0.35 rows=0)
+            -> Filter: (b.c2 = a.c2)  (cost=0.35 rows=1)
+                -> Table scan on b  (cost=0.35 rows=2)
+
+Warnings:
+Note	1276	Field or reference 'test.a.c2' of SELECT #2 was resolved in SELECT #1
+SELECT a.c2 FROM  t1 AS a WHERE
+EXISTS (SELECT 1 FROM  t1 AS b WHERE b.c2 = a.c2 LIMIT 1,1);
+c2
+explain format=tree SELECT a.c2 FROM  t1 AS a WHERE
+EXISTS (SELECT 1 FROM  t1 AS b WHERE b.c2 = a.c2 LIMIT 0,1);
+EXPLAIN
+-> Hash semijoin (b.c2 = a.c2)  (cost=0.825 rows=2)
+    -> Table scan on a  (cost=0.45 rows=2)
+    -> Hash
+        -> Table scan on b  (cost=0.175 rows=2)
+
+Warnings:
+Note	1276	Field or reference 'test.a.c2' of SELECT #2 was resolved in SELECT #1
+SELECT a.c2 FROM  t1 AS a WHERE
+EXISTS (SELECT 1 FROM  t1 AS b WHERE b.c2 = a.c2 LIMIT 0,1);
+c2
+name1
+name2
+SET @offset_value=0;
+PREPARE explain_stmt FROM "EXPLAIN format = tree SELECT a.c2 FROM  t1 AS a WHERE
+EXISTS (SELECT 1 FROM  t1 AS b WHERE b.c2 = a.c2 LIMIT ?,1)";
+Warnings:
+Note	1276	Field or reference 'test.a.c2' of SELECT #2 was resolved in SELECT #1
+EXECUTE explain_stmt USING @offset_value;
+EXPLAIN
+-> Filter: exists(select #2)  (cost=0.45 rows=2)
+    -> Table scan on a  (cost=0.45 rows=2)
+    -> Select #2 (subquery in condition; dependent)
+        -> Limit: 1 row(s)  (cost=0.35 rows=1)
+            -> Filter: (b.c2 = a.c2)  (cost=0.35 rows=1)
+                -> Table scan on b  (cost=0.35 rows=2)
+
+PREPARE stmt FROM "SELECT a.c2 FROM  t1 AS a WHERE
+EXISTS (SELECT 1 FROM  t1 AS b WHERE b.c2 = a.c2 LIMIT ?,1)";
+EXECUTE stmt USING @offset_value;
+c2
+name1
+name2
+explain format = tree SELECT a.c2 FROM  t1 AS a WHERE
+EXISTS (SELECT 1 FROM  t1 AS b WHERE b.c2 = a.c2 LIMIT 0,0);
+EXPLAIN
+-> Filter: exists(select #2)  (cost=0.45 rows=2)
+    -> Table scan on a  (cost=0.45 rows=2)
+    -> Select #2 (subquery in condition; dependent)
+        -> Zero rows (Zero limit)  (cost=0..0 rows=0)
+
+Warnings:
+Note	1276	Field or reference 'test.a.c2' of SELECT #2 was resolved in SELECT #1
+SELECT a.c2 FROM  t1 AS a WHERE
+EXISTS (SELECT 1 FROM  t1 AS b WHERE b.c2 = a.c2 LIMIT 0,0);
+c2
+DROP TABLE t1;
+SET optimizer_switch=default;
+#
+# Bug #31586937: REGRESSION: CRASH IN FILESORT::MAKE_SORTORDER
+#
+CREATE TABLE t1 (a INTEGER);
+CREATE TABLE t2 (b INTEGER);
+SELECT ( SELECT b FROM t2 ORDER BY a, MIN(a) LIMIT 1 ) FROM t1 GROUP BY a;
+( SELECT b FROM t2 ORDER BY a, MIN(a) LIMIT 1 )
+DROP TABLE t1, t2;
+#
+# Bug #32680367: ASSERTION `PATH->COST >= PATH->INIT_COST' FAILED|JOIN_OPTIMIZER.CC - HYPERGRAPH
+#
+CREATE TABLE t1 (a VARCHAR(1));
+INSERT INTO t1 VALUES (NULL), ('r');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SELECT * FROM t1 WHERE a <= ALL (
+SELECT 'a' FROM t1 AS t2
+WHERE t2.a < t1.a AND t2.a NOT IN (SELECT a FROM t1)
+);
+a
+NULL
+r
+DROP TABLE t1;
+#
+# Bug #32937950 - HYPERGRAPH: CACHED_ITEM* NEW_CACHED_ITEM: ASSERTION `0' FAILED.
+#
+CREATE TABLE t1 (
+a INTEGER,
+PRIMARY KEY (a)
+) PARTITION BY LINEAR KEY () PARTITIONS 4;
+SELECT 1 FROM t1 WHERE
+( SELECT a FROM ( SELECT 1 ) AS q )
+IN ( SELECT a FROM t1 WHERE a > 0 GROUP BY a );
+1
+DROP TABLE t1;
+#
+# Bug #32934187: HYPERGRAPH: CRASHING IN ITEM_IN_SUBSELECT::EXEC
+#
+CREATE TABLE t1 (a DATETIME);
+INSERT INTO t1 VALUES ('2000-01-01 00:00:00');
+INSERT INTO t1 VALUES ('2000-01-01 00:00:00');
+SET @b := _latin1 'a';
+SELECT 1 FROM t1 WHERE (@b IN ( SELECT a FROM t1 )) = a;
+DROP TABLE t1;
+#
+# Bug#32895824: SIGNAL 6 ASSERTION`!NULL_VALUE || IS_NULLABLE()'
+#               FAILED IN ../SQL/ITEM_FUNC.CC
+#
+CREATE TABLE t(pk INT PRIMARY KEY);
+SELECT 1 FROM t
+WHERE CAST(pk AS UNSIGNED INTEGER) = 1
+AND pk = (SELECT 1 FROM t);
+1
+DROP TABLE t;
+#
+# Bug #32932969: ASSERTION `ITEM->IS_NULLABLE()' FAILED.
+#
+CREATE TABLE t1 (a INTEGER);
+INSERT INTO t1 VALUES (1);
+SELECT 1 FROM t1 GROUP BY (
+SELECT COALESCE(18446744073709551614, COUNT(ST_AREA(ST_ASWKT(a))))
+) WITH ROLLUP;
+ERROR 22023: Invalid GIS data provided to function st_astext.
+DROP TABLE t1;
+#
+# Bug #33076462: PB2: FAILURE IN RQG_MULTI_UPDATE_DELETE TEST
+#
+CREATE TABLE t1 ( c INTEGER, KEY (c) );
+CREATE TABLE t2 ( pk INTEGER );
+INSERT INTO t2 VALUES (7);
+CREATE TABLE t3 (
+a INTEGER,
+b INTEGER,
+c INTEGER,
+KEY (a)
+);
+INSERT INTO t3 VALUES (3,4,NULL);
+ANALYZE TABLE t1, t2, t3;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+UPDATE t1, t2
+SET t1.c = 0
+WHERE t1.c <> (
+SELECT
+t3.c
+FROM
+t3
+JOIN t3 AS t3_b ON t3_b.a > t3.a
+WHERE t3.b <= t3.b XOR t2.pk = 3
+);
+DROP TABLE t1, t2, t3;
+#
+# Bug #33030793: WL#14419: ASSERTION `NEW_PATH->COST >= NEW_PATH->INIT_COST' FAILED
+#
+CREATE TABLE t1 ( a BLOB );
+SELECT t1.a
+FROM
+t1,
+LATERAL ( SELECT t1.a FROM t1 AS inner_t1 LIMIT 1 ) AS d1
+WHERE 1 IN ( SELECT a FROM t1 )
+ORDER BY a;
+a
+DROP TABLE t1;
+#
+# Bug #33045256: WL#14419: ASSERTION `NULLPTR != DYNAMIC_CAST<TARGET>(ARG)' FAILED
+#
+CREATE TABLE t1 (a INTEGER);
+INSERT INTO t1 VALUES (1);
+SELECT * FROM (
+SELECT a, JSON_ARRAYAGG(a) OVER () AS b FROM t1
+) AS d1
+WHERE (a,b) IN (
+SELECT a, JSON_ARRAYAGG(a) OVER () AS b FROM t1
+);
+DROP TABLE t1;
+#
+# Bug #33075707: HYPERGRAPH: ASSERTION `COND->REAL_ITEM()->IS_BOOL_FUNC()' FAILED
+#
+CREATE TABLE t1 ( a VARCHAR(1) );
+INSERT INTO t1 VALUES ('0');
+SELECT 1
+FROM t1
+WHERE a NOT IN (
+SELECT 1
+FROM
+t1 AS t2
+LEFT JOIN t1 AS t3 ON (t2.a = t3.a OR 0 IN ( SELECT REGEXP_LIKE(a, '') FROM t1 ))
+);
+1
+1
+DROP TABLE t1;
+# Bug#33952115: Semijoin may give wrong result
+CREATE TABLE t1(c0 int);
+INSERT INTO t1 VALUES(NULL), (1), (NULL), (2), (NULL), (3);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+explain SELECT t1.c0 AS ref0
+FROM t1
+WHERE t1.c0 IN (SELECT t2.c0 AS ref1
+FROM t1 as t2
+WHERE t2.c0 NOT IN (SELECT t3.c0 AS ref2
+FROM t1 as t3
+WHERE t3.c0
+)
+= t2.c0
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<subquery2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	NULL
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	6	16.67	Using where; Using join buffer (hash join)
+2	MATERIALIZED	t2	NULL	ALL	NULL	NULL	NULL	NULL	6	16.67	Using where
+3	SUBQUERY	t3	NULL	ALL	NULL	NULL	NULL	NULL	6	83.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c0` AS `ref0` from `test`.`t1` semi join (`test`.`t1` `t2`) where ((`test`.`t1`.`c0` = `<subquery2>`.`ref1`) and (<in_optimizer>(`test`.`t2`.`c0`,`test`.`t2`.`c0` not in ( <materialize> (/* select#3 */ select `test`.`t3`.`c0` AS `ref2` from `test`.`t1` `t3` where (0 <> `test`.`t3`.`c0`) having true ), <primary_index_lookup>(`test`.`t2`.`c0` in <temporary table> on <auto_distinct_key> where ((`test`.`t2`.`c0` = `<materialized_subquery>`.`ref2`))))) = `test`.`t2`.`c0`))
+SELECT t1.c0 AS ref0
+FROM t1
+WHERE t1.c0 IN (SELECT t2.c0 AS ref1
+FROM t1 as t2
+WHERE t2.c0 NOT IN (SELECT t3.c0 AS ref2
+FROM t1 as t3
+WHERE t3.c0
+)
+= t2.c0
+);
+ref0
+DROP TABLE t1;
+# Bug#33957233: Incorrect inner hash join when using materialization
+CREATE TABLE t0 (
+c0 INTEGER
+);
+INSERT INTO t0 VALUES
+(321108437), (-64596961), (329053785), (1983), (NULL), (NULL),
+(1936), (-543970881), (NULL), (NULL), (-1945919442), (NULL), (1230052719);
+ANALYZE TABLE t0;
+Table	Op	Msg_type	Msg_text
+test.t0	analyze	status	OK
+explain SELECT t0.c0
+FROM t0
+WHERE t0.c0 NOT IN (SELECT t0.c0 AS ref1
+FROM t0
+WHERE t0.c0 IN (SELECT t0.c0
+FROM t0
+WHERE t0.c0 NOT IN (SELECT t0.c0 AS ref3
+FROM t0
+)
+= t0.c0
+)
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t0	NULL	ALL	NULL	NULL	NULL	NULL	13	100.00	Using where
+2	SUBQUERY	<subquery3>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	NULL
+2	SUBQUERY	t0	NULL	ALL	NULL	NULL	NULL	NULL	13	10.00	Using where; Using join buffer (hash join)
+3	MATERIALIZED	t0	NULL	ALL	NULL	NULL	NULL	NULL	13	10.00	Using where
+4	SUBQUERY	t0	NULL	ALL	NULL	NULL	NULL	NULL	13	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t0`.`c0` AS `c0` from `test`.`t0` where <in_optimizer>(`test`.`t0`.`c0`,`test`.`t0`.`c0` in ( <materialize> (/* select#2 */ select `test`.`t0`.`c0` AS `ref1` from `test`.`t0` semi join (`test`.`t0`) where ((<in_optimizer>(`test`.`t0`.`c0`,`test`.`t0`.`c0` not in ( <materialize> (/* select#4 */ select `test`.`t0`.`c0` AS `ref3` from `test`.`t0` where true having true ), <primary_index_lookup>(`test`.`t0`.`c0` in <temporary table> on <auto_distinct_key> where ((`test`.`t0`.`c0` = `<materialized_subquery>`.`ref3`))))) = `test`.`t0`.`c0`) and (`test`.`t0`.`c0` = `<subquery3>`.`c0`)) having true ), <primary_index_lookup>(`test`.`t0`.`c0` in <temporary table> on <auto_distinct_key> where ((`test`.`t0`.`c0` = `<materialized_subquery>`.`ref1`)))) is false)
+SELECT t0.c0
+FROM t0
+WHERE t0.c0 NOT IN (SELECT t0.c0 AS ref1
+FROM t0
+WHERE t0.c0 IN (SELECT t0.c0
+FROM t0
+WHERE t0.c0 NOT IN (SELECT t0.c0 AS ref3
+FROM t0
+)
+= t0.c0
+)
+);
+c0
+321108437
+-64596961
+329053785
+1983
+NULL
+NULL
+1936
+-543970881
+NULL
+NULL
+-1945919442
+NULL
+1230052719
+DROP TABLE t0;
+# Bug#33755139: prepare stmt query return error record
+CREATE TABLE t1(a INTEGER, b INTEGER);
+INSERT INTO t1 VALUES(1, NULL);
+CREATE TABLE t2(c INTEGER, d INTEGER);
+INSERT INTO t2 VALUES(2, 2);
+SELECT a FROM t1 WHERE b =ALL (SELECT d FROM t2 WHERE c = 1);
+a
+1
+SELECT a FROM t1 WHERE b =ALL (SELECT d FROM t2 WHERE c = 2);
+a
+prepare ps FROM "
+SELECT a FROM t1 WHERE b =ALL (SELECT d FROM t2 WHERE c = ?)";
+SET @v = 1;
+execute ps using @v;
+a
+1
+SET @v = 2;
+execute ps using @v;
+a
+deallocate prepare ps;
+DROP TABLE t1, t2;
+#
+# Bug#34060289 optimizer rewrites view and turns left joins into inner joins
+#
+CREATE TABLE vt1 (c1 INT);
+CREATE TABLE vt2 (c1 INT);
+CREATE TABLE vt3 (c1 INT NOT NULL AUTO_INCREMENT, c2 INT,
+c3 INT, c4 INT, c5 INT, PRIMARY KEY (c1));
+INSERT INTO vt3 (c2,c3) VALUES (1,1);
+CREATE TABLE vt4 (c1 INT);
+INSERT INTO vt4 (c1) VALUES (1);
+CREATE VIEW v1 AS
+SELECT vt3.c2 AS vc1, vt3.c3 AS vc2, vt4.c1 AS vc3
+FROM (((vt3 LEFT JOIN vt1 ON vt1.c1 = vt3.c5)
+LEFT JOIN vt2 ON vt3.c4= vt2.c1) JOIN vt4);
+CREATE TABLE t1 (c1 INT, c2 CHAR(2));
+INSERT INTO t1 VALUES (1, '01');
+CREATE TABLE t2 (c2 INT, c3 INT);
+INSERT INTO t2 VALUES (1, null);
+SET optimizer_switch="derived_merge=off";
+SELECT *
+FROM v1
+WHERE (v1.vc3 IN (SELECT c1 FROM t1 WHERE c2='01'))
+AND (null IS null OR v1.vc1 IN (SELECT c2 FROM t2 WHERE c3=null))
+AND (null IS null OR v1.vc2 IN (null));
+vc1	vc2	vc3
+1	1	1
+SET optimizer_switch="derived_merge=on";
+SELECT *
+FROM v1
+WHERE (v1.vc3 IN (SELECT c1 FROM t1 WHERE c2='01'))
+AND (null IS null OR v1.vc1 IN (SELECT c2 FROM t2 WHERE c3=null))
+AND (null IS null OR v1.vc2 IN (null));
+vc1	vc2	vc3
+1	1	1
+SELECT *
+FROM v1
+WHERE (vc3 IN (SELECT c1 FROM t1 WHERE c2='01'))
+AND (null IS null OR v1.vc1 IN (SELECT c2 FROM t2 WHERE c3=null));
+vc1	vc2	vc3
+1	1	1
+DROP VIEW v1;
+DROP TABLE vt1, vt2, vt3, vt4, t1, t2;
+#
+#  Bug 33971286 - LEFT JOIN and Subquery single condition returns incorrect results
+#
+CREATE TABLE ot (c0 BIGINT NOT NULL, c1 VARCHAR(5));
+INSERT INTO ot VALUES (1, 'A'), (2, 'B'), (3, 'C'), (4, 'C');
+CREATE TABLE it1 (c0 INT NOT NULL, c1 BIGINT NOT NULL);
+INSERT INTO it1 VALUES (1, 3), (2, 2);
+CREATE TABLE it2 (c0 BIGINT NOT NULL, c1 VARCHAR(5));
+INSERT INTO it2 VALUES (1, 'A'), (2, 'B'), (3, 'C'), (4, 'C');
+ANALYZE TABLE ot, it1, it2;
+Table	Op	Msg_type	Msg_text
+test.ot	analyze	status	OK
+test.it1	analyze	status	OK
+test.it2	analyze	status	OK
+EXPLAIN SELECT ot.c0, dt.c0 AS dt_c0 FROM ot LEFT JOIN (SELECT it1.* FROM it1 WHERE c0 IN (SELECT c0 FROM it2 WHERE c1 = 'A')) dt ON ot.c0 = dt.c0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	ot	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+1	SIMPLE	it1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+1	SIMPLE	<subquery3>	NULL	eq_ref	<auto_distinct_key>	<auto_distinct_key>	9	test.it1.c0	1	100.00	Using where
+3	MATERIALIZED	it2	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`ot`.`c0` AS `c0`,`test`.`it1`.`c0` AS `dt_c0` from `test`.`ot` left join (`test`.`it1` semi join (`test`.`it2`)) on(((`test`.`it2`.`c1` = 'A') and (`test`.`ot`.`c0` = `test`.`it1`.`c0`) and (`test`.`it1`.`c0` = `<subquery3>`.`c0`))) where true
+SELECT ot.c0, dt.c0 AS dt_c0 FROM ot LEFT JOIN (SELECT it1.* FROM it1 WHERE c0 IN (SELECT c0 FROM it2 WHERE c1 = 'A')) dt ON ot.c0 = dt.c0;;
+c0	dt_c0
+1	1
+2	NULL
+3	NULL
+4	NULL
+SET optimizer_switch = "derived_merge=off,firstmatch=off";
+EXPLAIN SELECT ot.c0, dt.c0 AS dt_c0 FROM ot LEFT JOIN (SELECT it1.* FROM it1 WHERE c0 IN (SELECT c0 FROM it2 WHERE c1 = 'A')) dt ON ot.c0 = dt.c0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	ot	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	4	test.ot.c0	2	100.00	Using where
+2	DERIVED	<subquery3>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	NULL
+2	DERIVED	it1	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where; Using join buffer (hash join)
+3	MATERIALIZED	it2	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`ot`.`c0` AS `c0`,`dt`.`c0` AS `dt_c0` from `test`.`ot` left join (/* select#2 */ select `test`.`it1`.`c0` AS `c0`,`test`.`it1`.`c1` AS `c1` from `test`.`it1` semi join (`test`.`it2`) where ((`test`.`it2`.`c1` = 'A') and (`test`.`it1`.`c0` = `<subquery3>`.`c0`))) `dt` on((`test`.`ot`.`c0` = `dt`.`c0`)) where true
+SELECT ot.c0, dt.c0 AS dt_c0 FROM ot LEFT JOIN (SELECT it1.* FROM it1 WHERE c0 IN (SELECT c0 FROM it2 WHERE c1 = 'A')) dt ON ot.c0 = dt.c0;;
+c0	dt_c0
+1	1
+2	NULL
+3	NULL
+4	NULL
+SET optimizer_switch = default;
+DROP TABLE ot, it1, it2;
+# Bug#34630459: Mysqld failure : Query_expression::exclude_tree()
+CREATE TABLE t (c INTEGER);
+SELECT c
+FROM t
+WHERE ((SELECT c FROM t), 0) IN (SELECT 1, 2 UNION SELECT 3, 4) AND FALSE;
+c
+DROP TABLE t;
+#
+# Bug #34678179 Assertion `path->cost >= 0.0' failed
+#
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1), (2);
+CREATE TABLE t2 (a INT);
+CREATE TABLE t3 (a INT, KEY (a));
+ANALYZE TABLE t1,t2,t3;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+EXPLAIN FORMAT=TREE SELECT 1 FROM t1 WHERE a IN
+(SELECT COUNT(*) FROM t2 LEFT JOIN t3
+ON t3.a IN (SELECT t2_a.a FROM t2 AS t2_a, t2 AS t2_b)
+WHERE t2.a = 0);
+EXPLAIN
+-> Filter: <in_optimizer>(t1.a,t1.a in (select #2))  (rows=2)
+    -> Table scan on t1  (rows=2)
+    -> Select #2 (subquery in condition; run only once)
+        -> Filter: ((t1.a = `<materialized_subquery>`.`COUNT(*)`))  (rows=1)
+            -> Limit: 1 row(s)  (rows=1)
+                -> Index lookup on <materialized_subquery> using <auto_distinct_key> (COUNT(*)=t1.a)
+                    -> Materialize with deduplication  (rows=1)
+                        -> Aggregate: count(0)  (rows=1)
+                            -> Remove duplicate (t2, t3) rows using temporary table (weedout)  (rows=1)
+                                -> Nested loop left join  (rows=1)
+                                    -> Filter: (t2.a = 0)  (rows=1)
+                                        -> Table scan on t2  (rows=1)
+                                    -> Nested loop inner join  (rows=1)
+                                        -> Nested loop inner join  (rows=1)
+                                            -> Table scan on t2_a  (rows=1)
+                                            -> Covering index lookup on t3 using a (a=t2_a.a)  (rows=1)
+                                        -> Table scan on t2_b  (rows=1)
+
+DROP TABLE t1, t2, t3;
+#
+# Bug#34890862: Mysql server crash : `item->hidden == hidden' in
+#               assert_consistent_hidden_flags
+#
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER);
+SELECT *
+FROM (SELECT (SELECT SUM(t1.f1) FROM t1) AS subq
+FROM t1 AS t2
+WHERE t2.f1 IN (SELECT 1 FROM t1)
+ORDER BY t2.f2, subq) AS dt;
+subq
+DROP TABLE t1;
+# Bug#34946811: Failure in Item_ref::walk/Item_cond::fix_fields
+CREATE TABLE t (f integer);
+CREATE VIEW v AS SELECT * FROM t;
+SELECT 1
+FROM t AS t1 JOIN
+(SELECT v.*
+FROM v
+) AS t2
+ON t1.f = t2.f
+WHERE FALSE AND (t2.f, t2.f) IN (SELECT 1, 2);
+1
+explain SELECT 1
+FROM t AS t1 JOIN
+(SELECT v.*
+FROM v
+) AS t2
+ON t1.f = t2.f
+WHERE FALSE AND (t2.f, t2.f) IN (SELECT 1, 2);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t` `t1` join `test`.`t` where false
+SELECT t2.f
+FROM t AS t1 JOIN (SELECT *
+FROM (SELECT (SELECT f = 1 AS f FROM t) AS f
+FROM t
+) AS t2
+) AS t2
+ON t1.f = t2.f
+WHERE FALSE AND (t2.f,t2.f) IN (SELECT 4,3);
+f
+explain SELECT t2.f
+FROM t AS t1 JOIN (SELECT *
+FROM (SELECT (SELECT f = 1 AS f FROM t) AS f
+FROM t
+) AS t2
+) AS t2
+ON t1.f = t2.f
+WHERE FALSE AND (t2.f,t2.f) IN (SELECT 4,3);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+4	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Not optimized, outer query is empty
+Warnings:
+Note	1003	/* select#1 */ select (/* select#4 */ select (`test`.`t`.`f` = 1) AS `f` from `test`.`t`) AS `f` from `test`.`t` `t1` join `test`.`t` where false
+DROP VIEW v;
+DROP TABLE t;
+# Bug#35338776: Failure in find_item_in_list with unknown column 
+SELECT(SELECT SIN(a.c7)),c7;
+ERROR 42S22: Unknown column 'a.c7' in 'field list'
+#
+# Bug#35877600: Assertion failure at handler::ha_index_end() at handler.cc
+#
+CREATE TABLE t( c0 int AUTO_INCREMENT primary key , c1 CHAR(50) , c2 CHAR(50) , c3 CHAR(50) , c4 CHAR(50) , c5 CHAR(50) , c6 CHAR(50) , c7 CHAR(50) , c8 CHAR(50) , c9 CHAR(50) , c10 CHAR(50) , c11 CHAR(50) , c12 CHAR(50) , c13 CHAR(50) , c14 CHAR(50) , c15 CHAR(50) , c16 CHAR(50) , c17 CHAR(50) , c18 CHAR(50) , c19 CHAR(50) , c20 CHAR(50) , c21 CHAR(50) , c22 CHAR(50) , c23 CHAR(50) , c24 CHAR(50) , c25 CHAR(50) , c26 CHAR(50) , c27 CHAR(50) , c28 CHAR(50) , c29 CHAR(50) , c30 CHAR(50) , c31 CHAR(50) , c32 CHAR(50) , c33 CHAR(50) , c34 CHAR(50) , c35 CHAR(50) , c36 CHAR(50) , c37 CHAR(50) , c38 CHAR(50) , c39 CHAR(50) , c40 CHAR(50) , c41 CHAR(50) , c42 CHAR(50) , c43 CHAR(50) , c44 CHAR(50) , c45 CHAR(50) , c46 CHAR(50) , c47 CHAR(50) , c48 CHAR(50) , c49 CHAR(50) , c50 CHAR(50) , c51 CHAR(50) , c52 CHAR(50) , c53 CHAR(50) , c54 CHAR(50) , c55 CHAR(50) , c56 CHAR(50) , c57 CHAR(50) , c58 CHAR(50) , c59 CHAR(50) , c60 CHAR(50) , c61 CHAR(50) , c62 CHAR(50) , c63 CHAR(50) , c64 CHAR(50) , c65 CHAR(50) , c66 CHAR(50) , c67 CHAR(50) , c68 CHAR(50) , c69 CHAR(50) , c70 CHAR(50) , c71 CHAR(50) , c72 CHAR(50) , c73 CHAR(50) , c74 CHAR(50) , c75 CHAR(50) , c76 CHAR(50) , c77 CHAR(50) , c78 CHAR(50) , c79 CHAR(50) , c80 CHAR(50) , c81 CHAR(50) , c82 CHAR(50) , c83 CHAR(50) , c84 CHAR(50) , c85 CHAR(50) , c86 CHAR(50) , c87 CHAR(50) , c88 CHAR(50) , c89 CHAR(50) , c90 CHAR(50) , c91 CHAR(50) , c92 CHAR(50) , c93 CHAR(50) , c94 CHAR(50) , c95 CHAR(50) , c96 CHAR(50) , c97 CHAR(50) , c98 CHAR(50) , c99 CHAR(50)) ENGINE InnoDB;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99) values(1  , 2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10 , 11 , 12 , 13 , 14 , 15 , 16 , 17 , 18 , 19 , 20 , 21 , 22 , 23 , 24 , 25 , 26 , 27 , 28 , 29 , 30 , 31 , 32 , 33 , 34 , 35 , 36 , 37 , 38 , 39 , 40 , 41 , 42 , 43 , 44 , 45 , 46 , 47 , 48 , 49 , 50 , 51 , 52 , 53 , 54 , 55 , 56 , 57 , 58 , 59 , 60 , 61 , 62 , 63 , 64 , 65 , 66 , 67 , 68 , 69 , 70 , 71 , 72 , 73 , 74 , 75 , 76 , 77 , 78 , 79 , 80 , 81 , 82 , 83 , 84 , 85 , 86 , 87 , 88 , 89 , 90 , 91 , 92 , 93 , 94 , 95 , 96 , 97 , 98 , 99);
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+INSERT INTO t(c1  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 ) SELECT c0  , c2 , c3 , c4 , c5 , c6 , c7 , c8 , c9 , c10 , c11 , c12 , c13 , c14 , c15 , c16 , c17 , c18 , c19 , c20 , c21 , c22 , c23 , c24 , c25 , c26 , c27 , c28 , c29 , c30 , c31 , c32 , c33 , c34 , c35 , c36 , c37 , c38 , c39 , c40 , c41 , c42 , c43 , c44 , c45 , c46 , c47 , c48 , c49 , c50 , c51 , c52 , c53 , c54 , c55 , c56 , c57 , c58 , c59 , c60 , c61 , c62 , c63 , c64 , c65 , c66 , c67 , c68 , c69 , c70 , c71 , c72 , c73 , c74 , c75 , c76 , c77 , c78 , c79 , c80 , c81 , c82 , c83 , c84 , c85 , c86 , c87 , c88 , c89 , c90 , c91 , c92 , c93 , c94 , c95 , c96 , c97 , c98 , c99 from t;
+SELECT @@log_error_verbosity INTO @old_val;
+SET GLOBAL log_error_verbosity = 1;
+SELECT * FROM (SELECT  c0 AS col0, c1 AS col1, c2 AS col2, c3 AS col3, c4 AS col4, c5 AS col5, c6 AS col6, c7 AS col7, c8 AS col8, c9 AS col9, c10 AS col10, c11 AS col11, c12 AS col12, c13 AS col13, c14 AS col14, c15 AS col15, c16 AS col16, c17 AS col17, c18 AS col18, c19 AS col19, c20 AS col20, c21 AS col21, c22 AS col22, c23 AS col23, c24 AS col24, c25 AS col25, c26 AS col26, c27 AS col27, c28 AS col28, c29 AS col29, c30 AS col30, c31 AS col31, c32 AS col32, c33 AS col33, c34 AS col34, c35 AS col35, c36 AS col36, c37 AS col37, c38 AS col38, c39 AS col39, c40 AS col40, c41 AS col41, c42 AS col42, c43 AS col43, c44 AS col44, c45 AS col45, c46 AS col46, c47 AS col47, c48 AS col48, c49 AS col49, c50 AS col50, c51 AS col51, c52 AS col52, c53 AS col53, c54 AS col54, c55 AS col55, c56 AS col56, c57 AS col57, c58 AS col58, c59 AS col59, c60 AS col60, c61 AS col61, c62 AS col62, c63 AS col63, c64 AS col64, c65 AS col65, c66 AS col66, c67 AS col67, c68 AS col68, c69 AS col69, c70 AS col70, c71 AS col71, c72 AS col72, c73 AS col73, c74 AS col74, c75 AS col75, c76 AS col76, c77 AS col77, c78 AS col78, c79 AS col79, c80 AS col80, c81 AS col81, c82 AS col82, c83 AS col83, c84 AS col84, c85 AS col85, c86 AS col86, c87 AS col87, c88 AS col88, c89 AS col89, c90 AS col90, c91 AS col91, c92 AS col92, c93 AS col93, c94 AS col94, c95 AS col95, c96 AS col96, c97 AS col97, c98 AS col98, c99 AS col99, c0 AS col100, c1 AS col101, c2 AS col102, c3 AS col103, c4 AS col104, c5 AS col105, c6 AS col106, c7 AS col107, c8 AS col108, c9 AS col109, c10 AS col110, c11 AS col111, c12 AS col112, c13 AS col113, c14 AS col114, c15 AS col115, c16 AS col116, c17 AS col117, c18 AS col118, c19 AS col119, c20 AS col120, c21 AS col121, c22 AS col122, c23 AS col123, c24 AS col124, c25 AS col125, c26 AS col126, c27 AS col127, c28 AS col128, c29 AS col129, c30 AS col130, c31 AS col131, c32 AS col132, c33 AS col133, c34 AS col134, c35 AS col135, c36 AS col136, c37 AS col137, c38 AS col138, c39 AS col139, c40 AS col140, c41 AS col141, c42 AS col142, c43 AS col143, c44 AS col144, c45 AS col145, c46 AS col146, c47 AS col147, c48 AS col148, c49 AS col149, c50 AS col150, c51 AS col151, c52 AS col152, c53 AS col153, c54 AS col154, c55 AS col155, c56 AS col156, c57 AS col157, c58 AS col158, c59 AS col159, c60 AS col160, c61 AS col161, c62 AS col162, c63 AS col163, c64 AS col164, c65 AS col165, c66 AS col166, c67 AS col167, c68 AS col168, c69 AS col169, c70 AS col170, c71 AS col171, c72 AS col172, c73 AS col173, c74 AS col174, c75 AS col175, c76 AS col176, c77 AS col177, c78 AS col178, c79 AS col179, c80 AS col180, c81 AS col181, c82 AS col182, c83 AS col183, c84 AS col184, c85 AS col185, c86 AS col186, c87 AS col187, c88 AS col188, c89 AS col189, c90 AS col190, c91 AS col191, c92 AS col192, c93 AS col193, c94 AS col194, c95 AS col195, c96 AS col196, c97 AS col197, c98 AS col198, c99 AS col199 FROM t UNION SELECT  c0 AS col0, c1 AS col1, c2 AS col2, c3 AS col3, c4 AS col4, c5 AS col5, c6 AS col6, c7 AS col7, c8 AS col8, c9 AS col9, c10 AS col10, c11 AS col11, c12 AS col12, c13 AS col13, c14 AS col14, c15 AS col15, c16 AS col16, c17 AS col17, c18 AS col18, c19 AS col19, c20 AS col20, c21 AS col21, c22 AS col22, c23 AS col23, c24 AS col24, c25 AS col25, c26 AS col26, c27 AS col27, c28 AS col28, c29 AS col29, c30 AS col30, c31 AS col31, c32 AS col32, c33 AS col33, c34 AS col34, c35 AS col35, c36 AS col36, c37 AS col37, c38 AS col38, c39 AS col39, c40 AS col40, c41 AS col41, c42 AS col42, c43 AS col43, c44 AS col44, c45 AS col45, c46 AS col46, c47 AS col47, c48 AS col48, c49 AS col49, c50 AS col50, c51 AS col51, c52 AS col52, c53 AS col53, c54 AS col54, c55 AS col55, c56 AS col56, c57 AS col57, c58 AS col58, c59 AS col59, c60 AS col60, c61 AS col61, c62 AS col62, c63 AS col63, c64 AS col64, c65 AS col65, c66 AS col66, c67 AS col67, c68 AS col68, c69 AS col69, c70 AS col70, c71 AS col71, c72 AS col72, c73 AS col73, c74 AS col74, c75 AS col75, c76 AS col76, c77 AS col77, c78 AS col78, c79 AS col79, c80 AS col80, c81 AS col81, c82 AS col82, c83 AS col83, c84 AS col84, c85 AS col85, c86 AS col86, c87 AS col87, c88 AS col88, c89 AS col89, c90 AS col90, c91 AS col91, c92 AS col92, c93 AS col93, c94 AS col94, c95 AS col95, c96 AS col96, c97 AS col97, c98 AS col98, c99 AS col99, c0 AS col100, c1 AS col101, c2 AS col102, c3 AS col103, c4 AS col104, c5 AS col105, c6 AS col106, c7 AS col107, c8 AS col108, c9 AS col109, c10 AS col110, c11 AS col111, c12 AS col112, c13 AS col113, c14 AS col114, c15 AS col115, c16 AS col116, c17 AS col117, c18 AS col118, c19 AS col119, c20 AS col120, c21 AS col121, c22 AS col122, c23 AS col123, c24 AS col124, c25 AS col125, c26 AS col126, c27 AS col127, c28 AS col128, c29 AS col129, c30 AS col130, c31 AS col131, c32 AS col132, c33 AS col133, c34 AS col134, c35 AS col135, c36 AS col136, c37 AS col137, c38 AS col138, c39 AS col139, c40 AS col140, c41 AS col141, c42 AS col142, c43 AS col143, c44 AS col144, c45 AS col145, c46 AS col146, c47 AS col147, c48 AS col148, c49 AS col149, c50 AS col150, c51 AS col151, c52 AS col152, c53 AS col153, c54 AS col154, c55 AS col155, c56 AS col156, c57 AS col157, c58 AS col158, c59 AS col159, c60 AS col160, c61 AS col161, c62 AS col162, c63 AS col163, c64 AS col164, c65 AS col165, c66 AS col166, c67 AS col167, c68 AS col168, c69 AS col169, c70 AS col170, c71 AS col171, c72 AS col172, c73 AS col173, c74 AS col174, c75 AS col175, c76 AS col176, c77 AS col177, c78 AS col178, c79 AS col179, c80 AS col180, c81 AS col181, c82 AS col182, c83 AS col183, c84 AS col184, c85 AS col185, c86 AS col186, c87 AS col187, c88 AS col188, c89 AS col189, c90 AS col190, c91 AS col191, c92 AS col192, c93 AS col193, c94 AS col194, c95 AS col195, c96 AS col196, c97 AS col197, c98 AS col198, c99 AS col199 FROM t) t1;
+ERROR 42000: Row size too large (> 8126). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
+SET GLOBAL log_error_verbosity = @old_val;
+drop table t;

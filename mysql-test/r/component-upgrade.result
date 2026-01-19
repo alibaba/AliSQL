@@ -1,0 +1,22 @@
+#
+# Bug #24453571  SERVER CRASHES WHEN INSTALL COMPONENT IS ISSUED,
+# AFTER MYSQL_UPGRADE
+#
+# Checking MYSQL_UPGRADE creates the missing mysql.component table
+# when upgrading from 5.7. Simulating the senario by deleting the
+# component table.
+CALL mtr.add_suppression("Table 'mysql.component' doesn't exis");
+CALL mtr.add_suppression("The mysql.component table is missing or has an incorrect definition.");
+# Dropping component table.
+DROP TABLE mysql.component;
+# shutdown the server from mtr.
+# restart the server.
+# running mysql_upgrade
+# restart:--upgrade=FORCE
+INSTALL COMPONENT "file://component_example_component1";
+# a component should present
+SELECT COUNT(*) FROM mysql.component;
+COUNT(*)
+1
+UNINSTALL COMPONENT "file://component_example_component1";
+# restart:

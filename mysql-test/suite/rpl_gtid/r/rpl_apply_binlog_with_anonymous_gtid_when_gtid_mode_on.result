@@ -1,0 +1,38 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+#
+# Stop slave threads and clear slave datadir.
+#
+include/stop_slave.inc
+RESET SLAVE;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
+#
+# Copy the binlog with Anonymous_GTID log events and
+# relay log index to slave datadir.
+#
+#
+# Process the binlog with Anonymous_GTID log events.
+#
+START SLAVE;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
+#
+# Wait for SQL thread error.
+#
+call mtr.add_suppression("Replica.* @@SESSION.GTID_NEXT cannot be set to ANONYMOUS when @@GLOBAL.GTID_MODE = ON.");
+call mtr.add_suppression("Replica worker thread has failed to apply an event");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped");
+include/wait_for_slave_sql_error.inc [errno=1782]
+include/stop_slave.inc
+RESET MASTER;
+RESET SLAVE;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
+include/start_slave.inc
+[connection master]
+include/rpl_end.inc

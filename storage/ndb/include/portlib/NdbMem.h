@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,48 +28,9 @@
 
 #include <ndb_global.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
-
-
-/**
- * NdbMem_Create 
- * Create and initalise internal data structures for Ndb
- */
-void NdbMem_Create(void);
-
-
-/**
- * NdbMem_Destroy
- * Destroy all memory allocated by NdbMem
- */
-void NdbMem_Destroy(void);
-
-/**
- * NdbMem_Allocate
- * Allocate size of memory
- * @parameter size - size in bytes of memory to allocate
- * @returns - pointer to memory if succesful otherwise NULL
- */
-void* NdbMem_Allocate(size_t size);
-
-/**
- * NdbMem_AllocateAlign
- * Allocate size of memory
- * @parameter size - size in bytes of memory to allocate
- * @paramter alignment - byte boundary to align the data at
- * @returns - pointer to memory if succesful otherwise NULL
- */
-void* NdbMem_AllocateAlign(size_t size, size_t alignment);
-
-
-/** 
- * NdbMem_Free
- *  Free the memory that ptr points to 
- *  @parameter ptr - pointer to the memory to free
- */
-void NdbMem_Free(void* ptr);
 
 /**
  * NdbMem_MemLockAll
@@ -78,9 +47,30 @@ int NdbMem_MemUnlockAll(void);
 /**
  * Memlock region
  */
-int NdbMem_MemLock(const void * ptr, size_t len);
+int NdbMem_MemLock(const void *ptr, size_t len);
 
-#ifdef	__cplusplus
+int NdbMem_PopulateSpace(void *ptr, size_t len);
+
+#ifdef VM_TRACE
+
+/**
+ * Experimental functions for manage address space without backing, nor in
+ * memory nor on disk.
+ */
+
+int NdbMem_ReserveSpace(void **ptr, size_t len);
+int NdbMem_FreeSpace(void *ptr, size_t len);
+
+#endif
+
+void *NdbMem_AlignedAlloc(size_t alignment, size_t size);
+void NdbMem_AlignedFree(void *p);
+
+size_t NdbMem_GetSystemPageSize();
+
+void NdbMem_SecureClear(void *ptr, size_t len);
+
+#ifdef __cplusplus
 }
 #endif
 

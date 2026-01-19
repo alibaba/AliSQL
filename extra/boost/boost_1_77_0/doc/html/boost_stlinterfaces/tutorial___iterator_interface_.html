@@ -1,0 +1,863 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Tutorial: iterator_interface</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../stl_interfaces.html" title="Chapter 39. Boost.STLInterfaces">
+<link rel="prev" href="the__v1__and__v2__namespaces__and_the_use_of_c__20_concepts.html" title="The v1 and v2 Namespaces, and the Use of C++20 Concepts">
+<link rel="next" href="tutorial___view_interface_.html" title="Tutorial: view_interface">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="the__v1__and__v2__namespaces__and_the_use_of_c__20_concepts.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="tutorial___view_interface_.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_stlinterfaces.tutorial___iterator_interface_"></a><a class="link" href="tutorial___iterator_interface_.html" title="Tutorial: iterator_interface">Tutorial:
+    <code class="computeroutput"><span class="identifier">iterator_interface</span></code></a>
+</h2></div></div></div>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        All the member functions provided by <code class="computeroutput">iterator_interface</code> are in your
+        iterator's base class — <code class="computeroutput">iterator_interface</code> —
+        and can therefore be hidden if you define a member function with the same
+        name in your derived iterator. If you don't like the semantics of any <code class="computeroutput">iterator_interface</code>-provided
+        member function, feel free to replace it.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.h0"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___iterator_interface_.the__code__phrase_role__identifier__iterator_interface__phrase___code__template"></a></span><a class="link" href="tutorial___iterator_interface_.html#boost_stlinterfaces.tutorial___iterator_interface_.the__code__phrase_role__identifier__iterator_interface__phrase___code__template">The
+      <code class="computeroutput"><span class="identifier">iterator_interface</span></code> Template</a>
+    </h4>
+<p>
+      Though a given iterator may have a large number of operations associated with
+      it, there are only a few basis operations that the iterator needs to define;
+      the full set of operations it supports can be defined in terms of that much
+      smaller basis.
+    </p>
+<p>
+      It is possible to define any iterator <code class="computeroutput"><span class="identifier">Iter</span></code>
+      in terms of a subset of user-defined operations. By deriving <code class="computeroutput"><span class="identifier">Iter</span></code> from <code class="computeroutput">iterator_interface</code> using <a href="https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern" target="_top">CRTP</a>,
+      we can generate the full set of operations. Here is the declaration of <code class="computeroutput">iterator_interface</code>:
+    </p>
+<pre class="programlisting"><span class="keyword">template</span><span class="special">&lt;</span>
+    <span class="keyword">typename</span> <span class="identifier">Derived</span><span class="special">,</span>
+    <span class="keyword">typename</span> <span class="identifier">IteratorConcept</span><span class="special">,</span>
+    <span class="keyword">typename</span> <span class="identifier">ValueType</span><span class="special">,</span>
+    <span class="keyword">typename</span> <span class="identifier">Reference</span> <span class="special">=</span> <span class="identifier">ValueType</span> <span class="special">&amp;,</span>
+    <span class="keyword">typename</span> <span class="identifier">Pointer</span> <span class="special">=</span> <span class="identifier">ValueType</span> <span class="special">*,</span>
+    <span class="keyword">typename</span> <span class="identifier">DifferenceType</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">ptrdiff_t</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">iterator_interface</span><span class="special">;</span>
+</pre>
+<p>
+      Let's break that down.
+    </p>
+<p>
+      <code class="computeroutput"><span class="identifier">Derived</span></code> is the type that you're
+      deriving <code class="computeroutput">iterator_interface</code> from.
+    </p>
+<p>
+      <code class="computeroutput"><span class="identifier">IteratorConcept</span></code> defines the
+      iterator category/concept. This must be one of the C++ standard iterator tag
+      types, like <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">forward_iterator_tag</span></code>. In C++20 and later,
+      <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">contiguous_iterator_tag</span></code> is a valid tag to
+      use.
+    </p>
+<p>
+      <code class="computeroutput"><span class="identifier">ValueType</span></code> is used to define
+      the iterator's <code class="computeroutput"><span class="identifier">value_type</span></code> typedef.
+      Likewise, <code class="computeroutput"><span class="identifier">Reference</span></code> and <code class="computeroutput"><span class="identifier">Pointer</span></code> are used to define the iterator's
+      <code class="computeroutput"><span class="identifier">reference</span></code> and <code class="computeroutput"><span class="identifier">pointer</span></code> typedefs, respectively.
+    </p>
+<div class="tip"><table border="0" summary="Tip">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Tip]" src="../../../doc/src/images/tip.png"></td>
+<th align="left">Tip</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        <code class="computeroutput"><span class="identifier">Reference</span></code> does not need to
+        be a reference type, and <code class="computeroutput"><span class="identifier">Pointer</span></code>
+        does not need to be a pointer type. This fact is very useful when making
+        proxy iterators.
+      </p></td></tr>
+</table></div>
+<p>
+      <code class="computeroutput"><span class="identifier">DifferenceType</span></code> is used to define
+      the iterator's <code class="computeroutput"><span class="identifier">difference_type</span></code>.
+      Don't be a weirdo; just leave this as the default type, <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">ptrdiff_t</span></code>.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.h1"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___iterator_interface_.proxy_iterators"></a></span><a class="link" href="tutorial___iterator_interface_.html#boost_stlinterfaces.tutorial___iterator_interface_.proxy_iterators">Proxy
+      Iterators</a>
+    </h4>
+<p>
+      Sometimes you need to create an iterator <code class="computeroutput"><span class="identifier">I</span></code>
+      such that <code class="computeroutput"><span class="identifier">I</span><span class="special">::</span><span class="identifier">reference_type</span></code> is not a (possibly <code class="computeroutput"><span class="keyword">const</span></code>) reference to <code class="computeroutput"><span class="identifier">I</span><span class="special">::</span><span class="identifier">value_type</span></code>.
+      For instance, let's say you want to make a zip-iterator that produces pairs
+      of values from two separate underlying sequences. For sequences <code class="computeroutput"><span class="identifier">A</span></code> and <code class="computeroutput"><span class="identifier">B</span></code>,
+      with respective <code class="computeroutput"><span class="identifier">value_type</span></code>s
+      <code class="computeroutput"><span class="identifier">T</span></code> and <code class="computeroutput"><span class="identifier">U</span></code>,
+      one possible <code class="computeroutput"><span class="identifier">reference_type</span></code>
+      for a zip iterator would be <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="identifier">T</span> <span class="special">&amp;,</span> <span class="identifier">U</span> <span class="special">&amp;&gt;</span></code>
+      (this is distinct from a reference to a pair, such as <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">,</span> <span class="identifier">U</span><span class="special">&gt;</span> <span class="special">&amp;</span></code>).
+      Each such pair would contain a reference to one element from <code class="computeroutput"><span class="identifier">A</span></code> and a reference to the corresponding element
+      from <code class="computeroutput"><span class="identifier">B</span></code>.
+    </p>
+<p>
+      As another example, if you wanted an iterator <code class="computeroutput"><span class="identifier">I</span></code>
+      that represents the infinite sequence 0, 1, 2, ..., you'd be unable to form
+      a reference to most or all of those values; you'd instead produce a temporary
+      for each value as it is needed. This implies that <code class="computeroutput"><span class="identifier">I</span><span class="special">::</span><span class="identifier">value_type</span></code>
+      does not involve references at all; it may instead by <code class="computeroutput"><span class="keyword">int</span></code>
+      or <code class="computeroutput"><span class="keyword">double</span></code>.
+    </p>
+<p>
+      When defining a proxy iterator, you can use a template alias that provides
+      reasonable defaults for <code class="computeroutput">iterator_interface</code>'s parameters:
+    </p>
+<pre class="programlisting"><span class="keyword">template</span><span class="special">&lt;</span>
+    <span class="keyword">typename</span> <span class="identifier">Derived</span><span class="special">,</span>
+    <span class="keyword">typename</span> <span class="identifier">IteratorConcept</span><span class="special">,</span>
+    <span class="keyword">typename</span> <span class="identifier">ValueType</span><span class="special">,</span>
+    <span class="keyword">typename</span> <span class="identifier">Reference</span> <span class="special">=</span> <span class="identifier">ValueType</span><span class="special">,</span>
+    <span class="keyword">typename</span> <span class="identifier">DifferenceType</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">ptrdiff_t</span><span class="special">&gt;</span>
+<span class="keyword">using</span> <span class="identifier">proxy_iterator_interface</span> <span class="special">=</span> <span class="identifier">iterator_interface</span><span class="special">&lt;</span>
+    <span class="identifier">Derived</span><span class="special">,</span>
+    <span class="identifier">IteratorConcept</span><span class="special">,</span>
+    <span class="identifier">ValueType</span><span class="special">,</span>
+    <span class="identifier">Reference</span><span class="special">,</span>
+    <span class="identifier">proxy_arrow_result</span><span class="special">&lt;</span><span class="identifier">Reference</span><span class="special">&gt;,</span>
+    <span class="identifier">DifferenceType</span><span class="special">&gt;;</span>
+</pre>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        As shown above, <code class="computeroutput">proxy_iterator_interface</code> uses
+        a template called <code class="computeroutput"><span class="identifier">proxy_arrow_result</span></code>
+        as its pointer-type. This template makes a copy of whatever value is obtained
+        by <code class="computeroutput"><span class="keyword">operator</span><span class="special">*</span></code>,
+        and then returns a pointer to the copy in its <code class="computeroutput"><span class="keyword">operator</span><span class="special">-&gt;</span></code>. You may want to use something else
+        if this is a performance concern.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.h2"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___iterator_interface_.user_defined_iterator_operations"></a></span><a class="link" href="tutorial___iterator_interface_.html#boost_stlinterfaces.tutorial___iterator_interface_.user_defined_iterator_operations">User-Defined
+      Iterator Operations</a>
+    </h4>
+<p>
+      Now, let's get back to the user-defined basis operations.
+    </p>
+<p>
+      In the table below, <code class="computeroutput"><span class="identifier">Iter</span></code> is
+      a user-defined type derived from <code class="computeroutput">iterator_interface</code>; <code class="computeroutput"><span class="identifier">i</span></code> and <code class="computeroutput"><span class="identifier">i2</span></code>
+      are objects of type <code class="computeroutput"><span class="identifier">Iter</span></code>;
+      <code class="computeroutput"><span class="identifier">reference</span></code> is the type passed
+      as the <code class="computeroutput"><span class="identifier">Reference</span></code> template parameter
+      to <code class="computeroutput">iterator_interface</code>; <code class="computeroutput"><span class="identifier">pointer</span></code> is the type passed as the <code class="computeroutput"><span class="identifier">Pointer</span></code> template parameter to <code class="computeroutput">iterator_interface</code>;
+      and <code class="computeroutput"><span class="identifier">n</span></code> is a value of type <code class="computeroutput"><span class="identifier">difference_type</span></code>.
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.t0"></a><p class="title"><b>Table 39.1. User-Defined Operations</b></p>
+<div class="table-contents"><table class="table" summary="User-Defined Operations">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                Expression
+              </p>
+            </th>
+<th>
+              <p>
+                Return Type
+              </p>
+            </th>
+<th>
+              <p>
+                Semantics
+              </p>
+            </th>
+<th>
+              <p>
+                Assertion/note/pre-/post-condition
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="special">*</span><span class="identifier">i</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Convertible to <code class="computeroutput"><span class="identifier">reference</span></code>.
+              </p>
+            </td>
+<td>
+              <p>
+                Dereferences <code class="computeroutput"><span class="identifier">i</span></code> and
+                returns the result.
+              </p>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Expects:</em></span> i is dereferenceable.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">i</span> <span class="special">==</span>
+                <span class="identifier">i2</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Contextually convertible to <code class="computeroutput"><span class="keyword">bool</span></code>.
+              </p>
+            </td>
+<td>
+              <p>
+                Returns true if and only if <code class="computeroutput"><span class="identifier">i</span></code>
+                and <code class="computeroutput"><span class="identifier">i2</span></code> refer to the
+                same value.
+              </p>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Expects:</em></span> <code class="computeroutput"><span class="special">(</span><span class="identifier">i</span><span class="special">,</span> <span class="identifier">i2</span><span class="special">)</span></code>
+                is in the domain of <code class="computeroutput"><span class="special">==</span></code>.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">i2</span> <span class="special">-</span>
+                <span class="identifier">i</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Convertible to <code class="computeroutput"><span class="identifier">difference_type</span></code>.
+              </p>
+            </td>
+<td>
+              <p>
+                Returns <code class="computeroutput"><span class="identifier">n</span></code>.
+              </p>
+            </td>
+<td>
+              <p>
+                <span class="emphasis"><em>Expects:</em></span> there exists a value <code class="computeroutput"><span class="identifier">n</span></code> of type <code class="computeroutput"><span class="identifier">difference_type</span></code>
+                such that <code class="computeroutput"><span class="identifier">i</span> <span class="special">+</span>
+                <span class="identifier">n</span> <span class="special">==</span>
+                <span class="identifier">i2</span></code>. <code class="computeroutput"><span class="identifier">i2</span>
+                <span class="special">==</span> <span class="identifier">i</span>
+                <span class="special">+</span> <span class="special">(</span><span class="identifier">i2</span> <span class="special">-</span>
+                <span class="identifier">i</span><span class="special">)</span></code>.
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="special">++</span><span class="identifier">i</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">Iter</span> <span class="special">&amp;</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Increments <code class="computeroutput"><span class="identifier">i</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="special">--</span><span class="identifier">i</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">Iter</span> <span class="special">&amp;</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Decrements <code class="computeroutput"><span class="identifier">i</span></code>.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">i</span> <span class="special">+=</span>
+                <span class="identifier">n</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">Iter</span> <span class="special">&amp;</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="identifier">difference_type</span> <span class="identifier">m</span> <span class="special">=</span> <span class="identifier">n</span><span class="special">;</span>
+<span class="keyword">if</span> <span class="special">(</span><span class="identifier">m</span> <span class="special">&gt;=</span> <span class="number">0</span><span class="special">)</span>
+  <span class="keyword">while</span> <span class="special">(</span><span class="identifier">m</span><span class="special">--)</span> <span class="special">++</span><span class="identifier">i</span><span class="special">;</span>
+<span class="keyword">else</span>
+  <span class="keyword">while</span> <span class="special">(</span><span class="identifier">m</span><span class="special">++)</span> <span class="special">--</span><span class="identifier">i</span><span class="special">;</span></pre>
+<p>
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="tip"><table border="0" summary="Tip">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Tip]" src="../../../doc/src/images/tip.png"></td>
+<th align="left">Tip</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        The table above leaves a lot of implementation freedom. In <code class="computeroutput"><span class="keyword">operator</span><span class="special">+=()</span></code>,
+        you could take <code class="computeroutput"><span class="identifier">n</span></code> as a value
+        or as a reference; <code class="computeroutput"><span class="keyword">operator</span><span class="special">-()</span></code> can return a <code class="computeroutput"><span class="identifier">difference_type</span></code>
+        or just something convertible to one; etc. In particular, your operations
+        can be <code class="computeroutput"><span class="keyword">constexpr</span></code> or <code class="computeroutput"><span class="keyword">noexcept</span></code> as you see fit.
+      </p></td></tr>
+</table></div>
+<p>
+      Not all the iterator concepts require all the operations above. Here are the
+      operations used with each iterator concept:
+    </p>
+<div class="table">
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.t1"></a><p class="title"><b>Table 39.2. Operations Required for Each Concept</b></p>
+<div class="table-contents"><table class="table" summary="Operations Required for Each Concept">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                Concept
+              </p>
+            </th>
+<th>
+              <p>
+                Operations
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">input_iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="special">*</span><span class="identifier">i</span>
+<span class="identifier">i</span> <span class="special">==</span> <span class="identifier">i2</span>
+<span class="special">++</span><span class="identifier">i</span></pre>
+<p>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">output_iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="special">*</span><span class="identifier">i</span>
+<span class="special">++</span><span class="identifier">i</span></pre>
+<p>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">forward_iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="special">*</span><span class="identifier">i</span>
+<span class="identifier">i</span> <span class="special">==</span> <span class="identifier">i2</span>
+<span class="special">++</span><span class="identifier">i</span></pre>
+<p>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">bidirectional_iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="special">*</span><span class="identifier">i</span>
+<span class="identifier">i</span> <span class="special">==</span> <span class="identifier">i2</span>
+<span class="special">++</span><span class="identifier">i</span>
+<span class="special">--</span><span class="identifier">i</span></pre>
+<p>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">random_access_iterator</span></code>/<code class="computeroutput"><span class="identifier">continguous_iterator</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+</p>
+<pre class="programlisting"><span class="special">*</span><span class="identifier">i</span>
+<span class="identifier">i</span> <span class="special">-</span> <span class="identifier">i2</span>
+<span class="identifier">i</span> <span class="special">+=</span> <span class="identifier">n</span></pre>
+<p>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        For <code class="computeroutput"><span class="identifier">random_access_iterator</span></code>s,
+        the operation <code class="computeroutput"><span class="identifier">i</span> <span class="special">-</span>
+        <span class="identifier">i2</span></code> is used to provide all the relational
+        operators, including <code class="computeroutput"><span class="keyword">operator</span><span class="special">==()</span></code> and <code class="computeroutput"><span class="keyword">operator</span><span class="special">!=()</span></code>. If you are defining an iterator over
+        a discontiguous sequence (e.g. <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">deque</span></code>),
+        this implementation of <code class="computeroutput"><span class="keyword">operator</span><span class="special">==()</span></code> may not be optimal. In this case, provide
+        your own <code class="computeroutput"><span class="keyword">operator</span><span class="special">==()</span></code>.
+        <code class="computeroutput"><span class="keyword">operator</span><span class="special">!=()</span></code>
+        will be provided if <code class="computeroutput"><span class="keyword">operator</span><span class="special">==</span></code> is available.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.h3"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___iterator_interface_.an_important_note_about__code__phrase_role__keyword__operator__phrase__phrase_role__special________phrase___code__and__code__phrase_role__keyword__operator__phrase__phrase_role__special________phrase___code_"></a></span><a class="link" href="tutorial___iterator_interface_.html#boost_stlinterfaces.tutorial___iterator_interface_.an_important_note_about__code__phrase_role__keyword__operator__phrase__phrase_role__special________phrase___code__and__code__phrase_role__keyword__operator__phrase__phrase_role__special________phrase___code_">An
+      Important Note About <code class="computeroutput"><span class="keyword">operator</span><span class="special">++()</span></code> and <code class="computeroutput"><span class="keyword">operator</span><span class="special">--()</span></code></a>
+    </h4>
+<p>
+      There's a wrinkle in this way of doing things. When you define <code class="computeroutput"><span class="keyword">operator</span><span class="special">++()</span></code>
+      in your iterator type <code class="computeroutput"><span class="identifier">Derived</span></code>,
+      <code class="computeroutput">iterator_interface</code> defines post-increment,
+      <code class="computeroutput"><span class="keyword">operator</span><span class="special">++(</span><span class="keyword">int</span><span class="special">)</span></code>. But since
+      <code class="computeroutput"><span class="identifier">Derived</span></code> has an <code class="computeroutput"><span class="keyword">operator</span><span class="special">++</span></code> and
+      so does its base class <code class="computeroutput">iterator_interface</code>, the one in
+      <code class="computeroutput"><span class="identifier">Derived</span></code> <span class="bold"><strong>hides</strong></span>
+      the one in <code class="computeroutput">iterator_interface</code>.
+    </p>
+<p>
+      So, you need to add a using declaration that makes the <code class="computeroutput"><span class="keyword">operator</span><span class="special">++</span></code> from the base class visible in the derived
+      class. For instance, in the <code class="computeroutput"><span class="identifier">node_iterator</span></code>
+      example there are these lines:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="keyword">using</span> <span class="identifier">base_type</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span>
+    <span class="identifier">iterator_interface</span><span class="special">&lt;</span><span class="identifier">node_iterator</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">forward_iterator_tag</span><span class="special">,</span> <span class="identifier">T</span><span class="special">&gt;;</span>
+<span class="keyword">using</span> <span class="identifier">base_type</span><span class="special">::</span><span class="keyword">operator</span><span class="special">++;</span>
+</pre>
+<p>
+    </p>
+<div class="important"><table border="0" summary="Important">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Important]" src="../../../doc/src/images/important.png"></td>
+<th align="left">Important</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        All of the above applies to <code class="computeroutput"><span class="keyword">operator</span><span class="special">--</span></code>. So, for bidirectional iterators, you need
+        to add a line like <code class="computeroutput"><span class="keyword">using</span> <span class="identifier">base_type</span><span class="special">::</span><span class="keyword">operator</span><span class="special">--;</span></code> as well.
+      </p></td></tr>
+</table></div>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        These using declarations are not necessary for a random access iterator,
+        because <code class="computeroutput"><span class="identifier">Derived</span></code> does not
+        have an <code class="computeroutput"><span class="keyword">operator</span><span class="special">++()</span></code>
+        in that case.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.h4"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___iterator_interface_.putting_it_all_together"></a></span><a class="link" href="tutorial___iterator_interface_.html#boost_stlinterfaces.tutorial___iterator_interface_.putting_it_all_together">Putting
+      it All Together</a>
+    </h4>
+<p>
+      Ok, let's actually define a simple iterator. Let's say you need to interact
+      with some legacy code that has a hand-written linked list:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">T</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">node</span>
+<span class="special">{</span>
+    <span class="identifier">T</span> <span class="identifier">value_</span><span class="special">;</span>
+    <span class="identifier">node</span> <span class="special">*</span> <span class="identifier">next_</span><span class="special">;</span> <span class="comment">// == nullptr in the tail node</span>
+<span class="special">};</span>
+</pre>
+<p>
+    </p>
+<p>
+      We can't change this code to use <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">list</span></code>, but
+      it would be nice to be able to reuse all of the standard algorithms with this
+      type. Defining an iterator will get us there.
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">T</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">node_iterator</span>
+    <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span>
+          <span class="identifier">iterator_interface</span><span class="special">&lt;</span><span class="identifier">node_iterator</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">forward_iterator_tag</span><span class="special">,</span> <span class="identifier">T</span><span class="special">&gt;</span>
+</pre>
+<p>
+    </p>
+<p>
+      We are deriving <code class="computeroutput"><span class="identifier">node_iterator</span></code>
+      from <code class="computeroutput">iterator_interface</code>, and because
+      we're using <a href="https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern" target="_top">CRTP</a>,
+      we first have to pass <code class="computeroutput"><span class="identifier">node_iterator</span></code>
+      for the <code class="computeroutput"><span class="identifier">Derived</span></code> template parameter,
+      so that <code class="computeroutput">iterator_interface</code> knows what
+      derived type to cast to in order to get at the user-defined operations. Then,
+      we pass <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">forward_iterator_tag</span></code> for <code class="computeroutput"><span class="identifier">IteratorConcept</span></code>,
+      since that's appropriate for a singly-linked list. Finally, we pass <code class="computeroutput"><span class="identifier">T</span></code> to let <code class="computeroutput">iterator_interface</code> know what
+      the <code class="computeroutput"><span class="identifier">value_type</span></code> is for our iterator.
+    </p>
+<p>
+      We leave the rest of the template parameters at their defaults: <code class="computeroutput"><span class="identifier">T</span> <span class="special">&amp;</span></code> for
+      <code class="computeroutput"><span class="identifier">Reference</span></code>, <code class="computeroutput"><span class="identifier">T</span>
+      <span class="special">*</span></code> for <code class="computeroutput"><span class="identifier">Pointer</span></code>,
+      and <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">ptrdiff_t</span></code> for <code class="computeroutput"><span class="identifier">DifferenceType</span></code>.
+      This is what you will do for almost all iterators. The most common exceptions
+      to this are usually some kind of proxy iterator. Another exception is when
+      for better code generation you want to return builtin values instead of references
+      for constant iterators. To see an example of the latter, see the <code class="computeroutput"><span class="identifier">repeated_chars_iterator</span></code> in the introduction;
+      it's <code class="computeroutput"><span class="identifier">Reference</span></code> template parameter
+      is <code class="computeroutput"><span class="keyword">char</span></code> for this reason.
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="keyword">constexpr</span> <span class="identifier">node_iterator</span><span class="special">()</span> <span class="keyword">noexcept</span> <span class="special">:</span> <span class="identifier">it_</span><span class="special">(</span><span class="keyword">nullptr</span><span class="special">)</span> <span class="special">{}</span>
+<span class="keyword">constexpr</span> <span class="identifier">node_iterator</span><span class="special">(</span><span class="identifier">node</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;</span> <span class="special">*</span> <span class="identifier">it</span><span class="special">)</span> <span class="keyword">noexcept</span> <span class="special">:</span> <span class="identifier">it_</span><span class="special">(</span><span class="identifier">it</span><span class="special">)</span> <span class="special">{}</span>
+</pre>
+<p>
+    </p>
+<p>
+      Next, we define two constructors: a default constructor, and one that takes
+      a <code class="computeroutput"><span class="identifier">node</span></code> pointer. A default constructor
+      is required by the <code class="computeroutput"><span class="identifier">forward_iterator</span></code>
+      concept, but <code class="computeroutput">iterator_interface</code> cannot supply
+      this, since constructors are not visible in derived types without user intervention.
+    </p>
+<div class="important"><table border="0" summary="Important">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Important]" src="../../../doc/src/images/important.png"></td>
+<th align="left">Important</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        A default constructor is required for every iterator concept.
+      </p></td></tr>
+</table></div>
+<p>
+</p>
+<pre class="programlisting"><span class="keyword">constexpr</span> <span class="identifier">T</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">*()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">it_</span><span class="special">-&gt;</span><span class="identifier">value_</span><span class="special">;</span> <span class="special">}</span>
+<span class="keyword">constexpr</span> <span class="identifier">node_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">++()</span> <span class="keyword">noexcept</span>
+<span class="special">{</span>
+    <span class="identifier">it_</span> <span class="special">=</span> <span class="identifier">it_</span><span class="special">-&gt;</span><span class="identifier">next_</span><span class="special">;</span>
+    <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+<span class="special">}</span>
+<span class="keyword">friend</span> <span class="keyword">constexpr</span> <span class="keyword">bool</span>
+<span class="keyword">operator</span><span class="special">==(</span><span class="identifier">node_iterator</span> <span class="identifier">lhs</span><span class="special">,</span> <span class="identifier">node_iterator</span> <span class="identifier">rhs</span><span class="special">)</span> <span class="keyword">noexcept</span>
+<span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">lhs</span><span class="special">.</span><span class="identifier">it_</span> <span class="special">==</span> <span class="identifier">rhs</span><span class="special">.</span><span class="identifier">it_</span><span class="special">;</span>
+<span class="special">}</span>
+</pre>
+<p>
+    </p>
+<p>
+      Next, we define the user-defined operations that <code class="computeroutput">iterator_interface</code> requires to
+      do its work. As you might expect, the three required operations are very straightforward.
+    </p>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top">
+<p>
+        Here, I implement <code class="computeroutput"><span class="keyword">operator</span><span class="special">==()</span></code>
+        as a hidden friend function. it would have worked just as well if I had instead
+        implemented it as a member function, like this:
+      </p>
+<p>
+</p>
+<pre class="programlisting"><span class="keyword">constexpr</span> <span class="keyword">bool</span> <span class="keyword">operator</span><span class="special">==(</span><span class="identifier">node_iterator</span> <span class="identifier">rhs</span><span class="special">)</span> <span class="keyword">const</span> <span class="keyword">noexcept</span>
+<span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">it_</span> <span class="special">==</span> <span class="identifier">rhs</span><span class="special">.</span><span class="identifier">it_</span><span class="special">;</span>
+<span class="special">}</span></pre>
+<p>
+      </p>
+<p>
+        Either of these forms works, since <code class="computeroutput">iterator_interface</code> is concept-based
+        — the appropriate expressions need to be well-formed for the <code class="computeroutput">iterator_interface</code>
+        tempalte to do its work.
+      </p>
+</td></tr>
+</table></div>
+<p>
+      Finally, we need a using declaration to make <code class="computeroutput"><span class="identifier">iterator_interface</span><span class="special">::</span><span class="keyword">operator</span><span class="special">++(</span><span class="keyword">int</span><span class="special">)</span></code> visible:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="keyword">using</span> <span class="identifier">base_type</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span>
+    <span class="identifier">iterator_interface</span><span class="special">&lt;</span><span class="identifier">node_iterator</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">forward_iterator_tag</span><span class="special">,</span> <span class="identifier">T</span><span class="special">&gt;;</span>
+<span class="keyword">using</span> <span class="identifier">base_type</span><span class="special">::</span><span class="keyword">operator</span><span class="special">++;</span>
+</pre>
+<p>
+    </p>
+<p>
+      Here's how we might use the forward iterator we just defined:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="identifier">node_iterator</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="keyword">const</span> <span class="identifier">first</span><span class="special">(&amp;</span><span class="identifier">nodes</span><span class="special">[</span><span class="number">0</span><span class="special">]);</span>
+<span class="identifier">node_iterator</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="keyword">const</span> <span class="identifier">last</span><span class="special">;</span>
+<span class="keyword">for</span> <span class="special">(</span><span class="keyword">auto</span> <span class="identifier">it</span> <span class="special">=</span> <span class="identifier">first</span><span class="special">;</span> <span class="identifier">it</span> <span class="special">!=</span> <span class="identifier">last</span><span class="special">;</span> <span class="identifier">it</span><span class="special">++)</span> <span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">cout</span> <span class="special">&lt;&lt;</span> <span class="special">*</span><span class="identifier">it</span> <span class="special">&lt;&lt;</span> <span class="string">" "</span><span class="special">;</span> <span class="comment">// Prints 0 1 2 3 4</span>
+<span class="special">}</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">cout</span> <span class="special">&lt;&lt;</span> <span class="string">"\n"</span><span class="special">;</span>
+</pre>
+<p>
+    </p>
+<h4>
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.h5"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___iterator_interface_.what_about_adapting_an_existing_iterator_"></a></span><a class="link" href="tutorial___iterator_interface_.html#boost_stlinterfaces.tutorial___iterator_interface_.what_about_adapting_an_existing_iterator_">What
+      About Adapting an Existing Iterator?</a>
+    </h4>
+<p>
+      So glad you asked. If you want to make something like a filtering iterator,
+      or say a UTF-8 to UTF-32 transcoding iterator, you are starting with an existing
+      iterator and adapting it. There's a way to avoid having to write all of the
+      user-defined basis functions, as long as there's a base iterator that already
+      has the right operations with the right semantics.
+    </p>
+<p>
+      For example, consider an iterator that contains a pointer to an array of <code class="computeroutput"><span class="keyword">int</span></code>, and predicate of type <code class="computeroutput"><span class="identifier">Pred</span></code>.
+      It filters out integers that do not meet the predicate. Since we are using
+      an existing iterator (the pointer to <code class="computeroutput"><span class="keyword">int</span></code>),
+      we already have all the operations we need for a bidirectional iterator (and
+      more), except that <code class="computeroutput"><span class="keyword">operator</span><span class="special">++</span></code>
+      on an <code class="computeroutput"><span class="keyword">int</span> <span class="special">*</span></code>
+      does not skip over elements as we'd like. Here's the code:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Pred</span><span class="special">&gt;</span>
+<span class="keyword">struct</span> <span class="identifier">filtered_int_iterator</span> <span class="special">:</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">iterator_interface</span><span class="special">&lt;</span>
+                                   <span class="identifier">filtered_int_iterator</span><span class="special">&lt;</span><span class="identifier">Pred</span><span class="special">&gt;,</span>
+                                   <span class="identifier">std</span><span class="special">::</span><span class="identifier">bidirectional_iterator_tag</span><span class="special">,</span>
+                                   <span class="keyword">int</span><span class="special">&gt;</span>
+<span class="special">{</span>
+    <span class="identifier">filtered_int_iterator</span><span class="special">()</span> <span class="special">:</span> <span class="identifier">it_</span><span class="special">(</span><span class="keyword">nullptr</span><span class="special">)</span> <span class="special">{}</span>
+    <span class="identifier">filtered_int_iterator</span><span class="special">(</span><span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it</span><span class="special">,</span> <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">last</span><span class="special">,</span> <span class="identifier">Pred</span> <span class="identifier">pred</span><span class="special">)</span> <span class="special">:</span>
+        <span class="identifier">it_</span><span class="special">(</span><span class="identifier">it</span><span class="special">),</span>
+        <span class="identifier">last_</span><span class="special">(</span><span class="identifier">last</span><span class="special">),</span>
+        <span class="identifier">pred_</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">pred</span><span class="special">))</span>
+    <span class="special">{</span>
+        <span class="comment">// We need to do this in the constructor so that operator== works</span>
+        <span class="comment">// properly on two filtered_int_iterators, when they bound a sequence</span>
+        <span class="comment">// in which none of the ints meets the predicate.</span>
+        <span class="identifier">it_</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">find_if</span><span class="special">(</span><span class="identifier">it_</span><span class="special">,</span> <span class="identifier">last_</span><span class="special">,</span> <span class="identifier">pred_</span><span class="special">);</span>
+    <span class="special">}</span>
+
+    <span class="comment">// A bidirectional iterator based on iterator_interface usually required</span>
+    <span class="comment">// four user-defined operations.  since we are adapting an existing</span>
+    <span class="comment">// iterator (an int *), we only need to define this one.  The others are</span>
+    <span class="comment">// implemented by iterator_interface, using the underlying int *.</span>
+    <span class="identifier">filtered_int_iterator</span> <span class="special">&amp;</span> <span class="keyword">operator</span><span class="special">++()</span>
+    <span class="special">{</span>
+        <span class="identifier">it_</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">find_if</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">next</span><span class="special">(</span><span class="identifier">it_</span><span class="special">),</span> <span class="identifier">last_</span><span class="special">,</span> <span class="identifier">pred_</span><span class="special">);</span>
+        <span class="keyword">return</span> <span class="special">*</span><span class="keyword">this</span><span class="special">;</span>
+    <span class="special">}</span>
+
+    <span class="comment">// It is really common for iterator adaptors to have a base() member</span>
+    <span class="comment">// function that returns the adapted iterator.</span>
+    <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">base</span><span class="special">()</span> <span class="keyword">const</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">it_</span><span class="special">;</span> <span class="special">}</span>
+
+<span class="keyword">private</span><span class="special">:</span>
+    <span class="comment">// Provide access to these private members.</span>
+    <span class="keyword">friend</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">access</span><span class="special">;</span>
+
+    <span class="comment">// These functions are picked up by iterator_interface, and used to</span>
+    <span class="comment">// implement any operations that you don't define above.  They're not</span>
+    <span class="comment">// called base() so that they do not collide with the base() member above.</span>
+    <span class="comment">//</span>
+    <span class="comment">// Note that the const overload does not strictly speaking need to be a</span>
+    <span class="comment">// reference, as demonstrated here.</span>
+    <span class="keyword">constexpr</span> <span class="keyword">int</span> <span class="special">*&amp;</span> <span class="identifier">base_reference</span><span class="special">()</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">it_</span><span class="special">;</span> <span class="special">}</span>
+    <span class="keyword">constexpr</span> <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">base_reference</span><span class="special">()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span> <span class="special">{</span> <span class="keyword">return</span> <span class="identifier">it_</span><span class="special">;</span> <span class="special">}</span>
+
+    <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it_</span><span class="special">;</span>
+    <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">last_</span><span class="special">;</span>
+    <span class="identifier">Pred</span> <span class="identifier">pred_</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="comment">// A make-function makes it easier to deal with the Pred parameter.</span>
+<span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">Pred</span><span class="special">&gt;</span>
+<span class="keyword">auto</span> <span class="identifier">make_filtered_int_iterator</span><span class="special">(</span><span class="keyword">int</span> <span class="special">*</span> <span class="identifier">it</span><span class="special">,</span> <span class="keyword">int</span> <span class="special">*</span> <span class="identifier">last</span><span class="special">,</span> <span class="identifier">Pred</span> <span class="identifier">pred</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">filtered_int_iterator</span><span class="special">&lt;</span><span class="identifier">Pred</span><span class="special">&gt;(</span><span class="identifier">it</span><span class="special">,</span> <span class="identifier">last</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">pred</span><span class="special">));</span>
+<span class="special">}</span>
+</pre>
+<p>
+    </p>
+<p>
+      So, all we had to do was let <code class="computeroutput">iterator_interface</code> know that
+      there was an underlying iterator it could use — by implementing <code class="computeroutput"><span class="identifier">base_reference</span><span class="special">()</span></code>
+      — and the operations that we did not define got defined for us by <code class="computeroutput">iterator_interface</code>.
+    </p>
+<p>
+      Here is the iterator in action:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="number">8</span><span class="special">&gt;</span> <span class="identifier">ints</span> <span class="special">=</span> <span class="special">{{</span><span class="number">0</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">2</span><span class="special">,</span> <span class="number">3</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">6</span><span class="special">,</span> <span class="number">7</span><span class="special">}};</span>
+<span class="keyword">int</span> <span class="special">*</span> <span class="keyword">const</span> <span class="identifier">ints_first</span> <span class="special">=</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">();</span>
+<span class="keyword">int</span> <span class="special">*</span> <span class="keyword">const</span> <span class="identifier">ints_last</span> <span class="special">=</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">data</span><span class="special">()</span> <span class="special">+</span> <span class="identifier">ints</span><span class="special">.</span><span class="identifier">size</span><span class="special">();</span>
+
+<span class="keyword">auto</span> <span class="identifier">even</span> <span class="special">=</span> <span class="special">[](</span><span class="keyword">int</span> <span class="identifier">x</span><span class="special">)</span> <span class="special">{</span> <span class="keyword">return</span> <span class="special">(</span><span class="identifier">x</span> <span class="special">%</span> <span class="number">2</span><span class="special">)</span> <span class="special">==</span> <span class="number">0</span><span class="special">;</span> <span class="special">};</span>
+<span class="keyword">auto</span> <span class="identifier">first</span> <span class="special">=</span> <span class="identifier">make_filtered_int_iterator</span><span class="special">(</span><span class="identifier">ints_first</span><span class="special">,</span> <span class="identifier">ints_last</span><span class="special">,</span> <span class="identifier">even</span><span class="special">);</span>
+<span class="keyword">auto</span> <span class="identifier">last</span> <span class="special">=</span> <span class="identifier">make_filtered_int_iterator</span><span class="special">(</span><span class="identifier">ints_last</span><span class="special">,</span> <span class="identifier">ints_last</span><span class="special">,</span> <span class="identifier">even</span><span class="special">);</span>
+
+<span class="comment">// This is an example only.  Obviously, we could have called</span>
+<span class="comment">// std::copy_if() here.</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span> <span class="identifier">ints_copy</span><span class="special">;</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">back_inserter</span><span class="special">(</span><span class="identifier">ints_copy</span><span class="special">));</span>
+<span class="identifier">assert</span><span class="special">(</span><span class="identifier">ints_copy</span> <span class="special">==</span> <span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;{</span><span class="number">0</span><span class="special">,</span> <span class="number">2</span><span class="special">,</span> <span class="number">4</span><span class="special">,</span> <span class="number">6</span><span class="special">}));</span>
+</pre>
+<p>
+    </p>
+<h4>
+<a name="boost_stlinterfaces.tutorial___iterator_interface_.h6"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.tutorial___iterator_interface_.checking_your_work"></a></span><a class="link" href="tutorial___iterator_interface_.html#boost_stlinterfaces.tutorial___iterator_interface_.checking_your_work">Checking
+      Your Work</a>
+    </h4>
+<p>
+      Boost.STLInterfaces is able to check that some of the code that you write is
+      compatible with the concept for the iterator you're writing. It cannot check
+      everything. For instance, Boost.STLInterfaces does not know if your derived
+      type includes a default constructor, which is required by all the iterators.
+      In particular, <code class="computeroutput">iterator_interface</code> cannot <code class="computeroutput"><span class="keyword">static_assert</span></code> on the wellformedness of <code class="computeroutput"><span class="identifier">Derived</span><span class="special">()</span></code>,
+      since <code class="computeroutput"><span class="identifier">Derived</span></code> is an incomplete
+      type within the body of <code class="computeroutput">iterator_interface</code> —
+      <code class="computeroutput">iterator_interface</code> is the base
+      class for <code class="computeroutput"><span class="identifier">Derived</span></code>, not the
+      other way round.
+    </p>
+<p>
+      Since you can easily <code class="computeroutput"><span class="keyword">static_assert</span></code>
+      that a type models a given concept, a good practice is to put such a <code class="computeroutput"><span class="keyword">static_assert</span></code> after you define your iterator
+      type.
+    </p>
+<p>
+      For instance, after <code class="computeroutput"><span class="identifier">node_iterator</span></code>
+      you'll find this code:
+    </p>
+<p>
+</p>
+<pre class="programlisting"><span class="comment">// static_assert(std::forward_iterator&lt;node_iterator&gt;, ""), or nothing in</span>
+<span class="comment">// C++17 and earlier.</span>
+<span class="identifier">BOOST_STL_INTERFACES_STATIC_ASSERT_CONCEPT</span><span class="special">(</span>
+    <span class="identifier">node_iterator</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">forward_iterator</span><span class="special">)</span>
+</pre>
+<p>
+    </p>
+<p>
+      Consider this good code hygiene. Without this simple check, you'll probably
+      eventually find yourself looking at an error message with a very long template
+      instantiation stack.
+    </p>
+<p>
+      There's also a macro that can help you check that <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">iterator_traits</span></code>
+      is well-formed and provides the correct types. See <code class="computeroutput"><a class="link" href="../BOOST_STL__1_3_40_12_2_4_3.html" title="Macro BOOST_STL_INTERFACES_STATIC_ASSERT_ITERATOR_TRAITS">BOOST_STL_INTERFACES_STATIC_ASSERT_ITERATOR_TRAITS</a></code>.
+    </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2019 T. Zachary Laine<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="the__v1__and__v2__namespaces__and_the_use_of_c__20_concepts.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="tutorial___view_interface_.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

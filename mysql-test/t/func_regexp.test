@@ -16,8 +16,9 @@ set names latin1;
 
 create table t1 (xxx char(128));
 insert into t1 (xxx) values('this is a test of some long text to see what happens');
+analyze table t1;
 select * from t1 where xxx regexp('is a test of some long text to');
-explain extended select * from t1 where xxx regexp('is a test of some long text to');
+explain select * from t1 where xxx regexp('is a test of some long text to');
 select * from t1 where xxx regexp('is a test of some long text to ');
 select * from t1 where xxx regexp('is a test of some long text to s');
 select * from t1 where xxx regexp('is a test of some long text to se');
@@ -25,12 +26,17 @@ drop table t1;
 
 create table t1 (xxx char(128));
 insert into t1 (xxx) values('this is some text: to test - out.reg exp (22/45)');
+--error ER_REGEXP_MISSING_CLOSE_BRACKET
 select * from t1 where xxx REGEXP '^this is some text: to test - out\\.reg exp [[(][0-9]+[/\\][0-9]+[])][ ]*$';
 drop table t1;
 
 #
 # Check with different character sets and collations
 #
+--echo # The Henry Spencer library used prior to ICU was inonsistent
+--echo # here. When the regular expression search is performed in a
+--echo # case-insensitive manner, both '[[:lower:]]' and '[[:upper:]]'
+--echo # will match.
 select _latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin;
 select _koi8r  0xFF regexp _koi8r  '[[:lower:]]' COLLATE koi8r_bin;
 select _latin1 0xFF regexp _latin1 '[[:upper:]]' COLLATE latin1_bin;
@@ -69,9 +75,12 @@ SELECT 1 REGEXP NULL;
 # Bug #39021: SELECT REGEXP BINARY NULL never returns
 #
 
+--error ER_CHARACTER_SET_MISMATCH
 SELECT '' REGEXP BINARY NULL;
 SELECT NULL REGEXP BINARY NULL;
+--error ER_CHARACTER_SET_MISMATCH
 SELECT 'A' REGEXP BINARY NULL;
+--error ER_CHARACTER_SET_MISMATCH
 SELECT "ABC" REGEXP BINARY NULL;
 
 --echo End of 5.0 tests
@@ -106,3 +115,65 @@ SELECT '\t' REGEXP '[[:blank:]]';
 
 SELECT ' '  REGEXP '[[:space:]]';
 SELECT '\t' REGEXP '[[:space:]]';
+
+--echo #
+--echo # Bug#22836180: REGEXP, ASSERTION FAILED: !THD->IS_ERROR()
+--echo # IN SETUP_FIELDS()
+--echo #
+
+--error ER_WRONG_ARGUMENTS
+DO 1 regexp (multilinestring(point(1,1)));
+
+--echo #
+--echo # Bug#58026: massive recursion and crash in regular expression handling
+--echo #
+
+--disable_result_log
+--error ER_REGEXP_INTERNAL_ERROR
+SELECT '1' RLIKE RPAD('1', 10000, '(');
+--enable_result_log
+
+--echo # Bug#33089668: Calling regexp_instr() with NULL causes all
+--echo #               further calls of it to return NULL
+
+SELECT REGEXP_INSTR(e, 'pattern')
+FROM (VALUES ROW('Find pattern'), ROW(NULL), ROW('Find pattern')) AS v(e);
+
+SELECT REGEXP_LIKE(e, 'pattern')
+FROM (VALUES ROW('Find pattern'), ROW(NULL), ROW('Find pattern')) AS v(e);
+
+SELECT REGEXP_REPLACE(e, 'pattern', 'xyz')
+FROM (VALUES ROW('Find pattern'), ROW(NULL), ROW('Find pattern')) AS v(e);
+
+SELECT REGEXP_SUBSTR(e, 'pattern')
+FROM (VALUES ROW('Find pattern'), ROW(NULL), ROW('Find pattern')) AS v(e);
+
+CREATE FUNCTION r_instr(input_text VARCHAR(255)) RETURNS INT DETERMINISTIC
+    RETURN REGEXP_INSTR(input_text, 'pattern');
+SELECT r_instr('Find pattern');
+SELECT r_instr(NULL);
+SELECT r_instr('Find pattern');
+DROP FUNCTION r_instr;
+
+CREATE FUNCTION r_like(input_text VARCHAR(255)) RETURNS BOOLEAN DETERMINISTIC
+    RETURN REGEXP_LIKE(input_text, 'pattern');
+SELECT r_like('Find pattern');
+SELECT r_like(NULL);
+SELECT r_like('Find pattern');
+DROP FUNCTION r_like;
+
+CREATE FUNCTION r_replace(input_text VARCHAR(255))
+RETURNS VARCHAR(255) DETERMINISTIC
+    RETURN REGEXP_REPLACE(input_text, 'pattern', 'xyz');
+SELECT r_replace('Find pattern');
+SELECT r_replace(NULL);
+SELECT r_replace('Find pattern');
+DROP FUNCTION r_replace;
+
+CREATE FUNCTION r_substr(input_text VARCHAR(255))
+RETURNS VARCHAR(255) DETERMINISTIC
+    RETURN REGEXP_SUBSTR(input_text, 'pattern');
+SELECT r_substr('Find pattern');
+SELECT r_substr(NULL);
+SELECT r_substr('Find pattern');
+DROP FUNCTION r_substr;

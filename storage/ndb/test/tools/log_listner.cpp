@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2007, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,37 +28,30 @@
 #include <ndb_opts.h>
 #include <NDBT.hpp>
 
-static struct my_option my_long_options[] =
-{
-  NDB_STD_OPTS("eventlog"),
-  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
-};
+static struct my_option my_long_options[] = {
+    NDB_STD_OPTS("eventlog"),
+    {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}};
 
-int filter[] = { 15, NDB_MGM_EVENT_CATEGORY_BACKUP,
-		 15, NDB_MGM_EVENT_CATEGORY_CONNECTION,
-		 15, NDB_MGM_EVENT_CATEGORY_NODE_RESTART,
-		 15, NDB_MGM_EVENT_CATEGORY_STARTUP,
-		 15, NDB_MGM_EVENT_CATEGORY_SHUTDOWN,
-		 15, NDB_MGM_EVENT_CATEGORY_STATISTIC,
-		 15, NDB_MGM_EVENT_CATEGORY_ERROR,
-		 15, NDB_MGM_EVENT_CATEGORY_CHECKPOINT,
-		 15, NDB_MGM_EVENT_CATEGORY_CONGESTION,
-		 0 };
+int filter[] = {15, NDB_MGM_EVENT_CATEGORY_BACKUP,
+                15, NDB_MGM_EVENT_CATEGORY_CONNECTION,
+                15, NDB_MGM_EVENT_CATEGORY_NODE_RESTART,
+                15, NDB_MGM_EVENT_CATEGORY_STARTUP,
+                15, NDB_MGM_EVENT_CATEGORY_SHUTDOWN,
+                15, NDB_MGM_EVENT_CATEGORY_STATISTIC,
+                15, NDB_MGM_EVENT_CATEGORY_ERROR,
+                15, NDB_MGM_EVENT_CATEGORY_CHECKPOINT,
+                15, NDB_MGM_EVENT_CATEGORY_CONGESTION,
+                0};
 
-extern "C"
-void catch_signal(int signum)
-{
-}
+extern "C" void catch_signal(int signum) {}
 
-int 
-main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
   NDB_INIT(argv[0]);
-  const char *load_default_groups[]= { "mysql_cluster",0 };
-  load_defaults("my",load_default_groups,&argc,&argv);
+  Ndb_opts opts(argc, argv, my_long_options);
+
   int ho_error;
-#ifndef DBUG_OFF
-  opt_debug= "d:t:O,/tmp/eventlog.trace";
+#ifndef NDEBUG
+  opt_debug = "d:t:O,/tmp/eventlog.trace";
 #endif
 
 #ifndef _WIN32
@@ -59,44 +60,37 @@ main(int argc, char** argv)
   signal(SIGUSR1, catch_signal);
 #endif
 
-  if ((ho_error=handle_options(&argc, &argv, my_long_options, 
-			       ndb_std_get_one_option)))
+  if ((ho_error = opts.handle_options()))
     return NDBT_ProgramExit(NDBT_WRONGARGS);
 
-  NdbMgmHandle handle= ndb_mgm_create_handle();
+  NdbMgmHandle handle = ndb_mgm_create_handle();
   ndb_mgm_set_connectstring(handle, opt_ndb_connectstring);
-  
-  while (true)
-  {
-    if (ndb_mgm_connect(handle,0,0,0) == -1)
-    {
+
+  while (true) {
+    if (ndb_mgm_connect(handle, 0, 0, 0) == -1) {
       ndbout_c("Failed to connect");
       exit(0);
     }
-    
+
     NdbLogEventHandle le = ndb_mgm_create_logevent_handle(handle, filter);
-    if (le == 0)
-    {
+    if (le == 0) {
       ndbout_c("Failed to create logevent handle");
       exit(0);
     }
-    
+
     struct ndb_logevent event;
-    while (true)
-    {
-      int r= ndb_logevent_get_next(le, &event,5000);
-      if (r < 0)
-      {
-	ndbout_c("Error while getting next event");
-	break;
+    while (true) {
+      int r = ndb_logevent_get_next(le, &event, 5000);
+      if (r < 0) {
+        ndbout_c("Error while getting next event");
+        break;
       }
-      if (r == 0)
-      {
-	continue;
+      if (r == 0) {
+        continue;
       }
       ndbout_c("Got event: %d", event.type);
     }
-    
+
     ndb_mgm_destroy_logevent_handle(&le);
     ndb_mgm_disconnect(handle);
   }

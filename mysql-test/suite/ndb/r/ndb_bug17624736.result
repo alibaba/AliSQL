@@ -1,0 +1,64 @@
+create table t1 (
+a int not null,
+b int not null,
+unique key t1x1 (b) using hash,
+primary key using hash (a)
+) engine=ndb;
+create table t2 (
+a int not null,
+b int not null,
+key t2x1 (b),
+primary key using hash (a),
+constraint t2fk1 foreign key (b) references t1 (b)
+) engine=ndb;
+Expect fk and indexes to exist
+type	name
+Unique hash index	t1x1$unique
+Foreign key definition	t2fk1
+Ordered index	t2x1
+insert into t1 values (1,10),(2,20),(3,30),(4,40),(5,50);
+insert into t2 values (1,10),(2,10),(3,30),(4,50),(5,50);
+select * from t1 where b = 10 order by a;
+a	b
+1	10
+select * from t2 where b = 10 order by a;
+a	b
+1	10
+2	10
+# run restart skip indexes
+Node 1: NOT_STARTED
+Node 2: NOT_STARTED
+Node 1: STARTED
+Node 2: STARTED
+Expect neither fk or indexes since restart was without indexes
+type	name
+# run backup
+# create empty schema
+drop table t2, t1;
+create table t1 (
+a int not null,
+b int not null,
+unique key t1x1 (b) using hash,
+primary key using hash (a)
+) engine=ndb;
+create table t2 (
+a int not null,
+b int not null,
+key t2x1 (b),
+primary key using hash (a),
+constraint t2fk1 foreign key (b) references t1 (b)
+) engine=ndb;
+Expect fk and indexes to exist again
+type	name
+Unique hash index	t1x1$unique
+Foreign key definition	t2fk1
+Ordered index	t2x1
+# run restore
+select * from t1 where b = 10 order by a;
+a	b
+1	10
+select * from t2 where b = 10 order by a;
+a	b
+1	10
+2	10
+drop table t2, t1;

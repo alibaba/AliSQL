@@ -21,83 +21,141 @@ select distinct t2.i,@vv1:=if(sv1.i,1,0),@vv2:=if(sv2.i,1,0),@vv3:=if(sv3.i,1,0)
 i	@vv1:=if(sv1.i,1,0)	@vv2:=if(sv2.i,1,0)	@vv3:=if(sv3.i,1,0)	@vv1+@vv2+@vv3
 1	1	0	1	2
 2	1	0	0	1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 explain select * from t1 where i=@vv1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	i	i	4	const	1	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	i	i	4	const	2	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`i` = (@`vv1`))
 select @vv1,i,v from t1 where i=@vv1;
 @vv1	i	v
 1	1	1
 1	1	3
 explain select * from t1 where @vv1:=@vv1+1 and i=@vv1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using where
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (0 <> (@vv1:=((0 <> ((@`vv1`) + 1)) and (`test`.`t1`.`i` = (@`vv1`)))))
 explain select @vv1:=i from t1 where i=@vv1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	i	4	NULL	3	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	i	4	NULL	3	33.33	Using where; Using index
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Note	1003	/* select#1 */ select (@vv1:=`test`.`t1`.`i`) AS `@vv1:=i` from `test`.`t1` where (`test`.`t1`.`i` = (@`vv1`))
 explain select * from t1 where i=@vv1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	i	i	4	const	1	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	i	i	4	const	2	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`i` = (@`vv1`))
 drop table t1,t2;
 set @a=0,@b=0;
 select @a:=10,   @b:=1,   @a > @b, @a < @b;
 @a:=10	@b:=1	@a > @b	@a < @b
 10	1	1	0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a:="10", @b:="1", @a > @b, @a < @b;
 @a:="10"	@b:="1"	@a > @b	@a < @b
 10	1	1	0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a:=10,   @b:=2,   @a > @b, @a < @b;
 @a:=10	@b:=2	@a > @b	@a < @b
 10	2	0	1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a:="10", @b:="2", @a > @b, @a < @b;
 @a:="10"	@b:="2"	@a > @b	@a < @b
 10	2	1	0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a:=1;
 @a:=1
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a, @a:=1;
 @a	@a:=1
 1	1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 create table t1 (id int, d double, c char(10));
 insert into t1 values (1,2.0, "test");
 select @c:=0;
 @c:=0
 0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 update t1 SET id=(@c:=@c+1);
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @c;
 @c
 1
 select @c:=0;
 @c:=0
 0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 update t1 set id=(@c:=@c+1);
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @c;
 @c
 1
 select @c:=0;
 @c:=0
 0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @c:=@c+1;
 @c:=@c+1
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @d,(@d:=id),@d from t1;
 @d	(@d:=id)	@d
 NULL	1	1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @e,(@e:=d),@e from t1;
 @e	(@e:=d)	@e
 NULL	2	2
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @f,(@f:=c),@f from t1;
 @f	(@f:=c)	@f
 NULL	test	test
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 set @g=1;
 select @g,(@g:=c),@g from t1;
 @g	(@g:=c)	@g
 1	test	0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @c, @d, @e, @f;
 @c	@d	@e	@f
 1	1	2	test
 select @d:=id, @e:=id, @f:=id, @g:=@id from t1;
 @d:=id	@e:=id	@f:=id	@g:=@id
 1	1	1	NULL
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @c, @d, @e, @f, @g;
 @c	@d	@e	@f	@g
 1	1	1	1	NULL
@@ -105,35 +163,60 @@ drop table t1;
 select @a:=10, @b:=2, @a>@b, @a:="10", @b:="2", @a>@b, @a:=10, @b:=2, @a>@b, @a:="10", @b:="2", @a>@b;
 @a:=10	@b:=2	@a>@b	@a:="10"	@b:="2"	@a>@b	@a:=10	@b:=2	@a>@b	@a:="10"	@b:="2"	@a>@b
 10	2	1	10	2	1	10	2	1	10	2	1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 create table t1 (i int not null);
 insert t1 values (1),(2),(2),(3),(3),(3);
 select @a:=0;
 @a:=0
 0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a, @a:=@a+count(*), count(*), @a from t1 group by i;
 @a	@a:=@a+count(*)	count(*)	@a
 0	1	1	0
 0	2	2	0
 0	3	3	0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a:=0;
 @a:=0
 0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a+0, @a:=@a+0+count(*), count(*), @a+0 from t1 group by i;
 @a+0	@a:=@a+0+count(*)	count(*)	@a+0
 0	1	1	0
 0	2	2	0
 0	3	3	0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 set @a=0;
 select @a,@a:="hello",@a,@a:=3,@a,@a:="hello again" from t1 group by i;
 @a	@a:="hello"	@a	@a:=3	@a	@a:="hello again"
 0	hello	0	3	0	hello again
 0	hello	0	3	0	hello again
 0	hello	0	3	0	hello again
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a,@a:="hello",@a,@a:=3,@a,@a:="hello again" from t1 group by i;
 @a	@a:="hello"	@a	@a:=3	@a	@a:="hello again"
 hello again	hello	hello again	3	hello again	hello again
 hello again	hello	hello again	3	hello again	hello again
 hello again	hello	hello again	3	hello again	hello again
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 drop table t1;
 set @a=_latin2'test';
 select charset(@a),collation(@a),coercibility(@a);
@@ -158,27 +241,41 @@ select @a=_latin2'TEST' collate latin2_bin;
 select charset(@a:=_latin2'test');
 charset(@a:=_latin2'test')
 latin2
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select collation(@a:=_latin2'test');
 collation(@a:=_latin2'test')
 latin2_general_ci
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select coercibility(@a:=_latin2'test');
 coercibility(@a:=_latin2'test')
 2
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select collation(@a:=_latin2'test' collate latin2_bin);
 collation(@a:=_latin2'test' collate latin2_bin)
 latin2_bin
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select coercibility(@a:=_latin2'test' collate latin2_bin);
 coercibility(@a:=_latin2'test' collate latin2_bin)
 2
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select (@a:=_latin2'test' collate latin2_bin) = _latin2'TEST';
 (@a:=_latin2'test' collate latin2_bin) = _latin2'TEST'
 0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select charset(@a),collation(@a),coercibility(@a);
 charset(@a)	collation(@a)	coercibility(@a)
 latin2	latin2_bin	2
 select (@a:=_latin2'test' collate latin2_bin) = _latin2'TEST' collate latin2_general_ci;
 (@a:=_latin2'test' collate latin2_bin) = _latin2'TEST' collate latin2_general_ci
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 set @var= NULL ;
 select FIELD( @var,'1it','Hit') as my_column;
 my_column
@@ -220,23 +317,23 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `@first_var` longblob
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 set @first_var= cast(NULL as signed integer);
 create table t1 select @first_var;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `@first_var` bigint(20) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `@first_var` bigint DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 set @first_var= NULL;
 create table t1 select @first_var;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `@first_var` bigint(20) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `@first_var` bigint DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 set @first_var= concat(NULL);
 create table t1 select @first_var;
@@ -244,7 +341,7 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `@first_var` longblob
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 set @first_var=1;
 set @first_var= cast(NULL as CHAR);
@@ -253,7 +350,7 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `@first_var` longtext
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 set @a=18446744071710965857;
 select @a;
@@ -296,10 +393,14 @@ insert into t1 values (1,2),(2,3),(3,1);
 select @var:=f2 from t1 group by f1 order by f2 desc limit 1;
 @var:=f2
 3
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @var;
 @var
 3
 create table t2 as select @var:=f2 from t1 group by f1 order by f2 desc limit 1;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select * from t2;
 @var:=f2
 3
@@ -320,36 +421,46 @@ insert into t1 values
 (1, "a", 1.5, 1.6), (1, "a", 1.5, 1.6), (2, "b", 2.5, 2.6),
 (3, "c", 3.5, 3.6), (4, "d", 4.5, 4.6), (1, "a", 1.5, 1.6),
 (3, "c", 3.5, 3.6), (1, "a", 1.5, 1.6);
-select @a:=f1, count(f1) from t1 group by 1 desc;
+select @a:=f1, count(f1) from t1 group by 1 order by 1 desc;
 @a:=f1	count(f1)
 4	1
 3	2
 2	1
 1	4
-select @a:=f1, count(f1) from t1 group by 1 asc;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+select @a:=f1, count(f1) from t1 group by 1 order by 1 asc;
 @a:=f1	count(f1)
 1	4
 2	1
 3	2
 4	1
-select @a:=f2, count(f2) from t1 group by 1 desc;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+select @a:=f2, count(f2) from t1 group by 1 order by 1 desc;
 @a:=f2	count(f2)
 d	1
 c	2
 b	1
 a	4
-select @a:=f3, count(f3) from t1 group by 1 desc;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+select @a:=f3, count(f3) from t1 group by 1 order by 1 desc;
 @a:=f3	count(f3)
 4.5	1
 3.5	2
 2.5	1
 1.5	4
-select @a:=f4, count(f4) from t1 group by 1 desc;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+select @a:=f4, count(f4) from t1 group by 1 order by 1 desc;
 @a:=f4	count(f4)
 4.6	1
 3.6	2
 2.6	1
 1.6	4
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 drop table t1;
 create table t1 (f1 int);
 insert into t1 values (2), (1);
@@ -357,14 +468,16 @@ select @i := f1 as j from t1 order by 1;
 j
 1
 2
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 drop table t1;
 create table t1(a int);
 insert into t1 values(5),(4),(4),(3),(2),(2),(2),(1);
 set @rownum := 0;
 set @rank := 0;
 set @prev_score := NULL;
-select @rownum := @rownum + 1 as row,
-@rank := IF(@prev_score!=a, @rownum, @rank) as rank,
+select @rownum := @rownum + 1 as `row`,
+@rank := IF(@prev_score!=a, @rownum, @rank) as `rank`,
 @prev_score := a as score
 from t1 order by score desc;
 drop table t1;
@@ -376,6 +489,8 @@ if(b=@var, 999, b)	@var := b
 10	10
 999	10
 30	30
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 drop table t1;
 create temporary table t1 (id int);
 insert into t1 values (2), (3), (3), (4);
@@ -386,6 +501,8 @@ select @lastid != id, @lastid, @lastid := id from t1;
 1	2	3
 0	3	3
 1	3	4
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 drop table t1;
 create temporary table t1 (id bigint);
 insert into t1 values (2), (3), (3), (4);
@@ -396,6 +513,8 @@ select @lastid != id, @lastid, @lastid := id from t1;
 1	2	3
 0	3	3
 1	3	4
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 drop table t1;
 CREATE TABLE t1(a INT, b INT);
 INSERT INTO t1 VALUES (0, 0), (2, 1), (2, 3), (1, 1), (30, 20);
@@ -408,8 +527,18 @@ a	b
 2	3
 DROP TABLE t1;
 CREATE TABLE t1 (f1 int(11) default NULL, f2 int(11) default NULL);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE TABLE t2 (f1 int(11) default NULL, f2 int(11) default NULL, foo int(11));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE TABLE t3 (f1 int(11) default NULL, f2 int(11) default NULL);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES(10, 10);
 INSERT INTO t1 VALUES(10, 10);
 INSERT INTO t2 VALUES(10, 10, 10);
@@ -421,6 +550,8 @@ SELECT MIN(t2.f1),
 FROM t1,t2 WHERE t1.f1 = t2.f1 ORDER BY t2.f1;
 MIN(t2.f1)	@bar:= (SELECT MIN(t3.f2) FROM t3 WHERE t3.f2 > foo)
 10	NULL
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 DROP TABLE t1, t2, t3;
 End of 5.0 tests
 CREATE TABLE t1 (i INT);
@@ -435,6 +566,9 @@ SELECT (@a:=(SELECT @a:=1 FROM t1 LIMIT 1)) AND COUNT(1) FROM t1 GROUP BY @a;
 (@a:=(SELECT @a:=1 FROM t1 LIMIT 1)) AND COUNT(1)
 1
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 # BUG#55564 : should not crash
 SELECT IF(
 @v:=LEAST((SELECT 1 FROM t1 t2 LEFT JOIN t1 ON (@v) GROUP BY t1.a), a),
@@ -444,15 +578,23 @@ IF(
 @v:=LEAST((SELECT 1 FROM t1 t2 LEFT JOIN t1 ON (@v) GROUP BY t1.a), a),
 count(*), 1)
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 DROP TABLE t1;
 select @v:=@v:=sum(1) from dual;
 @v:=@v:=sum(1)
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 CREATE TABLE t1(a DECIMAL(31,21));
 INSERT INTO t1 VALUES (0);
 SELECT (@v:=a) <> (@v:=1) FROM t1;
 (@v:=a) <> (@v:=1)
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 DROP TABLE t1;
 End of 5.1 tests
 DROP TABLE IF EXISTS t1;
@@ -498,6 +640,9 @@ SELECT DISTINCT @a:=MIN(t1.a) FROM t1, t1 AS t2
 GROUP BY @b:=(SELECT COUNT(*) > t2.a);
 @a:=MIN(t1.a)
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 DROP TABLE t1;
 CREATE TABLE t1(a INT) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (0);
@@ -505,6 +650,8 @@ SELECT DISTINCT POW(COUNT(*), @a:=(SELECT 1 FROM t1 LEFT JOIN t1 AS t2 ON @a))
 AS b FROM t1 GROUP BY a;
 b
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 SELECT @a;
 @a
 1
@@ -518,6 +665,8 @@ SELECT @var:=(SELECT f2 FROM t2 WHERE @var) FROM t1 GROUP BY f1 ORDER BY f2 DESC
 LIMIT 1;
 @var:=(SELECT f2 FROM t2 WHERE @var)
 NULL
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 SELECT @var;
 @var
 NULL
@@ -529,6 +678,11 @@ INSERT INTO t2 VALUES (1), (3), (5), (7), (9);
 CREATE TABLE t3(a INT);
 INSERT INTO t3 VALUES (1), (4), (7), (10);
 SET @var1 = 6;
+ANALYZE TABLE t1,t2,t3;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
 explain format=json SELECT t1.a, t2.a, t3.a, (@var1:= @var1+0) AS var
 FROM t1
 LEFT JOIN t2 ON t1.a=t2.a AND t2.a < @var1
@@ -537,40 +691,74 @@ EXPLAIN
 {
   "query_block": {
     "select_id": 1,
+    "cost_info": {
+      "query_cost": "26.75"
+    },
     "nested_loop": [
       {
         "table": {
           "table_name": "t1",
           "access_type": "ALL",
-          "rows": 10,
-          "filtered": 100
+          "rows_examined_per_scan": 10,
+          "rows_produced_per_join": 10,
+          "filtered": "100.00",
+          "cost_info": {
+            "read_cost": "0.25",
+            "eval_cost": "1.00",
+            "prefix_cost": "1.25",
+            "data_read_per_join": "80"
+          },
+          "used_columns": [
+            "a"
+          ]
         }
       },
       {
         "table": {
           "table_name": "t2",
           "access_type": "ALL",
-          "rows": 5,
-          "filtered": 100,
-          "using_join_buffer": "Block Nested Loop",
-          "attached_condition": "<if>(is_not_null_compl(t2), ((`test`.`t1`.`a` = `test`.`t2`.`a`) and (`test`.`t2`.`a` < (@`var1`))), true)"
+          "rows_examined_per_scan": 5,
+          "rows_produced_per_join": 50,
+          "filtered": "100.00",
+          "using_join_buffer": "hash join",
+          "cost_info": {
+            "read_cost": "0.25",
+            "eval_cost": "5.00",
+            "prefix_cost": "6.50",
+            "data_read_per_join": "400"
+          },
+          "used_columns": [
+            "a"
+          ],
+          "attached_condition": "<if>(is_not_null_compl(t2), ((`test`.`t2`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`a` < (@`var1`))), true)"
         }
       },
       {
         "table": {
           "table_name": "t3",
           "access_type": "ALL",
-          "rows": 4,
-          "filtered": 100,
-          "using_join_buffer": "Block Nested Loop",
-          "attached_condition": "<if>(is_not_null_compl(t3), ((`test`.`t1`.`a` = `test`.`t3`.`a`) and (`test`.`t3`.`a` < (@`var1`))), true)"
+          "rows_examined_per_scan": 4,
+          "rows_produced_per_join": 200,
+          "filtered": "100.00",
+          "using_join_buffer": "hash join",
+          "cost_info": {
+            "read_cost": "0.25",
+            "eval_cost": "20.00",
+            "prefix_cost": "26.75",
+            "data_read_per_join": "1K"
+          },
+          "used_columns": [
+            "a"
+          ],
+          "attached_condition": "<if>(is_not_null_compl(t3), ((`test`.`t3`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`a` < (@`var1`))), true)"
         }
       }
     ]
   }
 }
 Warnings:
-Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t2`.`a` AS `a`,`test`.`t3`.`a` AS `a`,(@var1:=((@`var1`) + 0)) AS `var` from `test`.`t1` left join `test`.`t2` on(((`test`.`t1`.`a` = `test`.`t2`.`a`) and (`test`.`t2`.`a` < (@`var1`)))) left join `test`.`t3` on(((`test`.`t1`.`a` = `test`.`t3`.`a`) and (`test`.`t3`.`a` < (@`var1`)))) where 1
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t2`.`a` AS `a`,`test`.`t3`.`a` AS `a`,(@var1:=((@`var1`) + 0)) AS `var` from `test`.`t1` left join `test`.`t2` on(((`test`.`t2`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`a` < (@`var1`)))) left join `test`.`t3` on(((`test`.`t3`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`a` < (@`var1`)))) where true
 SELECT t1.a, t2.a, t3.a, (@var1:= @var1+0) AS var
 FROM t1
 LEFT JOIN t2 ON t1.a=t2.a AND t2.a < @var1
@@ -586,4 +774,322 @@ a	a	a	var
 7	NULL	NULL	6
 8	NULL	NULL	6
 9	NULL	NULL	6
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warnings:
 DROP TABLE t1, t2, t3;
+set    @X234567890123456789012345678901234567890123456789012345678901234 = 12;
+select @X234567890123456789012345678901234567890123456789012345678901234;
+@X234567890123456789012345678901234567890123456789012345678901234
+12
+set    @X2345678901234567890123456789012345678901234567890123456789012345 = 12;
+ERROR 42000: User variable name 'X2345678901234567890123456789012345678901234567890123456789012345' is illegal
+set @``= "illegal";
+ERROR 42000: User variable name '' is illegal
+set @`endswithspace `= "illegal";
+ERROR 42000: User variable name 'endswithspace ' is illegal
+select @X2345678901234567890123456789012345678901234567890123456789012345;
+@X2345678901234567890123456789012345678901234567890123456789012345
+NULL
+select @``;
+@``
+NULL
+select @`endswithspace `;
+@`endswithspace `
+NULL
+CREATE TABLE t1(a INT,KEY(a))ENGINE=INNODB;
+SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 GROUP BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col;
+col
+1
+SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 ORDER BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col;
+col
+1
+SET @c =(SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 GROUP BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col);
+SET @d =(SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 ORDER BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col);
+DROP TABLE t1;
+Bug#25727892: Refactor Item::const_item() as a non-virtual function
+Coverage for cached and non-cached user variables
+CREATE TABLE t1(a INTEGER, b INTEGER);
+INSERT INTO t1 VALUES (1,1), (1,2), (2,1);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+explain SELECT a FROM t1 WHERE a = @x;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` where (`test`.`t1`.`a` = <cache>((@`x`)))
+explain SELECT a FROM t1 WHERE a = @x AND (@x:= @x);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` where ((`test`.`t1`.`a` = (@`x`)) and (0 <> (@x:=(@`x`))))
+explain SELECT a FROM t1 WHERE a = @x INTO @x;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` where (`test`.`t1`.`a` = <cache>((@`x`)))
+SET @x= 1;
+SELECT a FROM t1 WHERE a = @x;
+a
+1
+1
+SELECT a FROM t1 WHERE a = @x AND (@x:= @x);
+a
+1
+1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+SELECT a FROM t1 WHERE a = @x INTO @x;
+ERROR 42000: Result consisted of more than one row
+SET @x= 2;
+SELECT a FROM t1 WHERE a = @x INTO @x;
+DROP TABLE t1;
+#
+# Bug#28960901: ASSERTION FAILED: (TLEN % 2) == 0
+#
+CREATE TABLE t1(a VARCHAR(10) CHARSET latin1, b VARCHAR(20) CHARSET utf16);
+INSERT INTO t1 VALUES ('a', 'abcd');
+SELECT (@x:=b) FROM t1;
+(@x:=b)
+abcd
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+SELECT * FROM t1 WHERE b = (SELECT (@x:=1) FROM t1) OR a = @x;
+a	b
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1292	Truncated incorrect DOUBLE value: ''
+SELECT (@x:=a) FROM t1;
+(@x:=a)
+a
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+SELECT * FROM t1 WHERE a = (SELECT (@x:=_utf16 0x1023) FROM t1) OR b = @x;
+ERROR HY000: Invalid latin1 character string: '\x10\x23'
+DROP TABLE t1;
+#
+# Bug#29665165: REGRESSION: SOUNDS LIKE CRASHING TO ME
+#
+SET @c := FROM_UNIXTIME(1537002029);
+DO ((@c := (_utf32' -'))) SOUNDS LIKE(@c);
+ERROR HY000: Invalid latin1 character string: '\x00\x00\x20\x2D'
+# 'Temporal = string literal' compares as temporals, but
+# 'Temporal = string user variable' compares as DOUBLE.
+# It is a behaviour change introduced by WL#6570.
+# Note that
+# https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+# suggests explicit casts as safer. Bug#90076 should fix this.
+CREATE TABLE t1 (pk INTEGER PRIMARY KEY, d DATE);
+INSERT INTO t1 VALUES(1, '2017-01-01');
+SELECT d < 00010101000000.0 AS a FROM t1;
+a
+0
+set @tsn= 00010101000000.0;
+SELECT d < @tsn AS a FROM t1;
+a
+1
+DROP TABLE t1;
+CREATE TABLE numbers
+(pk INTEGER PRIMARY KEY,
+ui BIGINT UNSIGNED,
+si BIGINT
+);
+INSERT INTO numbers VALUES
+(0, 0, -9223372036854775808), (1, 18446744073709551615, 9223372036854775807);
+SET @ui_min = CAST(0 AS UNSIGNED);
+SET @ui_max = CAST(18446744073709551615 AS UNSIGNED);
+SET @si_min = CAST(-9223372036854775808 AS SIGNED);
+SET @si_max = CAST(9223372036854775807 AS SIGNED);
+PREPARE s1 FROM 'SELECT * FROM numbers WHERE ui=?';
+PREPARE s2 FROM 'SELECT * FROM numbers WHERE si=?';
+EXECUTE s1 USING @ui_min;
+pk	ui	si
+0	0	-9223372036854775808
+EXECUTE s1 USING @ui_max;
+pk	ui	si
+1	18446744073709551615	9223372036854775807
+EXECUTE s1 USING @si_min;
+pk	ui	si
+EXECUTE s1 USING @si_max;
+pk	ui	si
+EXECUTE s2 USING @ui_min;
+pk	ui	si
+EXECUTE s2 USING @ui_max;
+pk	ui	si
+EXECUTE s2 USING @si_min;
+pk	ui	si
+0	0	-9223372036854775808
+EXECUTE s2 USING @si_max;
+pk	ui	si
+1	18446744073709551615	9223372036854775807
+DEALLOCATE PREPARE s1;
+DEALLOCATE PREPARE s2;
+DROP TABLE numbers;
+CREATE TABLE strings
+(pk INTEGER PRIMARY KEY,
+vc_ascii VARCHAR(20) COLLATE ascii_general_ci,
+vc_latin1 VARCHAR(20) COLLATE latin1_general_ci,
+vc_utf8mb4 VARCHAR(20) COLLATE utf8mb4_0900_ai_ci,
+vc_utf16 VARCHAR(20) COLLATE utf16_general_ci,
+vc_utf32 VARCHAR(20) COLLATE utf32_general_ci
+);
+SET @str_ascii=_ASCII'abcxyz';
+SET @str_utf8mb4=CONVERT(x'616263C3A6C3B8C3A578797A' USING utf8mb4);
+SET @str_latin1=CONVERT(@str_utf8mb4 USING latin1);
+SET @str_utf16=CONVERT(@str_utf8mb4 USING utf16);
+SET @str_utf32=CONVERT(@str_utf8mb4 USING utf32);
+INSERT INTO strings VALUES
+(0, @str_ascii, @str_ascii, @str_ascii, @str_ascii, @str_ascii),
+(1, @str_ascii, @str_utf8mb4, @str_utf8mb4, @str_utf8mb4, @str_utf8mb4);
+PREPARE s1 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_ascii = ?';
+PREPARE s2 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_latin1 = ?';
+PREPARE s3 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_utf8mb4 = ?';
+PREPARE s4 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_utf16 = ?';
+PREPARE s5 FROM 'SELECT HEX(vc_utf8mb4) FROM strings WHERE vc_utf32 = ?';
+EXECUTE s1 USING @str_ascii;
+HEX(vc_utf8mb4)
+61626378797A
+616263C3A6C3B8C3A578797A
+EXECUTE s1 USING @str_latin1;
+ERROR HY000: Conversion from collation latin1_swedish_ci into ascii_general_ci impossible for parameter
+EXECUTE s1 USING @str_utf8mb4;
+ERROR HY000: Conversion from collation utf8mb4_0900_ai_ci into ascii_general_ci impossible for parameter
+EXECUTE s1 USING @str_utf16;
+ERROR HY000: Conversion from collation utf16_general_ci into ascii_general_ci impossible for parameter
+EXECUTE s1 USING @str_utf32;
+ERROR HY000: Conversion from collation utf32_general_ci into ascii_general_ci impossible for parameter
+EXECUTE s2 USING @str_ascii;
+HEX(vc_utf8mb4)
+61626378797A
+EXECUTE s2 USING @str_latin1;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s2 USING @str_utf8mb4;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s2 USING @str_utf16;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s2 USING @str_utf32;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s3 USING @str_ascii;
+HEX(vc_utf8mb4)
+61626378797A
+EXECUTE s3 USING @str_latin1;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s3 USING @str_utf8mb4;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s3 USING @str_utf16;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s3 USING @str_utf32;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s4 USING @str_ascii;
+HEX(vc_utf8mb4)
+61626378797A
+EXECUTE s4 USING @str_latin1;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s4 USING @str_utf8mb4;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s4 USING @str_utf16;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s4 USING @str_utf32;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s5 USING @str_ascii;
+HEX(vc_utf8mb4)
+61626378797A
+EXECUTE s5 USING @str_latin1;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s5 USING @str_utf8mb4;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s5 USING @str_utf16;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+EXECUTE s5 USING @str_utf32;
+HEX(vc_utf8mb4)
+616263C3A6C3B8C3A578797A
+DEALLOCATE PREPARE s1;
+DEALLOCATE PREPARE s2;
+DEALLOCATE PREPARE s3;
+DEALLOCATE PREPARE s4;
+DEALLOCATE PREPARE s5;
+DROP TABLE strings;
+set @maxint=18446744073709551615;
+SELECT @maxint + 0e0;
+@maxint + 0e0
+1.8446744073709552e19
+SELECT 18446744073709551615 + 0e0;
+18446744073709551615 + 0e0
+1.8446744073709552e19
+SELECT @maxint + 0.0;
+@maxint + 0.0
+18446744073709551615.0
+SELECT 18446744073709551615 + 0.0;
+18446744073709551615 + 0.0
+18446744073709551615.0
+PREPARE s FROM 'SELECT 0e0 + ?';
+EXECUTE s USING @maxint;
+0e0 + ?
+1.8446744073709552e19
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT 0.0 + ?';
+EXECUTE s USING @maxint;
+0.0 + ?
+18446744073709551615.000000000000000000000000000000
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT 0 + ?';
+EXECUTE s USING @maxint;
+0 + ?
+18446744073709551615
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT concat(?,"")';
+EXECUTE s USING @maxint;
+concat(?,"")
+18446744073709551615
+DEALLOCATE PREPARE s;
+# Bug#31358565: Assertion `false' failed. In Item_func_get_user_var::propagate_type'
+do null not between 1 and @undefined_var;
+do null not between @undefined_var and 1;
+# Bug#28013997: Assertion failed: (slen % 4) == 0
+SET @f = _utf32 'a';
+CREATE TABLE t1 (a TIMESTAMP);
+INSERT INTO t1 VALUES ('2018-05-12 07:43:04'), ('2018-05-12 07:43:04');
+SELECT 1 FROM t1 WHERE @f<>'3761-03-28' XOR (@f:='5570-12-30') > a;
+1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+DROP TABLE t1;
+# Bug#31599885: Global-buffer-overflow in decimal_bin_size_inline
+CREATE TABLE t(a BIT(4), b INTEGER);
+SELECT AVG((@e:= a)) FROM t;
+AVG((@e:= a))
+NULL
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+SELECT AVG((@e:= a)) FROM t GROUP BY b;
+AVG((@e:= a))
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+DROP TABLE t;
+#
+# Bug #32802216: RECENT REGRESSION: PROTOCOL_TEXT::STORE_LONGLONG: ASSERTION `SEND_METADATA || FIELD_TYPES == NULLPTR || FIELD_TYPES[FIELD_POS] == MYSQL_TYPE_LONGLONG' FAILED.
+#
+CREATE TABLE t1 (a TINYINT);
+INSERT INTO t1 VALUES (1);
+SELECT (@a:=a) FROM t1 GROUP BY 1;
+(@a:=a)
+1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+DROP TABLE t1;

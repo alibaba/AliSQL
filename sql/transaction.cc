@@ -1,24 +1,84 @@
-/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include "sql/transaction.h"
 
-#include "sql_priv.h"
-#include "transaction.h"
-#include "rpl_handler.h"
-#include "debug_sync.h"         // DEBUG_SYNC
-#include "sql_acl.h"            // SUPER_ACL
+#include <stddef.h>
+
+#include "lex_string.h"
+#include "m_ctype.h"
+#include "my_compiler.h"
+#include "my_dbug.h"
+#include "my_inttypes.h"
+#include "my_loglevel.h"
+#include "my_psi_config.h"
+#include "my_sys.h"
+#include "mysql/components/services/log_builtins.h"
+#include "mysql/psi/mysql_transaction.h"
+#include "mysql_com.h"
+#include "mysqld_error.h"
+#include "sql/auth/auth_common.h"
+#include "sql/dd/cache/dictionary_client.h"
+#include "sql/debug_sync.h"  // DEBUG_SYNC
+#include "sql/handler.h"
+#include "sql/log.h"
+#include "sql/mdl.h"
+#include "sql/mysqld.h"  // opt_readonly
+#include "sql/query_options.h"
+#include "sql/rpl_context.h"
+#include "sql/rpl_gtid.h"
+#include "sql/rpl_rli.h"
+#include "sql/rpl_transaction_write_set_ctx.h"
+#include "sql/session_tracker.h"
+#include "sql/sql_class.h"  // THD
+#include "sql/sql_lex.h"
+#include "sql/system_variables.h"
+#include "sql/tc_log.h"
+#include "sql/transaction_info.h"
+#include "sql/xa.h"
+
+/**
+  Helper: Tell tracker (if any) that transaction ended.
+*/
+void trans_track_end_trx(THD *thd) {
+  TX_TRACKER_GET(tst);
+  tst->end_trx(thd);
+}
+
+/**
+  Helper: transaction ended, SET TRANSACTION one-shot variables
+  revert to session values. Let the transaction state tracker know.
+*/
+void trans_reset_one_shot_chistics(THD *thd) {
+  if (thd->variables.session_track_transaction_info > TX_TRACK_NONE) {
+    TX_TRACKER_GET(tst);
+    tst->set_read_flags(thd, TX_READ_INHERIT);
+    tst->set_isol_level(thd, TX_ISOL_INHERIT);
+  }
+
+  thd->tx_isolation = (enum_tx_isolation)thd->variables.transaction_isolation;
+  thd->tx_read_only = thd->variables.transaction_read_only;
+}
 
 /**
   Check if we have a condition where the transaction state must
@@ -26,90 +86,28 @@
   that we are not executing a stored program and that we don't
   have an active XA transaction.
 
-  @return TRUE if the commit/rollback cannot be executed,
-          FALSE otherwise.
+  @return true if the commit/rollback cannot be executed,
+          false otherwise.
 */
 
-bool trans_check_state(THD *thd)
-{
-  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
-  DBUG_ENTER("trans_check");
+bool trans_check_state(THD *thd) {
+  DBUG_TRACE;
 
   /*
     Always commit statement transaction before manipulating with
     the normal one.
   */
-  DBUG_ASSERT(thd->transaction.stmt.is_empty());
+  assert(thd->get_transaction()->is_empty(Transaction_ctx::STMT));
 
-  if (unlikely(thd->in_sub_stmt))
+  if (unlikely(thd->in_sub_stmt)) {
     my_error(ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG, MYF(0));
-  if (xa_state != XA_NOTR)
-    my_error(ER_XAER_RMFAIL, MYF(0), xa_state_names[xa_state]);
-  else
-    DBUG_RETURN(FALSE);
-
-  DBUG_RETURN(TRUE);
-}
-
-
-/**
-  Mark a XA transaction as rollback-only if the RM unilaterally
-  rolled back the transaction branch.
-
-  @note If a rollback was requested by the RM, this function sets
-        the appropriate rollback error code and transits the state
-        to XA_ROLLBACK_ONLY.
-
-  @return TRUE if transaction was rolled back or if the transaction
-          state is XA_ROLLBACK_ONLY. FALSE otherwise.
-*/
-static bool xa_trans_rolled_back(XID_STATE *xid_state)
-{
-  if (xid_state->rm_error)
-  {
-    switch (xid_state->rm_error) {
-    case ER_LOCK_WAIT_TIMEOUT:
-      my_error(ER_XA_RBTIMEOUT, MYF(0));
-      break;
-    case ER_LOCK_DEADLOCK:
-      my_error(ER_XA_RBDEADLOCK, MYF(0));
-      break;
-    default:
-      my_error(ER_XA_RBROLLBACK, MYF(0));
-    }
-    xid_state->xa_state= XA_ROLLBACK_ONLY;
-  }
-
-  return (xid_state->xa_state == XA_ROLLBACK_ONLY);
-}
-
-
-/**
-  Rollback the active XA transaction.
-
-  @note Resets rm_error before calling ha_rollback(), so
-        the thd->transaction.xid structure gets reset
-        by ha_rollback() / THD::transaction::cleanup().
-
-  @return TRUE if the rollback failed, FALSE otherwise.
-*/
-
-static bool xa_trans_force_rollback(THD *thd)
-{
-  /*
-    We must reset rm_error before calling ha_rollback(),
-    so thd->transaction.xid structure gets reset
-    by ha_rollback()/THD::transaction::cleanup().
-  */
-  thd->transaction.xid_state.rm_error= 0;
-  if (ha_rollback_trans(thd, true))
-  {
-    my_error(ER_XAER_RMERR, MYF(0));
     return true;
   }
+
+  if (thd->get_transaction()->xid_state()->check_in_xa(true)) return true;
+
   return false;
 }
-
 
 /**
   Begin a new transaction.
@@ -120,37 +118,35 @@ static bool xa_trans_force_rollback(THD *thd)
   @param thd     Current thread
   @param flags   Transaction flags
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+  @retval false  Success
+  @retval true   Failure
 */
 
-bool trans_begin(THD *thd, uint flags)
-{
-  int res= FALSE;
-  DBUG_ENTER("trans_begin");
+bool trans_begin(THD *thd, uint flags) {
+  bool res = false;
+  DBUG_TRACE;
 
-  if (trans_check_state(thd))
-    DBUG_RETURN(TRUE);
+  if (trans_check_state(thd)) return true;
+
+  TX_TRACKER_GET(tst);
 
   thd->locked_tables_list.unlock_locked_tables(thd);
 
-  DBUG_ASSERT(!thd->locked_tables_mode);
+  assert(!thd->locked_tables_mode);
 
   if (thd->in_multi_stmt_transaction_mode() ||
-      (thd->variables.option_bits & OPTION_TABLE_LOCK))
-  {
-    thd->variables.option_bits&= ~OPTION_TABLE_LOCK;
-    thd->server_status&=
-      ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
+      (thd->variables.option_bits & OPTION_TABLE_LOCK)) {
+    thd->variables.option_bits &= ~OPTION_TABLE_LOCK;
+    thd->server_status &=
+        ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
     DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
-    res= MY_TEST(ha_commit_trans(thd, TRUE));
+    res = ha_commit_trans(thd, true);
   }
 
-  thd->variables.option_bits&= ~OPTION_BEGIN;
-  thd->transaction.all.reset_unsafe_rollback_flags();
+  thd->variables.option_bits &= ~OPTION_BEGIN;
+  thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
 
-  if (res)
-    DBUG_RETURN(TRUE);
+  if (res) return true;
 
   /*
     Release transactional metadata locks only after the
@@ -159,132 +155,205 @@ bool trans_begin(THD *thd, uint flags)
   thd->mdl_context.release_transactional_locks();
 
   // The RO/RW options are mutually exclusive.
-  DBUG_ASSERT(!((flags & MYSQL_START_TRANS_OPT_READ_ONLY) &&
-                (flags & MYSQL_START_TRANS_OPT_READ_WRITE)));
-  if (flags & MYSQL_START_TRANS_OPT_READ_ONLY)
-    thd->tx_read_only= true;
-  else if (flags & MYSQL_START_TRANS_OPT_READ_WRITE)
-  {
+  assert(!((flags & MYSQL_START_TRANS_OPT_READ_ONLY) &&
+           (flags & MYSQL_START_TRANS_OPT_READ_WRITE)));
+  if (flags & MYSQL_START_TRANS_OPT_READ_ONLY) {
+    thd->tx_read_only = true;
+    if (tst) tst->set_read_flags(thd, TX_READ_ONLY);
+  } else if (flags & MYSQL_START_TRANS_OPT_READ_WRITE) {
     /*
       Explicitly starting a RW transaction when the server is in
       read-only mode, is not allowed unless the user has SUPER priv.
       Implicitly starting a RW transaction is allowed for backward
       compatibility.
     */
-    const bool user_is_super=
-      MY_TEST(thd->security_ctx->master_access & SUPER_ACL);
-    if (opt_readonly && !user_is_super)
-    {
-      my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--read-only");
-      DBUG_RETURN(true);
-    }
-    thd->tx_read_only= false;
+    if (check_readonly(thd, true)) return true;
+    thd->tx_read_only = false;
+    /*
+      This flags that tx_read_only was set explicitly, rather than
+      just from the session's default.
+    */
+    if (tst) tst->set_read_flags(thd, TX_READ_WRITE);
   }
 
-  thd->variables.option_bits|= OPTION_BEGIN;
-  thd->server_status|= SERVER_STATUS_IN_TRANS;
-  if (thd->tx_read_only)
-    thd->server_status|= SERVER_STATUS_IN_TRANS_READONLY;
+  DBUG_EXECUTE_IF("dbug_set_high_prio_trx", {
+    assert(thd->tx_priority == 0);
+    thd->tx_priority = 1;
+  });
+
+  thd->variables.option_bits |= OPTION_BEGIN;
+  thd->server_status |= SERVER_STATUS_IN_TRANS;
+  if (thd->tx_read_only) thd->server_status |= SERVER_STATUS_IN_TRANS_READONLY;
   DBUG_PRINT("info", ("setting SERVER_STATUS_IN_TRANS"));
 
+  if (tst) tst->add_trx_state(thd, TX_EXPLICIT);
+
   /* ha_start_consistent_snapshot() relies on OPTION_BEGIN flag set. */
-  if (flags & MYSQL_START_TRANS_OPT_WITH_CONS_SNAPSHOT)
-    res= ha_start_consistent_snapshot(thd);
+  if (flags & MYSQL_START_TRANS_OPT_WITH_CONS_SNAPSHOT) {
+    if (tst) tst->add_trx_state(thd, TX_WITH_SNAPSHOT);
+    res = ha_start_consistent_snapshot(thd);
+  }
 
-  DBUG_RETURN(MY_TEST(res));
+  /*
+    Register transaction start in performance schema if not done already.
+    We handle explicitly started transactions here, implicitly started
+    transactions (and single-statement transactions in autocommit=1 mode)
+    are handled in trans_register_ha().
+    We can't handle explicit transactions in the same way as implicit
+    because we want to correctly attribute statements which follow
+    BEGIN but do not touch any transactional tables.
+  */
+#ifdef HAVE_PSI_TRANSACTION_INTERFACE
+  if (thd->m_transaction_psi == nullptr) {
+    thd->m_transaction_psi =
+        MYSQL_START_TRANSACTION(&thd->m_transaction_state, nullptr, nullptr,
+                                thd->tx_isolation, thd->tx_read_only, false);
+    DEBUG_SYNC(thd, "after_set_transaction_psi_before_set_transaction_gtid");
+    gtid_set_performance_schema_values(thd);
+  }
+#endif
+
+  return res;
 }
-
 
 /**
   Commit the current transaction, making its changes permanent.
 
-  @param thd     Current thread
+  @param[in] thd                       Current thread
+  @param[in] ignore_global_read_lock   Allow commit to complete even if a
+                                       global read lock is active. This can be
+                                       used to allow changes to internal tables
+                                       (e.g. slave status tables, analyze
+  table).
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+  @retval false  Success
+  @retval true   Failure
 */
 
-bool trans_commit(THD *thd)
-{
+bool trans_commit(THD *thd, bool ignore_global_read_lock) {
   int res;
-  DBUG_ENTER("trans_commit");
+  DBUG_TRACE;
 
-#ifndef DBUG_OFF
-  char buf1[256], buf2[256];
-  DBUG_PRINT("enter", ("stmt.ha_list: %s, all.ha_list: %s",
-                       ha_list_names(thd->transaction.stmt.ha_list, buf1),
-                       ha_list_names(thd->transaction.all.ha_list, buf2)));
+  DBUG_EXECUTE_IF(
+      "crash_on_transactional_ddl_commit",
+      if (thd->m_transactional_ddl.inited() &&
+          thd->lex->sql_command == SQLCOM_COMMIT) { DBUG_SUICIDE(); });
 
-  thd->transaction.stmt.dbug_unsafe_rollback_flags("stmt");
-  thd->transaction.all.dbug_unsafe_rollback_flags("all");
-#endif
+  if (trans_check_state(thd)) return true;
 
-  if (trans_check_state(thd))
-    DBUG_RETURN(TRUE);
-
-  thd->server_status&=
-    ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
+  thd->server_status &=
+      ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
-  res= ha_commit_trans(thd, TRUE);
-  thd->variables.option_bits&= ~OPTION_BEGIN;
-  thd->transaction.all.reset_unsafe_rollback_flags();
-  thd->lex->start_transaction_opt= 0;
+  res = ha_commit_trans(thd, true, ignore_global_read_lock);
+  if (res == false)
+    if (thd->rpl_thd_ctx.session_gtids_ctx().notify_after_transaction_commit(
+            thd))
+      LogErr(WARNING_LEVEL, ER_TRX_GTID_COLLECT_REJECT);
+  /*
+    When gtid mode is enabled, a transaction may cause binlog
+    rotation, which inserts a record into the gtid system table
+    (which is probably a transactional table). Thence, the flag
+    SERVER_STATUS_IN_TRANS may be set again while calling
+    ha_commit_trans(...) Consequently, we need to reset it back,
+    much like we are doing before calling ha_commit_trans(...).
 
-  DBUG_RETURN(MY_TEST(res));
+    We would really only need to do this when gtid_mode=on.  However,
+    checking gtid_mode requires holding a lock, which is costly.  So
+    we clear the bit unconditionally.  This has no side effects since
+    if gtid_mode=off the bit is already cleared.
+  */
+  thd->server_status &= ~SERVER_STATUS_IN_TRANS;
+  thd->variables.option_bits &= ~OPTION_BEGIN;
+  thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
+  thd->lex->start_transaction_opt = 0;
+
+  /* The transaction should be marked as complete in P_S. */
+  assert(thd->m_transaction_psi == nullptr);
+
+  thd->tx_priority = 0;
+
+  trans_track_end_trx(thd);
+
+  /*
+    Avoid updating modified uncommitted objects when committing attachable
+    read-write transaction. This is required to allow I_S queries to update
+    table statistics during CREATE TABLE ... SELECT, otherwise the
+    uncommitted object added by DDL would be removed by I_S query.
+  */
+  if (!thd->is_attachable_rw_transaction_active()) {
+    /*
+      If the SE failed to commit the transaction, we must rollback the
+      modified dictionary objects to make sure the DD cache, the DD
+      tables and the state in the SE stay in sync.
+    */
+    if (res)
+      thd->dd_client()->rollback_modified_objects();
+    else
+      thd->dd_client()->commit_modified_objects();
+  }
+
+  thd->locked_tables_list.adjust_renamed_tablespace_mdls(&thd->mdl_context);
+
+  thd->m_transactional_ddl.post_ddl();
+
+  return res;
 }
-
 
 /**
   Implicitly commit the current transaction.
 
   @note A implicit commit does not releases existing table locks.
 
-  @param thd     Current thread
+  @param[in] thd                       Current thread
+  @param[in] ignore_global_read_lock   Allow commit to complete even if a
+                                       global read lock is active. This can be
+                                       used to allow changes to internal tables
+                                       (e.g. slave status tables, analyze
+  table).
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+
+  @retval false  Success
+  @retval true   Failure
 */
 
-bool trans_commit_implicit(THD *thd)
-{
-  bool res= FALSE;
-  DBUG_ENTER("trans_commit_implicit");
-
-#ifndef DBUG_OFF
-  char buf1[256], buf2[256];
-  DBUG_PRINT("enter", ("stmt.ha_list: %s, all.ha_list: %s",
-                       ha_list_names(thd->transaction.stmt.ha_list, buf1),
-                       ha_list_names(thd->transaction.all.ha_list, buf2)));
-
-  thd->transaction.stmt.dbug_unsafe_rollback_flags("stmt");
-  thd->transaction.all.dbug_unsafe_rollback_flags("all");
-#endif
+bool trans_commit_implicit(THD *thd, bool ignore_global_read_lock) {
+  bool res = false;
+  DBUG_TRACE;
 
   /*
     Ensure that trans_check_state() was called before trans_commit_implicit()
     by asserting that conditions that are checked in the former function are
     true.
   */
-  DBUG_ASSERT(thd->transaction.stmt.is_empty() &&
-              !thd->in_sub_stmt &&
-              thd->transaction.xid_state.xa_state == XA_NOTR);
+  assert(thd->get_transaction()->is_empty(Transaction_ctx::STMT) &&
+         !thd->in_sub_stmt &&
+         !thd->get_transaction()->xid_state()->check_in_xa(false));
 
   if (thd->in_multi_stmt_transaction_mode() ||
-      (thd->variables.option_bits & OPTION_TABLE_LOCK))
-  {
+      (thd->variables.option_bits & OPTION_TABLE_LOCK)) {
     /* Safety if one did "drop table" on locked tables */
     if (!thd->locked_tables_mode)
-      thd->variables.option_bits&= ~OPTION_TABLE_LOCK;
-    thd->server_status&=
-      ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
-    DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
-    res= MY_TEST(ha_commit_trans(thd, TRUE));
-  }
-  else if (tc_log)
-    tc_log->commit(thd, true);
+      thd->variables.option_bits &= ~OPTION_TABLE_LOCK;
+    res = ha_commit_trans(thd, true, ignore_global_read_lock);
 
-  thd->variables.option_bits&= ~OPTION_BEGIN;
-  thd->transaction.all.reset_unsafe_rollback_flags();
+    /* When duckdb_mode and binlog are both enabled, duckdb may register
+    transactions during commit. Therefore, we move thd->server_status &=
+    after ha_commit_trans. */
+    thd->server_status &=
+        ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
+    DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
+  } else if (tc_log)
+    res = tc_log->commit(thd, true);
+
+  if (res == false)
+    if (thd->rpl_thd_ctx.session_gtids_ctx().notify_after_transaction_commit(
+            thd))
+      LogErr(WARNING_LEVEL, ER_TRX_GTID_COLLECT_REJECT);
+  thd->variables.option_bits &= ~OPTION_BEGIN;
+  thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
+
+  /* The transaction should be marked as complete in P_S. */
+  assert(thd->m_transaction_psi == nullptr);
 
   /*
     Upon implicit commit, reset the current transaction
@@ -292,51 +361,80 @@ bool trans_commit_implicit(THD *thd)
     @@session.completion_type since it's documented
     to not have any effect on implicit commit.
   */
-  thd->tx_isolation= (enum_tx_isolation) thd->variables.tx_isolation;
-  thd->tx_read_only= thd->variables.tx_read_only;
+  trans_reset_one_shot_chistics(thd);
 
-  DBUG_RETURN(res);
+  trans_track_end_trx(thd);
+
+  /*
+    Avoid updating modified uncommitted objects when committing attachable
+    read-write transaction. This is required to allow I_S queries to update
+    table statistics during CREATE TABLE ... SELECT, otherwise the
+    uncommitted object added by DDL would be removed by I_S query.
+  */
+  if (!thd->is_attachable_rw_transaction_active()) {
+    /*
+      If the SE failed to commit the transaction, we must rollback the
+      modified dictionary objects to make sure the DD cache, the DD
+      tables and the state in the SE stay in sync.
+    */
+    if (res)
+      thd->dd_client()->rollback_modified_objects();
+    else
+      thd->dd_client()->commit_modified_objects();
+  }
+
+  thd->locked_tables_list.adjust_renamed_tablespace_mdls(&thd->mdl_context);
+  return res;
 }
-
 
 /**
   Rollback the current transaction, canceling its changes.
 
   @param thd     Current thread
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+  @retval false  Success
+  @retval true   Failure
 */
 
-bool trans_rollback(THD *thd)
-{
+bool trans_rollback(THD *thd) {
   int res;
-  DBUG_ENTER("trans_rollback");
+  DBUG_TRACE;
 
-#ifndef DBUG_OFF
-  char buf1[256], buf2[256];
-  DBUG_PRINT("enter", ("stmt.ha_list: %s, all.ha_list: %s",
-                       ha_list_names(thd->transaction.stmt.ha_list, buf1),
-                       ha_list_names(thd->transaction.all.ha_list, buf2)));
+  if (trans_check_state(thd)) return true;
 
-  thd->transaction.stmt.dbug_unsafe_rollback_flags("stmt");
-  thd->transaction.all.dbug_unsafe_rollback_flags("all");
-#endif
+  thd->m_transactional_ddl.rollback();
 
-  if (trans_check_state(thd))
-    DBUG_RETURN(TRUE);
-
-  thd->server_status&=
-    ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
+  thd->server_status &=
+      ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
-  res= ha_rollback_trans(thd, TRUE);
-  thd->variables.option_bits&= ~OPTION_BEGIN;
-  thd->transaction.all.reset_unsafe_rollback_flags();
-  thd->lex->start_transaction_opt= 0;
+  res = ha_rollback_trans(thd, true);
+  thd->variables.option_bits &= ~OPTION_BEGIN;
+  thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
+  thd->lex->start_transaction_opt = 0;
 
-  DBUG_RETURN(MY_TEST(res));
+  /* The transaction should be marked as complete in P_S. */
+  assert(thd->m_transaction_psi == nullptr);
+
+  thd->tx_priority = 0;
+
+  trans_track_end_trx(thd);
+
+  /*
+    Avoid updating modified uncommitted objects when rolling back
+    attachable read-write transaction. This is required to allow I_S
+    queries to update table statistics during CREATE TABLE ... SELECT,
+    otherwise the uncommitted object added by DDL would be removed by I_S
+    query.
+  */
+  if (!thd->is_attachable_rw_transaction_active())
+    thd->dd_client()->rollback_modified_objects();
+
+  thd->locked_tables_list.discard_renamed_tablespace_mdls();
+
+  thd->m_transactional_ddl.post_ddl();
+
+  return res;
 }
-
 
 /**
   Implicitly rollback the current transaction, typically
@@ -353,10 +451,9 @@ bool trans_rollback(THD *thd)
         transaction rollback request.
 */
 
-bool trans_rollback_implicit(THD *thd)
-{
+bool trans_rollback_implicit(THD *thd) {
   int res;
-  DBUG_ENTER("trans_rollback_implict");
+  DBUG_TRACE;
 
   /*
     Always commit/rollback statement transaction before manipulating
@@ -364,25 +461,37 @@ bool trans_rollback_implicit(THD *thd)
     Don't perform rollback in the middle of sub-statement, wait till
     its end.
   */
-  DBUG_ASSERT(thd->transaction.stmt.is_empty() && !thd->in_sub_stmt);
+  assert(thd->get_transaction()->is_empty(Transaction_ctx::STMT) &&
+         !thd->in_sub_stmt);
 
-  thd->server_status&=
-    ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
+  thd->server_status &=
+      ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
-  res= ha_rollback_trans(thd, true);
-  /*
-    We don't reset OPTION_BEGIN flag below to simulate implicit start
-    of new transacton in @@autocommit=1 mode. This is necessary to
-    preserve backward compatibility.
-  */
-  thd->transaction.all.reset_unsafe_rollback_flags();
+  res = ha_rollback_trans(thd, true);
+  thd->variables.option_bits &= ~OPTION_BEGIN;
+  thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
 
   /* Rollback should clear transaction_rollback_request flag. */
-  DBUG_ASSERT(! thd->transaction_rollback_request);
+  assert(!thd->transaction_rollback_request);
+  /* The transaction should be marked as complete in P_S. */
+  assert(thd->m_transaction_psi == nullptr);
 
-  DBUG_RETURN(MY_TEST(res));
+  trans_track_end_trx(thd);
+
+  /*
+    Avoid updating modified uncommitted objects when rolling back
+    attachable read-write transaction. This is required to allow I_S
+    queries to update table statistics during CREATE TABLE ... SELECT,
+    otherwise the uncommitted object added by DDL would be removed by I_S
+    query.
+  */
+  if (!thd->is_attachable_rw_transaction_active())
+    thd->dd_client()->rollback_modified_objects();
+
+  thd->locked_tables_list.discard_renamed_tablespace_mdls();
+
+  return res;
 }
-
 
 /**
   Commit the single statement transaction.
@@ -393,71 +502,66 @@ bool trans_rollback_implicit(THD *thd)
         is based on counting locks, but if the user has used LOCK
         TABLES then that mechanism does not know to do the commit.
 
-  @param thd     Current thread
+  @param[in] thd                       Current thread
+  @param[in] ignore_global_read_lock   Allow commit to complete even if a
+                                       global read lock is active. This can be
+                                       used to allow changes to internal tables
+                                       (e.g. slave status tables, analyze
+  table).
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+
+  @retval false  Success
+  @retval true   Failure
 */
 
-bool trans_commit_stmt(THD *thd)
-{
-  DBUG_ENTER("trans_commit_stmt");
-#ifndef DBUG_OFF
-  char buf1[256], buf2[256];
-  DBUG_PRINT("enter", ("stmt.ha_list: %s, all.ha_list: %s",
-                       ha_list_names(thd->transaction.stmt.ha_list, buf1),
-                       ha_list_names(thd->transaction.all.ha_list, buf2)));
-#endif
-
-  int res= FALSE;
+bool trans_commit_stmt(THD *thd, bool ignore_global_read_lock) {
+  DBUG_TRACE;
+  int res = false;
   /*
     We currently don't invoke commit/rollback at end of
     a sub-statement.  In future, we perhaps should take
     a savepoint for each nested statement, and release the
     savepoint when statement has succeeded.
   */
-  DBUG_ASSERT(! thd->in_sub_stmt);
+  assert(!thd->in_sub_stmt);
 
-#ifndef DBUG_OFF
-  DBUG_PRINT("enter", ("stmt.ha_list: %s, all.ha_list: %s",
-                       ha_list_names(thd->transaction.stmt.ha_list, buf1),
-                       ha_list_names(thd->transaction.all.ha_list, buf2)));
+  /*
+    Some code in MYSQL_BIN_LOG::commit and ha_commit_low() is not safe
+    for attachable transactions.
+  */
+  assert(!thd->is_attachable_ro_transaction_active());
 
-  thd->transaction.stmt.dbug_unsafe_rollback_flags("stmt");
-  thd->transaction.all.dbug_unsafe_rollback_flags("all");
-#endif
+  thd->get_transaction()->merge_unsafe_rollback_flags();
 
-  thd->transaction.merge_unsafe_rollback_flags();
+  if (thd->get_transaction()->is_active(Transaction_ctx::STMT)) {
+    res = ha_commit_trans(thd, false, ignore_global_read_lock);
+    if (!thd->in_active_multi_stmt_transaction())
+      trans_reset_one_shot_chistics(thd);
+  } else if (tc_log)
+    res = tc_log->commit(thd, false);
+  if (res == false && !thd->in_active_multi_stmt_transaction())
+    if (thd->rpl_thd_ctx.session_gtids_ctx().notify_after_transaction_commit(
+            thd))
+      LogErr(WARNING_LEVEL, ER_TRX_GTID_COLLECT_REJECT);
+  /* In autocommit=1 mode the transaction should be marked as complete in P_S */
+  assert(thd->in_active_multi_stmt_transaction() ||
+         thd->m_transaction_psi == nullptr);
 
-  if (thd->transaction.stmt.ha_list)
-  {
-    res= ha_commit_trans(thd, FALSE);
-    if (! thd->in_active_multi_stmt_transaction())
-    {
-      thd->tx_isolation= (enum_tx_isolation) thd->variables.tx_isolation;
-      thd->tx_read_only= thd->variables.tx_read_only;
-    }
-  }
-  else if (tc_log)
-    tc_log->commit(thd, false);
+  thd->get_transaction()->reset(Transaction_ctx::STMT);
 
-  thd->transaction.stmt.reset();
-
-  DBUG_RETURN(MY_TEST(res));
+  return res;
 }
-
 
 /**
   Rollback the single statement transaction.
 
   @param thd     Current thread
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+  @retval false  Success
+  @retval true   Failure
 */
-bool trans_rollback_stmt(THD *thd)
-{
-  DBUG_ENTER("trans_rollback_stmt");
+bool trans_rollback_stmt(THD *thd) {
+  DBUG_TRACE;
 
   /*
     We currently don't invoke commit/rollback at end of
@@ -465,54 +569,117 @@ bool trans_rollback_stmt(THD *thd)
     a savepoint for each nested statement, and release the
     savepoint when statement has succeeded.
   */
-  DBUG_ASSERT(! thd->in_sub_stmt);
+  assert(!thd->in_sub_stmt);
 
-#ifndef DBUG_OFF
-  char buf1[256], buf2[256];
-  DBUG_PRINT("enter", ("stmt.ha_list: %s, all.ha_list: %s",
-                       ha_list_names(thd->transaction.stmt.ha_list, buf1),
-                       ha_list_names(thd->transaction.all.ha_list, buf2)));
+  /*
+    Some code in MYSQL_BIN_LOG::rollback and ha_rollback_low() is not safe
+    for attachable transactions.
+  */
+  assert(!thd->is_attachable_ro_transaction_active());
 
-  thd->transaction.stmt.dbug_unsafe_rollback_flags("stmt");
-  thd->transaction.all.dbug_unsafe_rollback_flags("all");
-#endif
+  thd->get_transaction()->merge_unsafe_rollback_flags();
 
-  thd->transaction.merge_unsafe_rollback_flags();
-
-  if (thd->transaction.stmt.ha_list)
-  {
-    ha_rollback_trans(thd, FALSE);
-    if (! thd->in_active_multi_stmt_transaction())
-    {
-      thd->tx_isolation= (enum_tx_isolation) thd->variables.tx_isolation;
-      thd->tx_read_only= thd->variables.tx_read_only;
-    }
-  }
-  else if (tc_log)
+  if (thd->get_transaction()->is_active(Transaction_ctx::STMT)) {
+    ha_rollback_trans(thd, false);
+    if (!thd->in_active_multi_stmt_transaction())
+      trans_reset_one_shot_chistics(thd);
+  } else if (tc_log)
     tc_log->rollback(thd, false);
 
-  thd->transaction.stmt.reset();
+  if (!thd->owned_gtid_is_empty() && !thd->in_active_multi_stmt_transaction()) {
+    /*
+      To a failed single statement transaction on auto-commit mode,
+      we roll back its owned gtid if it does not modify
+      non-transational table or commit its owned gtid if it has modified
+      non-transactional table when rolling back it if binlog is disabled,
+      as we did when binlog is enabled.
+      We do not need to check if binlog is enabled here, since we already
+      released its owned gtid in MYSQL_BIN_LOG::rollback(...) right before
+      this if binlog is enabled.
+    */
+    if (thd->get_transaction()->has_modified_non_trans_table(
+            Transaction_ctx::STMT))
+      gtid_state->update_on_commit(thd);
+    else
+      gtid_state->update_on_rollback(thd);
+  }
+  /*
+    Statement rollback for replicated atomic DDL should call
+    post-rollback hook. This ensures the slave info won't be updated
+    for failed atomic DDL statements during the eventual implicit
+    commit which is done even even in case of DDL failure.
 
-  DBUG_RETURN(FALSE);
+    Unlike the post_commit it has to be invoked even when there's
+    no active statement transaction.
+    TODO: consider to align the commit case to invoke pre- and post-
+    hooks on the same level with the rollback one.
+  */
+  if (is_atomic_ddl_commit_on_slave(thd)) thd->rli_slave->post_rollback();
+
+  /* In autocommit=1 mode the transaction should be marked as complete in P_S */
+  assert(thd->in_active_multi_stmt_transaction() ||
+         thd->m_transaction_psi == nullptr ||
+         /* Todo: BUG#20488921 is in the way. */
+         DBUG_EVALUATE_IF("simulate_xa_commit_log_failure", true, false));
+
+  thd->get_transaction()->reset(Transaction_ctx::STMT);
+
+  return false;
+}
+
+/**
+  Commit the attachable transaction.
+
+  @note This is slimmed down version of trans_commit_stmt() which commits
+        attachable transaction but skips code which is unnecessary and
+        unsafe for them (like dealing with GTIDs).
+
+  @param thd     Current thread
+
+  @retval False - Success
+  @retval True  - Failure
+*/
+bool trans_commit_attachable(THD *thd) {
+  DBUG_TRACE;
+  int res = 0;
+
+  /* This function only handles attachable transactions. */
+  assert(thd->is_attachable_ro_transaction_active());
+
+  /*
+    Since the attachable transaction is AUTOCOMMIT we only need to commit
+    statement transaction.
+  */
+  assert(!thd->get_transaction()->is_active(Transaction_ctx::SESSION));
+
+  /* Attachable transactions should not do anything unsafe. */
+  assert(
+      !thd->get_transaction()->cannot_safely_rollback(Transaction_ctx::STMT));
+
+  if (thd->get_transaction()->is_active(Transaction_ctx::STMT)) {
+    res = ha_commit_attachable(thd);
+  }
+
+  assert(thd->m_transaction_psi == nullptr);
+
+  thd->get_transaction()->reset(Transaction_ctx::STMT);
+
+  return res;
 }
 
 /* Find a named savepoint in the current transaction. */
-static SAVEPOINT **
-find_savepoint(THD *thd, LEX_STRING name)
-{
-  SAVEPOINT **sv= &thd->transaction.savepoints;
+static SAVEPOINT **find_savepoint(THD *thd, LEX_STRING name) {
+  SAVEPOINT **sv = &thd->get_transaction()->m_savepoints;
 
-  while (*sv)
-  {
-    if (my_strnncoll(system_charset_info, (uchar *) name.str, name.length,
-                     (uchar *) (*sv)->name, (*sv)->length) == 0)
+  while (*sv) {
+    if (my_strnncoll(system_charset_info, (uchar *)name.str, name.length,
+                     (uchar *)(*sv)->name, (*sv)->length) == 0)
       break;
-    sv= &(*sv)->prev;
+    sv = &(*sv)->prev;
   }
 
   return sv;
 }
-
 
 /**
   Set a named transaction savepoint.
@@ -520,54 +687,49 @@ find_savepoint(THD *thd, LEX_STRING name)
   @param thd    Current thread
   @param name   Savepoint name
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+  @retval false  Success
+  @retval true   Failure
 */
 
-bool trans_savepoint(THD *thd, LEX_STRING name)
-{
+bool trans_savepoint(THD *thd, LEX_STRING name) {
   SAVEPOINT **sv, *newsv;
-  DBUG_ENTER("trans_savepoint");
+  DBUG_TRACE;
 
   if (!(thd->in_multi_stmt_transaction_mode() || thd->in_sub_stmt) ||
       !opt_using_transactions)
-    DBUG_RETURN(FALSE);
+    return false;
 
-  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
-  if (xa_state != XA_NOTR && xa_state != XA_ACTIVE)
-  {
-    my_error(ER_XAER_RMFAIL, MYF(0), xa_state_names[xa_state]);
-    DBUG_RETURN(TRUE);
-  }
+  if (thd->get_transaction()->xid_state()->check_has_uncommitted_xa())
+    return true;
 
-  sv= find_savepoint(thd, name);
+  sv = find_savepoint(thd, name);
 
   if (*sv) /* old savepoint of the same name exists */
   {
-    newsv= *sv;
-    ha_release_savepoint(thd, *sv);
-    *sv= (*sv)->prev;
-  }
-  else if ((newsv= (SAVEPOINT *) alloc_root(&thd->transaction.mem_root,
-                                            savepoint_alloc_size)) == NULL)
-  {
+    newsv = *sv;
+    if (ha_release_savepoint(thd, *sv)) {
+      assert(thd->is_error() || thd->is_killed());
+      return true;
+    }
+    *sv = (*sv)->prev;
+  } else if ((newsv = (SAVEPOINT *)thd->get_transaction()->allocate_memory(
+                  savepoint_alloc_size)) == nullptr) {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
-    DBUG_RETURN(TRUE);
+    return true;
   }
 
-  newsv->name= strmake_root(&thd->transaction.mem_root, name.str, name.length);
-  newsv->length= name.length;
+  newsv->name = thd->get_transaction()->strmake(name.str, name.length);
+  newsv->length = name.length;
 
   /*
     if we'll get an error here, don't add new savepoint to the list.
     we'll lose a little bit of memory in transaction mem_root, but it'll
     be free'd when transaction ends anyway
   */
-  if (ha_savepoint(thd, newsv))
-    DBUG_RETURN(TRUE);
+  if (ha_savepoint(thd, newsv)) return true;
 
-  newsv->prev= thd->transaction.savepoints;
-  thd->transaction.savepoints= newsv;
+  newsv->prev = thd->get_transaction()->m_savepoints;
+  thd->get_transaction()->m_savepoints = newsv;
 
   /*
     Remember locks acquired before the savepoint was set.
@@ -578,11 +740,15 @@ bool trans_savepoint(THD *thd, LEX_STRING name)
     the last locked table. This allows to release some
     locks acquired during LOCK TABLES.
   */
-  newsv->mdl_savepoint= thd->mdl_context.mdl_savepoint();
+  newsv->mdl_savepoint = thd->mdl_context.mdl_savepoint();
 
-  DBUG_RETURN(FALSE);
+  if (thd->is_current_stmt_binlog_row_enabled_with_write_set_extraction()) {
+    thd->get_transaction()->get_transaction_write_set_ctx()->add_savepoint(
+        name.str);
+  }
+
+  return false;
 }
-
 
 /**
   Rollback a transaction to the named savepoint.
@@ -597,46 +763,39 @@ bool trans_savepoint(THD *thd, LEX_STRING name)
   @param thd    Current thread
   @param name   Savepoint name
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+  @retval false  Success
+  @retval true   Failure
 */
 
-bool trans_rollback_to_savepoint(THD *thd, LEX_STRING name)
-{
-  int res= FALSE;
-  SAVEPOINT *sv= *find_savepoint(thd, name);
-  DBUG_ENTER("trans_rollback_to_savepoint");
+bool trans_rollback_to_savepoint(THD *thd, LEX_STRING name) {
+  int res = false;
+  SAVEPOINT *sv = *find_savepoint(thd, name);
+  DBUG_TRACE;
 
-#ifndef DBUG_OFF
-  char buf1[256], buf2[256];
-  DBUG_PRINT("enter", ("stmt.ha_list: %s, all.ha_list: %s",
-                       ha_list_names(thd->transaction.stmt.ha_list, buf1),
-                       ha_list_names(thd->transaction.all.ha_list, buf2)));
-
-  thd->transaction.stmt.dbug_unsafe_rollback_flags("stmt");
-  thd->transaction.all.dbug_unsafe_rollback_flags("all");
-#endif
-
-  if (sv == NULL)
-  {
+  if (sv == nullptr) {
     my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "SAVEPOINT", name.str);
-    DBUG_RETURN(TRUE);
+    return true;
   }
 
-  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
-  if (xa_state != XA_NOTR && xa_state != XA_ACTIVE)
-  {
-    my_error(ER_XAER_RMFAIL, MYF(0), xa_state_names[xa_state]);
-    DBUG_RETURN(TRUE);
-  }
+  if (thd->get_transaction()->xid_state()->check_has_uncommitted_xa())
+    return true;
+
+  if (ha_rollback_to_savepoint(thd, sv))
+    res = true;
+  else if (thd->get_transaction()->cannot_safely_rollback(
+               Transaction_ctx::SESSION) &&
+           !thd->slave_thread)
+    thd->get_transaction()->push_unsafe_rollback_warnings(thd);
+
+  thd->get_transaction()->m_savepoints = sv;
 
   /**
     Checking whether it is safe to release metadata locks acquired after
     savepoint, if rollback to savepoint is successful.
-  
+
     Whether it is safe to release MDL after rollback to savepoint depends
     on storage engines participating in transaction:
-  
+
     - InnoDB doesn't release any row-locks on rollback to savepoint so it
       is probably a bad idea to release MDL as well.
     - Binary log implementation in some cases (e.g when non-transactional
@@ -645,30 +804,22 @@ bool trans_rollback_to_savepoint(THD *thd, LEX_STRING name)
       log accompanied with ROLLBACK TO SAVEPOINT statement. Since the real
       write happens at the end of transaction releasing MDL on tables
       mentioned in these events (i.e. acquired after savepoint and before
-      rollback ot it) can break replication, as concurrent DROP TABLES
+      rollback of it) can break replication, as concurrent DROP TABLES
       statements will be able to drop these tables before events will get
       into binary log,
-  
-    For backward-compatibility reasons we always release MDL if binary
-    logging is off.
   */
-  bool mdl_can_safely_rollback_to_savepoint=
-                (!(mysql_bin_log.is_open() && thd->variables.sql_log_bin) ||
-                 ha_rollback_to_savepoint_can_release_mdl(thd));
 
-  if (ha_rollback_to_savepoint(thd, sv))
-    res= TRUE;
-  else if (thd->transaction.all.cannot_safely_rollback() && !thd->slave_thread)
-    thd->transaction.push_unsafe_rollback_warnings(thd);
-
-  thd->transaction.savepoints= sv;
-
-  if (!res && mdl_can_safely_rollback_to_savepoint)
+  if (!res && ha_rollback_to_savepoint_can_release_mdl(thd))
     thd->mdl_context.rollback_to_savepoint(sv->mdl_savepoint);
 
-  DBUG_RETURN(MY_TEST(res));
-}
+  if (thd->is_current_stmt_binlog_row_enabled_with_write_set_extraction()) {
+    thd->get_transaction()
+        ->get_transaction_write_set_ctx()
+        ->rollback_to_savepoint(name.str);
+  }
 
+  return res;
+}
 
 /**
   Remove the named savepoint from the set of savepoints of
@@ -680,296 +831,31 @@ bool trans_rollback_to_savepoint(THD *thd, LEX_STRING name)
   @param thd    Current thread
   @param name   Savepoint name
 
-  @retval FALSE  Success
-  @retval TRUE   Failure
+  @retval false  Success
+  @retval true   Failure
 */
 
-bool trans_release_savepoint(THD *thd, LEX_STRING name)
-{
-  int res= FALSE;
-  SAVEPOINT *sv= *find_savepoint(thd, name);
-  DBUG_ENTER("trans_release_savepoint");
+bool trans_release_savepoint(THD *thd, LEX_STRING name) {
+  int res = false;
+  SAVEPOINT *sv = *find_savepoint(thd, name);
+  DBUG_TRACE;
 
-  if (sv == NULL)
-  {
+  if (sv == nullptr) {
     my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "SAVEPOINT", name.str);
-    DBUG_RETURN(TRUE);
+    return true;
   }
 
-  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
-  if (xa_state != XA_NOTR && xa_state != XA_ACTIVE)
-  {
-    my_error(ER_XAER_RMFAIL, MYF(0), xa_state_names[xa_state]);
-    DBUG_RETURN(TRUE);
+  if (thd->get_transaction()->xid_state()->check_has_uncommitted_xa())
+    return true;
+
+  if (ha_release_savepoint(thd, sv)) res = true;
+
+  thd->get_transaction()->m_savepoints = sv->prev;
+
+  if (thd->is_current_stmt_binlog_row_enabled_with_write_set_extraction()) {
+    thd->get_transaction()->get_transaction_write_set_ctx()->del_savepoint(
+        name.str);
   }
 
-  if (ha_release_savepoint(thd, sv))
-    res= TRUE;
-
-  thd->transaction.savepoints= sv->prev;
-
-  DBUG_RETURN(MY_TEST(res));
-}
-
-
-/**
-  Starts an XA transaction with the given xid value.
-
-  @param thd    Current thread
-
-  @retval FALSE  Success
-  @retval TRUE   Failure
-*/
-
-bool trans_xa_start(THD *thd)
-{
-  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
-  DBUG_ENTER("trans_xa_start");
-
-  if (xa_state == XA_IDLE && thd->lex->xa_opt == XA_RESUME)
-  {
-    bool not_equal= !thd->transaction.xid_state.xid.eq(thd->lex->xid);
-    if (not_equal)
-      my_error(ER_XAER_NOTA, MYF(0));
-    else
-      thd->transaction.xid_state.xa_state= XA_ACTIVE;
-    DBUG_RETURN(not_equal);
-  }
-
-  /* TODO: JOIN is not supported yet. */
-  if (thd->lex->xa_opt != XA_NONE)
-    my_error(ER_XAER_INVAL, MYF(0));
-  else if (xa_state != XA_NOTR)
-    my_error(ER_XAER_RMFAIL, MYF(0), xa_state_names[xa_state]);
-  else if (thd->locked_tables_mode || thd->in_active_multi_stmt_transaction())
-    my_error(ER_XAER_OUTSIDE, MYF(0));
-  else if (!trans_begin(thd))
-  {
-    DBUG_ASSERT(thd->transaction.xid_state.xid.is_null());
-    thd->transaction.xid_state.xa_state= XA_ACTIVE;
-    thd->transaction.xid_state.rm_error= 0;
-    thd->transaction.xid_state.xid.set(thd->lex->xid);
-    if (xid_cache_insert(&thd->transaction.xid_state))
-    {
-      thd->transaction.xid_state.xa_state= XA_NOTR;
-      thd->transaction.xid_state.xid.null();
-      trans_rollback(thd);
-      DBUG_RETURN(true);
-    }
-    DBUG_RETURN(FALSE);
-  }
-
-  DBUG_RETURN(TRUE);
-}
-
-
-/**
-  Put a XA transaction in the IDLE state.
-
-  @param thd    Current thread
-
-  @retval FALSE  Success
-  @retval TRUE   Failure
-*/
-
-bool trans_xa_end(THD *thd)
-{
-  DBUG_ENTER("trans_xa_end");
-
-  /* TODO: SUSPEND and FOR MIGRATE are not supported yet. */
-  if (thd->lex->xa_opt != XA_NONE)
-    my_error(ER_XAER_INVAL, MYF(0));
-  else if (thd->transaction.xid_state.xa_state != XA_ACTIVE)
-    my_error(ER_XAER_RMFAIL, MYF(0),
-             xa_state_names[thd->transaction.xid_state.xa_state]);
-  else if (!thd->transaction.xid_state.xid.eq(thd->lex->xid))
-    my_error(ER_XAER_NOTA, MYF(0));
-  else if (!xa_trans_rolled_back(&thd->transaction.xid_state))
-    thd->transaction.xid_state.xa_state= XA_IDLE;
-
-  DBUG_RETURN(thd->is_error() ||
-              thd->transaction.xid_state.xa_state != XA_IDLE);
-}
-
-
-/**
-  Put a XA transaction in the PREPARED state.
-
-  @param thd    Current thread
-
-  @retval FALSE  Success
-  @retval TRUE   Failure
-*/
-
-bool trans_xa_prepare(THD *thd)
-{
-  DBUG_ENTER("trans_xa_prepare");
-
-  if (thd->transaction.xid_state.xa_state != XA_IDLE)
-    my_error(ER_XAER_RMFAIL, MYF(0),
-             xa_state_names[thd->transaction.xid_state.xa_state]);
-  else if (!thd->transaction.xid_state.xid.eq(thd->lex->xid))
-    my_error(ER_XAER_NOTA, MYF(0));
-  else if (ha_prepare(thd))
-  {
-    xid_cache_delete(&thd->transaction.xid_state);
-    thd->transaction.xid_state.xa_state= XA_NOTR;
-    my_error(ER_XA_RBROLLBACK, MYF(0));
-  }
-  else
-    thd->transaction.xid_state.xa_state= XA_PREPARED;
-
-  DBUG_RETURN(thd->is_error() ||
-              thd->transaction.xid_state.xa_state != XA_PREPARED);
-}
-
-
-/**
-  Commit and terminate the a XA transaction.
-
-  @param thd    Current thread
-
-  @retval FALSE  Success
-  @retval TRUE   Failure
-*/
-
-bool trans_xa_commit(THD *thd)
-{
-  bool res= TRUE;
-  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
-  DBUG_ENTER("trans_xa_commit");
-
-  if (!thd->transaction.xid_state.xid.eq(thd->lex->xid))
-  {
-    /*
-      xid_state.in_thd is always true beside of xa recovery procedure.
-      Note, that there is no race condition here between xid_cache_search
-      and xid_cache_delete, since we always delete our own XID
-      (thd->lex->xid == thd->transaction.xid_state.xid).
-      The only case when thd->lex->xid != thd->transaction.xid_state.xid
-      and xid_state->in_thd == 0 is in the function
-      xa_cache_insert(XID, xa_states), which is called before starting
-      client connections, and thus is always single-threaded.
-    */
-    XID_STATE *xs= xid_cache_search(thd->lex->xid);
-    res= !xs || xs->in_thd;
-    if (res)
-      my_error(ER_XAER_NOTA, MYF(0));
-    else
-    {
-      res= xa_trans_rolled_back(xs);
-      ha_commit_or_rollback_by_xid(thd, thd->lex->xid, !res);
-      xid_cache_delete(xs);
-    }
-    DBUG_RETURN(res);
-  }
-
-  if (xa_trans_rolled_back(&thd->transaction.xid_state))
-  {
-    xa_trans_force_rollback(thd);
-    res= thd->is_error();
-  }
-  else if (xa_state == XA_IDLE && thd->lex->xa_opt == XA_ONE_PHASE)
-  {
-    int r= ha_commit_trans(thd, TRUE);
-    if ((res= MY_TEST(r)))
-      my_error(r == 1 ? ER_XA_RBROLLBACK : ER_XAER_RMERR, MYF(0));
-  }
-  else if (xa_state == XA_PREPARED && thd->lex->xa_opt == XA_NONE)
-  {
-    MDL_request mdl_request;
-
-    /*
-      Acquire metadata lock which will ensure that COMMIT is blocked
-      by active FLUSH TABLES WITH READ LOCK (and vice versa COMMIT in
-      progress blocks FTWRL).
-
-      We allow FLUSHer to COMMIT; we assume FLUSHer knows what it does.
-    */
-    mdl_request.init(MDL_key::COMMIT, "", "", MDL_INTENTION_EXCLUSIVE,
-                     MDL_TRANSACTION);
-
-    if (thd->mdl_context.acquire_lock(&mdl_request,
-                                      thd->variables.lock_wait_timeout))
-    {
-      ha_rollback_trans(thd, TRUE);
-      my_error(ER_XAER_RMERR, MYF(0));
-    }
-    else
-    {
-      DEBUG_SYNC(thd, "trans_xa_commit_after_acquire_commit_lock");
-
-      if (tc_log)
-        res= MY_TEST(tc_log->commit(thd, /* all */ true));
-      else
-        res= MY_TEST(ha_commit_low(thd, /* all */ true));
-
-      if (res)
-        my_error(ER_XAER_RMERR, MYF(0));
-    }
-  }
-  else
-  {
-    my_error(ER_XAER_RMFAIL, MYF(0), xa_state_names[xa_state]);
-    DBUG_RETURN(TRUE);
-  }
-
-  thd->variables.option_bits&= ~OPTION_BEGIN;
-  thd->transaction.all.reset_unsafe_rollback_flags();
-  thd->server_status&=
-    ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
-  DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
-  xid_cache_delete(&thd->transaction.xid_state);
-  thd->transaction.xid_state.xa_state= XA_NOTR;
-
-  DBUG_RETURN(res);
-}
-
-
-/**
-  Roll back and terminate a XA transaction.
-
-  @param thd    Current thread
-
-  @retval FALSE  Success
-  @retval TRUE   Failure
-*/
-
-bool trans_xa_rollback(THD *thd)
-{
-  bool res= TRUE;
-  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
-  DBUG_ENTER("trans_xa_rollback");
-
-  if (!thd->transaction.xid_state.xid.eq(thd->lex->xid))
-  {
-    XID_STATE *xs= xid_cache_search(thd->lex->xid);
-    if (!xs || xs->in_thd)
-      my_error(ER_XAER_NOTA, MYF(0));
-    else
-    {
-      xa_trans_rolled_back(xs);
-      ha_commit_or_rollback_by_xid(thd, thd->lex->xid, 0);
-      xid_cache_delete(xs);
-    }
-    DBUG_RETURN(thd->get_stmt_da()->is_error());
-  }
-
-  if (xa_state != XA_IDLE && xa_state != XA_PREPARED && xa_state != XA_ROLLBACK_ONLY)
-  {
-    my_error(ER_XAER_RMFAIL, MYF(0), xa_state_names[xa_state]);
-    DBUG_RETURN(TRUE);
-  }
-
-  res= xa_trans_force_rollback(thd);
-
-  thd->variables.option_bits&= ~OPTION_BEGIN;
-  thd->transaction.all.reset_unsafe_rollback_flags();
-  thd->server_status&=
-    ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
-  DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
-  xid_cache_delete(&thd->transaction.xid_state);
-  thd->transaction.xid_state.xa_state= XA_NOTR;
-
-  DBUG_RETURN(res);
+  return res;
 }

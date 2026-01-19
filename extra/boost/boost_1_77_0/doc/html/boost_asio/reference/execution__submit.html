@@ -1,0 +1,121 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>execution::submit</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="execution__start.html" title="execution::start">
+<link rel="next" href="execution_context.html" title="execution_context">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="execution__start.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="execution_context.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.execution__submit"></a><a class="link" href="execution__submit.html" title="execution::submit">execution::submit</a>
+</h3></div></div></div>
+<p>
+        <a class="indexterm" name="boost_asio.indexterm.execution__submit"></a> 
+A customisation point
+        that submits a sender to a receiver.
+      </p>
+<pre class="programlisting">constexpr unspecified submit = unspecified;
+</pre>
+<p>
+        The name <code class="computeroutput">execution::submit</code> denotes a customisation point object.
+        For some subexpressions <code class="computeroutput">s</code> and <code class="computeroutput">r</code>, let <code class="computeroutput">S</code>
+        be a type such that <code class="computeroutput">decltype((s))</code> is <code class="computeroutput">S</code> and let
+        <code class="computeroutput">R</code> be a type such that <code class="computeroutput">decltype((r))</code> is <code class="computeroutput">R</code>.
+        The expression <code class="computeroutput">execution::submit(s, r)</code> is ill-formed if <code class="computeroutput">sender_to&lt;S,
+        R&gt;</code> is not <code class="computeroutput">true</code>. Otherwise, it is expression-equivalent
+        to:
+      </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+            <code class="computeroutput">s.submit(r)</code>, if that expression is valid and <code class="computeroutput">S</code>
+            models <code class="computeroutput">sender</code>. If the function selected does not submit
+            the receiver object <code class="computeroutput">r</code> via the sender <code class="computeroutput">s</code>, the
+            program is ill-formed with no diagnostic required.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">submit(s, r)</code>, if that expression is valid and
+            <code class="computeroutput">S</code> models <code class="computeroutput">sender</code>, with overload resolution performed
+            in a context that includes the declaration <code class="computeroutput">void submit();</code>
+            and that does not include a declaration of <code class="computeroutput">execution::submit</code>.
+            If the function selected by overload resolution does not submit the receiver
+            object <code class="computeroutput">r</code> via the sender <code class="computeroutput">s</code>, the program is ill-formed
+            with no diagnostic required.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">execution::start((new submit_receiver&lt;S, R&gt;{s,r})-&gt;state_)</code>,
+            where <code class="computeroutput">submit_receiver</code> is an implementation-defined class
+            template equivalent to:
+          </li>
+</ul></div>
+<pre class="programlisting">template&lt;class S, class R&gt;
+  struct submit_receiver {
+    struct wrap {
+      submit_receiver * p_;
+      template&lt;class...As&gt;
+        requires receiver_of&lt;R, As...&gt;
+      void set_value(As&amp;&amp;... as) &amp;&amp;
+        noexcept(is_nothrow_receiver_of_v&lt;R, As...&gt;) {
+        execution::set_value(std::move(p_-&gt;r_), (As&amp;&amp;) as...);
+        delete p_;
+      }
+      template&lt;class E&gt;
+        requires receiver&lt;R, E&gt;
+      void set_error(E&amp;&amp; e) &amp;&amp; noexcept {
+        execution::set_error(std::move(p_-&gt;r_), (E&amp;&amp;) e);
+        delete p_;
+      }
+      void set_done() &amp;&amp; noexcept {
+        execution::set_done(std::move(p_-&gt;r_));
+        delete p_;
+      }
+    };
+    remove_cvref_t&lt;R&gt; r_;
+    connect_result_t&lt;S, wrap&gt; state_;
+    submit_receiver(S&amp;&amp; s, R&amp;&amp; r)
+      : r_((R&amp;&amp;) r)
+      , state_(execution::connect((S&amp;&amp;) s, wrap{this})) {}
+  };
+</pre>
+<h5>
+<a name="boost_asio.reference.execution__submit.h0"></a>
+        <span class="phrase"><a name="boost_asio.reference.execution__submit.requirements"></a></span><a class="link" href="execution__submit.html#boost_asio.reference.execution__submit.requirements">Requirements</a>
+      </h5>
+<p>
+        <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/execution/submit.hpp</code>
+      </p>
+<p>
+        <span class="emphasis"><em>Convenience header: </em></span><code class="literal">boost/asio/execution.hpp</code>
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="execution__start.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="execution_context.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

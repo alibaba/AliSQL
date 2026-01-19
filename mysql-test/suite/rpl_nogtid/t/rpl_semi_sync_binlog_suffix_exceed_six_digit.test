@@ -1,0 +1,148 @@
+##############################################################################
+# ==== Purpose ====
+# The purpose of this test is to verify that, replication doesn't switch from
+# semisync to async when binlog suffix exceeds six digits.
+#
+# ==== Requirement ====
+# Replication doesn't switch from semisync to async when binlog suffix exceeds
+# six digits
+#
+# ==== Implementation ====
+# 1. Initial setup
+# 2. Reset the binary log and set the suffix to 999999.
+# 3. Start replicating from the binlog file with suffix 999999.
+# 4. Insert 2 rows, this will cause binary log to rotate
+#    from six digit suffix to seven digit suffix
+# 5. Stop the replica
+# 6. Execute an insert on source and verify that it doesn't commit even after
+#    a sleep of 1 second. The source will commit after the
+#    rpl_semi_sync_source_timeout.
+# 7. Start the replica.
+# 8. Cleanup.
+#
+# ==== Reference ====
+# Bug#37024069: Issues with strcmp when binlog suffix number exceeds six digits
+
+--source include/have_binlog_format_row.inc
+--source include/have_semisync_plugin.inc
+--let $rpl_skip_start_slave = 1
+--source include/master-slave.inc
+--source include/install_semisync.inc
+
+# Suppress warnings that might be generated during the test
+let $messages =
+Timeout waiting for reply of binlog
+Got an error reading communication packets
+;
+--source include/suppress_messages.inc
+
+# install_semisync.inc starts the receiver thread so need to stop it before
+# we execute RESET command on source.
+
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_io.inc
+
+--echo #
+--echo # 1. Initial setup
+--echo #
+
+--source include/rpl_connection_master.inc
+
+--let $sysvars_to_save = ["GLOBAL.rpl_semi_sync_source_timeout", "GLOBAL.max_binlog_size"]
+--source include/save_sysvars.inc
+
+# NOTE: This may produce spurious, random failures, in case the SELECT(at step 6)
+# takes longer time than what remains until the semisync timeout occurs. If this
+# becomes a problem, increase the timeout.
+
+SET GLOBAL rpl_semi_sync_source_timeout = 5000;
+
+--echo #
+--echo # 2. Reset the binary log and set the suffix to 999999.
+--echo #
+
+RESET MASTER TO 999999;
+
+--let $binlog_file = query_get_value("SHOW BINARY LOGS", Log_name, 1)
+
+--echo #
+--echo # 3. Start replicating from the binlog file with suffix 999999.
+--echo #
+--source include/rpl_connection_slave.inc
+
+--replace_result $binlog_file BINLOG_FILE
+eval CHANGE REPLICATION SOURCE TO source_log_file = '$binlog_file';
+--source include/start_slave.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL max_binlog_size = 4096;
+
+CREATE TABLE t2 (s VARCHAR(4096));
+
+--echo #
+--echo # 4. Insert 2 rows, this will cause binary log to rotate
+--echo #    from six digit suffix to seven digit suffix
+--echo #
+
+INSERT INTO t2 VALUES (REPEAT("a", 4096));
+INSERT INTO t2 VALUES (REPEAT("a", 4096));
+--echo #
+--echo # 5. Stop the replica
+--echo #
+
+--source include/sync_slave_sql_with_master.inc
+--source include/stop_slave.inc
+
+--echo #
+--echo # 6. Execute an insert on source and verify that it doesn't commit even
+--echo #    after a sleep of 1 second. The source will commit after the
+--echo #    rpl_semi_sync_source_timeout.
+--echo #
+--source include/rpl_connection_slave.inc
+
+--let $row_count_before= `SELECT COUNT(*) FROM t2`
+--let $yes_tx_before = query_get_value(SHOW STATUS LIKE 'Rpl_semi_sync_yes_tx', Value, 1)
+
+--send INSERT INTO t2 VALUES ('a')
+--sleep 1
+--source include/rpl_connection_master1.inc
+--let $row_count_after= `SELECT COUNT(*) FROM t2`
+--let $yes_tx_after = query_get_value(SHOW STATUS LIKE 'Rpl_semi_sync_yes_tx', Value, 1)
+
+# When the replica is stopped, the INSERT query will only succeed
+# after the value for rpl_semi_sync_source_timeout elapses.
+
+--let $assert_text = Row count has not been updated
+--let $assert_cond = "$row_count_before" = "$row_count_after"
+--source include/assert.inc
+
+# The number of commits that were acknowledged successfully by a replica
+# should remain unchanged.
+
+--let $assert_text = Status variable Rpl_semi_sync_yes_tx is unchanged
+--let $assert_cond = "$yes_tx_before" = "$yes_tx_after"
+--source include/assert.inc
+
+--source include/rpl_connection_slave.inc
+--reap;
+
+--echo #
+--echo # 7. Start the replica
+--echo #
+
+--source include/rpl_connection_slave.inc
+
+--source include/start_slave.inc
+
+--echo #
+--echo # 8. Cleanup
+--echo #
+--source include/rpl_connection_master.inc
+
+DROP TABLE t2;
+--source include/restore_sysvars.inc
+
+--source include/sync_slave_sql_with_master.inc
+
+--source include/uninstall_semisync.inc
+--source include/rpl_end.inc

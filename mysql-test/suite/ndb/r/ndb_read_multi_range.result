@@ -9,11 +9,11 @@ insert into t1 values
 (1,2,1),(2,3,2),(3,4,3),(4,5,4),
 (5,2,12),(6,3,11),(7,4,10),(8,5,9),
 (9,2,8),(10,3,7),(11,4,6),(12,5,5);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 set autocommit=off;
 create table r1 as select * from t1 where a in (2,8,12);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a;
 a	b	c
@@ -22,7 +22,7 @@ a	b	c
 12	5	5
 drop table r1;
 create table r1 as select * from t1 where b in (1,2,5);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a;
 a	b	c
@@ -34,7 +34,7 @@ a	b	c
 12	5	5
 drop table r1;
 create table r1 as select * from t1 where c in (2,8,12);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a;
 a	b	c
@@ -43,7 +43,7 @@ a	b	c
 9	2	8
 drop table r1;
 create table r1 as select * from t1 where a in (2,8) or (a > 11) or (a <= 1);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a;
 a	b	c
@@ -53,7 +53,7 @@ a	b	c
 12	5	5
 drop table r1;
 create table r1 as select * from t1 where a in (33,8,12);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a;
 a	b	c
@@ -61,7 +61,7 @@ a	b	c
 12	5	5
 drop table r1;
 create table r1 as select * from t1 where a in (2,33,8,12,34);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a;
 a	b	c
@@ -70,7 +70,7 @@ a	b	c
 12	5	5
 drop table r1;
 create table r1 as select * from t1 where b in (1,33,5);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a;
 a	b	c
@@ -83,10 +83,10 @@ a	b	c
 4	5	4
 8	5	9
 12	5	5
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 create table r1 as select * from t1 where b in (45,1,33,5,44);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 3
 select * from r1 order by a;
 a	b	c
@@ -96,10 +96,10 @@ a	b	c
 drop table r1;
 select * from t1 force index(b) where b in (45,22) order by a;
 a	b	c
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 create table r1 as select * from t1 where c in (2,8,33);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 3
 select * from r1 order by a;
 a	b	c
@@ -107,7 +107,7 @@ a	b	c
 9	2	8
 drop table r1;
 create table r1 as select * from t1 where c in (13,2,8,33,12);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a;
 a	b	c
@@ -119,11 +119,11 @@ select * from t1 where a in (33,8,12) order by a;
 a	b	c
 8	5	9
 12	5	5
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 select * from t1 where a in (33,34,35) order by a;
 a	b	c
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 select * from t1 where a in (2,8) or (a > 11) or (a <= 1) order by a;
 a	b	c
@@ -131,7 +131,7 @@ a	b	c
 2	3	2
 8	5	9
 12	5	5
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 select * from t1 where b in (6,7) or (b <= 5) or (b >= 10) order by b,a;
 a	b	c
@@ -147,14 +147,14 @@ a	b	c
 4	5	4
 8	5	9
 12	5	5
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 select * from t1 where c in (13,2,8,33,12) order by c,a;
 a	b	c
 2	3	2
 9	2	8
 5	2	12
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 drop table t1;
 set autocommit=on;
@@ -174,11 +174,11 @@ insert into t1 values
 (1,2,1,3,1),
 (1,2,1,4,1),
 (1,2,1,5,1);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 create table r1 as select * from t1
 where a=1 and b=2 and c=1 and d in (1,4,3,2);
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 2
 select * from r1 order by a,b,c,d;
 a	b	c	d	e
@@ -312,6 +312,9 @@ c datetime default NULL,
 PRIMARY KEY  (a),
 KEY idx_bc (b,c)
 ) ENGINE=ndbcluster;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES 
 (406989,67,'2006-02-23 17:08:46'), (150078,67,'2005-10-26 11:17:45'),
 (406993,67,'2006-02-27 11:20:57'), (245655,67,'2005-12-08 15:59:08'),
@@ -477,6 +480,8 @@ type varchar(150) NOT NULL,
 modified timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 PRIMARY KEY (id)
 ) ENGINE=ndbcluster;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES ('sakila',1,'Some text goes here','text',CURRENT_TIMESTAMP);
 SELECT id, tag, doc, type FROM t1 WHERE id IN ('flipper','orka');
 id	tag	doc	type
@@ -489,11 +494,17 @@ var1 int(2) NOT NULL,
 var2 int(2) NOT NULL,
 PRIMARY KEY  (var1)
 ) ENGINE=ndbcluster DEFAULT CHARSET=ascii CHECKSUM=1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE TABLE t2 (
 var1 int(2) NOT NULL,
 var2 int(2) NOT NULL,
 PRIMARY KEY  (var1)
 ) ENGINE=ndbcluster DEFAULT CHARSET=ascii CHECKSUM=1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE TRIGGER testtrigger
 AFTER UPDATE ON t1 FOR EACH ROW BEGIN
 REPLACE INTO t2 SELECT * FROM t1 WHERE t1.var1 = NEW.var1;END|
@@ -562,7 +573,9 @@ a
 drop table t1;
 create table t1 (a varchar(1536) not null,
 b varchar(1532) not null,
-c int, primary key (a,b)) engine=ndb;
+c int, primary key (a,b)) character set latin1 engine=ndb;
+Warnings:
+Warning	1296	Specified key 'PRIMARY' was too long (max = 3056 bytes); statistics will not be generated
 insert into t1 values ('a', 'a', 1), ('b', 'b', 2), ('c', 'c', 3),
 ('d', 'd', 4), ('e', 'e', 5), ('f', 'f', 6),
 ('g', 'g', 7), ('h', 'h', 8), ('i', 'i', 9),
@@ -590,8 +603,10 @@ i	i	9
 m	m	13
 v	v	22
 drop table t1, t2;
-create table t1 (pk int primary key, a int) engine=ndb;
-create table t2 (pk int primary key, a int) engine=ndb;
+create table t1 (pk int primary key, a int) engine=ndb
+comment="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
+create table t2 (pk int primary key, a int) engine=ndb
+comment="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 insert into t2 values
 (0,0), (1,1), (2,2), (3,3), (4,4),
 (5,5), (6,6), (7,7), (8,8), (9,9);
@@ -602,12 +617,17 @@ t1.a + t2.a*10 + t3.a*100 + t4.a*1000,
 from
 t2 as t1, t2 as t2, t2 as t3, t2 as t4
 where (t1.a + t2.a*10 + t3.a*100 + t4.a*1000) < 3000;
+set optimizer_switch='block_nested_loop=off';
 explain
 SELECT DISTINCT STRAIGHT_JOIN t1.pk FROM 
 t1 LEFT JOIN t2 ON t2.a = t1.a AND t2.pk != 6;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3000	Using temporary
-1	SIMPLE	t2	range	PRIMARY	PRIMARY	4	NULL	6	Using where; Distinct
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ALL	PRIMARY	NULL	NULL	NULL	3000	100.00	Using temporary
+1	SIMPLE	t2	p0,p1,p2,p3,p4,p5,p6,p7	range	PRIMARY	PRIMARY	4	NULL	6	100.00	Using pushed condition ((`test`.`t2`.`a` = `test`.`t1`.`a`) and (`test`.`t2`.`pk` <> 6)); Using MRR; Distinct
+Warnings:
+Note	1003	Can't push table 't2' as child, access type 'Range-scan' not implemented
+Note	1003	/* select#1 */ select straight_join distinct `test`.`t1`.`pk` AS `pk` from `test`.`t1` left join `test`.`t2` on(((`test`.`t2`.`a` = `test`.`t1`.`a`) and (`test`.`t2`.`pk` <> 6))) where true
 SELECT DISTINCT STRAIGHT_JOIN t1.pk FROM 
 t1 LEFT JOIN t2 ON t2.a = t1.a AND t2.pk != 6;
+set optimizer_switch='block_nested_loop=default';
 drop table t1, t2;

@@ -112,9 +112,11 @@ SELECT @@session.local_infile = 1;
 # Check if the value in GLOBAL Tables matches values in variable   #
 ####################################################################
 
+--disable_warnings
 SELECT IF(@@global.local_infile, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='local_infile';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_018_07----------------------#'
@@ -159,7 +161,9 @@ SET global.local_infile = 1;
 --Error ER_UNKNOWN_TABLE
 SELECT global.local_infile;
 --Error ER_BAD_FIELD_ERROR
-SELECT local_infile = @@session.local_infile;
+SELECT local_infile;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.local_infile;
 
 ##############################  
 #   Restore initial value    #

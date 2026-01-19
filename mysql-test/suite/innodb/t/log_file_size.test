@@ -1,0 +1,89 @@
+# Test invalid size of redo log files.
+
+let MYSQLD_DATADIR= `select @@datadir`;
+let SEARCH_FILE= $MYSQLTEST_VARDIR/log/my_restart.err;
+let args=--console --log-error-verbosity=3 > $SEARCH_FILE 2>&1;
+
+--echo #
+--echo # Do clean shutdown of MySQL and remove log files.
+--echo #
+
+--source include/shutdown_mysqld.inc
+
+--remove_files_wildcard $MYSQLD_DATADIR/#innodb_redo #ib_redo*
+
+let MYSQLD_REDODIR = $MYSQLD_DATADIR/#innodb_redo;
+
+perl;
+foreach (0, 1, 64*1024-1, 64*1024+1) {
+    my $expected_file_size = $_;
+    my $file_name = "$ENV{MYSQLD_REDODIR}/#ib_redo_prepared_$expected_file_size";
+    open($file, '>:raw', $file_name) or die "Unable to open: $!";
+    vec($byte, 0, 8) = 255;
+    print $file $byte for (1..$expected_file_size);
+    close($file);
+    my $actual_file_size = -s $file_name;
+    print "Prepared a file with size = $actual_file_size bytes\n";
+}
+EOF
+
+--echo #
+--echo # Create #ib_redo0 as empty file and start MySQL.
+--echo # We should detect that #ib_redo0 is empty.
+--echo #
+
+--move_file $MYSQLD_REDODIR/#ib_redo_prepared_0 $MYSQLD_REDODIR/#ib_redo0
+--error 1,42
+--exec $MYSQLD_CMD $args
+let SEARCH_PATTERN= redo log file .*#ib_redo0 is empty;
+--source include/search_pattern.inc
+--remove_file $SEARCH_FILE
+--remove_file $MYSQLD_REDODIR/#ib_redo0
+
+--echo #
+--echo # Create #ib_redo0 with 1 byte inside and start MySQL.
+--echo # We should detect that #ib_redo0 is too small.
+--echo #
+
+--move_file $MYSQLD_REDODIR/#ib_redo_prepared_1 $MYSQLD_REDODIR/#ib_redo0
+--error 1,42
+--exec $MYSQLD_CMD $args
+let SEARCH_PATTERN= redo log file .*#ib_redo0 is smaller than 65536 bytes;
+--source include/search_pattern.inc
+--remove_file $SEARCH_FILE
+--remove_file $MYSQLD_REDODIR/#ib_redo0
+
+--echo #
+--echo # Create #ib_redo0 with 64kB-1 bytes inside and start MySQL.
+--echo # We should detect that #ib_redo0 is too small.
+--echo #
+
+--move_file $MYSQLD_REDODIR/#ib_redo_prepared_65535 $MYSQLD_REDODIR/#ib_redo0
+--error 1,42
+--exec $MYSQLD_CMD $args
+let SEARCH_PATTERN= redo log file .*#ib_redo0 is smaller than 65536 bytes;
+--source include/search_pattern.inc
+--remove_file $SEARCH_FILE
+--remove_file $MYSQLD_REDODIR/#ib_redo0
+
+--echo #
+--echo # Create #ib_redo0 with 64kB+1 bytes inside and start MySQL.
+--echo # We should detect that #ib_redo0's size is not divisible by page size.
+--echo #
+
+--move_file $MYSQLD_REDODIR/#ib_redo_prepared_65537 $MYSQLD_REDODIR/#ib_redo0
+--error 1,42
+--exec $MYSQLD_CMD $args
+let SEARCH_PATTERN= .*#ib_redo0 size 65537 is not a multiple of innodb_page_size;
+--source include/search_pattern.inc
+--remove_file $SEARCH_FILE
+--remove_file $MYSQLD_REDODIR/#ib_redo0
+
+--echo
+
+--echo #
+--echo # Start MySQL afterwards.
+--echo #
+
+--let $restart_parameters= restart:
+--source include/start_mysqld.inc

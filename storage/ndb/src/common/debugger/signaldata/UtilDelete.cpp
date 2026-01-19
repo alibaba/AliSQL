@@ -1,15 +1,23 @@
 /*
-   Copyright (C) 2003, 2005, 2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
+    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,16 +26,13 @@
 
 #include <signaldata/UtilDelete.hpp>
 
-bool 
-printUTIL_DELETE_REQ(FILE * out, const Uint32 * data, Uint32 l, Uint16 b){
+bool printUTIL_DELETE_REQ(FILE *out, const Uint32 *data, Uint32 l, Uint16 b) {
   (void)l;  // Don't want compiler warning
   (void)b;  // Don't want compiler warning
 
-  UtilDeleteReq* sig = (UtilDeleteReq*)data;
+  const UtilDeleteReq *sig = (const UtilDeleteReq *)data;
   fprintf(out, " senderData: %d prepareId: %d totalDataLen: %d\n",
-	  sig->senderData,
-	  sig->prepareId,
-	  sig->totalDataLen);
+          sig->senderData, sig->prepareId, sig->totalDataLen);
   fprintf(out,
           " H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x\n"
           " H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x\n"
@@ -39,28 +44,25 @@ printUTIL_DELETE_REQ(FILE * out, const Uint32 * data, Uint32 l, Uint16 b){
           sig->attrData[12], sig->attrData[13], sig->attrData[14],
           sig->attrData[15], sig->attrData[16], sig->attrData[17],
           sig->attrData[18], sig->attrData[19], sig->attrData[20],
-          sig->attrData[21]
-          );
+          sig->attrData[21]);
 
   return true;
 }
 
-bool 
-printUTIL_DELETE_CONF(FILE * out, const Uint32 * data, Uint32 l, Uint16 b){
+bool printUTIL_DELETE_CONF(FILE *out, const Uint32 *data, Uint32 l, Uint16 b) {
   (void)l;  // Don't want compiler warning
   (void)b;  // Don't want compiler warning
 
-  UtilDeleteConf* sig = (UtilDeleteConf*)data;
+  const UtilDeleteConf *sig = (const UtilDeleteConf *)data;
   fprintf(out, " senderData: %d\n", sig->senderData);
   return true;
 }
 
-bool 
-printUTIL_DELETE_REF(FILE * out, const Uint32 * data, Uint32 l, Uint16 b){
+bool printUTIL_DELETE_REF(FILE *out, const Uint32 *data, Uint32 l, Uint16 b) {
   (void)l;  // Don't want compiler warning
   (void)b;  // Don't want compiler warning
 
-  UtilDeleteRef* sig = (UtilDeleteRef*)data;
+  const UtilDeleteRef *sig = (const UtilDeleteRef *)data;
   fprintf(out, " senderData: %d\n", sig->senderData);
   fprintf(out, " errorCode: %d\n", sig->errorCode);
   return true;

@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005, 2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,6 +28,8 @@
 
 #include "SignalData.hpp"
 
+#define JAM_FILE_ID 119
+
 /**
  * @class UtilReleaseReq
  * @brief Release Prepared transaction in Util block
@@ -31,55 +40,53 @@
 class UtilReleaseReq {
   friend class DbUtil;
   friend class Trix;
-public:
-  STATIC_CONST( SignalLength = 2 );
 
-private:  
-  Uint32 senderData; // MUST be no 1!
+ public:
+  static constexpr Uint32 SignalLength = 2;
+
+ private:
+  Uint32 senderData;  // MUST be no 1!
   Uint32 prepareId;
 };
-
 
 /**
  * @class UtilReleaseConf
  *
  * Data format:
- * - UTIL_PREPARE_CONF <UtilPrepareId> 
+ * - UTIL_PREPARE_CONF <UtilPrepareId>
  */
 
 class UtilReleaseConf {
   friend class DbUtil;
   friend class Trix;
 
-  STATIC_CONST( SignalLength = 1 );
+  static constexpr Uint32 SignalLength = 1;
 
-private:
+ private:
   Uint32 senderData;  // MUST be no 1!
 };
-
 
 /**
  * @class UtilReleaseRef
  *
  * Data format:
- * - UTIL_PREPARE_RELEASE_REF 
+ * - UTIL_PREPARE_RELEASE_REF
  */
 
 class UtilReleaseRef {
   friend class DbUtil;
   friend class Trix;
 
-  enum ErrorCode {
-    NO_ERROR = 0,
-    NO_SUCH_PREPARE_SEIZED = 1
-  };
+  enum ErrorCode { RELEASE_REF_NO_ERROR = 0, NO_SUCH_PREPARE_SEIZED = 1 };
 
-  STATIC_CONST( SignalLength = 3 );
+  static constexpr Uint32 SignalLength = 3;
 
-private:
-  Uint32 senderData; // MUST be no 1!
+ private:
+  Uint32 senderData;  // MUST be no 1!
   Uint32 prepareId;
   Uint32 errorCode;
 };
+
+#undef JAM_FILE_ID
 
 #endif

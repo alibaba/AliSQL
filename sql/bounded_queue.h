@@ -1,199 +1,152 @@
-/* Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved. 
+/* Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #ifndef BOUNDED_QUEUE_INCLUDED
 #define BOUNDED_QUEUE_INCLUDED
 
-#include <string.h>
-#include "my_global.h"
 #include "my_base.h"
 #include "my_sys.h"
-#include "queues.h"
-
-class Sort_param;
+#include "mysys_err.h"
+#include "priority_queue.h"
+#include "sql/malloc_allocator.h"
 
 /**
   A priority queue with a fixed, limited size.
 
-  This is a wrapper on top of QUEUE and the queue_xxx() functions.
+  This is a wrapper on top of Priority_queue.
   It keeps the top-N elements which are inserted.
 
   Elements of type Element_type are pushed into the queue.
-  For each element, we call a user-supplied keymaker_function,
+  For each element, we call a user-supplied Key_generator::make_sortkey(),
   to generate a key of type Key_type for the element.
-  Instances of Key_type are compared with the user-supplied compare_function.
+  Instances of Key_type are compared with the user-supplied Key_compare.
 
-  The underlying QUEUE implementation needs one extra element for replacing
-  the lowest/highest element when pushing into a full queue.
+  Pointers to the top-N elements are stored in the sort_keys array given
+  to the init() function below. To access elements in sorted order,
+  sort the array and access it sequentially.
  */
-template<typename Element_type, typename Key_type>
-class Bounded_queue
-{
-public:
-  Bounded_queue()
-  {
-    memset(&m_queue, 0, sizeof(m_queue));
-  }
+template <typename Element_type, typename Key_type, typename Key_generator,
+          typename Key_compare = std::less<Key_type>>
+class Bounded_queue {
+ public:
+  typedef Priority_queue<
+      Key_type, std::vector<Key_type, Malloc_allocator<Key_type>>, Key_compare>
+      Queue_type;
 
-  ~Bounded_queue()
-  {
-    delete_queue(&m_queue);
-  }
+  typedef typename Queue_type::allocator_type allocator_type;
 
-  /**
-     Function for making sort-key from input data.
-     @param param Sort parameters.
-     @param to    Where to put the key.
-     @param from  The input data.
-  */
-  typedef void (*keymaker_function)(Sort_param *param,
-                                    Key_type *to,
-                                    Element_type *from);
-
-  /**
-     Function for comparing two keys.
-     @param  n Pointer to number of bytes to compare.
-     @param  a First key.
-     @param  b Second key.
-     @retval -1, 0, or 1 depending on whether the left argument is 
-             less than, equal to, or greater than the right argument.
-   */
-  typedef int (*compare_function)(size_t *n, Key_type **a, Key_type **b);
+  Bounded_queue(
+      size_t element_size = sizeof(Element_type),
+      const allocator_type &alloc = allocator_type(PSI_NOT_INSTRUMENTED))
+      : m_queue(Key_compare(), alloc),
+        m_sort_keys(nullptr),
+        m_sort_param(nullptr),
+        m_element_size(element_size) {}
 
   /**
     Initialize the queue.
 
     @param max_elements   The size of the queue.
-    @param max_at_top     Set to true if you want biggest element on top.
-           false: We keep the n largest elements.
-                  pop() will return the smallest key in the result set.
-           true:  We keep the n smallest elements.
-                  pop() will return the largest key in the result set.
-    @param compare        Compare function for elements, takes 3 arguments.
-                          If NULL, we use get_ptr_compare(compare_length).
-    @param compare_length Length of the data (i.e. the keys) used for sorting.
-    @param keymaker       Function which generates keys for elements.
-    @param sort_param     Sort parameters.
-    @param sort_keys      Array of pointers to keys to sort.
+    @param sort_param     Sort parameters. We call sort_param->make_sortkey()
+                          to generate keys for elements.
+    @param[in,out] sort_keys Array of keys to sort.
+                             Must be initialized by caller.
+                             Will be filled with pointers to the top-N elements.
 
-    @retval 0 OK, 1 Could not allocate memory.
+    @retval false OK, true Could not allocate memory.
 
     We do *not* take ownership of any of the input pointer arguments.
    */
-  int init(ha_rows max_elements, bool max_at_top,
-           compare_function compare, size_t compare_length,
-           keymaker_function keymaker, Sort_param *sort_param,
-           Key_type **sort_keys);
+  bool init(ha_rows max_elements, Key_generator *sort_param,
+            Key_type *sort_keys) {
+    m_sort_keys = sort_keys;
+    m_sort_param = sort_param;
+    DBUG_EXECUTE_IF("bounded_queue_init_fail",
+                    my_error(EE_OUTOFMEMORY, MYF(ME_FATALERROR), 42);
+                    return true;);
+
+    // We allocate space for one extra element, for replace when queue is full.
+    if (m_queue.reserve(max_elements + 1)) return true;
+    // We cannot have packed keys in the queue.
+    m_queue.m_compare_length = sort_param->max_compare_length();
+    // We can have variable length keys though.
+    if (sort_param->using_varlen_keys()) m_queue.m_param = sort_param;
+    return false;
+  }
 
   /**
     Pushes an element on the queue.
     If the queue is already full, we discard one element.
-    Calls keymaker_function to generate a key for the element.
+    Calls m_sort_param::make_sortkey() to generate a key for the element.
 
-    @param element        The element to be pushed.
+    @param opaque    Parameter to send on to make_sortkey().
+
+    @retval false OK, true error.
    */
-  void push(Element_type *element);
+  template <class Opaque>
+  [[nodiscard]] bool push(const Opaque &opaque) {
+    /*
+      Add one extra byte to each key, so that sort-key generating functions
+      won't be returning out-of-space. Since we know there's always room
+      given a "m_element_size"-sized buffer even in the worst case (by
+      definition), we could in principle make a special mode flag in
+      Sort_param::make_sortkey() instead for the case of fixed-length records,
+      but this is much simpler.
+     */
+    assert(m_element_size < 0xFFFFFFFF);
+    const uint element_size = m_element_size + 1;
 
-  /**
-    Removes the top element from the queue.
-
-    @retval Pointer to the (key of the) removed element.
-
-    @note This function is for unit testing, where we push elements into to the
-          queue, and test that the appropriate keys are retained.
-          Interleaving of push() and pop() operations has not been tested.
-   */
-  Key_type **pop()
-  {
-    // Don't return the extra element to the client code.
-    if (queue_is_full((&m_queue)))
-      queue_remove(&m_queue, 0);
-    DBUG_ASSERT(m_queue.elements > 0);
-    if (m_queue.elements == 0)
-      return NULL;
-    return reinterpret_cast<Key_type**>(queue_remove(&m_queue, 0));
+    if (m_queue.size() == m_queue.capacity()) {
+      const Key_type &pq_top = m_queue.top();
+      const uint rec_sz =
+          m_sort_param->make_sortkey(pq_top, element_size, opaque);
+      // UINT_MAX means error, but we do not want to add a dependency
+      // on class THD here, as in current_thd->is_error().
+      if (rec_sz == UINT_MAX) return true;
+      assert(rec_sz <= m_element_size);
+      m_queue.update_top();
+      return false;
+    } else {
+      const uint rec_sz = m_sort_param->make_sortkey(
+          m_sort_keys[m_queue.size()], element_size, opaque);
+      // UINT_MAX means error, but we do not want to add a dependency
+      // on class THD here, as in current_thd->is_error().
+      if (rec_sz == UINT_MAX) return true;
+      assert(rec_sz <= m_element_size);
+      return m_queue.push(m_sort_keys[m_queue.size()]);
+    }
   }
 
   /**
     The number of elements in the queue.
    */
-  uint num_elements() const { return m_queue.elements; }
+  size_t num_elements() const { return m_queue.size(); }
 
-  /**
-    Is the queue initialized?
-   */
-  bool is_initialized() const { return m_queue.max_elements > 0; }
-
-private:
-  Key_type         **m_sort_keys;
-  size_t             m_compare_length;
-  keymaker_function  m_keymaker;
-  Sort_param        *m_sort_param;
-  st_queue           m_queue;
+ private:
+  Queue_type m_queue;
+  Key_type *m_sort_keys;
+  Key_generator *m_sort_param;
+  size_t m_element_size;
 };
-
-
-template<typename Element_type, typename Key_type>
-int Bounded_queue<Element_type, Key_type>::init(ha_rows max_elements,
-                                                bool max_at_top,
-                                                compare_function compare,
-                                                size_t compare_length,
-                                                keymaker_function keymaker,
-                                                Sort_param *sort_param,
-                                                Key_type **sort_keys)
-{
-  DBUG_ASSERT(sort_keys != NULL);
-
-  m_sort_keys=      sort_keys;
-  m_compare_length= compare_length;
-  m_keymaker=       keymaker;
-  m_sort_param=     sort_param;
-  // init_queue() takes an uint, and also does (max_elements + 1)
-  if (max_elements >= (UINT_MAX - 1))
-    return 1;
-  if (compare == NULL)
-    compare=
-      reinterpret_cast<compare_function>(get_ptr_compare(compare_length));
-
-  DBUG_EXECUTE_IF("bounded_queue_init_fail",
-                  DBUG_SET("+d,simulate_out_of_memory"););
-
-  // We allocate space for one extra element, for replace when queue is full.
-  return init_queue(&m_queue, (uint) max_elements + 1,
-                    0, max_at_top,
-                    reinterpret_cast<queue_compare>(compare),
-                    &m_compare_length);
-}
-
-
-template<typename Element_type, typename Key_type>
-void Bounded_queue<Element_type, Key_type>::push(Element_type *element)
-{
-  DBUG_ASSERT(is_initialized());
-  if (queue_is_full((&m_queue)))
-  {
-    // Replace top element with new key, and re-order the queue.
-    Key_type **pq_top= reinterpret_cast<Key_type **>(queue_top(&m_queue));
-    (*m_keymaker)(m_sort_param, *pq_top, element);
-    queue_replaced(&m_queue);
-  } else {
-    // Insert new key into the queue.
-    (*m_keymaker)(m_sort_param, m_sort_keys[m_queue.elements], element);
-    queue_insert(&m_queue,
-                 reinterpret_cast<uchar*>(&m_sort_keys[m_queue.elements]));
-  }
-}
 
 #endif  // BOUNDED_QUEUE_INCLUDED

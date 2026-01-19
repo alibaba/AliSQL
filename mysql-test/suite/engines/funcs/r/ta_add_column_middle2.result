@@ -7,10 +7,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -19,11 +19,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` bit(1) DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -35,10 +35,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -47,11 +47,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` bit(1) DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -63,10 +63,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -75,11 +75,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` bit(1) DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -91,10 +91,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -103,11 +103,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` bit(1) DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -119,10 +119,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -131,11 +131,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` bit(1) NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -147,10 +147,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -159,11 +159,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` bit(1) NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -175,10 +175,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -187,11 +187,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` bit(1) NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -203,10 +203,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -215,11 +215,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` bit(1) NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -231,10 +231,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -243,11 +243,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` tinyint(4) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` tinyint DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -259,10 +259,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -271,11 +271,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` tinyint(4) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` tinyint DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -287,10 +287,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -299,11 +299,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` tinyint(4) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` tinyint DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -315,10 +315,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -327,11 +327,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` tinyint(4) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` tinyint DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -343,10 +343,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -355,11 +355,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` tinyint(4) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` tinyint NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -371,10 +371,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -383,11 +383,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` tinyint(4) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` tinyint NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -399,10 +399,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -411,11 +411,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` tinyint(4) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` tinyint NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -427,10 +427,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -439,11 +439,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` tinyint(4) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` tinyint NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -455,10 +455,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 SMALLINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -467,11 +467,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` smallint(6) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` smallint DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -483,10 +483,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 SMALLINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -495,11 +495,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` smallint(6) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` smallint DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -511,10 +511,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 SMALLINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -523,11 +523,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` smallint(6) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` smallint DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -539,10 +539,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 SMALLINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -551,11 +551,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` smallint(6) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` smallint DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -567,10 +567,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 SMALLINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -579,11 +579,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` smallint(6) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` smallint NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -595,10 +595,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 SMALLINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -607,11 +607,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` smallint(6) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` smallint NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -623,10 +623,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 SMALLINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -635,11 +635,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` smallint(6) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` smallint NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -651,10 +651,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 SMALLINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -663,11 +663,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` smallint(6) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` smallint NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -679,10 +679,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -691,11 +691,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` mediumint(9) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` mediumint DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -707,10 +707,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -719,11 +719,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` mediumint(9) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` mediumint DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -735,10 +735,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -747,11 +747,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` mediumint(9) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` mediumint DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -763,10 +763,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -775,11 +775,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` mediumint(9) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` mediumint DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -791,10 +791,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -803,11 +803,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` mediumint(9) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` mediumint NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -819,10 +819,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -831,11 +831,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` mediumint(9) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` mediumint NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -847,10 +847,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -859,11 +859,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` mediumint(9) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` mediumint NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -875,10 +875,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -887,11 +887,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` mediumint(9) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` mediumint NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -903,10 +903,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -915,11 +915,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` int DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -931,10 +931,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -943,11 +943,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` int DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -959,10 +959,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -971,11 +971,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` int DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -987,10 +987,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -999,11 +999,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` int DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1015,10 +1015,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1027,11 +1027,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1043,10 +1043,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1055,11 +1055,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1071,10 +1071,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1083,11 +1083,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1099,10 +1099,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1111,11 +1111,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1127,10 +1127,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INTEGER  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1139,11 +1139,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` int DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1155,10 +1155,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INTEGER  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1167,11 +1167,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` int DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1183,10 +1183,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INTEGER  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1195,11 +1195,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` int DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1211,10 +1211,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INTEGER  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1223,11 +1223,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` int DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1239,10 +1239,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INTEGER  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1251,11 +1251,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1267,10 +1267,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INTEGER  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1279,11 +1279,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1295,10 +1295,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INTEGER  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1307,11 +1307,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1323,10 +1323,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 INTEGER  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1335,11 +1335,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` int(11) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1351,10 +1351,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIGINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1363,11 +1363,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` bigint(20) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` bigint DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1379,10 +1379,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIGINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1391,11 +1391,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` bigint(20) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` bigint DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1407,10 +1407,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIGINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1419,11 +1419,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` bigint(20) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` bigint DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1435,10 +1435,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIGINT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1447,11 +1447,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` bigint(20) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` bigint DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1463,10 +1463,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIGINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1475,11 +1475,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` bigint(20) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` bigint NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1491,10 +1491,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIGINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1503,11 +1503,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` bigint(20) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` bigint NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1519,10 +1519,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIGINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1531,11 +1531,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` bigint(20) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` bigint NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1547,10 +1547,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BIGINT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1559,11 +1559,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` bigint(20) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` bigint NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1575,10 +1575,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 REAL  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1587,11 +1587,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1603,10 +1603,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 REAL  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1615,11 +1615,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1631,10 +1631,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 REAL  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1643,11 +1643,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1659,10 +1659,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 REAL  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1671,11 +1671,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1687,10 +1687,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 REAL  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1699,11 +1699,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1715,10 +1715,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 REAL  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1727,11 +1727,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1743,10 +1743,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 REAL  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1755,11 +1755,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1771,10 +1771,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 REAL  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1783,11 +1783,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1799,10 +1799,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DOUBLE  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1811,11 +1811,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1827,10 +1827,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DOUBLE  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1839,11 +1839,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1855,10 +1855,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DOUBLE  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1867,11 +1867,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1883,10 +1883,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DOUBLE  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1895,11 +1895,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1911,10 +1911,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DOUBLE  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1923,11 +1923,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1939,10 +1939,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DOUBLE  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1951,11 +1951,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1967,10 +1967,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DOUBLE  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -1979,11 +1979,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -1995,10 +1995,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DOUBLE  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2007,11 +2007,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` double NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2023,10 +2023,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 FLOAT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2035,11 +2035,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` float DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2051,10 +2051,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 FLOAT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2063,11 +2063,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` float DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2079,10 +2079,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 FLOAT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2091,11 +2091,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` float DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2107,10 +2107,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 FLOAT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2119,11 +2119,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` float DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2135,10 +2135,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 FLOAT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2147,11 +2147,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` float NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2163,10 +2163,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 FLOAT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2175,11 +2175,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` float NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2191,10 +2191,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 FLOAT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2203,11 +2203,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` float NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2219,10 +2219,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 FLOAT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2231,11 +2231,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` float NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2247,10 +2247,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DECIMAL  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2259,11 +2259,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2275,10 +2275,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DECIMAL  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2287,11 +2287,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2303,10 +2303,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DECIMAL  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2315,11 +2315,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2331,10 +2331,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DECIMAL  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2343,11 +2343,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2359,10 +2359,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DECIMAL  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2371,11 +2371,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2387,10 +2387,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DECIMAL  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2399,11 +2399,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2415,10 +2415,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DECIMAL  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2427,11 +2427,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2443,10 +2443,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DECIMAL  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2455,11 +2455,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2471,10 +2471,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 NUMERIC  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2483,11 +2483,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2499,10 +2499,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 NUMERIC  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2511,11 +2511,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2527,10 +2527,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 NUMERIC  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2539,11 +2539,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2555,10 +2555,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 NUMERIC  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2567,11 +2567,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2583,10 +2583,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 NUMERIC  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2595,11 +2595,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2611,10 +2611,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 NUMERIC  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2623,11 +2623,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2639,10 +2639,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 NUMERIC  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2651,11 +2651,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2667,10 +2667,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 NUMERIC  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2679,11 +2679,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` decimal(10,0) NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2695,10 +2695,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DATE  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2707,11 +2707,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` date DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2723,10 +2723,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DATE  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2735,11 +2735,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` date DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2751,10 +2751,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DATE  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2763,11 +2763,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` date DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2779,10 +2779,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DATE  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2791,11 +2791,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` date DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2807,10 +2807,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DATE  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2819,11 +2819,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` date NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2835,10 +2835,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DATE  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2847,11 +2847,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` date NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2863,10 +2863,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DATE  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2875,11 +2875,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` date NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2891,10 +2891,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 DATE  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2903,11 +2903,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` date NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2919,10 +2919,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIME  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2931,11 +2931,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` time DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2947,10 +2947,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIME  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2959,11 +2959,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` time DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -2975,10 +2975,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIME  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -2987,11 +2987,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` time DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3003,10 +3003,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIME  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3015,11 +3015,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` time DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3031,10 +3031,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIME  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3043,11 +3043,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` time NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3059,10 +3059,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIME  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3071,11 +3071,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` time NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3087,10 +3087,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIME  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3099,11 +3099,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` time NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3115,10 +3115,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIME  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3127,11 +3127,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` time NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3143,10 +3143,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIMESTAMP  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3155,11 +3155,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` timestamp NULL DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3171,10 +3171,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIMESTAMP  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3183,11 +3183,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` timestamp NULL DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3199,10 +3199,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIMESTAMP  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3211,11 +3211,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` timestamp NULL DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3227,10 +3227,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIMESTAMP  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3239,11 +3239,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` timestamp NULL DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3255,10 +3255,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIMESTAMP  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3267,11 +3267,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `c2` int NOT NULL,
+  `c4` timestamp NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3283,10 +3283,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIMESTAMP  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3295,11 +3295,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `c2` int NOT NULL,
+  `c4` timestamp NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3311,10 +3311,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIMESTAMP  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3323,11 +3323,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `c2` int NOT NULL,
+  `c4` timestamp NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3339,10 +3339,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TIMESTAMP  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3351,11 +3351,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `c2` int NOT NULL,
+  `c4` timestamp NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3367,10 +3367,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 YEAR  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3379,11 +3379,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` year(4) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` year DEFAULT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3395,10 +3395,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 YEAR  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3407,11 +3407,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` year(4) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` year DEFAULT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3423,10 +3423,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 YEAR  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3435,11 +3435,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` year(4) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` year DEFAULT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3451,10 +3451,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 YEAR  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3463,11 +3463,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` year(4) DEFAULT NULL,
+  `c2` int NOT NULL,
+  `c4` year DEFAULT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3479,10 +3479,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 YEAR  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3491,11 +3491,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` year(4) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` year NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3507,10 +3507,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 YEAR  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3519,11 +3519,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` year(4) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` year NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3535,10 +3535,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 YEAR  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3547,11 +3547,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` year(4) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` year NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3563,10 +3563,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 YEAR  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3575,11 +3575,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
-  `c4` year(4) NOT NULL,
+  `c2` int NOT NULL,
+  `c4` year NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3591,10 +3591,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3603,11 +3603,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinyblob,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3619,10 +3619,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3631,11 +3631,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinyblob,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3647,10 +3647,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3659,11 +3659,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinyblob,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3675,10 +3675,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3687,11 +3687,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinyblob,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3703,10 +3703,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3715,11 +3715,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinyblob NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3731,10 +3731,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3743,11 +3743,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinyblob NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3759,10 +3759,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3771,11 +3771,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinyblob NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3787,10 +3787,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3799,11 +3799,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinyblob NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3815,10 +3815,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3827,11 +3827,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` blob,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3843,10 +3843,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3855,11 +3855,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` blob,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3871,10 +3871,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3883,11 +3883,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` blob,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3899,10 +3899,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3911,11 +3911,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` blob,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3927,10 +3927,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3939,11 +3939,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` blob NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3955,10 +3955,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3967,11 +3967,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` blob NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -3983,10 +3983,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -3995,11 +3995,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` blob NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4011,10 +4011,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 BLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4023,11 +4023,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` blob NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4039,10 +4039,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4051,11 +4051,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumblob,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4067,10 +4067,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4079,11 +4079,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumblob,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4095,10 +4095,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4107,11 +4107,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumblob,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4123,10 +4123,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4135,11 +4135,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumblob,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4151,10 +4151,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4163,11 +4163,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumblob NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4179,10 +4179,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4191,11 +4191,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumblob NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4207,10 +4207,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4219,11 +4219,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumblob NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4235,10 +4235,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4247,11 +4247,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumblob NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4263,10 +4263,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4275,11 +4275,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longblob,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4291,10 +4291,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4303,11 +4303,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longblob,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4319,10 +4319,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4331,11 +4331,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longblob,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4347,10 +4347,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGBLOB  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4359,11 +4359,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longblob,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4375,10 +4375,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4387,11 +4387,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longblob NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4403,10 +4403,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4415,11 +4415,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longblob NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4431,10 +4431,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4443,11 +4443,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longblob NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4459,10 +4459,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGBLOB  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4471,11 +4471,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longblob NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4487,10 +4487,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4499,11 +4499,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinytext,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4515,10 +4515,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4527,11 +4527,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinytext,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4543,10 +4543,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4555,11 +4555,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinytext,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4571,10 +4571,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4583,11 +4583,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinytext,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4599,10 +4599,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4611,11 +4611,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinytext NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4627,10 +4627,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4639,11 +4639,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinytext NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4655,10 +4655,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4667,11 +4667,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinytext NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4683,10 +4683,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TINYTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4695,11 +4695,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` tinytext NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4711,10 +4711,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4723,11 +4723,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` text,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4739,10 +4739,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4751,11 +4751,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` text,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4767,10 +4767,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4779,11 +4779,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` text,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4795,10 +4795,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4807,11 +4807,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` text,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4823,10 +4823,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4835,11 +4835,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` text NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4851,10 +4851,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4863,11 +4863,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` text NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4879,10 +4879,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4891,11 +4891,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` text NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4907,10 +4907,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 TEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4919,11 +4919,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` text NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4935,10 +4935,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4947,11 +4947,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumtext,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4963,10 +4963,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -4975,11 +4975,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumtext,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -4991,10 +4991,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5003,11 +5003,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumtext,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5019,10 +5019,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5031,11 +5031,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumtext,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5047,10 +5047,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5059,11 +5059,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumtext NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5075,10 +5075,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5087,11 +5087,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumtext NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5103,10 +5103,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5115,11 +5115,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumtext NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5131,10 +5131,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 MEDIUMTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5143,11 +5143,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` mediumtext NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5159,10 +5159,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5171,11 +5171,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longtext,
   `c3` char(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5187,10 +5187,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5199,11 +5199,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longtext,
   `c3` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5215,10 +5215,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5227,11 +5227,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longtext,
   `c3` binary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5243,10 +5243,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGTEXT  NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5255,11 +5255,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longtext,
   `c3` varbinary(20) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5271,10 +5271,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5283,11 +5283,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` char(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longtext NOT NULL,
   `c3` char(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5299,10 +5299,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5311,11 +5311,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varchar(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longtext NOT NULL,
   `c3` varchar(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5327,10 +5327,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5339,11 +5339,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` binary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longtext NOT NULL,
   `c3` binary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
@@ -5355,10 +5355,10 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD c4 LONGTEXT  NOT NULL AFTER c2;
 SHOW TABLES;
 Tables_in_test
@@ -5367,11 +5367,11 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` varbinary(15) NOT NULL,
-  `c2` int(11) NOT NULL,
+  `c2` int NOT NULL,
   `c4` longtext NOT NULL,
   `c3` varbinary(20) NOT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test

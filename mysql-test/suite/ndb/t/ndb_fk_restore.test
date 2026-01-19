@@ -1,0 +1,373 @@
+-- source include/have_ndb.inc
+-- source suite/ndb/include/backup_restore_setup.inc
+
+# bug#16285826 - NDB_RESTORE -M DOES NOT RESTORE FK CONSTRAINTS
+-- echo # bug#16285826
+
+create table t1 (
+  a1 int primary key
+) engine ndb;
+
+insert into t1 (a1) values
+  (1),(2),(3),(4),(5),(6),(7),(8),(9);
+
+create table t2 (
+  a2 int primary key auto_increment,
+  b2 int not null,
+  key xb2 (b2),
+  constraint fkb2a1 foreign key (b2) references t1 (a1)
+) engine ndb;
+
+-- echo # TEST: basic meta
+
+-- source ndb_fk_restore.inc
+
+-- echo # TEST: basic data
+
+insert into t2 (b2) select x.a1 from t1 x,t1 y;
+-- error ER_NO_REFERENCED_ROW_2
+insert into t2 (b2) values (10);
+-- error ER_ROW_IS_REFERENCED_2
+delete from t1 where a1 = 1;
+
+# t1 fragment may be restored before t2 fragment but in MTR
+# there are two fragments so likely FK disable is required
+
+-- source ndb_fk_restore.inc
+
+-- error ER_NO_REFERENCED_ROW_2
+insert into t2 (b2) values (10);
+-- error ER_ROW_IS_REFERENCED_2
+delete from t1 where a1 = 1;
+
+-- echo # TEST: child part key
+
+drop table t2;
+
+create table t2 (
+  a2 int primary key auto_increment,
+  b2 int not null,
+  c2 int not null,
+  key xb2c2 (b2,c2),
+  constraint fkb2a1 foreign key (b2) references t1 (a1)
+) engine ndb;
+
+insert into t2 (b2,c2) select x.a1,99 from t1 x,t1 y;
+-- error ER_NO_REFERENCED_ROW_2
+insert into t2 (b2,c2) values (10,99);
+-- error ER_ROW_IS_REFERENCED_2
+delete from t1 where a1 = 1;
+
+-- source ndb_fk_restore.inc
+
+-- error ER_NO_REFERENCED_ROW_2
+insert into t2 (b2,c2) values (10,99);
+-- error ER_ROW_IS_REFERENCED_2
+delete from t1 where a1 = 1;
+
+-- echo # TEST: column order
+
+drop table t2,t1;
+
+create table t1 (
+  a1 int primary key,
+  b1 int not null,
+  c1 int not null,
+  unique key (b1,c1) using hash
+) engine ndb;
+
+insert into t1 (a1,b1,c1) values
+  (1,11,12),(2,21,22),(3,31,32),(4,41,42),(5,51,52),(6,61,62);
+
+create table t2 (
+  a2 int primary key auto_increment,
+  b2 int not null,
+  c2 int not null,
+  key xb2c2 (b2,c2),
+  constraint fkb2c2c1b1 foreign key (b2,c2) references t1 (c1,b1)
+) engine ndb;
+
+insert into t2 (b2,c2) select x.c1,x.b1 from t1 x,t1 y;
+-- error ER_NO_REFERENCED_ROW_2
+insert into t2 (b2,c2) values (61,62);
+-- error ER_ROW_IS_REFERENCED_2
+delete from t1 where b1=61 and c1=62;
+
+-- source ndb_fk_restore.inc
+
+-- error ER_NO_REFERENCED_ROW_2
+insert into t2 (b2,c2) values (61,62);
+-- error ER_ROW_IS_REFERENCED_2
+delete from t1 where b1=61 and c1=62;
+
+-- echo # TEST: disable indexes
+
+-- let $disable_indexes=1
+-- source ndb_fk_restore.inc
+
+-- echo # TEST: rebuild indexes meta
+
+# previous tables are unusable via mysql
+drop table t2, t1;
+
+create table t1 (
+  a1 int primary key,
+  b1 int not null,
+  c1 int not null,
+  unique key (b1,c1) using hash
+) engine ndb;
+
+create table t2 (
+  a2 int primary key auto_increment,
+  b2 int not null,
+  c2 int not null,
+  key xb2c2 (b2,c2),
+  constraint fkb2c2c1b1 foreign key (b2,c2) references t1 (c1,b1)
+) engine ndb;
+
+-- let $rebuild_indexes=1
+-- source ndb_fk_restore.inc
+
+-- echo # TEST: rebuild indexes data
+
+# there may be a bug with add FK and reversed column order
+
+alter table t2 algorithm=inplace,
+  drop foreign key fkb2c2c1b1;
+alter table t2 algorithm=inplace,
+  add constraint fkb2c2b1c1 foreign key (b2,c2) references t1 (b1,c1);
+
+insert into t1 (a1,b1,c1) values
+  (1,11,12),(2,21,22),(3,31,32),(4,41,42),(5,51,52),(6,61,62);
+
+insert into t2 (b2,c2) select x.b1,x.c1 from t1 x,t1 y;
+-- error ER_NO_REFERENCED_ROW_2
+insert into t2 (b2,c2) values (62,61);
+-- error ER_ROW_IS_REFERENCED_2
+delete from t1 where b1=61 and c1=62;
+
+-- let $rebuild_indexes=1
+-- source ndb_fk_restore.inc
+
+-- error ER_NO_REFERENCED_ROW_2
+insert into t2 (b2,c2) values (62,61);
+-- error ER_ROW_IS_REFERENCED_2
+delete from t1 where b1=61 and c1=62;
+
+drop table t2, t1;
+
+-- echo #
+-- echo # BUG#18560951 NDB_RESTORE INCLUDES FK FOR ALL DATABASES WHEN USING --INCLUDE-* OR --EXCLUDE
+-- echo #
+
+-- echo # create database db1 with tables t1,t2
+create database db1;
+
+create table db1.t1 (
+  a1 int primary key
+) engine ndb;
+
+create table db1.t2 (
+  a1 int,
+  foreign key fk1(a1) references t1(a1)
+) engine ndb;
+
+-- echo # create database db2 with table tb1
+
+create database db2;
+
+create table db2.t1 (
+  a1 int primary key
+) engine ndb;
+
+-- echo # take backup and drop the tables
+--source include/ndb_backup.inc
+drop table db1.t2, db1.t1, db2.t1;
+
+-- echo # now try restoring only the database db2
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -m -r --include-databases=db2 --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+-- echo # verify the tables present
+--disable_warnings
+show create table db2.t1;
+--enable_warnings
+drop table db2.t1;
+
+-- echo # restore particular table and check for fk problem
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -m -r --include-tables=db1.t1,db2.t1 --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+-- echo # verify the tables present
+--disable_warnings
+show create table db1.t1;
+show create table db2.t1;
+--enable_warnings
+drop table db1.t1, db2.t1;
+
+--echo # verify that restoring table with FK whose parent doesn't exist, fails
+--error 1
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -m -r --include-tables=db1.t2 --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+--echo # cleanup
+drop database db1;
+drop database db2;
+
+--echo # Bug#26974491 FIXES DATA RESTORE WITH DISABLE INDEXES
+create database db3;
+use db3;
+create table t4 (
+  id int primary key auto_increment
+) engine=ndb;
+create table t5 (
+  id int primary key auto_increment,
+  val int,
+  constraint fkt3t2 foreign key (val) references t4 (id)
+)engine=ndb;
+insert into t4 values (1), (2), (3), (4), (5);
+insert into t5 values (1,1), (2,2), (3,3), (4,4), (5,5);
+
+-- echo # take backup and drop the tables
+-- source include/ndb_backup.inc
+drop table db3.t5, db3.t4;
+
+-- echo # Create more tables before restore in order to verify that ndb_restore restores foreign keys
+-- echo # appropriately even though the table ids of parent and child tables which make up the name
+-- echo # of the foreign key in the format, <parent_table_id>/<child_table_id>/fk_name are different
+-- echo # in backup files than the table ids restored.
+create table db3.t6 (
+  id int primary key auto_increment
+) engine=ndb;
+create table db3.t7 (
+  id int primary key auto_increment
+) engine=ndb;
+create table db3.t8 (
+  id int primary key auto_increment
+) engine=ndb;
+create table db3.t9 (
+  id int primary key auto_increment
+) engine=ndb;
+
+-- echo # Use case #1: Meta restore done with --disable-indexes (recommended)
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-meta --print_meta --disable-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-data $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 --restore-data $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 --rebuild-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+-- echo # Drop the tables to retore them again with a different use case
+drop table db3.t5, db3.t4;
+
+-- echo # Use case #2: Separate --disable-indexes step after metadata restore
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-meta --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --disable-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-data --disable-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 --restore-data --disable-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 --rebuild-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+-- echo # Drop the tables to retore them again with a different use case
+drop table db3.t5, db3.t4;
+
+-- echo # Use case #3: Data restore with --disable-indexes
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-meta --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-data --disable-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 --restore-data --disable-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 --rebuild-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+-- echo # Drop the tables to retore them again with a different use case
+drop table db3.t5, db3.t4;
+
+-- echo # Use case #4: Data restore with --disable-indexes and Data restore with --rebuild-indexes
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-meta --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-data --disable-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 --restore-data --rebuild-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+-- echo # Drop the tables to retore them again with a different use case
+drop table db3.t5, db3.t4;
+
+-- echo # Use case #5: Both metadata and data restore with both --disable-indexes and --rebuild-indexes
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 --restore-meta --restore-data --disable-indexes --rebuild-indexes $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 --restore-data $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+--echo # cleanup
+drop table db3.t6, db3.t7, db3.t8, db3.t9;
+drop database db3;
+
+-- echo #
+-- echo # Bug#36345882 Fix column ordering in Dbdict::buildFK_prepare
+-- echo #
+
+# Check ndb_restore rebuild indexes for multi column foreign key constraints.
+
+use test;
+
+let $using_hash=using hash;
+
+eval create table t1 (
+  b1 int as (b) stored not null,
+  c1 int as (c) stored not null,
+  a1 int as (a) stored not null,
+  b2 int as (b) stored not null,
+  c2 int as (c) stored not null,
+  a2 int as (a) stored not null,
+  a int default 0,
+  b int default 0,
+  c int default 0,
+  primary key pk1 (a1,b1,c1) $using_hash,
+  unique key uk2 (a2,b2,c2) $using_hash
+) engine=ndbcluster;
+
+eval create table t2 (
+  a int default 0,
+  b int default 0,
+  c int default 0,
+  d int default 0,
+  e int default 0,
+  f int default 0,
+  b1 int as (b) stored not null,
+  c1 int as (c) stored not null,
+  a1 int as (a) stored not null,
+  b2 int as (b) stored not null,
+  c2 int as (c) stored not null,
+  a2 int as (a) stored not null,
+  b3 int as (b) stored not null,
+  c3 int as (c) stored not null,
+  a3 int as (a) stored not null,
+  primary key pk1 (a1,b1,c1) $using_hash,
+  unique key uk2 (a2,b2,c2) $using_hash,
+  key ok3 (a3,b3,c3),
+  key ok3def (c3,b3,a3,d,e,f),
+  constraint fk11 foreign key (c1,b1,a1) references t1 (c1,b1,a1),
+  constraint fk21 foreign key (c2,b2,a2) references t1 (c1,b1,a1),
+  constraint fk31 foreign key (c3,b3,a3) references t1 (c1,b1,a1),
+  constraint fk12 foreign key (c1,b1,a1) references t1 (c2,b2,a2),
+  constraint fk22 foreign key (c2,b2,a2) references t1 (c2,b2,a2),
+  constraint fk32 foreign key (c3,b3,a3) references t1 (c2,b2,a2)
+) engine=ndbcluster;
+
+# ok3 index could not be used for fk31 and fk32 since column order did not
+# match. Instead ok3def is used since it has a matching prefix.
+alter table t2 drop index ok3;
+# pk1 is used for constraint fk12 instead of implicitly created fk12.
+alter table t2 drop index fk12;
+# uk2 is used for constraint fk22 instead of implicitly created fk22.
+alter table t2 drop index fk22;
+
+let $ndb_desc_opts= -d test t1 t2;
+source suite/ndb/include/ndb_desc_print.inc;
+
+# Add parent row, use different values for the different columns.
+insert into t1 (a, b, c) values (11, 12, 13);
+# Add valid child row.
+insert into t2 (a, b, c) values (11, 12, 13);
+
+--error ER_NO_REFERENCED_ROW_2
+insert into t2 (a,b,c) values (101, 102, 103);
+
+let $rebuild_indexes= 1;
+source ndb_fk_restore.inc;
+
+select * from t1;
+select * from t2;
+
+drop table t2,t1;
+
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT

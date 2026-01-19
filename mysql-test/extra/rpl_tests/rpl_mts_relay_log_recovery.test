@@ -25,13 +25,13 @@
 # --relay-log-recovery=1 option.
 #
 # ==== Usage ====
-# --let $skip_slave_start_var= BOOL [ TRUE / FALSE ]
+# --let $skip_replica_start_var= BOOL [ TRUE / FALSE ]
 # --source extra/rpl_tests/rpl_mts_relay_log_recovery.test
 #
 # Parameters:
 #
-#   $skip_slave_start_var
-#     Boolean that specifies if 'skip_slave_start' server parameter should be
+#   $skip_replica_start_var
+#     Boolean that specifies if 'skip_replica_start' server parameter should be
 #     TRUE or FALSE.
 #
 # Testing Method:
@@ -43,29 +43,16 @@
 # should be successful.
 
 --source extra/rpl_tests/rpl_generate_mts_gap.test
+CALL mtr.add_suppression("Recovery from source pos");
 
 --source include/rpl_connection_slave.inc
-CALL mtr.add_suppression("Recovery from master pos");
 # Kill the slave server
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
-let PID_FILE= `SELECT @@pid_file`;
-perl;
-use strict;
-my $file= $ENV{'PID_FILE'} or die "Pid file not set";
-open(FILE, "$file") or die("Unable to open $file: $!\n");
-my $pid=0;
-while (<FILE>) {
-      $pid = $_;
-}
-close(FILE);
-kill 9, $pid;
-EOF
+--source include/kill_mysqld.inc
 
 # Restart the slave server
 --let $rpl_server_number= 2
---let $rpl_server_parameters= --skip_slave_start=$skip_slave_start_var --relay_log_info_repository=TABLE --master_info_repository=TABLE --sync_master_info=1 --relay-log-recovery=1
+--let $rpl_server_parameters= --skip_replica_start=$skip_replica_start_var --sync_source_info=1 --relay-log-recovery=1
 --source include/rpl_start_server.inc
-
 --exec echo "After restart gaps should be filled."
 
 --let $assert_text= Table d1.t should contain 2 rows.
@@ -76,7 +63,10 @@ EOF
 --let $assert_cond= [select count(*) from d2.t] = 3
 --source include/assert.inc
 
+if ($skip_replica_start_var == TRUE)
+{
 --source include/start_slave.inc
+}
 
 # Check consistency
 --source include/rpl_connection_master.inc

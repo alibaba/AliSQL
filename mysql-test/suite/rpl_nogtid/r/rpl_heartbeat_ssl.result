@@ -1,0 +1,37 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+
+*** Heartbeat over SSL ***
+include/stop_slave.inc
+RESET SLAVE;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
+CHANGE REPLICATION SOURCE TO 
+SOURCE_HOST='127.0.0.1',
+SOURCE_PORT=MASTER_PORT,
+SOURCE_USER='root',
+SOURCE_HEARTBEAT_PERIOD=0.1,
+SOURCE_LOG_FILE='MASTER_BINLOG',
+SOURCE_SSL=1,
+SOURCE_SSL_CA='MYSQL_TEST_DIR/std_data/cacert.pem',
+SOURCE_SSL_CERT='MYSQL_TEST_DIR/std_data/client-cert.pem',
+SOURCE_SSL_KEY='MYSQL_TEST_DIR/std_data/client-key.pem';
+Warnings:
+Warning	####	CHANGE REPLICATION SOURCE TO with a SOURCE_LOG_FILE clause but no SOURCE_LOG_POS clause may not be safe. The old position value may not be valid for the new binary log file.
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+include/start_slave.inc
+Master_SSL_Allowed: Yes
+Heartbeat event has received
+
+*** Clean up ***
+include/stop_slave.inc
+CHANGE REPLICATION SOURCE TO 
+SOURCE_SSL=0,
+SOURCE_SSL_CA='',
+SOURCE_SSL_CERT='',
+SOURCE_SSL_KEY='';
+include/rpl_end.inc

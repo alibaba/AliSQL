@@ -65,7 +65,9 @@ create table t1 (
 id int(11) not null,
 text text,
 primary key (id)
-) engine=MyISAM default charset=latin1;
+) default charset=latin1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 load xml infile '../../std_data/loadxml2.dat' into table t1;
 select * from t1;
 id	text
@@ -120,3 +122,50 @@ col1	col2	col3
 ABC	DEF	NULL
 GHI	NULL	123
 DROP TABLE t1;
+#
+# Regression test added in WL#8063
+#
+CREATE TABLE t1 (col1 VARCHAR(3), col2 VARCHAR(3), col3 INTEGER);
+CREATE TABLE t2(i INT NOT NULL);
+CREATE TRIGGER t1_ai AFTER INSERT ON t1 FOR EACH ROW INSERT INTO t2 VALUES (NULL);
+LOAD XML INFILE '../../std_data/bug16171518_2.dat' INTO TABLE t1;
+ERROR 23000: Column 'i' cannot be null
+DROP TABLE t1, t2;
+CREATE TABLE t3 (col1 VARCHAR(3), col2 VARCHAR(3), col3 INTEGER);
+CREATE VIEW v3 AS SELECT * FROM t3 WHERE col3 < 0 WITH CHECK OPTION;
+LOAD XML INFILE '../../std_data/bug16171518_2.dat' INTO TABLE v3;
+ERROR HY000: CHECK OPTION failed 'test.v3'
+DROP VIEW v3;
+DROP TABLE t3;
+CREATE TABLE t4 (col1 VARCHAR(3), col2 VARCHAR(3), col3 INTEGER, col4 INT NOT NULL);
+LOAD XML INFILE '../../std_data/bug16171518_2.dat' INTO TABLE t4 (col1, col2, col3) SET col4 = NULL;
+ERROR 23000: Column 'col4' cannot be null
+DROP TABLE t4;
+#
+# BUG#30753708: LOAD XML: FIELD VALUES LEAK WHEN GOING OUT OF SCOPE
+#
+CREATE TABLE t1(a INT NOT NULL PRIMARY KEY, p INT NULL);
+LOAD XML INFILE '../../std_data/bug30753708.dat' INTO TABLE t1 ROWS IDENTIFIED BY '<address>';
+SELECT * FROM t1 ORDER BY a;
+a	p
+1	1
+2	2
+3	3
+4	NULL
+5	NULL
+6	NULL
+7	NULL
+DROP TABLE t1;
+CREATE TABLE t1(a INT NOT NULL PRIMARY KEY, p INT NULL, s VARCHAR(100));
+LOAD XML INFILE '../../std_data/bug30753708.dat' INTO TABLE t1 ROWS IDENTIFIED BY '<address>';
+SELECT * FROM t1 ORDER BY a;
+a	p	s
+1	1	NULL
+2	2	ABC
+3	3	ABC + XYZ
+4	NULL	NULL
+5	NULL	ABC + KLM + XYZ + the end
+6	NULL	ABC + 
+7	NULL	A<L>Z
+DROP TABLE t1;
+#

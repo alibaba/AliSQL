@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2011, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -23,15 +31,13 @@
 #include "../../src/ndbapi/NdbQueryBuilder.hpp"
 
 class HugoQueryBuilder {
-public:
-
+ public:
   typedef Uint64 OptionMask;
 
   /**
    * Options that affects what kind of query is built
    */
-  enum QueryOption
-  {
+  enum QueryOption {
     /**
      * Query should be a lookup
      */
@@ -63,96 +69,98 @@ public:
     O_TABLE_SCAN = 0x20,
 
     /**
-     * If not any options set, random query qill be created
+     * Column references may also include grandparents (Default 'on')
      */
-    O_RANDOM_OPTIONS = (OptionMask)((~(OptionMask)0) & 
-                                    ~(OptionMask)(O_SCAN | O_LOOKUP))
+    O_GRANDPARENT = 0x100
   };
-  static const OptionMask OM_RANDOM_OPTIONS = (OptionMask)O_RANDOM_OPTIONS;
+  static const OptionMask OM_RANDOM_OPTIONS =
+      (OptionMask)(O_PK_INDEX | O_UNIQUE_INDEX | O_ORDERED_INDEX |
+                   O_TABLE_SCAN | O_GRANDPARENT);
 
-  HugoQueryBuilder(Ndb* ndb, const NdbDictionary::Table**tabptr, 
-                   OptionMask om = OM_RANDOM_OPTIONS){
+  HugoQueryBuilder(Ndb *ndb, const NdbDictionary::Table **tabptr,
+                   OptionMask om = OM_RANDOM_OPTIONS)
+      : m_ndb(ndb) {
     init();
-    for (; * tabptr != 0; tabptr++)
-      addTable(ndb, * tabptr);
+    for (; *tabptr != 0; tabptr++) addTable(*tabptr);
     setOptionMask(om);
     fixOptions();
   }
-  HugoQueryBuilder(Ndb* ndb, const NdbDictionary::Table* tab, QueryOption o) {
+  HugoQueryBuilder(Ndb *ndb, const NdbDictionary::Table *tab, QueryOption o)
+      : m_ndb(ndb) {
     init();
-    addTable(ndb, tab);
+    addTable(tab);
     setOption(o);
     fixOptions();
   }
   virtual ~HugoQueryBuilder();
 
-  void setMinJoinLevel(int level) { m_joinLevel[0] = level;}
-  int getMinJoinLevel() const { return m_joinLevel[0];}
-  void setMaxJoinLevel(int level) { m_joinLevel[1] = level;}
-  int getMaxJoinLevel() const { return m_joinLevel[1];}
+  void setMinJoinLevel(int level) { m_joinLevel[0] = level; }
+  int getMinJoinLevel() const { return m_joinLevel[0]; }
+  void setMaxJoinLevel(int level) { m_joinLevel[1] = level; }
+  int getMaxJoinLevel() const { return m_joinLevel[1]; }
 
-  void setJoinLevel(int level) { setMinJoinLevel(level);setMaxJoinLevel(level);}
+  void setJoinLevel(int level) {
+    setMinJoinLevel(level);
+    setMaxJoinLevel(level);
+  }
   int getJoinLevel() const;
 
-  void addTable(Ndb*, const NdbDictionary::Table*);
-  void removeTable(const NdbDictionary::Table*);
+  void addTable(const NdbDictionary::Table *);
+  void removeTable(const NdbDictionary::Table *);
 
-  void setOption(QueryOption o) { m_options |= (OptionMask)o;}
-  void clearOption(QueryOption o) const { m_options &= ~(OptionMask)o;}
-  bool testOption(QueryOption o) const { return (m_options & o) != 0;}
+  void setOption(QueryOption o) { m_options |= (OptionMask)o; }
+  void clearOption(QueryOption o) const { m_options &= ~(OptionMask)o; }
+  bool testOption(QueryOption o) const { return (m_options & o) != 0; }
 
-  OptionMask getOptionMask() const { return m_options;}
-  void setOptionMask(OptionMask om) { m_options = om;}
+  OptionMask getOptionMask() const { return m_options; }
+  void setOptionMask(OptionMask om) { m_options = om; }
 
-  const NdbQueryDef * createQuery(bool takeOwnership = false);
+  const NdbQueryDef *createQuery(bool takeOwnership = false);
 
-private:
-  struct TableDef
-  {
-    const NdbDictionary::Table * m_table;
-    Vector<const NdbDictionary::Index*> m_unique_indexes;
-    Vector<const NdbDictionary::Index*> m_ordered_indexes;
+ private:
+  const Ndb *m_ndb;
+
+  struct TableDef {
+    const NdbDictionary::Table *m_table;
+    Vector<const NdbDictionary::Index *> m_unique_indexes;
+    Vector<const NdbDictionary::Index *> m_ordered_indexes;
   };
 
   void init();
   mutable OptionMask m_options;
-  int m_joinLevel[2]; // min/max
+  int m_joinLevel[2];  // min/max
   Vector<TableDef> m_tables;
-  Vector<const NdbQueryDef*> m_queries;
+  Vector<const NdbQueryDef *> m_queries;
 
   // get random table
   struct TableDef getTable() const;
 
-  struct OpIdx
-  {
+  struct OpIdx {
     NdbQueryOperationDef::Type m_type;
-    const NdbDictionary::Table * m_table;
-    const NdbDictionary::Index * m_index;
+    const NdbDictionary::Table *m_table;
+    const NdbDictionary::Index *m_index;
   };
   OpIdx getOp() const;
 
-  struct Op
-  {
+  struct Op {
     int m_parent;
     int m_idx;
-    const NdbQueryOperationDef * m_op;
+    const NdbQueryOperationDef *m_op;
   };
 
-  Vector<Op> m_query; // Query built sofar
+  Vector<Op> m_query;  // Query built sofar
 
   /**
    * Check if all column in cols can be bound to a column in tables in
    *   ops
    */
-  static bool checkBindable(Vector<const NdbDictionary::Column*> cols,
-                            Vector<Op> ops,
-                            bool allow_bind_nullable);
+  static bool checkBindable(Vector<const NdbDictionary::Column *> cols,
+                            Vector<Op> ops, bool allow_bind_nullable);
 
-  Vector<Op> getParents(OpIdx); //
-  NdbQueryOperand * createLink(NdbQueryBuilder&, const NdbDictionary::Column*,
-                               Vector<Op> & parents,
-                               bool allow_bind_nullable);
-  const NdbQueryOperationDef* createOp(NdbQueryBuilder&);
+  Vector<Op> getParents(OpIdx);  //
+  NdbQueryOperand *createLink(NdbQueryBuilder &, const NdbDictionary::Column *,
+                              Vector<Op> &parents, bool allow_bind_nullable);
+  const NdbQueryOperationDef *createOp(NdbQueryBuilder &);
 
   void fixOptions();
 
@@ -160,9 +168,9 @@ private:
    * We currently don't support busy-scan joins
    */
   bool checkBusyScan(Op) const;
-  bool isAncestor(const Op& parent, const Op& child) const;
+  bool isAncestor(const Op &parent, const Op &child) const;
 
-  friend NdbOut& operator<<(NdbOut& out, const HugoQueryBuilder::Op& op);
+  friend NdbOut &operator<<(NdbOut &out, const HugoQueryBuilder::Op &op);
 };
 
 #endif

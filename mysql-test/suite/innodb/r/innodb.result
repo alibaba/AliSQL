@@ -15,6 +15,8 @@ id	code	name
 6	3	Jeremy
 7	4	Matt
 update ignore t1 set id = 8, name = 'Sinisa' where id < 3;
+Warnings:
+Warning	1062	Duplicate entry '8' for key 't1.PRIMARY'
 select id, code, name from t1 order by id;
 id	code	name
 2	1	Monty
@@ -25,6 +27,8 @@ id	code	name
 7	4	Matt
 8	1	Sinisa
 update ignore t1 set id = id + 10, name = 'Ralph' where id < 4;
+Warnings:
+Warning	1062	Duplicate entry 'Ralph' for key 't1.name'
 select id, code, name from t1 order by id;
 id	code	name
 3	2	David
@@ -43,6 +47,10 @@ PRIMARY KEY (id),
 KEY parent_id (parent_id),
 KEY level (level)
 ) engine=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,0,0),(3,1,1),(4,1,1),(8,2,2),(9,2,2),(17,3,2),(22,4,2),(24,4,2),(28,5,2),(29,5,2),(30,5,2),(31,6,2),(32,6,2),(33,6,2),(203,7,2),(202,7,2),(20,3,2),(157,0,0),(193,5,2),(40,7,2),(2,1,1),(15,2,2),(6,1,1),(34,6,2),(35,6,2),(16,3,2),(7,1,1),(36,7,2),(18,3,2),(26,5,2),(27,5,2),(183,4,2),(38,7,2),(25,5,2),(37,7,2),(21,4,2),(19,3,2),(5,1,1),(179,5,2);
 update t1 set parent_id=parent_id+100;
 select * from t1 where parent_id=102;
@@ -95,6 +103,37 @@ id	parent_id	level
 1202	107	2
 1203	107	2
 update ignore t1 set id=id+1;
+Warnings:
+Warning	1062	Duplicate entry '1002' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1003' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1004' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1005' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1006' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1007' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1008' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1009' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1016' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1017' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1018' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1019' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1020' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1021' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1022' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1025' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1026' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1027' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1028' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1029' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1030' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1031' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1032' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1033' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1034' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1035' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1036' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1037' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1038' for key 't1.PRIMARY'
+Warning	1062	Duplicate entry '1203' for key 't1.PRIMARY'
 select * from t1;
 id	parent_id	level
 1001	100	0
@@ -137,20 +176,28 @@ id	parent_id	level
 1202	107	2
 1204	107	2
 update ignore t1 set id=1023 where id=1010;
+Warnings:
+Warning	1062	Duplicate entry '1023' for key 't1.PRIMARY'
 select * from t1 where parent_id=102;
 id	parent_id	level
 1008	102	2
 1010	102	2
 1015	102	2
 explain select level from t1 where level=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	level	level	1	const	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	level	level	1	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`level` AS `level` from `test`.`t1` where (`test`.`t1`.`level` = 1)
 explain select level,id from t1 where level=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	level	level	1	const	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	level	level	1	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`level` AS `level`,`test`.`t1`.`id` AS `id` from `test`.`t1` where (`test`.`t1`.`level` = 1)
 explain select level,id,parent_id from t1 where level=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	level	level	1	const	#	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	level	level	1	const	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`level` AS `level`,`test`.`t1`.`id` AS `id`,`test`.`t1`.`parent_id` AS `parent_id` from `test`.`t1` where (`test`.`t1`.`level` = 1)
 select level,id from t1 where level=1;
 level	id
 1	1002
@@ -172,16 +219,19 @@ Table	Op	Msg_type	Msg_text
 test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
 test.t1	optimize	status	OK
 show keys from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	id	A	#	NULL	NULL		BTREE			YES
-t1	1	parent_id	1	parent_id	A	#	NULL	NULL		BTREE			YES
-t1	1	level	1	level	A	#	NULL	NULL		BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	#	NULL	NULL		BTREE			YES	NULL
+t1	1	parent_id	1	parent_id	A	#	NULL	NULL		BTREE			YES	NULL
+t1	1	level	1	level	A	#	NULL	NULL		BTREE			YES	NULL
 drop table t1;
 CREATE TABLE t1 (
 gesuchnr int(11) DEFAULT '0' NOT NULL,
 benutzer_id int(11) DEFAULT '0' NOT NULL,
 PRIMARY KEY (gesuchnr,benutzer_id)
 ) engine=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 replace into t1 (gesuchnr,benutzer_id) values (2,1);
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
@@ -216,8 +266,8 @@ analyze table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 show keys from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	1	skr	1	a	A	#	NULL	NULL	YES	BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	1	skr	1	a	A	#	NULL	NULL	YES	BTREE			YES	NULL
 drop table t1;
 create table t1 (a int,b varchar(20),key(a)) engine=innodb;
 insert into t1 values (1,""), (2,"testing");
@@ -239,7 +289,7 @@ n	after commit
 commit;
 insert into t1 values (5);
 insert into t1 values (4);
-ERROR 23000: Duplicate entry '4' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '4' for key 't1.PRIMARY'
 commit;
 select n, "after commit" from t1;
 n	after commit
@@ -248,7 +298,7 @@ n	after commit
 set autocommit=1;
 insert into t1 values (6);
 insert into t1 values (4);
-ERROR 23000: Duplicate entry '4' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '4' for key 't1.PRIMARY'
 select n from t1;
 n
 4
@@ -323,7 +373,7 @@ drop table t1;
 CREATE TABLE t1 (id char(8) not null primary key, val int not null) engine=innodb;
 insert into t1 values ('pippo', 12);
 insert into t1 values ('pippo', 12);
-ERROR 23000: Duplicate entry 'pippo' for key 'PRIMARY'
+ERROR 23000: Duplicate entry 'pippo' for key 't1.PRIMARY'
 delete from t1;
 delete from t1 where id = 'pippo';
 select * from t1;
@@ -376,6 +426,8 @@ ref_email varchar(100) DEFAULT '' NOT NULL,
 detail varchar(200),
 PRIMARY KEY (user_id,ref_email)
 )engine=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (10292,'sanjeev','29153373','sansh777@hotmail.com','xxx'),(10292,'shirish','2333604','shirish@yahoo.com','ddsds'),(10292,'sonali','323232','sonali@bolly.com','filmstar');
 select * from t1 where user_id=10292;
 user_id	name	phone	ref_email	detail
@@ -404,15 +456,15 @@ drop table t1;
 CREATE TABLE t1 (a int not null, b int not null,c int not null,
 key(a),primary key(a,b), unique(c),key(a),unique(b));
 Warnings:
-Note	1831	Duplicate index 'a_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'a_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 show index from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	a	A	#	NULL	NULL		BTREE			YES
-t1	0	PRIMARY	2	b	A	#	NULL	NULL		BTREE			YES
-t1	0	c	1	c	A	#	NULL	NULL		BTREE			YES
-t1	0	b	1	b	A	#	NULL	NULL		BTREE			YES
-t1	1	a	1	a	A	#	NULL	NULL		BTREE			YES
-t1	1	a_2	1	a	A	#	NULL	NULL		BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	a	A	#	NULL	NULL		BTREE			YES	NULL
+t1	0	PRIMARY	2	b	A	#	NULL	NULL		BTREE			YES	NULL
+t1	0	c	1	c	A	#	NULL	NULL		BTREE			YES	NULL
+t1	0	b	1	b	A	#	NULL	NULL		BTREE			YES	NULL
+t1	1	a	1	a	A	#	NULL	NULL		BTREE			YES	NULL
+t1	1	a_2	1	a	A	#	NULL	NULL		BTREE			YES	NULL
 drop table t1;
 create table t1 (col1 int not null, col2 char(4) not null, primary key(col1));
 alter table t1 engine=innodb;
@@ -491,6 +543,10 @@ approved datetime,
 dummy_primary_key int(11) NOT NULL auto_increment,
 PRIMARY KEY (dummy_primary_key)
 ) ENGINE=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES ('user_0','somepassword','N',0,0,0,'2000-09-07','23:06:59','2000-09-07 23:06:59',1);
 INSERT INTO t1 VALUES ('user_1','somepassword','Y',1,1,1,'2000-09-07','23:06:59','2000-09-07 23:06:59',2);
 INSERT INTO t1 VALUES ('user_2','somepassword','N',2,2,1.4142135623731,'2000-09-07','23:06:59','2000-09-07 23:06:59',3);
@@ -512,6 +568,10 @@ KEY (id),
 KEY parent_id (parent_id),
 KEY level (level)
 ) engine=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,0,0),(3,1,1),(4,1,1),(8,2,2),(9,2,2),(17,3,2),(22,4,2),(24,4,2),(28,5,2),(29,5,2),(30,5,2),(31,6,2),(32,6,2),(33,6,2),(203,7,2),(202,7,2),(20,3,2),(157,0,0),(193,5,2),(40,7,2),(2,1,1),(15,2,2),(6,1,1),(34,6,2),(35,6,2),(16,3,2),(7,1,1),(36,7,2),(18,3,2),(26,5,2),(27,5,2),(183,4,2),(38,7,2),(25,5,2),(37,7,2),(21,4,2),(19,3,2),(5,1,1);
 INSERT INTO t1 values (179,5,2);
 update t1 set parent_id=parent_id+100;
@@ -525,86 +585,86 @@ update t1 set id=1024 where id=1009;
 select * from t1;
 id	parent_id	level
 1001	100	0
+1002	101	1
 1003	101	1
 1004	101	1
+1005	101	1
+1006	101	1
+1007	101	1
 1008	102	2
-1024	102	2
+1015	102	2
+1016	103	2
 1017	103	2
+1018	103	2
+1019	103	2
+1020	103	2
+1021	104	2
 1022	104	2
+1024	102	2
 1024	104	2
+1025	105	2
+1026	105	2
+1027	105	2
 1028	105	2
 1029	105	2
 1030	105	2
 1031	106	2
 1032	106	2
 1033	106	2
-1203	107	2
-1202	107	2
-1020	103	2
-1157	100	0
-1193	105	2
-1040	107	2
-1002	101	1
-1015	102	2
-1006	101	1
 1034	106	2
 1035	106	2
-1016	103	2
-1007	101	1
 1036	107	2
-1018	103	2
-1026	105	2
-1027	105	2
-1183	104	2
-1038	107	2
-1025	105	2
 1037	107	2
-1021	104	2
-1019	103	2
-1005	101	1
+1038	107	2
+1040	107	2
+1157	100	0
 1179	105	2
+1183	104	2
+1193	105	2
+1202	107	2
+1203	107	2
 update ignore t1 set id=id+1;
 select * from t1;
 id	parent_id	level
 1002	100	0
+1003	101	1
 1004	101	1
 1005	101	1
+1006	101	1
+1007	101	1
+1008	101	1
 1009	102	2
-1025	102	2
+1016	102	2
+1017	103	2
 1018	103	2
+1019	103	2
+1020	103	2
+1021	103	2
+1022	104	2
 1023	104	2
+1025	102	2
 1025	104	2
+1026	105	2
+1027	105	2
+1028	105	2
 1029	105	2
 1030	105	2
 1031	105	2
 1032	106	2
 1033	106	2
 1034	106	2
-1204	107	2
-1203	107	2
-1021	103	2
-1158	100	0
-1194	105	2
-1041	107	2
-1003	101	1
-1016	102	2
-1007	101	1
 1035	106	2
 1036	106	2
-1017	103	2
-1008	101	1
 1037	107	2
-1019	103	2
-1027	105	2
-1028	105	2
-1184	104	2
-1039	107	2
-1026	105	2
 1038	107	2
-1022	104	2
-1020	103	2
-1006	101	1
+1039	107	2
+1041	107	2
+1158	100	0
 1180	105	2
+1184	104	2
+1194	105	2
+1203	107	2
+1204	107	2
 update ignore t1 set id=1023 where id=1010;
 select * from t1 where parent_id=102;
 id	parent_id	level
@@ -612,24 +672,26 @@ id	parent_id	level
 1025	102	2
 1016	102	2
 explain select level from t1 where level=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	level	level	1	const	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	level	level	1	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`level` AS `level` from `test`.`t1` where (`test`.`t1`.`level` = 1)
 select level,id from t1 where level=1;
 level	id
+1	1003
 1	1004
 1	1005
-1	1003
+1	1006
 1	1007
 1	1008
-1	1006
 select level,id,parent_id from t1 where level=1;
 level	id	parent_id
+1	1003	101
 1	1004	101
 1	1005	101
-1	1003	101
+1	1006	101
 1	1007	101
 1	1008	101
-1	1006	101
 select level,id from t1 where level=1 order by id;
 level	id
 1	1003
@@ -643,37 +705,37 @@ select * from t1;
 id	parent_id	level
 1002	100	0
 1009	102	2
-1025	102	2
+1016	102	2
+1017	103	2
 1018	103	2
+1019	103	2
+1020	103	2
+1021	103	2
+1022	104	2
 1023	104	2
+1025	102	2
 1025	104	2
+1026	105	2
+1027	105	2
+1028	105	2
 1029	105	2
 1030	105	2
 1031	105	2
 1032	106	2
 1033	106	2
 1034	106	2
-1204	107	2
-1203	107	2
-1021	103	2
-1158	100	0
-1194	105	2
-1041	107	2
-1016	102	2
 1035	106	2
 1036	106	2
-1017	103	2
 1037	107	2
-1019	103	2
-1027	105	2
-1028	105	2
-1184	104	2
-1039	107	2
-1026	105	2
 1038	107	2
-1022	104	2
-1020	103	2
+1039	107	2
+1041	107	2
+1158	100	0
 1180	105	2
+1184	104	2
+1194	105	2
+1203	107	2
+1204	107	2
 drop table t1;
 CREATE TABLE t1 (
 sca_code char(6) NOT NULL,
@@ -718,7 +780,7 @@ update t1 set sca_pic="test" where sca_pic is null;
 delete from t1 where sca_code='pd';
 drop table t1;
 set @a:=now();
-CREATE TABLE t1 (a int not null, b timestamp not null default 
+CREATE TABLE t1 (a int not null, b timestamp not null default
 current_timestamp on update current_timestamp, primary key (a)) engine=innodb;
 insert into t1 (a) values(1),(2),(3);
 select t1.a from t1 natural join t1 as t2 where t1.b >= @a order by t1.a;
@@ -749,8 +811,8 @@ Table	Op	Msg_type	Msg_text
 test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
 test.t1	optimize	status	OK
 show keys from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	a	A	#	NULL	NULL		BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	a	A	#	NULL	NULL		BTREE			YES	NULL
 drop table t1;
 create table t1 (i int, j int ) ENGINE=innodb;
 insert into t1 values (1,2);
@@ -772,23 +834,19 @@ SELECT MIN(B),MAX(b) FROM t1 WHERE t1.a = 1;
 MIN(B)	MAX(b)
 1	1
 drop table t1;
-CREATE TABLE t1 (a int unsigned NOT NULL) engine=innodb;
-INSERT INTO t1 VALUES (1);
-SELECT * FROM t1;
-a
-1
-DROP TABLE t1;
 create table t1 (a int  primary key,b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int, a1 int, a2 int, a3 int, a4 int, a5 int, a6 int, a7 int, a8 int, a9 int, b1 int, b2 int, b3 int, b4 int, b5 int, b6 int) engine = innodb;
 insert into t1 values (1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
 explain select * from t1 where a > 0 and a < 50;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	PRIMARY	PRIMARY	4	NULL	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`d` AS `d`,`test`.`t1`.`e` AS `e`,`test`.`t1`.`f` AS `f`,`test`.`t1`.`g` AS `g`,`test`.`t1`.`h` AS `h`,`test`.`t1`.`i` AS `i`,`test`.`t1`.`j` AS `j`,`test`.`t1`.`k` AS `k`,`test`.`t1`.`l` AS `l`,`test`.`t1`.`m` AS `m`,`test`.`t1`.`n` AS `n`,`test`.`t1`.`o` AS `o`,`test`.`t1`.`p` AS `p`,`test`.`t1`.`q` AS `q`,`test`.`t1`.`r` AS `r`,`test`.`t1`.`s` AS `s`,`test`.`t1`.`t` AS `t`,`test`.`t1`.`u` AS `u`,`test`.`t1`.`v` AS `v`,`test`.`t1`.`w` AS `w`,`test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y`,`test`.`t1`.`z` AS `z`,`test`.`t1`.`a1` AS `a1`,`test`.`t1`.`a2` AS `a2`,`test`.`t1`.`a3` AS `a3`,`test`.`t1`.`a4` AS `a4`,`test`.`t1`.`a5` AS `a5`,`test`.`t1`.`a6` AS `a6`,`test`.`t1`.`a7` AS `a7`,`test`.`t1`.`a8` AS `a8`,`test`.`t1`.`a9` AS `a9`,`test`.`t1`.`b1` AS `b1`,`test`.`t1`.`b2` AS `b2`,`test`.`t1`.`b3` AS `b3`,`test`.`t1`.`b4` AS `b4`,`test`.`t1`.`b5` AS `b5`,`test`.`t1`.`b6` AS `b6` from `test`.`t1` where ((`test`.`t1`.`a` > 0) and (`test`.`t1`.`a` < 50))
 drop table t1;
 create table t1 (id int NOT NULL,id2 int NOT NULL,id3 int NOT NULL,dummy1 char(30),primary key (id,id2),index index_id3 (id3)) engine=innodb;
 insert into t1 values (0,0,0,'ABCDEFGHIJ'),(2,2,2,'BCDEFGHIJK'),(1,1,1,'CDEFGHIJKL');
 LOCK TABLES t1 WRITE;
 insert into t1 values (99,1,2,'D'),(1,1,2,'D');
-ERROR 23000: Duplicate entry '1-1' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '1-1' for key 't1.PRIMARY'
 select id from t1;
 id
 0
@@ -806,13 +864,15 @@ insert into t1 values (0,0,0,'ABCDEFGHIJ'),(2,2,2,'BCDEFGHIJK'),(1,1,1,'CDEFGHIJ
 LOCK TABLES t1 WRITE;
 begin;
 insert into t1 values (99,1,2,'D'),(1,1,2,'D');
-ERROR 23000: Duplicate entry '1-1' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '1-1' for key 't1.PRIMARY'
 select id from t1;
 id
 0
 1
 2
 insert ignore into t1 values (100,1,2,'D'),(1,1,99,'D');
+Warnings:
+Warning	1062	Duplicate entry '1-1' for key 't1.PRIMARY'
 commit;
 select id,id3 from t1;
 id	id3
@@ -830,7 +890,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` char(20) DEFAULT NULL,
   KEY `a` (`a`(5))
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create temporary table t1 (a int not null auto_increment, primary key(a)) engine=innodb;
 insert into t1 values (NULL),(NULL),(NULL);
@@ -915,35 +975,52 @@ drop table t1;
 create table t1 (a int not null, b int not null, c int not null, primary key (a),key(b)) engine=innodb;
 insert into t1 values (3,3,3),(1,1,1),(2,2,2),(4,4,4);
 explain select * from t1 order by a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	#	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` order by `test`.`t1`.`a`
 explain select * from t1 order by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	#	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` order by `test`.`t1`.`b`
 explain select * from t1 order by c;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	#	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` order by `test`.`t1`.`c`
 explain select a from t1 order by a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` order by `test`.`t1`.`a`
 explain select b from t1 order by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	b	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`b` AS `b` from `test`.`t1` order by `test`.`t1`.`b`
 explain select a,b from t1 order by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	b	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` order by `test`.`t1`.`b`
 explain select a,b from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	b	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1`
 explain select a,b,c from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	#	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1`
 drop table t1;
 create table t1 (t int not null default 1, key (t)) engine=innodb;
 desc t1;
 Field	Type	Null	Key	Default	Extra
-t	int(11)	NO	MUL	1	
+t	int	NO	MUL	1	
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
 number bigint(20) NOT NULL default '0',
 cname char(15) NOT NULL default '',
@@ -957,6 +1034,15 @@ version smallint(6) NOT NULL default '0',
 assigned_scps int(11) default '0',
 status tinyint(4) default '0'
 ) ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (4077711111,'SeanWheeler',90,2,20020111112846,500,00000000000000,-1,2,3,1);
 INSERT INTO t1 VALUES (9197722223,'berry',90,3,20020111112809,500,20020102114532,501,4,10,0);
 INSERT INTO t1 VALUES (650,'San Francisco',0,0,20011227111336,342,00000000000000,-1,1,24,1);
@@ -976,24 +1062,33 @@ version smallint(6) NOT NULL default '0',
 assigned_scps int(11) default '0',
 status tinyint(4) default '0'
 ) ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES (4077711111,'SeanWheeler',0,2,20020111112853,500,00000000000000,-1,2,3,1);
 INSERT INTO t2 VALUES (9197722223,'berry',90,3,20020111112818,500,20020102114532,501,4,10,0);
 INSERT INTO t2 VALUES (650,'San Francisco',90,0,20020109113158,342,00000000000000,-1,1,24,1);
 INSERT INTO t2 VALUES (333,'tubs',99,2,20020109113453,501,20020109113453,500,3,10,0);
 select * from t1;
 number	cname	carrier_id	privacy	last_mod_date	last_mod_id	last_app_date	last_app_id	version	assigned_scps	status
-4077711111	SeanWheeler	90	2	2002-01-11 11:28:46	500	0000-00-00 00:00:00	-1	2	3	1
-9197722223	berry	90	3	2002-01-11 11:28:09	500	2002-01-02 11:45:32	501	4	10	0
-650	San Francisco	0	0	2001-12-27 11:13:36	342	0000-00-00 00:00:00	-1	1	24	1
 302467	Sue's Subshop	90	3	2002-01-09 11:32:41	500	2002-01-02 11:51:11	501	7	24	0
-6014911113	SudzCarwash	520	1	2002-01-02 11:52:34	500	2002-01-02 11:52:59	501	33	32768	0
 333	tubs	99	2	2002-01-09 11:34:40	501	2002-01-09 11:34:40	500	3	10	0
+4077711111	SeanWheeler	90	2	2002-01-11 11:28:46	500	0000-00-00 00:00:00	-1	2	3	1
+6014911113	SudzCarwash	520	1	2002-01-02 11:52:34	500	2002-01-02 11:52:59	501	33	32768	0
+650	San Francisco	0	0	2001-12-27 11:13:36	342	0000-00-00 00:00:00	-1	1	24	1
+9197722223	berry	90	3	2002-01-11 11:28:09	500	2002-01-02 11:45:32	501	4	10	0
 select * from t2;
 number	cname	carrier_id	privacy	last_mod_date	last_mod_id	last_app_date	last_app_id	version	assigned_scps	status
-4077711111	SeanWheeler	0	2	2002-01-11 11:28:53	500	0000-00-00 00:00:00	-1	2	3	1
-9197722223	berry	90	3	2002-01-11 11:28:18	500	2002-01-02 11:45:32	501	4	10	0
-650	San Francisco	90	0	2002-01-09 11:31:58	342	0000-00-00 00:00:00	-1	1	24	1
 333	tubs	99	2	2002-01-09 11:34:53	501	2002-01-09 11:34:53	500	3	10	0
+4077711111	SeanWheeler	0	2	2002-01-11 11:28:53	500	0000-00-00 00:00:00	-1	2	3	1
+650	San Francisco	90	0	2002-01-09 11:31:58	342	0000-00-00 00:00:00	-1	1	24	1
+9197722223	berry	90	3	2002-01-11 11:28:18	500	2002-01-02 11:45:32	501	4	10	0
 delete t1, t2 from t1 left join t2 on t1.number=t2.number where (t1.carrier_id=90 and t1.number=t2.number) or (t2.carrier_id=90 and t1.number=t2.number) or  (t1.carrier_id=90 and t2.number is null);
 select * from t1;
 number	cname	carrier_id	privacy	last_mod_date	last_mod_id	last_app_date	last_app_id	version	assigned_scps	status
@@ -1006,11 +1101,12 @@ select * from t2;
 number	cname	carrier_id	privacy	last_mod_date	last_mod_id	last_app_date	last_app_id	version	assigned_scps	status
 333	tubs	99	2	2002-01-09 11:34:53	501	2002-01-09 11:34:53	500	3	10	0
 drop table t1,t2;
+SET sql_mode = default;
 create table t1 (id int unsigned not null auto_increment, code tinyint unsigned not null, name char(20) not null, primary key (id), key (code), unique (name)) engine=innodb;
 BEGIN;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-SELECT @@tx_isolation,@@global.tx_isolation;
-@@tx_isolation	@@global.tx_isolation
+SELECT @@transaction_isolation,@@global.transaction_isolation;
+@@transaction_isolation	@@global.transaction_isolation
 SERIALIZABLE	REPEATABLE-READ
 insert into t1 (code, name) values (1, 'Tim'), (1, 'Monty'), (2, 'David');
 select id, code, name from t1 order by id;
@@ -1031,6 +1127,8 @@ id	code	name
 5	3	Sasha
 COMMIT;
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 BEGIN;
 SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 insert into t1 (code, name) values (3, 'Jeremy'), (4, 'Matt');
@@ -1046,7 +1144,13 @@ id	code	name
 COMMIT;
 DROP TABLE t1;
 create table t1 (n int(10), d int(10)) engine=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (n int(10), d int(10)) engine=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values(1,1),(1,2);
 insert into t2 values(1,10),(2,20);
 UPDATE t1,t2 SET t1.d=t2.d,t2.d=30 WHERE t1.n=t2.n;
@@ -1067,7 +1171,7 @@ insert into t1 values (1);
 insert into t1 values (1);
 insert into t2 values (1),(2);
 delete t2 from t2;
-ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '1' for key 't1.PRIMARY'
 select count(*) from t2 /* must be 2 as restored after rollback caused by the error */;
 count(*)
 2
@@ -1080,7 +1184,7 @@ insert into t1 values (1);
 insert into t1 values (1);
 insert into t2 values (1),(2);
 delete t2 from t2;
-ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '1' for key 't1.PRIMARY'
 select count(*) from t2 /* must be 2 as restored after rollback caused by the error */;
 count(*)
 2
@@ -1222,28 +1326,34 @@ select count(*) from t1;
 count(*)
 623
 explain select * from t1 where c between 1 and 2500;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	c	c	5	NULL	#	Using index condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	c	c	5	NULL	#	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` where (`test`.`t1`.`c` between 1 and 2500)
 update t1 set c=a;
 explain select * from t1 where c between 1 and 2500;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	c	NULL	NULL	NULL	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	c	NULL	NULL	NULL	#	#	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` where (`test`.`t1`.`c` between 1 and 2500)
 drop table t1,t2;
 create table t1 (id int primary key auto_increment, fk int, index index_fk (fk)) engine=innodb;
 insert into t1 (id) values (null),(null),(null),(null),(null);
 update t1 set fk=69 where fk is null order by id limit 1;
 SELECT * from t1;
 id	fk
+1	69
 2	NULL
 3	NULL
 4	NULL
 5	NULL
-1	69
 drop table t1;
 create table t1 (a int not null, b int not null, key (a));
 insert into t1 values (1,1),(1,2),(1,3),(3,1),(3,2),(3,3),(3,1),(3,2),(3,3),(2,1),(2,2),(2,3);
 SET @tmp=0;
 update t1 set b=(@tmp:=@tmp+1) order by a;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 update t1 set b=99 where a=1 order by b asc limit 1;
 update t1 set b=100 where a=1 order by b desc limit 2;
 update t1 set a=a+10+b where a=1 order by b;
@@ -1287,10 +1397,16 @@ CREATE TABLE t1 (`id 1` INT NOT NULL, PRIMARY KEY (`id 1`)) ENGINE=INNODB;
 CREATE TABLE t2 (id INT PRIMARY KEY, t1_id INT, INDEX par_ind (t1_id), FOREIGN KEY (`t1_id`) REFERENCES `t1`(`id 1`)  ON DELETE CASCADE ) ENGINE=INNODB;
 drop table t2,t1;
 create table `t1` (`id` int( 11 ) not null  ,primary key ( `id` )) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into `t1`values ( 1 ) ;
 create table `t2` (`id` int( 11 ) not null default '0',unique key `id` ( `id` ) ,constraint `t1_id_fk` foreign key ( `id` ) references `t1` (`id` )) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into `t2`values ( 1 ) ;
 create table `t3` (`id` int( 11 ) not null default '0',key `id` ( `id` ) ,constraint `t2_id_fk` foreign key ( `id` ) references `t2` (`id` )) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into `t3`values ( 1 ) ;
 delete t3,t2,t1 from t1,t2,t3 where t1.id =1 and t2.id = t1.id and t3.id = t2.id;
 ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`))
@@ -1321,15 +1437,19 @@ foreign key(pid) references t1(id) on delete cascade) engine=innodb;
 insert into t1 values(0,0),(1,0),(2,1),(3,2),(4,3),(5,4),(6,5),(7,6),
 (8,7),(9,8),(10,9),(11,10),(12,11),(13,12),(14,13),(15,14);
 delete from t1 where id=0;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t1`, CONSTRAINT `t1_ibfk_1` FOREIGN KEY (`pid`) REFERENCES `t1` (`id`) ON DELETE CASCADE)
+ERROR HY000: Foreign key cascade delete/update exceeds max depth of 15.
 delete from t1 where id=15;
 delete from t1 where id=0;
 drop table t1;
 CREATE TABLE t1 (col1 int(1))ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE TABLE t2 (col1 int(1),stamp TIMESTAMP,INDEX stamp_idx
 (stamp))ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values (1),(2),(3);
-insert into t2 values (1, 20020204130000),(2, 20020204130000),(4,20020204310000 ),(5,20020204230000);
+insert ignore into t2 values (1, 20020204130000),(2, 20020204130000),(4,20020204310000 ),(5,20020204230000);
 Warnings:
 Warning	1265	Data truncated for column 'stamp' at row 3
 SELECT col1 FROM t1 UNION SELECT col1 FROM t2 WHERE stamp <
@@ -1350,6 +1470,10 @@ PRIMARY KEY  (`id`),
 KEY `id_object` (`id_object`),
 KEY `id_version` (`id_version`)
 ) ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES("6", "3382", "9", "Test", NULL), ("7", "102", "5", "Le Pekin (Test)", NULL),("584", "1794", "4", "Test de resto", NULL),("837", "1822", "6", "Test 3", NULL),("1119", "3524", "1", "Societe Test", NULL),("1122", "3525", "1", "Fournisseur Test", NULL);
 CREATE TABLE t2 (
 `id` int(10) unsigned NOT NULL auto_increment,
@@ -1357,9 +1481,12 @@ CREATE TABLE t2 (
 PRIMARY KEY  (`id`),
 KEY `id_version` (`id_version`)
 ) ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES("3524", "1"),("3525", "1"),("1794", "4"),("102", "5"),("1822", "6"),("3382", "9");
 SELECT t2.id, t1.`label` FROM t2 INNER JOIN
-(SELECT t1.id_object as id_object FROM t1 WHERE t1.`label` LIKE '%test%') AS lbl 
+(SELECT t1.id_object as id_object FROM t1 WHERE t1.`label` LIKE '%test%') AS lbl
 ON (t2.id = lbl.id_object) INNER JOIN t1 ON (t2.id = t1.id_object) ORDER BY 1;
 id	label
 102	Le Pekin (Test)
@@ -1418,132 +1545,155 @@ create table t1 (a int) engine=innodb;
 create table t2 like t1;
 drop table t1,t2;
 create table t1 (id int(11) not null, id2 int(11) not null, unique (id,id2)) engine=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (id int(11) not null, constraint t1_id_fk foreign key ( id ) references t1 (id)) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` int(11) NOT NULL,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id2` int NOT NULL,
   UNIQUE KEY `id` (`id`,`id2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   KEY `t1_id_fk` (`id`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 create index id on t2 (id);
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   KEY `id` (`id`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 create index id2 on t2 (id);
 Warnings:
-Note	1831	Duplicate index 'id2' defined on the table 'test.t2'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'id2' defined on the table 'test.t2'. This is deprecated and will be disallowed in a future release.
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   KEY `id` (`id`),
   KEY `id2` (`id`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop index id2 on t2;
 drop index id on t2;
 ERROR HY000: Cannot drop index 'id': needed in a foreign key constraint
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   KEY `id` (`id`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 create table t2 (id int(11) not null, id2 int(11) not null, constraint t1_id_fk foreign key (id,id2) references t1 (id,id2)) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id2` int NOT NULL,
   KEY `t1_id_fk` (`id`,`id2`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`, `id2`) REFERENCES `t1` (`id`, `id2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 create unique index id on t2 (id,id2);
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id2` int NOT NULL,
   UNIQUE KEY `id` (`id`,`id2`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`, `id2`) REFERENCES `t1` (`id`, `id2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 create table t2 (id int(11) not null, id2 int(11) not null, unique (id,id2),constraint t1_id_fk foreign key (id2,id) references t1 (id,id2)) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id2` int NOT NULL,
   UNIQUE KEY `id` (`id`,`id2`),
   KEY `t1_id_fk` (`id2`,`id`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id2`, `id`) REFERENCES `t1` (`id`, `id2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 create table t2 (id int(11) not null, id2 int(11) not null, unique (id,id2), constraint t1_id_fk foreign key (id) references t1 (id)) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id2` int NOT NULL,
   UNIQUE KEY `id` (`id`,`id2`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 create table t2 (id int(11) not null, id2 int(11) not null, unique (id,id2),constraint t1_id_fk foreign key (id2,id) references t1 (id,id2)) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id2` int NOT NULL,
   UNIQUE KEY `id` (`id`,`id2`),
   KEY `t1_id_fk` (`id2`,`id`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id2`, `id`) REFERENCES `t1` (`id`, `id2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 create table t2 (id int(11) not null auto_increment, id2 int(11) not null, constraint t1_id_fk foreign key (id) references t1 (id), primary key (id), index (id,id2)) engine = innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id2` int NOT NULL,
   PRIMARY KEY (`id`),
   KEY `id` (`id`,`id2`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 create table t2 (id int(11) not null auto_increment, id2 int(11) not null, constraint t1_id_fk foreign key (id) references t1 (id)) engine= innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id2` int NOT NULL,
   KEY `t1_id_fk` (`id`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 alter table t2 add index id_test (id), add index id_test2 (id,id2);
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `id2` int(11) NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id2` int NOT NULL,
   KEY `id_test` (`id`),
   KEY `id_test2` (`id`,`id2`),
   CONSTRAINT `t1_id_fk` FOREIGN KEY (`id`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 create table t2 (id int(11) not null, id2 int(11) not null, constraint t1_id_fk foreign key (id2,id) references t1 (id)) engine = innodb;
 ERROR 42000: Incorrect foreign key definition for 't1_id_fk': Key reference and table reference don't match
@@ -1551,25 +1701,25 @@ create table t2 (a int auto_increment primary key, b int, index(b), foreign key 
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `a` int(11) NOT NULL AUTO_INCREMENT,
-  `b` int(11) DEFAULT NULL,
+  `a` int NOT NULL AUTO_INCREMENT,
+  `b` int DEFAULT NULL,
   PRIMARY KEY (`a`),
   UNIQUE KEY `b_2` (`b`),
   KEY `b` (`b`),
   CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2;
 create table t2 (a int auto_increment primary key, b int, foreign key (b) references t1(id), foreign key (b) references t1(id), unique(b)) engine=innodb;
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `a` int(11) NOT NULL AUTO_INCREMENT,
-  `b` int(11) DEFAULT NULL,
+  `a` int NOT NULL AUTO_INCREMENT,
+  `b` int DEFAULT NULL,
   PRIMARY KEY (`a`),
   UNIQUE KEY `b` (`b`),
   CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`id`),
   CONSTRAINT `t2_ibfk_2` FOREIGN KEY (`b`) REFERENCES `t1` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t2, t1;
 create table t1 (c char(10), index (c,c)) engine=innodb;
 ERROR 42S21: Duplicate column name 'c'
@@ -1591,7 +1741,7 @@ ERROR 42S21: Duplicate column name 'c1'
 drop table t1;
 CREATE TABLE t1 (a_id tinyint(4) NOT NULL default '0', PRIMARY KEY  (a_id)) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 INSERT INTO t1 VALUES (1),(2),(3);
-CREATE TABLE t2 (b_id tinyint(4) NOT NULL default '0',b_a tinyint(4) NOT NULL default '0', PRIMARY KEY  (b_id), KEY  (b_a), 
+CREATE TABLE t2 (b_id tinyint(4) NOT NULL default '0',b_a tinyint(4) NOT NULL default '0', PRIMARY KEY  (b_id), KEY  (b_a),
 CONSTRAINT fk_b_a FOREIGN KEY (b_a) REFERENCES t1 (a_id) ON DELETE CASCADE ON UPDATE NO ACTION) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 INSERT INTO t2 VALUES (1,1),(2,1),(3,1),(4,2),(5,2);
 SELECT * FROM (SELECT t1.*,GROUP_CONCAT(t2.b_id SEPARATOR ',') as b_list FROM (t1 LEFT JOIN (t2) on t1.a_id = t2.b_a) GROUP BY t1.a_id ) AS xyz;
@@ -1626,8 +1776,10 @@ a	b	c	d	e
 2	2	b	2	2
 3	3	ab	3	3
 explain select * from t1 order by a,b,c,d;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`d` AS `d`,`test`.`t1`.`e` AS `e` from `test`.`t1` order by `test`.`t1`.`a`,`test`.`t1`.`b`,`test`.`t1`.`c`,`test`.`t1`.`d`
 drop table t1;
 create table t1 (a char(1), b char(1), key(a, b)) engine=innodb;
 insert into t1 values ('8', '6'), ('4', '7');
@@ -1660,8 +1812,10 @@ select count(*) from t1 where x = -16;
 count(*)
 0
 explain select count(*) from t1 where x > -16;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	PRIMARY	PRIMARY	8	NULL	2	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	8	NULL	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where true
 select count(*) from t1 where x > -16;
 count(*)
 2
@@ -1673,34 +1827,34 @@ select count(*) from t1 where x = 18446744073709551601;
 count(*)
 1
 drop table t1;
-SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_buffer_pool_pages_total';
+SELECT variable_value FROM performance_schema.global_status WHERE LOWER(variable_name) = 'innodb_buffer_pool_pages_total';
 variable_value
 {checked_valid}
-SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_page_size';
+SELECT variable_value FROM performance_schema.global_status WHERE LOWER(variable_name) = 'innodb_page_size';
 variable_value
 {checked_valid}
-SELECT variable_value - @innodb_rows_deleted_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_deleted';
-variable_value - @innodb_rows_deleted_orig
-71
-SELECT variable_value - @innodb_rows_inserted_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_inserted';
-variable_value - @innodb_rows_inserted_orig
-963
-SELECT variable_value - @innodb_rows_updated_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_updated';
-variable_value - @innodb_rows_updated_orig
-866
-SELECT variable_value - @innodb_row_lock_waits_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_waits';
+SELECT sum(variable_value) - @innodb_rows_deleted_orig FROM performance_schema.global_status WHERE LOWER(variable_name) like 'innodb%_rows_deleted';
+sum(variable_value) - @innodb_rows_deleted_orig
+1830
+SELECT sum(variable_value) - @innodb_rows_inserted_orig FROM performance_schema.global_status WHERE LOWER(variable_name) like 'innodb%_rows_inserted';
+sum(variable_value) - @innodb_rows_inserted_orig
+2733
+SELECT sum(variable_value) - @innodb_rows_updated_orig FROM performance_schema.global_status WHERE LOWER(variable_name) like 'innodb%_rows_updated';
+sum(variable_value) - @innodb_rows_updated_orig
+2635
+SELECT variable_value - @innodb_row_lock_waits_orig FROM performance_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_waits';
 variable_value - @innodb_row_lock_waits_orig
 0
-SELECT variable_value - @innodb_row_lock_current_waits_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_current_waits';
+SELECT variable_value - @innodb_row_lock_current_waits_orig FROM performance_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_current_waits';
 variable_value - @innodb_row_lock_current_waits_orig
 0
-SELECT variable_value - @innodb_row_lock_time_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time';
+SELECT variable_value - @innodb_row_lock_time_orig FROM performance_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time';
 variable_value - @innodb_row_lock_time_orig
 0
-SELECT variable_value - @innodb_row_lock_time_max_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_max';
+SELECT variable_value - @innodb_row_lock_time_max_orig FROM performance_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_max';
 variable_value - @innodb_row_lock_time_max_orig
 0
-SELECT variable_value - @innodb_row_lock_time_avg_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_avg';
+SELECT variable_value - @innodb_row_lock_time_avg_orig FROM performance_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_avg';
 variable_value - @innodb_row_lock_time_avg_orig
 0
 SET @innodb_sync_spin_loops_orig = @@innodb_sync_spin_loops;
@@ -1726,6 +1880,7 @@ innodb_thread_concurrency	0
 set global innodb_thread_concurrency=1001;
 Warnings:
 Warning	1292	Truncated incorrect innodb_thread_concurrency value: '1001'
+Warning	1210	Current innodb_thread_concurrency is too big for safety of redo log files. Consider decreasing it or increasing innodb_redo_log_capacity.
 show variables like "innodb_thread_concurrency";
 Variable_name	Value
 innodb_thread_concurrency	1000
@@ -1790,7 +1945,7 @@ t1	CREATE TABLE `t1` (
   `v` varchar(10) DEFAULT NULL,
   `c` char(10) DEFAULT NULL,
   `t` text
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 create table t2 like t1;
 show create table t2;
 Table	Create Table
@@ -1798,7 +1953,7 @@ t2	CREATE TABLE `t2` (
   `v` varchar(10) DEFAULT NULL,
   `c` char(10) DEFAULT NULL,
   `t` text
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 create table t3 select * from t1;
 show create table t3;
 Table	Create Table
@@ -1806,7 +1961,7 @@ t3	CREATE TABLE `t3` (
   `v` varchar(10) DEFAULT NULL,
   `c` char(10) DEFAULT NULL,
   `t` text
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 alter table t1 modify c varchar(10);
 show create table t1;
 Table	Create Table
@@ -1814,7 +1969,7 @@ t1	CREATE TABLE `t1` (
   `v` varchar(10) DEFAULT NULL,
   `c` varchar(10) DEFAULT NULL,
   `t` text
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 alter table t1 modify v char(10);
 show create table t1;
 Table	Create Table
@@ -1822,7 +1977,7 @@ t1	CREATE TABLE `t1` (
   `v` char(10) DEFAULT NULL,
   `c` varchar(10) DEFAULT NULL,
   `t` text
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 alter table t1 modify t varchar(10);
 Warnings:
 Note	1265	Data truncated for column 't' at row 2
@@ -1832,13 +1987,14 @@ t1	CREATE TABLE `t1` (
   `v` char(10) DEFAULT NULL,
   `c` varchar(10) DEFAULT NULL,
   `t` varchar(10) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 select concat('*',v,'*',c,'*',t,'*') from t1;
 concat('*',v,'*',c,'*',t,'*')
 *+*+*+ *
 *+*+*+         *
 drop table t1,t2,t3;
-create table t1 (v varchar(10), c char(10), t text, key(v), key(c), key(t(10))) stats_persistent=0;
+create table t1 (v varchar(10), c char(10), t text, key(v), key(c), key(t(10)))
+stats_persistent=0 charset latin1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -1852,7 +2008,7 @@ t1	CREATE TABLE `t1` (
 select count(*) from t1;
 count(*)
 270
-insert into t1 values(concat('a',char(1)),concat('a',char(1)),concat('a',char(1)));
+insert into t1 values(concat('a','!'),concat('a','!'),concat('a','!'));
 select count(*) from t1 where v='a';
 count(*)
 10
@@ -1890,28 +2046,40 @@ select count(*) from t1 where v like 'a %';
 count(*)
 9
 explain select count(*) from t1 where v='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	13	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	13	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` = 'a  ')
 explain select count(*) from t1 where c='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	c	c	11	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	c	c	11	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`c` = 'a  ')
 explain select count(*) from t1 where t='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	t	t	13	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	t	t	13	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`t` = 'a  ')
 explain select count(*) from t1 where v like 'a%';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	v	v	13	NULL	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	v	v	13	NULL	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` like 'a%')
 explain select count(*) from t1 where v between 'a' and 'a ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	13	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	13	const	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` between 'a' and 'a ')
 explain select count(*) from t1 where v between 'a' and 'a ' and v between 'a  ' and 'b\n';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	13	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	13	const	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where ((`test`.`t1`.`v` between 'a' and 'a ') and (`test`.`t1`.`v` between 'a  ' and 'b\n'))
 alter table t1 add unique(v);
-ERROR 23000: Duplicate entry '{ ' for key 'v_2'
+ERROR 23000: Duplicate entry '{ ' for key 't1.v_2'
 alter table t1 add key(v);
 Warnings:
-Note	1831	Duplicate index 'v_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'v_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 select concat('*',v,'*',c,'*',t,'*') as qq from t1 where v='a';
 qq
 *a*a*a*
@@ -1925,12 +2093,14 @@ qq
 *a        *a*a        *
 *a         *a*a         *
 explain select * from t1 where v='a';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v,v_2	#	13	const	#	Using index condition
-select v,count(*) from t1 group by v limit 10;
-v	count(*)
-a	1
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v,v_2	#	13	const	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
+select TRIM(v),count(*) from t1 group by TRIM(v) order by TRIM(v) limit 10;
+TRIM(v)	count(*)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -1939,10 +2109,10 @@ f	10
 g	10
 h	10
 i	10
-select v,count(t) from t1 group by v limit 10;
-v	count(t)
-a	1
+select TRIM(v),count(t) from t1 group by TRIM(v) order by TRIM(v) limit 10;
+TRIM(v)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -1951,10 +2121,10 @@ f	10
 g	10
 h	10
 i	10
-select v,count(c) from t1 group by v limit 10;
-v	count(c)
-a	1
+select TRIM(v),count(c) from t1 group by TRIM(v) order by TRIM(v) limit 10;
+TRIM(v)	count(c)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -1963,10 +2133,10 @@ f	10
 g	10
 h	10
 i	10
-select sql_big_result v,count(t) from t1 group by v limit 10;
-v	count(t)
-a	1
+select sql_big_result TRIM(v),count(t) from t1 group by TRIM(v) order by TRIM(v) limit 10;
+TRIM(v)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -1975,10 +2145,10 @@ f	10
 g	10
 h	10
 i	10
-select sql_big_result v,count(c) from t1 group by v limit 10;
-v	count(c)
-a	1
+select sql_big_result TRIM(v),count(c) from t1 group by TRIM(v) order by TRIM(v) limit 10;
+TRIM(v)	count(c)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -1987,10 +2157,10 @@ f	10
 g	10
 h	10
 i	10
-select c,count(*) from t1 group by c limit 10;
+select c,count(*) from t1 group by c order by c limit 10;
 c	count(*)
-a	1
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -1999,10 +2169,10 @@ f	10
 g	10
 h	10
 i	10
-select c,count(t) from t1 group by c limit 10;
+select c,count(t) from t1 group by c order by c limit 10;
 c	count(t)
-a	1
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2013,8 +2183,8 @@ h	10
 i	10
 select sql_big_result c,count(t) from t1 group by c limit 10;
 c	count(t)
-a	1
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2023,10 +2193,10 @@ f	10
 g	10
 h	10
 i	10
-select t,count(*) from t1 group by t limit 10;
-t	count(*)
-a	1
+select TRIM(t),count(*) from t1 group by TRIM(t) order by TRIM(t) limit 10;
+TRIM(t)	count(*)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2035,10 +2205,10 @@ f	10
 g	10
 h	10
 i	10
-select t,count(t) from t1 group by t limit 10;
-t	count(t)
-a	1
+select TRIM(t),count(t) from t1 group by TRIM(t) order by TRIM(t) limit 10;
+TRIM(t)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2047,10 +2217,10 @@ f	10
 g	10
 h	10
 i	10
-select sql_big_result t,count(t) from t1 group by t limit 10;
-t	count(t)
-a	1
+select sql_big_result TRIM(t),count(t) from t1 group by TRIM(t) order by TRIM(t) limit 10;
+TRIM(t)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2069,7 +2239,7 @@ t1	CREATE TABLE `t1` (
   KEY `c` (`c`),
   KEY `t` (`t`(10)),
   KEY `v` (`v`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 STATS_PERSISTENT=0
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=latin1 STATS_PERSISTENT=0
 select count(*) from t1 where v='a';
 count(*)
 10
@@ -2089,24 +2259,34 @@ select count(*) from t1 where v like 'a %';
 count(*)
 9
 explain select count(*) from t1 where v='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	303	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	303	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` = 'a  ')
 explain select count(*) from t1 where v like 'a%';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	v	v	303	NULL	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	v	v	303	NULL	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` like 'a%')
 explain select count(*) from t1 where v between 'a' and 'a ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	303	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	303	const	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` between 'a' and 'a ')
 explain select count(*) from t1 where v between 'a' and 'a ' and v between 'a  ' and 'b\n';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	303	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	303	const	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where ((`test`.`t1`.`v` between 'a' and 'a ') and (`test`.`t1`.`v` between 'a  ' and 'b\n'))
 explain select * from t1 where v='a';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	303	const	#	Using index condition
-select v,count(*) from t1 group by v limit 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	303	const	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
+select v,count(*) from t1 group by v order by v limit 10;
 v	count(*)
-a	1
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2115,10 +2295,10 @@ f	10
 g	10
 h	10
 i	10
-select v,count(t) from t1 group by v limit 10;
-v	count(t)
-a	1
+select TRIM(v),count(t) from t1 group by v order by v limit 10;
+TRIM(v)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2127,10 +2307,10 @@ f	10
 g	10
 h	10
 i	10
-select sql_big_result v,count(t) from t1 group by v limit 10;
-v	count(t)
-a	1
+select sql_big_result TRIM(v),count(t) from t1 group by v order by v limit 10;
+TRIM(v)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2149,7 +2329,7 @@ t1	CREATE TABLE `t1` (
   KEY `c` (`c`),
   KEY `t` (`t`(10)),
   KEY `v` (`v`(30))
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 STATS_PERSISTENT=0
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=latin1 STATS_PERSISTENT=0
 select count(*) from t1 where v='a';
 count(*)
 10
@@ -2169,24 +2349,34 @@ select count(*) from t1 where v like 'a %';
 count(*)
 9
 explain select count(*) from t1 where v='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	33	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	33	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` = 'a  ')
 explain select count(*) from t1 where v like 'a%';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	v	v	33	NULL	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	v	v	33	NULL	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` like 'a%')
 explain select count(*) from t1 where v between 'a' and 'a ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	33	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	33	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` between 'a' and 'a ')
 explain select count(*) from t1 where v between 'a' and 'a ' and v between 'a  ' and 'b\n';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	33	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	33	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where ((`test`.`t1`.`v` between 'a' and 'a ') and (`test`.`t1`.`v` between 'a  ' and 'b\n'))
 explain select * from t1 where v='a';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	33	const	#	Using where
-select v,count(*) from t1 group by v limit 10;
-v	count(*)
-a	1
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	33	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
+select TRIM(v),count(*) from t1 group by v order by v limit 10;
+TRIM(v)	count(*)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2195,10 +2385,10 @@ f	10
 g	10
 h	10
 i	10
-select v,count(t) from t1 group by v limit 10;
-v	count(t)
-a	1
+select TRIM(v),count(t) from t1 group by v order by v limit 10;
+TRIM(v)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2207,10 +2397,10 @@ f	10
 g	10
 h	10
 i	10
-select sql_big_result v,count(t) from t1 group by v limit 10;
-v	count(t)
-a	1
+select sql_big_result TRIM(v),count(t) from t1 group by v order by v limit 10;
+TRIM(v)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2229,11 +2419,11 @@ t1	CREATE TABLE `t1` (
   KEY `c` (`c`),
   KEY `t` (`t`(10)),
   KEY `v` (`v`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 STATS_PERSISTENT=0
-select v,count(*) from t1 group by v limit 10;
-v	count(*)
-a	1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=latin1 STATS_PERSISTENT=0
+select TRIM(v),count(*) from t1 group by v order by v limit 10;
+TRIM(v)	count(*)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2242,10 +2432,10 @@ f	10
 g	10
 h	10
 i	10
-select v,count(t) from t1 group by v limit 10;
-v	count(t)
-a	1
+select TRIM(v),count(t) from t1 group by v order by v limit 10;
+TRIM(v)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2254,10 +2444,10 @@ f	10
 g	10
 h	10
 i	10
-select sql_big_result v,count(t) from t1 group by v limit 10;
-v	count(t)
-a	1
+select sql_big_result TRIM(v),count(t) from t1 group by v order by v limit 10;
+TRIM(v)	count(t)
 a	10
+a!	1
 b	10
 c	10
 d	10
@@ -2267,19 +2457,20 @@ g	10
 h	10
 i	10
 drop table t1;
+SET NAMES utf8mb4;
 create table t1 (a char(10), unique (a));
 insert into t1 values ('a   ');
 insert into t1 values ('a ');
-ERROR 23000: Duplicate entry 'a' for key 'a'
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
 alter table t1 modify a varchar(10);
-insert into t1 values ('a '),('a  '),('a   '),('a         ');
-ERROR 23000: Duplicate entry 'a ' for key 'a'
-insert into t1 values ('a     ');
-ERROR 23000: Duplicate entry 'a     ' for key 'a'
-insert into t1 values ('a          ');
-ERROR 23000: Duplicate entry 'a         ' for key 'a'
-insert into t1 values ('a ');
-ERROR 23000: Duplicate entry 'a ' for key 'a'
+insert into t1 values ('a'),('á'),('à'),('å');
+ERROR 23000: Duplicate entry 'a' for key 't1.a'
+insert into t1 values ('á');
+ERROR 23000: Duplicate entry 'á' for key 't1.a'
+insert into t1 values ('A');
+ERROR 23000: Duplicate entry 'A' for key 't1.a'
+insert into t1 values ('å');
+ERROR 23000: Duplicate entry 'å' for key 't1.a'
 update t1 set a='a  ' where a like 'a%';
 select concat(a,'.') from t1;
 concat(a,'.')
@@ -2297,6 +2488,7 @@ select concat(a,'.') from t1;
 concat(a,'.')
 a  .
 drop table t1;
+SET NAMES DEFAULT;
 create table t1 (v varchar(10), c char(10), t text, key(v(5)), key(c(5)), key(t(5)));
 show create table t1;
 Table	Create Table
@@ -2307,31 +2499,33 @@ t1	CREATE TABLE `t1` (
   KEY `v` (`v`(5)),
   KEY `c` (`c`(5)),
   KEY `t` (`t`(5))
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (v char(10) character set utf8);
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `v` char(10) CHARACTER SET utf8 DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+  `v` char(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (v varchar(10), c char(10)) row_format=fixed;
 Warnings:
-Warning	1478	InnoDB: assuming ROW_FORMAT=COMPACT.
+Warning	1478	InnoDB: assuming ROW_FORMAT=DYNAMIC.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `v` varchar(10) DEFAULT NULL,
   `c` char(10) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 insert into t1 values('a','a'),('a ','a ');
 select concat('*',v,'*',c,'*') from t1;
 concat('*',v,'*',c,'*')
 *a*a*
 *a *a*
 drop table t1;
-create table t1 (v varchar(65530), key(v(10)));
+create table t1 (v varchar(65530), key(v(10))) charset latin1;
 insert into t1 values(repeat('a',65530));
 select length(v) from t1 where v=repeat('a',65530);
 length(v)
@@ -2340,17 +2534,21 @@ drop table t1;
 create table t1(a int, b varchar(12), key ba(b, a));
 insert into t1 values (1, 'A'), (20, NULL);
 explain select * from t1 where a=20 and b is null;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	ba	ba	20	const,const	1	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	ba	ba	56	const,const	1	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where ((`test`.`t1`.`a` = 20) and (`test`.`t1`.`b` is null))
 select * from t1 where a=20 and b is null;
 a	b
 20	NULL
 drop table t1;
 set session old_alter_table=0;
-create table t1 (v varchar(65530), key(v));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES';
 Warnings:
-Warning	1071	Specified key was too long; max key length is 767 bytes
-drop table t1;
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+create table t1 (v varchar(65530), key(v)) charset latin1 ROW_FORMAT=COMPACT;
+Got one of the listed errors
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (v varchar(65536));
 Warnings:
 Note	1246	Converting column 'v' from VARCHAR to TEXT
@@ -2358,19 +2556,21 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `v` mediumtext
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (v varchar(65530) character set utf8);
 Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 Note	1246	Converting column 'v' from VARCHAR to TEXT
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `v` mediumtext CHARACTER SET utf8
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+  `v` mediumtext CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
+SET sql_mode = default;
 set default_storage_engine=MyISAM;
-create table t1 (v varchar(16384)) engine=innodb;
+create table t1 (v varchar(16384)) charset latin1 engine=innodb;
 drop table t1;
 create table t1 (a char(1), b char(1), key(a, b)) engine=innodb;
 insert into t1 values ('8', '6'), ('4', '7');
@@ -2382,12 +2582,15 @@ min(b)
 6
 drop table t1;
 CREATE TABLE t1 ( `a` int(11) NOT NULL auto_increment, `b` int(11) default NULL,PRIMARY KEY  (`a`),UNIQUE KEY `b` (`b`)) ENGINE=innodb;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 (b) values (1);
 replace into t1 (b) values (2), (1), (3);
 select * from t1;
 a	b
-3	1
 2	2
+3	1
 4	3
 truncate table t1;
 insert into t1 (b) values (1);
@@ -2396,8 +2599,8 @@ replace into t1 (b) values (1);
 replace into t1 (b) values (3);
 select * from t1;
 a	b
-3	1
 2	2
+3	1
 4	3
 drop table t1;
 create table t1 (rowid int not null auto_increment, val int not null,primary
@@ -2405,7 +2608,7 @@ key (rowid), unique(val)) engine=innodb;
 replace into t1 (val) values ('1'),('2');
 replace into t1 (val) values ('1'),('2');
 insert into t1 (val) values ('1'),('2');
-ERROR 23000: Duplicate entry '1' for key 'val'
+ERROR 23000: Duplicate entry '1' for key 't1.val'
 select * from t1;
 rowid	val
 3	1
@@ -2414,11 +2617,17 @@ drop table t1;
 create table t1 (a int not null auto_increment primary key, val int) engine=InnoDB;
 insert into t1 (val) values (1);
 update t1 set a=2 where a=1;
-insert into t1 (val) values (1);
-ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+insert into t1 (val) values (3);
 select * from t1;
 a	val
 2	1
+3	3
+insert into t1 values (2, 2);
+ERROR 23000: Duplicate entry '2' for key 't1.PRIMARY'
+select * from t1;
+a	val
+2	1
+3	3
 drop table t1;
 CREATE TABLE t1 (GRADE DECIMAL(4) NOT NULL, PRIMARY KEY (GRADE)) ENGINE=INNODB;
 INSERT INTO t1 (GRADE) VALUES (151),(252),(343);
@@ -2485,41 +2694,6 @@ character set = latin1 engine = innodb;
 create table t8 (col1 blob, index(col1(767)))
 character set = latin1 engine = innodb;
 drop table t1, t2, t3, t4, t5, t6, t7, t8;
-create table t1 (col1 varchar(768), index(col1))
-character set = latin1 engine = innodb;
-Warnings:
-Warning	1071	Specified key was too long; max key length is 767 bytes
-create table t2 (col1 varbinary(768), index(col1))
-character set = latin1 engine = innodb;
-Warnings:
-Warning	1071	Specified key was too long; max key length is 767 bytes
-create table t3 (col1 text, index(col1(768)))
-character set = latin1 engine = innodb;
-Warnings:
-Warning	1071	Specified key was too long; max key length is 767 bytes
-create table t4 (col1 blob, index(col1(768)))
-character set = latin1 engine = innodb;
-Warnings:
-Warning	1071	Specified key was too long; max key length is 767 bytes
-show create table t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `col1` varchar(768) DEFAULT NULL,
-  KEY `col1` (`col1`(767))
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-drop table t1, t2, t3, t4;
-create table t1 (col1 varchar(768) primary key)
-character set = latin1 engine = innodb;
-ERROR 42000: Specified key was too long; max key length is 767 bytes
-create table t2 (col1 varbinary(768) primary key)
-character set = latin1 engine = innodb;
-ERROR 42000: Specified key was too long; max key length is 767 bytes
-create table t3 (col1 text, primary key(col1(768)))
-character set = latin1 engine = innodb;
-ERROR 42000: Specified key was too long; max key length is 767 bytes
-create table t4 (col1 blob, primary key(col1(768)))
-character set = latin1 engine = innodb;
-ERROR 42000: Specified key was too long; max key length is 767 bytes
 CREATE TABLE t1
 (
 id INT PRIMARY KEY
@@ -2536,7 +2710,7 @@ INSERT INTO t2 VALUES(1);
 DELETE FROM t1 WHERE id = 1;
 ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `c1` FOREIGN KEY (`v`) REFERENCES `t1` (`id`))
 DROP TABLE t1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+ERROR HY000: Cannot drop table 't1' referenced by a foreign key constraint 'c1' on table 't2'.
 SET FOREIGN_KEY_CHECKS=0;
 DROP TABLE t1;
 SET FOREIGN_KEY_CHECKS=1;
@@ -2574,33 +2748,37 @@ drop table t1;
 set foreign_key_checks=0;
 create table t2 (a int primary key, b int, foreign key (b) references t1(a)) engine = innodb;
 create table t1(a char(10) primary key, b varchar(20)) engine = innodb;
-ERROR HY000: Cannot add foreign key constraint
+ERROR HY000: Referencing column 'b' and referenced column 'a' in foreign key constraint 't2_ibfk_1' are incompatible.
 set foreign_key_checks=1;
 drop table t2;
 set foreign_key_checks=0;
 create table t1(a varchar(10) primary key) engine = innodb DEFAULT CHARSET=latin1;
 create table t2 (a varchar(10), foreign key (a) references t1(a)) engine = innodb DEFAULT CHARSET=utf8;
-ERROR HY000: Cannot add foreign key constraint
+ERROR HY000: Referencing column 'a' and referenced column 'a' in foreign key constraint 't2_ibfk_1' are incompatible.
 set foreign_key_checks=1;
 drop table t1;
 set foreign_key_checks=0;
 create table t2 (a varchar(10), foreign key (a) references t1(a)) engine = innodb;
 create table t1(a varchar(10) primary key) engine = innodb;
 alter table t1 modify column a int;
-Got one of the listed errors
+ERROR HY000: Referencing column 'a' and referenced column 'a' in foreign key constraint 't2_ibfk_1' are incompatible.
 set foreign_key_checks=1;
 drop table t2,t1;
 set foreign_key_checks=0;
 create table t2 (a varchar(10), foreign key (a) references t1(a)) engine = innodb DEFAULT CHARSET=latin1;
 create table t1(a varchar(10) primary key) engine = innodb DEFAULT CHARSET=latin1;
 alter table t1 convert to character set utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 set foreign_key_checks=1;
 drop table t2,t1;
 set foreign_key_checks=0;
 create table t2 (a varchar(10), foreign key (a) references t1(a)) engine = innodb DEFAULT CHARSET=latin1;
 create table t3(a varchar(10) primary key) engine = innodb DEFAULT CHARSET=utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 rename table t3 to t1;
-ERROR HY000: Error on rename of './test/t3' to './test/t1' (errno: 150 - Foreign key constraint is incorrectly formed)
+ERROR HY000: Referencing column 'a' and referenced column 'a' in foreign key constraint 't2_ibfk_1' are incompatible.
 set foreign_key_checks=1;
 drop table t2,t3;
 create table t1(a int primary key) row_format=redundant engine=innodb;
@@ -2624,29 +2802,34 @@ ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fail
 update t4 set a=2;
 ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t4`, CONSTRAINT `t4_ibfk_1` FOREIGN KEY (`a`) REFERENCES `t3` (`a`))
 truncate t1;
-ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`a`) REFERENCES `test`.`t1` (`a`))
+ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t2`, CONSTRAINT `t2_ibfk_1`)
 truncate t3;
-ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t4`, CONSTRAINT `t4_ibfk_1` FOREIGN KEY (`a`) REFERENCES `test`.`t3` (`a`))
+ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t4`, CONSTRAINT `t4_ibfk_1`)
 truncate t2;
 truncate t4;
 truncate t1;
-ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`a`) REFERENCES `test`.`t1` (`a`))
+ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t2`, CONSTRAINT `t2_ibfk_1`)
 truncate t3;
-ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t4`, CONSTRAINT `t4_ibfk_1` FOREIGN KEY (`a`) REFERENCES `test`.`t3` (`a`))
+ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t4`, CONSTRAINT `t4_ibfk_1`)
 drop table t4,t3,t2,t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (s1 varbinary(2),primary key (s1)) engine=innodb;
 create table t2 (s1 binary(2),primary key (s1)) engine=innodb;
 create table t3 (s1 varchar(2) binary,primary key (s1)) engine=innodb;
+Warnings:
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
 create table t4 (s1 char(2) binary,primary key (s1)) engine=innodb;
+Warnings:
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
 insert into t1 values (0x41),(0x4120),(0x4100);
 insert into t2 values (0x41),(0x4120),(0x4100);
-ERROR 23000: Duplicate entry 'A' for key 'PRIMARY'
+ERROR 23000: Duplicate entry 'A' for key 't2.PRIMARY'
 insert into t2 values (0x41),(0x4120);
 insert into t3 values (0x41),(0x4120),(0x4100);
-ERROR 23000: Duplicate entry 'A ' for key 'PRIMARY'
+ERROR 23000: Duplicate entry 'A ' for key 't3.PRIMARY'
 insert into t3 values (0x41),(0x4100);
 insert into t4 values (0x41),(0x4120),(0x4100);
-ERROR 23000: Duplicate entry 'A' for key 'PRIMARY'
+ERROR 23000: Duplicate entry 'A' for key 't4.PRIMARY'
 insert into t4 values (0x41),(0x4100);
 select hex(s1) from t1;
 hex(s1)
@@ -2712,7 +2895,11 @@ hex(s1)
 4120
 drop table t2,t1;
 create table t1 (a int primary key,s1 varchar(2) binary not null unique) engine=innodb;
+Warnings:
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
 create table t2 (s1 char(2) binary not null, constraint c foreign key(s1) references t1(s1) on update cascade) engine=innodb;
+Warnings:
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
 insert into t1 values(1,0x4100),(2,0x41);
 insert into t2 values(0x41);
 select hex(s1) from t2;
@@ -2745,10 +2932,11 @@ ALTER TABLE t2 DROP FOREIGN KEY t2_ibfk_0;
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `a` int(11) DEFAULT NULL,
+  `a` int DEFAULT NULL,
   KEY `t2_ibfk_0` (`a`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t2,t1;
+SET sql_mode = default;
 CREATE TABLE t1 (
 field1 varchar(8) NOT NULL DEFAULT '',
 field2 varchar(8) NOT NULL DEFAULT '',
@@ -2782,21 +2970,21 @@ references t2(c1) on delete cascade;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` bigint(20) NOT NULL,
-  `c2` bigint(20) NOT NULL,
+  `c1` bigint NOT NULL,
+  `c2` bigint NOT NULL,
   PRIMARY KEY (`c1`),
   UNIQUE KEY `c2` (`c2`),
   CONSTRAINT `c2_fk` FOREIGN KEY (`c2`) REFERENCES `t2` (`c1`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 alter table t1 drop foreign key c2_fk;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` bigint(20) NOT NULL,
-  `c2` bigint(20) NOT NULL,
+  `c1` bigint NOT NULL,
+  `c2` bigint NOT NULL,
   PRIMARY KEY (`c1`),
   UNIQUE KEY `c2` (`c2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1, t2;
 create table t1(a date) engine=innodb;
 create table t2(a date, key(a)) engine=innodb;
@@ -2826,10 +3014,14 @@ create table t1(a int not null, b int, primary key(a)) engine=innodb;
 insert into t1 values(1,1),(2,2),(3,1),(4,2),(5,1),(6,2),(7,3);
 commit;
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 update t1 set b = 5 where b = 1;
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 select * from t1 where a = 7 and b = 3 for update;
@@ -2869,6 +3061,8 @@ d	e
 8	6
 12	1
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 insert into t1 select * from t2;
@@ -2900,38 +3094,56 @@ a	b
 8	6
 12	1
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 insert into t1 select * from t2;
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 update t3 set b = (select b from t2 where a = d);
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 create table t4(a int not null, b int, primary key(a)) engine=innodb select * from t2;
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 insert into t5 (select * from t2 lock in share mode);
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 update t6 set e = (select b from t2 where a = d lock in share mode);
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 create table t7(a int not null, b int, primary key(a)) engine=innodb select * from t2 lock in share mode;
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 insert into t8 (select * from t2 for update);
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 update t9 set e = (select b from t2 where a = d for update);
 SET binlog_format='MIXED';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 create table t10(a int not null, b int, primary key(a)) engine=innodb select * from t2 for update;
@@ -2952,6 +3164,9 @@ CREATE TABLE t1 (
 a BIGINT(20) NOT NULL,
 PRIMARY KEY  (a)
 ) ENGINE=INNODB DEFAULT CHARSET=UTF8;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 CREATE TABLE t2 (
 a BIGINT(20) NOT NULL,
 b VARCHAR(128) NOT NULL,
@@ -2961,6 +3176,9 @@ KEY idx_t2_b_c (b,c(100)),
 CONSTRAINT t_fk FOREIGN KEY (a) REFERENCES t1 (a)
 ON DELETE CASCADE
 ) ENGINE=INNODB DEFAULT CHARSET=UTF8;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1, 'bar', 'vbar');
 INSERT INTO t2 VALUES (1, 'BAR2', 'VBAR');
@@ -2972,6 +3190,8 @@ a	b	c
 SELECT * FROM t2 WHERE BINARY b = 'customer_over';
 a	b	c
 1	customer_over	1
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
 SELECT DISTINCT p0.a FROM t2 p0 WHERE p0.b = 'customer_over';
 a
 1
@@ -2979,9 +3199,13 @@ a
 SELECT DISTINCT p0.a FROM t2 p0 WHERE BINARY p0.b = 'customer_over';
 a
 1
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
 SELECT p0.a FROM t2 p0 WHERE BINARY p0.b = 'customer_over';
 a
 1
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
 drop table t2, t1;
 CREATE TABLE t1 ( a int ) ENGINE=innodb;
 BEGIN;
@@ -3000,28 +3224,27 @@ DELETE CASCADE ON UPDATE CASCADE;
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
-  `f` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `f` int NOT NULL,
   PRIMARY KEY (`id`),
   KEY `f` (`f`),
   CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`f`) REFERENCES `t1` (`f`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `t2_t1` FOREIGN KEY (`id`) REFERENCES `t1` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t2, t1;
 CREATE TABLE t1 (a INT, INDEX(a)) ENGINE=InnoDB;
 CREATE TABLE t2 (a INT, INDEX(a)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1);
 ALTER TABLE t2 ADD FOREIGN KEY (a) REFERENCES t1 (a) ON DELETE SET NULL;
-set @old_sql_mode = @@sql_mode;
-set @@sql_mode = 'STRICT_TRANS_TABLES';
 ALTER TABLE t2 MODIFY a INT NOT NULL;
-ERROR HY000: Column 'a' cannot be NOT NULL: needed in a foreign key constraint 'test/t2_ibfk_1' SET NULL
-set @@sql_mode = @old_sql_mode;
+ERROR HY000: Column 'a' cannot be NOT NULL: needed in a foreign key constraint 't2_ibfk_1' SET NULL
 DELETE FROM t1;
 DROP TABLE t2,t1;
 CREATE TABLE t1 (a VARCHAR(5) COLLATE utf8_unicode_ci PRIMARY KEY)
 ENGINE=InnoDB;
+Warnings:
+Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 INSERT INTO t1 VALUES (0xEFBCA4EFBCA4EFBCA4);
 DELETE FROM t1;
 INSERT INTO t1 VALUES ('DDD');
@@ -3040,19 +3263,19 @@ id
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=349 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=349 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 CREATE TABLE t2 (id int PRIMARY KEY) ENGINE=InnoDB;
 INSERT INTO t2 VALUES(42),(347),(348);
 ALTER TABLE t1 ADD CONSTRAINT t1_t2 FOREIGN KEY (id) REFERENCES t2(id);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`id`),
   CONSTRAINT `t1_t2` FOREIGN KEY (`id`) REFERENCES `t2` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=349 DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB AUTO_INCREMENT=349 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1,t2;
 SET innodb_strict_mode=ON;
 CREATE TABLE t1 (
@@ -3064,8 +3287,8 @@ c17 CHAR(255), c18 CHAR(255), c19 CHAR(255), c20 CHAR(255),
 c21 CHAR(255), c22 CHAR(255), c23 CHAR(255), c24 CHAR(255),
 c25 CHAR(255), c26 CHAR(255), c27 CHAR(255), c28 CHAR(255),
 c29 CHAR(255), c30 CHAR(255), c31 CHAR(255), c32 CHAR(255)
-) ENGINE = InnoDB;
-ERROR 42000: Row size too large (> {checked_valid}). Changing some columns to TEXT or BLOB or using ROW_FORMAT=DYNAMIC or ROW_FORMAT=COMPRESSED may help. In current row format, BLOB prefix of 768 bytes is stored inline.
+) charset latin1 ENGINE = InnoDB;
+ERROR 42000: Row size too large (> {checked_valid}). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
 SET innodb_strict_mode=OFF;
 DROP TABLE IF EXISTS t1;
 Warnings:
@@ -3073,6 +3296,8 @@ Note	1051	Unknown table 'test.t1'
 CREATE TABLE t1(
 id BIGINT(20) NOT NULL AUTO_INCREMENT PRIMARY KEY
 ) ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES(-10);
 SELECT * FROM t1;
 id
@@ -3083,43 +3308,6 @@ id
 -10
 1
 DROP TABLE t1;
-SET binlog_format='MIXED';
-SET TX_ISOLATION='read-committed';
-SET AUTOCOMMIT=0;
-DROP TABLE IF EXISTS t1, t2;
-Warnings:
-Note	1051	Unknown table 'test.t1'
-Note	1051	Unknown table 'test.t2'
-CREATE TABLE t1 ( a int ) ENGINE=InnoDB;
-CREATE TABLE t2 LIKE t1;
-SELECT * FROM t2;
-a
-SET binlog_format='MIXED';
-SET TX_ISOLATION='read-committed';
-SET AUTOCOMMIT=0;
-INSERT INTO t1 VALUES (1);
-COMMIT;
-SELECT * FROM t1 WHERE a=1;
-a
-1
-SET binlog_format='MIXED';
-SET TX_ISOLATION='read-committed';
-SET AUTOCOMMIT=0;
-SELECT * FROM t2;
-a
-SET binlog_format='MIXED';
-SET TX_ISOLATION='read-committed';
-SET AUTOCOMMIT=0;
-INSERT INTO t1 VALUES (2);
-COMMIT;
-SELECT * FROM t1 WHERE a=2;
-a
-2
-SELECT * FROM t1 WHERE a=2;
-a
-2
-DROP TABLE t1;
-DROP TABLE t2;
 create table t1 (i int, j int) engine=innodb;
 insert into t1 (i, j) values (1, 1), (2, 2);
 update t1 set j = 2;
@@ -3127,10 +3315,13 @@ affected rows: 1
 info: Rows matched: 2  Changed: 1  Warnings: 0
 drop table t1;
 create table t1 (id int) comment='this is a comment' engine=innodb;
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 select table_comment, data_free > 0 as data_free_is_set
 from information_schema.tables
 where table_schema='test' and table_name = 't1';
-table_comment	data_free_is_set
+TABLE_COMMENT	data_free_is_set
 this is a comment	1
 drop table t1;
 CREATE TABLE t1 (
@@ -3138,15 +3329,28 @@ c1 INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
 c2 VARCHAR(128) NOT NULL,
 PRIMARY KEY(c1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=100;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 CREATE TABLE t2 (
 c1 INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
 c2 INT(10) UNSIGNED DEFAULT NULL,
 PRIMARY KEY(c1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=200;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+ANALYZE TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	analyze	status	OK
 SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE table_name = 't2';
 AUTO_INCREMENT
 200
 ALTER TABLE t2 ADD CONSTRAINT t1_t2_1 FOREIGN KEY(c1) REFERENCES t1(c1);
+ANALYZE TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	analyze	status	OK
 SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE table_name = 't2';
 AUTO_INCREMENT
 200
@@ -3164,11 +3368,11 @@ TRUNCATE TABLE t1;
 affected rows: 0
 DROP TABLE t1;
 Variable_name	Value
-Handler_update	0
+Handler_update	10
 Variable_name	Value
 Handler_delete	0
 Variable_name	Value
-Handler_update	1
+Handler_update	11
 Variable_name	Value
 Handler_delete	1
 DROP TABLE bug58912;
@@ -3218,11 +3422,11 @@ c2 INT, INDEX idx(c2)) ENGINE=InnoDB;
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TEMPORARY TABLE `t2` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  `c2` int(11) DEFAULT NULL,
+  `c1` int NOT NULL AUTO_INCREMENT,
+  `c2` int DEFAULT NULL,
   PRIMARY KEY (`c1`),
   KEY `idx` (`c2`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 START TRANSACTION READ ONLY;
 INSERT INTO t2 VALUES(NULL,1),(NULL,2),(NULL,3);
 INSERT INTO t1 VALUES(0);
@@ -3246,20 +3450,51 @@ COMMIT;
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TEMPORARY TABLE `t2` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  `c2` int(11) DEFAULT NULL,
+  `c1` int NOT NULL AUTO_INCREMENT,
+  `c2` int DEFAULT NULL,
   PRIMARY KEY (`c1`),
   KEY `idx` (`c2`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1
 SELECT * FROM t2;
 c1	c2
 4	1
-7	1
 5	2
-8	2
 6	3
+7	1
+8	2
 9	3
 DROP TABLE t1;
 DROP TABLE t2;
+count_alloc WHERE event_name like 'memory/innodb/other'
+count_alloc
+0
+SET @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
+Warnings:
+Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
+SET GLOBAL log_bin_trust_function_creators = 1;
+Warnings:
+Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
+create table t1 (col1 integer primary key, col2 integer) engine=innodb;
+insert t1 values (1,100);
+create function f1 () returns integer begin
+declare var1 int;
+select col2 into var1 from t1 where col1=1 for update;
+return var1;
+end|
+start transaction;
+select f1();
+f1()
+100
+update t1 set col2=0 where col1=1;
+select * from t1;
+col1	col2
+1	100
+rollback;
+rollback;
+drop table t1;
+drop function f1;
+SET @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
+Warnings:
+Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.

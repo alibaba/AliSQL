@@ -1,15 +1,22 @@
 /*
- Copyright 2010 Sun Microsystems, Inc.
- All rights reserved. Use is subject to license terms.
+ Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is designed to work with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have either included with
+ the program or referenced in the documentation.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -24,8 +31,8 @@
 
 #include <jni.h>
 
-#include "jtie.hpp"
 #include "helpers.hpp"
+#include "jtie.hpp"
 
 // ---------------------------------------------------------------------------
 // JTie Template Library: Include these global symbol definitions in
@@ -36,37 +43,28 @@
 // JTie Library: Global Variable Definitions & Template Instantiations
 // ---------------------------------------------------------------------------
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_ByteBuffer_isReadOnly,
-                                   "java/nio/ByteBuffer",
-                                   "isReadOnly",
-                                   "()Z")
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_ByteBuffer_isReadOnly,
+                                     "java/nio/ByteBuffer", "isReadOnly", "()Z")
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_ByteBuffer_asReadOnlyBuffer,
-                                   "java/nio/ByteBuffer",
-                                   "asReadOnlyBuffer",
-                                   "()Ljava/nio/ByteBuffer;")
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_ByteBuffer_asReadOnlyBuffer,
+                                     "java/nio/ByteBuffer", "asReadOnlyBuffer",
+                                     "()Ljava/nio/ByteBuffer;")
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_ByteBuffer_remaining,
-                                   "java/nio/ByteBuffer",
-                                   "remaining",
-                                   "()I")
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_ByteBuffer_remaining,
+                                     "java/nio/ByteBuffer", "remaining", "()I")
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_ByteBuffer_position,
-                                   "java/nio/ByteBuffer",
-                                   "position",
-                                   "()I")
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_ByteBuffer_position,
+                                     "java/nio/ByteBuffer", "position", "()I")
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_Wrapper_cdelegate,
-                                   "com/mysql/jtie/Wrapper",
-                                   "cdelegate",
-                                   "J")
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_Wrapper_cdelegate,
+                                     "com/mysql/jtie/Wrapper", "cdelegate", "J")
 
 // ---------------------------------------------------------------------------
 // JTie Library: Load and Unload Handlers
 // ---------------------------------------------------------------------------
 
 // root object, which allows Threads to obtain their local JNIEnv
-static JavaVM * jtie_cached_jvm;
+static JavaVM *jtie_cached_jvm;
 
 /**
  * Handler function to be called from a user-defined function JNI_OnLoad
@@ -81,28 +79,26 @@ static JavaVM * jtie_cached_jvm;
  * If the VM does not recognize the version number returned by JNI_OnLoad,
  * the native library cannot be loaded.
  */
-jint
-JTie_OnLoad(JavaVM * jvm, void * reserved)
-{
-    TRACE("jint JTie_OnLoad(JavaVM *, void *)");
-    (void)reserved;
-    VERBOSE("initializing the JTie resources ...");
+jint JTie_OnLoad(JavaVM *jvm, void *reserved) {
+  TRACE("jint JTie_OnLoad(JavaVM *, void *)");
+  (void)reserved;
+  VERBOSE("initializing the JTie resources ...");
 
-    // beware of circular loading dependencies: do not load classes here
-    // whose static initializers have a dependency upon this native library...
+  // beware of circular loading dependencies: do not load classes here
+  // whose static initializers have a dependency upon this native library...
 
-    // cache the JavaVM pointer
-    jtie_cached_jvm = jvm;
+  // cache the JavaVM pointer
+  jtie_cached_jvm = jvm;
 
-    // get the JNI environment
-    JNIEnv * env;
-    if (jvm->GetEnv((void**)&env, JNI_VERSION_1_2) != JNI_OK) {
-        return JNI_ERR; // unsupported version or thread not attached to VM
-    }
+  // get the JNI environment
+  JNIEnv *env;
+  if (jvm->GetEnv((void **)&env, JNI_VERSION_1_2) != JNI_OK) {
+    return JNI_ERR;  // unsupported version or thread not attached to VM
+  }
 
-    // JTie requires JDK 1.4 JNI functions (e.g., direct ByteBuffer access)
-    VERBOSE("... initialized the JTie resources");
-    return JNI_VERSION_1_4;
+  // JTie requires JDK 1.4 JNI functions (e.g., direct ByteBuffer access)
+  VERBOSE("... initialized the JTie resources");
+  return JNI_VERSION_1_4;
 }
 
 /**
@@ -116,28 +112,26 @@ JTie_OnLoad(JavaVM * jvm, void * reserved)
  * which requires to be conservative and refrain from arbitrary Java
  * call-backs (classes have been unloaded when JNI_OnUnload is invoked).
  */
-void
-JTie_OnUnload(JavaVM * jvm, void * reserved)
-{
-    TRACE("void JTie_OnUnload(JavaVM *, void *)");
-    (void)reserved;
-    VERBOSE("releasing the JTie resources ...");
+void JTie_OnUnload(JavaVM *jvm, void *reserved) {
+  TRACE("void JTie_OnUnload(JavaVM *, void *)");
+  (void)reserved;
+  VERBOSE("releasing the JTie resources ...");
 
-    // get the JNI environment
-    JNIEnv * env;
-    if (jvm->GetEnv((void**)&env, JNI_VERSION_1_2) != JNI_OK) {
-        return; // unsupported version or thread not attached to VM
-    }
+  // get the JNI environment
+  JNIEnv *env;
+  if (jvm->GetEnv((void **)&env, JNI_VERSION_1_2) != JNI_OK) {
+    return;  // unsupported version or thread not attached to VM
+  }
 
-    jtie_cached_jvm = NULL;
-    VERBOSE("... released the JTie resources");
+  jtie_cached_jvm = NULL;
+  VERBOSE("... released the JTie resources");
 }
 
 // ---------------------------------------------------------------------------
 // JTie Library: Wrapper Class Load Handler
 // ---------------------------------------------------------------------------
 
-#if 0 // XXX not implemented, see comments in Wrapper.java
+#if 0  // XXX not implemented, see comments in Wrapper.java
 
 // XXX review & ceanup...
 
@@ -176,4 +170,4 @@ Java_com_mysql_jtie_Wrapper_initIds(JNIEnv * env, jclass cls)
 
 // ---------------------------------------------------------------------------
 
-#endif // jtie_lib_hpp
+#endif  // jtie_lib_hpp

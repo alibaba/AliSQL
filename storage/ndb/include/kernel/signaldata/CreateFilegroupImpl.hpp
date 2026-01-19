@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2005-2008 MySQL AB, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2005, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,8 @@
 #define CREATE_FILEGROUP_IMPL_HPP
 
 #include "SignalData.hpp"
+
+#define JAM_FILE_ID 53
 
 struct CreateFilegroupImplReq {
   /**
@@ -32,25 +41,26 @@ struct CreateFilegroupImplReq {
   /**
    * For printing
    */
-  friend bool printCREATE_FILEGROUP_IMPL_REQ(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 5 ); // DICT2DICT
-  STATIC_CONST( TablespaceLength = 7 );
-  STATIC_CONST( LogfileGroupLength = 6 );
-  
+  friend bool printCREATE_FILEGROUP_IMPL_REQ(FILE *, const Uint32 *, Uint32,
+                                             Uint16);
+
+  static constexpr Uint32 SignalLength = 5;  // DICT2DICT
+  static constexpr Uint32 TablespaceLength = 7;
+  static constexpr Uint32 LogfileGroupLength = 6;
+
   Uint32 senderData;
-  Uint32 senderRef;  
+  Uint32 senderRef;
   Uint32 filegroup_id;
   Uint32 filegroup_version;
   Uint32 requestType;
-  
+
   union {
     struct {
       Uint32 extent_size;
       Uint32 logfile_group_id;
     } tablespace;
     struct {
-      Uint32 buffer_size; // In pages
+      Uint32 buffer_size;  // In pages
     } logfile_group;
   };
 };
@@ -62,13 +72,14 @@ struct CreateFilegroupImplRef {
   friend class Dbdict;
   friend class Tsman;
   friend class Lgman;
-  
+
   /**
    * For printing
    */
-  friend bool printCREATE_FILEGROUP_IMPL_REF(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 3 );
+  friend bool printCREATE_FILEGROUP_IMPL_REF(FILE *, const Uint32 *, Uint32,
+                                             Uint16);
+
+  static constexpr Uint32 SignalLength = 3;
 
   enum ErrorCode {
     NoError = 0,
@@ -77,7 +88,7 @@ struct CreateFilegroupImplRef {
     OutOfLogBufferMemory = 1504,
     OneLogfileGroupLimit = 1514
   };
-  
+
   Uint32 senderData;
   Uint32 senderRef;
   Uint32 errorCode;
@@ -90,13 +101,14 @@ struct CreateFilegroupImplConf {
   friend class Dbdict;
   friend class Tsman;
   friend class Lgman;
-  
+
   /**
    * For printing
    */
-  friend bool printCREATE_FILEGROUP_IMPL_CONF(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 2 );
+  friend bool printCREATE_FILEGROUP_IMPL_CONF(FILE *, const Uint32 *, Uint32,
+                                              Uint16);
+
+  static constexpr Uint32 SignalLength = 2;
 
   Uint32 senderData;
   Uint32 senderRef;
@@ -113,15 +125,15 @@ struct CreateFileImplReq {
   /**
    * For printing
    */
-  friend bool printCREATE_FILE_IMPL_REQ(FILE*, const Uint32*, Uint32, Uint16);
+  friend bool printCREATE_FILE_IMPL_REQ(FILE *, const Uint32 *, Uint32, Uint16);
 
-  STATIC_CONST( SignalLength = 11 ); // DICT2DICT
-  STATIC_CONST( DatafileLength = 10 );
-  STATIC_CONST( UndofileLength = 9 );
-  STATIC_CONST( CommitLength = 7 );
-  STATIC_CONST( AbortLength = 7 );
-  SECTION( FILENAME = 0 );
-  
+  static constexpr Uint32 SignalLength = 11;  // DICT2DICT
+  static constexpr Uint32 DatafileLength = 10;
+  static constexpr Uint32 UndofileLength = 9;
+  static constexpr Uint32 CommitLength = 7;
+  static constexpr Uint32 AbortLength = 7;
+  SECTION(FILENAME = 0);
+
   enum RequestInfo {
     Create = 0x1,
     CreateForce = 0x2,
@@ -129,7 +141,7 @@ struct CreateFileImplReq {
     Commit = 0x8,
     Abort = 0x10
   };
-  
+
   Uint32 senderData;
   Uint32 senderRef;
   Uint32 requestInfo;
@@ -152,13 +164,13 @@ struct CreateFileImplRef {
   friend class Dbdict;
   friend class Tsman;
   friend class Lgman;
-  
+
   /**
    * For printing
    */
-  friend bool printCREATE_FILE_IMPL_REF(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 5 );
+  friend bool printCREATE_FILE_IMPL_REF(FILE *, const Uint32 *, Uint32, Uint16);
+
+  static constexpr Uint32 SignalLength = 5;
 
   enum ErrorCode {
     NoError = 0,
@@ -172,9 +184,10 @@ struct CreateFileImplRef {
     FileReadError = 1512,
     FilegroupNotOnline = 1513,
     FileSizeTooLarge = 1515,
-    FileSizeTooSmall = 1516
+    FileSizeTooSmall = 1516,
+    OutOfDiskPageBufferMemory = 1517
   };
-  
+
   Uint32 senderData;
   Uint32 senderRef;
   Uint32 errorCode;
@@ -186,17 +199,19 @@ struct CreateFileImplConf {
   friend class Dbdict;
   friend class Tsman;
   friend class Lgman;
-  
-  
+
   /**
    * For printing
    */
-  friend bool printCREATE_FILE_IMPL_CONF(FILE*, const Uint32*, Uint32, Uint16);
-  
-  STATIC_CONST( SignalLength = 4 );
+  friend bool printCREATE_FILE_IMPL_CONF(FILE *, const Uint32 *, Uint32,
+                                         Uint16);
+
+  static constexpr Uint32 SignalLength = 4;
 
   Uint32 senderData;
   Uint32 senderRef;
 };
+
+#undef JAM_FILE_ID
 
 #endif

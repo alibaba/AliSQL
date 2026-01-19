@@ -1,15 +1,22 @@
 /*
-   Copyright 2009, 2010 Sun Microsystems, Inc.
-   All rights reserved. Use is subject to license terms.
+   Copyright (c) 2009, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,45 +26,101 @@
 #ifndef NdbInfoRecAttr_H
 #define NdbInfoRecAttr_H
 
+#include <assert.h>
+#include <string.h>
+
 class NdbInfoRecAttr {
-public:
-  const void* ptr() const {
+ public:
+  const void *ptr() const {
+    assert(m_requested);
     return m_data;
   }
 
   Uint32 u_32_value() const {
+    assert(m_requested);
     assert(m_len == sizeof(Uint32));
-    return *((Uint32 *) m_data);
+    return *((const Uint32 *)m_data);
   }
 
   Uint64 u_64_value() const {
     Uint64 val;
+    assert(m_requested);
     assert(m_len == sizeof(Uint64));
     memcpy(&val, m_data, sizeof(Uint64));
     return val;
   }
 
-  const char* c_str() const {
+  const char *c_str() const {
+    assert(m_requested);
     assert(m_len > 0);
     return m_data;
   }
 
   Uint32 length() const {
+    assert(m_requested);
     return m_len;
   }
 
   bool isNULL() const {
+    assert(m_requested);
     return !m_defined;
   }
 
-protected:
-  friend class NdbInfoScanOperation;
-  NdbInfoRecAttr() : m_data(NULL), m_len(0), m_defined(false) {};
-  ~NdbInfoRecAttr() {};
-private:
-  const char* m_data;
+ private:
+  friend class NdbInfoRecAttrCollection;
+  NdbInfoRecAttr()
+      : m_data(nullptr), m_len(0), m_defined(false), m_requested(false) {}
+  ~NdbInfoRecAttr() {}
+
+  const char *m_data;
   Uint32 m_len;
   bool m_defined;
+  bool m_requested;
+};
+
+// Fixed size collection of NdbInfoRecAttr
+class NdbInfoRecAttrCollection {
+ public:
+  NdbInfoRecAttrCollection();  // Not implemented
+  NdbInfoRecAttrCollection(
+      const NdbInfoRecAttrCollection &);  // Not implemented
+
+  NdbInfoRecAttrCollection(unsigned count) : m_attr_count(count) {
+    m_attrs = new NdbInfoRecAttr[count];
+  }
+
+  ~NdbInfoRecAttrCollection() { delete[] m_attrs; }
+
+  const NdbInfoRecAttr *get_value(unsigned idx) {
+    assert(idx < m_attr_count);
+    NdbInfoRecAttr *attr = &m_attrs[idx];
+    attr->m_requested = true;
+    return attr;
+  }
+
+  bool is_requested(unsigned idx) const {
+    assert(idx < m_attr_count);
+    return m_attrs[idx].m_requested;
+  }
+
+  void set_recattr(unsigned idx, const char *data, Uint32 len) const {
+    assert(idx < m_attr_count);
+    NdbInfoRecAttr *attr = &m_attrs[idx];
+
+    attr->m_data = data;
+    attr->m_len = len;
+    attr->m_defined = true;
+  }
+
+  void reset_recattrs(void) const {
+    for (unsigned i = 0; i < m_attr_count; i++) {
+      m_attrs[i].m_defined = false;
+    }
+  }
+
+ private:
+  const unsigned m_attr_count;
+  NdbInfoRecAttr *m_attrs;
 };
 
 #endif

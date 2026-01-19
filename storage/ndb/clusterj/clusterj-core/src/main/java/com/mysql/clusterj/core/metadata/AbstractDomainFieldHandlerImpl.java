@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +26,7 @@
 package com.mysql.clusterj.core.metadata;
 
 import com.mysql.clusterj.ClusterJDatastoreException;
+import com.mysql.clusterj.ClusterJException;
 import com.mysql.clusterj.ClusterJFatalInternalException;
 import com.mysql.clusterj.ClusterJUserException;
 import com.mysql.clusterj.ColumnMetadata;
@@ -174,6 +183,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         }
     }
 
+    public void filterIsNull(ScanFilter filter) {
+        filter.isNull(storeColumn);
+    }
+
+    public void filterIsNotNull(ScanFilter filter) {
+        filter.isNotNull(storeColumn);
+    }
+
     public String getColumnName() {
         return columnName;
     }
@@ -254,11 +271,15 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         objectOperationHandlerDelegate.objectInitializeJavaDefaultValue(this, handler);
     }
 
+    Object getDefaultValue() {
+        return defaultValue;
+    }
+
     public void objectSetKeyValue(Object key, ValueHandler handler) {
         if (logger.isDetailEnabled()) {
             logger.detail("Setting value " + key + ".");
         }
-        handler.setObject(fieldNumber, key);
+        objectOperationHandlerDelegate.objectSetValue(this, key, handler);
     }
 
     public void objectSetValue(ResultData rs, ValueHandler handler) {
@@ -266,6 +287,22 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             objectOperationHandlerDelegate.objectSetValue(this, rs, handler);
         } catch (Exception ex) {
             throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "objectSetValue"), ex);
+        }
+    }
+
+    public void objectSetValue(Object value, ValueHandler handler) {
+        try {
+            objectOperationHandlerDelegate.objectSetValue(this, value, handler);
+        } catch (Exception ex) {
+            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "objectSetValue"), ex);
+        }
+    }
+
+    public Object objectGetValue(ValueHandler handler) {
+        try {
+            return objectOperationHandlerDelegate.objectGetValue(this, handler);
+        } catch (Exception ex) {
+            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "objectGetValue"), ex);
         }
     }
 
@@ -364,7 +401,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         } catch (NullPointerException npe) {
             throw new ClusterJUserException(
                     local.message("ERR_Key_Must_Not_Be_Null",
-                            domainTypeHandler.getName(), getName()));
+                            domainTypeHandler.getName(), getName()), npe);
         }
     }
 
@@ -409,7 +446,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
     protected void reportErrors() {
         if (errorMessages != null) {
-            throw new ClusterJUserException(errorMessages.toString());
+            domainTypeHandler.setUnsupported(errorMessages.toString());
         }
     }
 
@@ -429,6 +466,8 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         boolean isPrimitive();
 
+        Object objectGetValue(AbstractDomainFieldHandlerImpl abstractDomainFieldHandlerImpl, ValueHandler handler);
+
         Object getValue(QueryExecutionContext context, String index);
 
         void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler);
@@ -445,6 +484,8 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         void objectSetValue(AbstractDomainFieldHandlerImpl fmd, ResultData rs, ValueHandler handler);
 
+        void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler);
+
         void operationSetBounds(AbstractDomainFieldHandlerImpl fmd, Object value, IndexScanOperation.BoundType type, IndexScanOperation op);
 
         void filterCompareValue(AbstractDomainFieldHandlerImpl fmd, Object value, ScanFilter.BinaryCondition condition, ScanFilter filter);
@@ -456,7 +497,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd, PartitionKey partitionKey, ValueHandler keyValueHandler);
     }
 
-    protected static ObjectOperationHandler objectOperationHandlerByte = new ObjectOperationHandler() {
+    protected abstract static class ObjectOperationHandlerByte implements ObjectOperationHandler {
 
         public boolean isPrimitive() {
             return true;
@@ -471,7 +512,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         }
 
         public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
-            return (Byte) (columnDefaultValue == null ? Byte.valueOf((byte)0) : Byte.valueOf(columnDefaultValue));
+            return (Byte) (columnDefaultValue == null ? Byte.valueOf((byte) 0) : Byte.valueOf(columnDefaultValue));
         }
 
         public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, Operation op) {
@@ -482,29 +523,34 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             if (logger.isDetailEnabled()) {
                 logger.detail("Column " + fmd.columnName + " set to value " + handler.getByte(fmd.fieldNumber));
             }
-            op.setByte(fmd.storeColumn, handler.getObjectByte(fmd.fieldNumber).byteValue());
-        }
-
-        public String handler() {
-            return "setByte";
+            op.setByte(fmd.storeColumn, handler.getByte(fmd.fieldNumber));
         }
 
         public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, ResultData rs, ValueHandler handler) {
             handler.setByte(fmd.fieldNumber, rs.getByte(fmd.storeColumn));
         }
 
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setByte(fmd.fieldNumber, ((Number)value).byteValue());
+        }
+
         public void operationSetBounds(AbstractDomainFieldHandlerImpl fmd, Object value, IndexScanOperation.BoundType type, IndexScanOperation op) {
-            op.setBoundByte(fmd.storeColumn, type, ((Number)value).byteValue());
+            try {
+                op.setBoundByte(fmd.storeColumn, type, ((Number) value).byteValue());
+            } catch (ClassCastException ex) {
+                throw new ClusterJUserException(local.message("ERR_Parameter_Type", "Number", value.getClass().getName()));
+            }
         }
 
         public void filterCompareValue(AbstractDomainFieldHandlerImpl fmd, Object value, ScanFilter.BinaryCondition condition, ScanFilter filter) {
-            filter.cmpByte(condition, fmd.storeColumn, ((Number) value).byteValue());
+            try {
+                filter.cmpByte(condition, fmd.storeColumn, ((Number) value).byteValue());
+            } catch (ClassCastException ex) {
+                throw new ClusterJUserException(local.message("ERR_Parameter_Type", "Number", value.getClass().getName()));
+            }
         }
 
         public void operationEqual(AbstractDomainFieldHandlerImpl fmd, Object value, Operation op) {
-            if (logger.isDetailEnabled()) {
-                logger.detail("setInt.setEqual " + fmd.columnName + " to value " + value);
-            }
             op.equalByte(fmd.storeColumn, ((Number) value).byteValue());
         }
 
@@ -512,16 +558,85 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return true;
         }
 
+        public Object getValue(QueryExecutionContext context, String index) {
+            return context.getByte(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getByte(fmd.fieldNumber);
+        }
+    };
+
+    protected static ObjectOperationHandler objectOperationHandlerByte = new ObjectOperationHandlerByte() {
+
+        public String handler() {
+            return "primitive byte";
+        }
+
         public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
                 PartitionKey partitionKey, ValueHandler keyValueHandler) {
             throw new ClusterJFatalInternalException(
                     local.message("ERR_Operation_Not_Supported","partitionKeySetPart", "non-key fields"));
         }
+    };
 
-        public Object getValue(QueryExecutionContext context, String index) {
-            return context.getByte(index);
+    protected static ObjectOperationHandler objectOperationHandlerKeyByte = new ObjectOperationHandlerByte() {
+
+        public String handler() {
+            return "primitive key byte";
         }
 
+        public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler, Operation op) {
+            op.equalByte(fmd.storeColumn, handler.getByte(fmd.fieldNumber));
+        }
+
+        public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
+                PartitionKey partitionKey, ValueHandler keyValueHandler) {
+            partitionKey.addByteKey(fmd.storeColumn, keyValueHandler.getByte(fmd.fieldNumber));
+        }
+    };
+
+    protected abstract static class ObjectOperationHandlerObjectByte extends ObjectOperationHandlerByte {
+
+        public boolean isPrimitive() {
+            return false;
+        }
+
+        public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+        }
+
+        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
+            return (Byte) (columnDefaultValue == null ? Byte.valueOf((byte)0) : Byte.valueOf(columnDefaultValue));
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setObjectByte(fmd.fieldNumber, (value != null)?((Number)value).byteValue(): null);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getObjectByte(fmd.fieldNumber);
+        }
+    }
+
+    protected static ObjectOperationHandler objectOperationHandlerObjectByte = new ObjectOperationHandlerObjectByte() {
+
+        public String handler() {
+            return "object Byte";
+        }
+
+        public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler, Operation op) {
+            if (handler.isNull(fmd.fieldNumber)) {
+                op.setNull(fmd.storeColumn);
+            } else {
+                op.setByte(fmd.storeColumn, handler.getObjectByte(fmd.fieldNumber));
+            }
+        }
+
+        public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
+                PartitionKey partitionKey, ValueHandler keyValueHandler) {
+            throw new ClusterJFatalInternalException(
+                    local.message("ERR_Operation_Not_Supported","partitionKeySetPart", "non-key fields"));
+        }
     };
 
     protected static ObjectOperationHandler objectOperationHandlerBoolean = new ObjectOperationHandler() {
@@ -582,6 +697,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getBoolean(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getBoolean(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setBoolean(fmd.fieldNumber, (Boolean)value);
         }
 
     };
@@ -648,6 +771,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getBoolean(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getObjectBoolean(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setObjectBoolean(fmd.fieldNumber, (Boolean)value);
         }
 
     };
@@ -727,6 +858,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getBytes(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getBytes(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setBytes(fmd.fieldNumber, (byte[])value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerKeyBytes = new ObjectOperationHandler() {
@@ -795,6 +934,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getBytes(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getBytes(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setBytes(fmd.fieldNumber, (byte[])value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerBytesLob = new ObjectOperationHandler() {
@@ -852,7 +999,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
                     public void run() {
                         Blob blob = op.getBlobHandle(fmd.storeColumn);
-                        byte[] data = handler.getBytes(fmd.fieldNumber);
+                        byte[] data = handler.getLobBytes(fmd.fieldNumber);
                         int length = data.length;
                         if (logger.isDetailEnabled()) {
                             logger.detail("Value to operation set blob value for field " + fmd.name + " for column " + fmd.columnName + " wrote length " + length + formatBytes(16, data));
@@ -877,7 +1024,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
                 logger.detail("ResultSet get blob value for field " + fmd.name + " for column " + fmd.columnName + " returned length " + length + formatBytes(16, data));
             }
             blob.close();
-            handler.setBytes(fmd.fieldNumber, data);
+            handler.setLobBytes(fmd.fieldNumber, data);
         }
 
         public void operationSetBounds(AbstractDomainFieldHandlerImpl fmd, Object value, IndexScanOperation.BoundType type, IndexScanOperation op) {
@@ -904,6 +1051,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getBoolean(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getLobBytes(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setLobBytes(fmd.fieldNumber, (byte[])value);
         }
 
     };
@@ -963,7 +1118,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
                     public void run() {
                         Blob blob = op.getBlobHandle(fmd.storeColumn);
-                        byte[] data = fmd.storeColumn.encode(handler.getString(fmd.fieldNumber));
+                        byte[] data = fmd.storeColumn.encode(handler.getLobString(fmd.fieldNumber));
                         int length = data.length;
                         if (logger.isDetailEnabled()) {
                             logger.detail("Value to operation set text value for field " + fmd.name + " for column " + fmd.columnName + " wrote length " + length + formatBytes(16, data));
@@ -988,7 +1143,12 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
                 logger.detail("ResultSet get text value for field " + fmd.name + " for column " + fmd.columnName + " returned length " + length + formatBytes(16, data));
             }
             blob.close();
-            handler.setString(fmd.fieldNumber, fmd.storeColumn.decode(data));
+            try {
+                handler.setLobString(fmd.fieldNumber, fmd.storeColumn.decode(data));
+            } catch (ClusterJException ex) {
+                System.out.println(ex.getMessage() + " length: " + data.length + " " + formatBytes(data.length, data));
+                throw ex;
+            }
         }
 
         public void operationSetBounds(AbstractDomainFieldHandlerImpl fmd, Object value, IndexScanOperation.BoundType type, IndexScanOperation op) {
@@ -1015,6 +1175,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getString(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getLobString(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setLobString(fmd.fieldNumber, (String)value);
         }
 
     };
@@ -1085,6 +1253,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getBigDecimal(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getBigDecimal(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setBigDecimal(fmd.fieldNumber, (BigDecimal)value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerBigInteger = new ObjectOperationHandler() {
@@ -1153,6 +1329,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getBigInteger(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getBigInteger(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setBigInteger(fmd.fieldNumber, (BigInteger)value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerDouble = new ObjectOperationHandler() {
@@ -1213,6 +1397,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getDouble(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getDouble(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setDouble(fmd.fieldNumber, (Double)value);
         }
 
     };
@@ -1277,6 +1469,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getFloat(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getFloat(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setFloat(fmd.fieldNumber, (Float)value);
+        }
+
     };
 
     protected abstract static class ObjectOperationHandlerInt implements ObjectOperationHandler {
@@ -1294,7 +1494,8 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         }
 
         public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
-            return (Integer) (columnDefaultValue == null ? Integer.valueOf(0) : Integer.valueOf(columnDefaultValue));
+            Object result = (Integer) (columnDefaultValue == null ? Integer.valueOf(0) : Integer.valueOf(columnDefaultValue));
+            return result;
         }
 
         public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, Operation op) {
@@ -1330,6 +1531,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getInt(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getInt(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setInt(fmd.fieldNumber, (Integer)value);
         }
 
     };
@@ -1447,6 +1656,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getJavaSqlDate(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getJavaSqlDate(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setJavaSqlDate(fmd.fieldNumber, (java.sql.Date)value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerJavaSqlTime = new ObjectOperationHandler() {
@@ -1515,6 +1732,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getJavaSqlTime(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getJavaSqlTime(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setJavaSqlTime(fmd.fieldNumber, (java.sql.Time)value);
         }
 
     };
@@ -1587,6 +1812,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getJavaSqlTimestamp(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getJavaSqlTimestamp(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setJavaSqlTimestamp(fmd.fieldNumber, (java.sql.Timestamp)value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerJavaUtilDate = new ObjectOperationHandler() {
@@ -1657,6 +1890,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getJavaUtilDate(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getJavaUtilDate(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setJavaUtilDate(fmd.fieldNumber, (java.util.Date)value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerKeyString = new ObjectOperationHandler() {
@@ -1720,6 +1961,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getString(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getString(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setString(fmd.fieldNumber, (String)value);
+        }
+
     };
 
     public abstract static class ObjectOperationHandlerLong implements ObjectOperationHandler {
@@ -1771,6 +2020,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getLong(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getLong(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setLong(fmd.fieldNumber, (Long)value);
+        }
+
     }
 
     protected static ObjectOperationHandler objectOperationHandlerLong = new ObjectOperationHandlerLong() {
@@ -1810,73 +2067,6 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
                 PartitionKey partitionKey, ValueHandler keyValueHandler) {
             partitionKey.addLongKey(fmd.storeColumn, keyValueHandler.getLong(fmd.fieldNumber));
-        }
-
-    };
-    protected static ObjectOperationHandler objectOperationHandlerObjectByte = new ObjectOperationHandler() {
-
-        public boolean isPrimitive() {
-            return false;
-        }
-
-        public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
-        }
-
-        public void operationGetValue(AbstractDomainFieldHandlerImpl fmd, Operation op) {
-            op.getValue(fmd.storeColumn);
-        }
-
-        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
-            return (Byte) (columnDefaultValue == null ? Byte.valueOf((byte)0) : Byte.valueOf(columnDefaultValue));
-        }
-
-        public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, Operation op) {
-            op.setByte(fmd.storeColumn, (Byte) value);
-        }
-
-        public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler, Operation op) {
-            if (handler.isNull(fmd.fieldNumber)) {
-                op.setNull(fmd.storeColumn);
-            } else {
-                op.setByte(fmd.storeColumn, handler.getObjectByte(fmd.fieldNumber).byteValue());
-            }
-        }
-
-        public String handler() {
-            return "object Byte";
-        }
-
-        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, ResultData rs, ValueHandler handler) {
-            handler.setObjectByte(fmd.fieldNumber, rs.getObjectByte(fmd.storeColumn));
-        }
-
-        public void operationSetBounds(AbstractDomainFieldHandlerImpl fmd, Object value, IndexScanOperation.BoundType type, IndexScanOperation op) {
-            op.setBoundByte(fmd.storeColumn, type, ((Number)value).byteValue());
-        }
-
-        public void filterCompareValue(AbstractDomainFieldHandlerImpl fmd, Object value, ScanFilter.BinaryCondition condition, ScanFilter filter) {
-            filter.cmpByte(condition, fmd.storeColumn, ((Number) value).byteValue());
-        }
-
-        public void operationEqual(AbstractDomainFieldHandlerImpl fmd, Object value, Operation op) {
-            if (logger.isDetailEnabled()) {
-                logger.detail("setObjectByte.setEqual " + fmd.columnName + " to value " + value);
-            }
-            op.equalByte(fmd.storeColumn, ((Number) value).byteValue());
-        }
-
-        public boolean isValidIndexType(AbstractDomainFieldHandlerImpl fmd, boolean hashNotOrdered) {
-            return true;
-        }
-
-        public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
-                PartitionKey partitionKey, ValueHandler keyValueHandler) {
-            throw new ClusterJFatalInternalException(
-                    local.message("ERR_Operation_Not_Supported","partitionKeySetPart", "non-key fields"));
-        }
-
-        public Object getValue(QueryExecutionContext context, String index) {
-            return context.getByte(index);
         }
 
     };
@@ -1944,6 +2134,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getDouble(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getObjectDouble(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setObjectDouble(fmd.fieldNumber, (Double)value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerObjectFloat = new ObjectOperationHandler() {
@@ -2009,6 +2207,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getFloat(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getObjectFloat(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setObjectFloat(fmd.fieldNumber, (Float)value);
+        }
+
     };
 
     protected abstract static class ObjectOperationHandlerInteger implements ObjectOperationHandler {
@@ -2057,6 +2263,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getInt(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getObjectInt(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setObjectInt(fmd.fieldNumber, (Integer)value);
         }
 
     }
@@ -2152,6 +2366,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getLong(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getObjectLong(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setObjectLong(fmd.fieldNumber, (Long)value);
+        }
+
     }
 
     protected static ObjectOperationHandler objectOperationHandlerObjectLong = new ObjectOperationHandlerObjectLong() {
@@ -2197,80 +2419,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
     };
 
-    protected static ObjectOperationHandler objectOperationHandlerObjectShort = new ObjectOperationHandler() {
-
-        public boolean isPrimitive() {
-            return false;
-        }
-
-        public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
-        }
-
-        public void operationGetValue(AbstractDomainFieldHandlerImpl fmd, Operation op) {
-            op.getValue(fmd.storeColumn);
-        }
-
-        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
-            return (Short) (columnDefaultValue == null ? Short.valueOf((short) 0) : Short.valueOf(columnDefaultValue));
-        }
-
-        public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, Operation op) {
-            op.setShort(fmd.storeColumn, (Short) value);
-        }
-
-        public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler, Operation op) {
-            if (handler.isNull(fmd.fieldNumber)) {
-                op.setNull(fmd.storeColumn);
-            } else {
-                op.setShort(fmd.storeColumn, handler.getObjectShort(fmd.fieldNumber));
-            }
-        }
-
-        public String handler() {
-            return "object Short";
-        }
-
-        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, ResultData rs, ValueHandler handler) {
-            handler.setObjectShort(fmd.fieldNumber, rs.getObjectShort(fmd.storeColumn));
-        }
-
-        public void operationSetBounds(AbstractDomainFieldHandlerImpl fmd, Object value, IndexScanOperation.BoundType type, IndexScanOperation op) {
-            try {
-                op.setBoundShort(fmd.storeColumn, type, ((Number) value).shortValue());
-            } catch (ClassCastException ex) {
-                throw new ClusterJUserException(local.message("ERR_Parameter_Type", "Number", value.getClass().getName()));
-            }
-        }
-
-        public void filterCompareValue(AbstractDomainFieldHandlerImpl fmd, Object value, ScanFilter.BinaryCondition condition, ScanFilter filter) {
-            try {
-                filter.cmpShort(condition, fmd.storeColumn, ((Number) value).shortValue());
-            } catch (ClassCastException ex) {
-                throw new ClusterJUserException(local.message("ERR_Parameter_Type", "Number", value.getClass().getName()));
-            }
-        }
-
-        public void operationEqual(AbstractDomainFieldHandlerImpl fmd, Object value, Operation op) {
-            op.equalShort(fmd.storeColumn, ((Number) value).shortValue());
-        }
-
-        public boolean isValidIndexType(AbstractDomainFieldHandlerImpl fmd, boolean hashNotOrdered) {
-            return true;
-        }
-
-        public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
-                PartitionKey partitionKey, ValueHandler keyValueHandler) {
-            throw new ClusterJFatalInternalException(
-                    local.message("ERR_Operation_Not_Supported","partitionKeySetPart", "non-key fields"));
-        }
-
-        public Object getValue(QueryExecutionContext context, String index) {
-            return context.getShort(index);
-        }
-
-    };
-
-    protected static ObjectOperationHandler objectOperationHandlerShort = new ObjectOperationHandler() {
+    protected abstract static class ObjectOperationHandlerShort implements ObjectOperationHandler {
 
         public boolean isPrimitive() {
             return true;
@@ -2299,12 +2448,12 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             op.setShort(fmd.storeColumn, handler.getShort(fmd.fieldNumber));
         }
 
-        public String handler() {
-            return "primitive short";
-        }
-
         public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, ResultData rs, ValueHandler handler) {
             handler.setShort(fmd.fieldNumber, rs.getShort(fmd.storeColumn));
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setShort(fmd.fieldNumber, ((Number)value).shortValue());
         }
 
         public void operationSetBounds(AbstractDomainFieldHandlerImpl fmd, Object value, IndexScanOperation.BoundType type, IndexScanOperation op) {
@@ -2331,16 +2480,85 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return true;
         }
 
+        public Object getValue(QueryExecutionContext context, String index) {
+            return context.getShort(index);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getShort(fmd.fieldNumber);
+        }
+    };
+
+    protected static ObjectOperationHandler objectOperationHandlerShort = new ObjectOperationHandlerShort() {
+
+        public String handler() {
+            return "primitive short";
+        }
+
         public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
                 PartitionKey partitionKey, ValueHandler keyValueHandler) {
             throw new ClusterJFatalInternalException(
                     local.message("ERR_Operation_Not_Supported","partitionKeySetPart", "non-key fields"));
         }
+    };
 
-        public Object getValue(QueryExecutionContext context, String index) {
-            return context.getShort(index);
+    protected static ObjectOperationHandler objectOperationHandlerKeyShort = new ObjectOperationHandlerShort() {
+
+        public String handler() {
+            return "primitive key short";
         }
 
+        public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler, Operation op) {
+            op.equalShort(fmd.storeColumn, handler.getShort(fmd.fieldNumber));
+        }
+
+        public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
+                PartitionKey partitionKey, ValueHandler keyValueHandler) {
+            partitionKey.addShortKey(fmd.storeColumn, keyValueHandler.getShort(fmd.fieldNumber));
+        }
+    };
+
+    protected abstract static class ObjectOperationHandlerObjectShort extends ObjectOperationHandlerShort {
+
+        public boolean isPrimitive() {
+            return false;
+        }
+
+        public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+        }
+
+        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
+            return (Short) (columnDefaultValue == null ? Short.valueOf((short)0) : Short.valueOf(columnDefaultValue));
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setObjectShort(fmd.fieldNumber, (value != null)?((Number)value).shortValue(): null);
+        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getObjectShort(fmd.fieldNumber);
+        }
+    }
+
+    protected static ObjectOperationHandler objectOperationHandlerObjectShort = new ObjectOperationHandlerObjectShort() {
+
+        public String handler() {
+            return "object Short";
+        }
+
+        public void operationSetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler, Operation op) {
+            if (handler.isNull(fmd.fieldNumber)) {
+                op.setNull(fmd.storeColumn);
+            } else {
+                op.setShort(fmd.storeColumn, handler.getObjectShort(fmd.fieldNumber));
+            }
+        }
+
+        public void partitionKeySetPart(AbstractDomainFieldHandlerImpl fmd,
+                PartitionKey partitionKey, ValueHandler keyValueHandler) {
+            throw new ClusterJFatalInternalException(
+                    local.message("ERR_Operation_Not_Supported","partitionKeySetPart", "non-key fields"));
+        }
     };
 
     protected static ObjectOperationHandler objectOperationHandlerShortYear = new ObjectOperationHandler() {
@@ -2409,6 +2627,19 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public Object getValue(QueryExecutionContext context, String index) {
             return context.getShort(index);
+        }
+
+        /** Years are stored in the domain model as short and in the database as byte.
+         * @param fmd the domain field handler
+         * @param handler the handler
+         * @return the handler's byte value plus 1900 (the year's base year) as a short
+         */
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return (short)(handler.getByte(fmd.fieldNumber) + 1900);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setByte(fmd.fieldNumber, (byte)((Short)value - 1900));
         }
 
     };
@@ -2485,6 +2716,24 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getShort(index);
         }
 
+        /** Years are stored in the domain model as short and in the database as byte.
+         * @param fmd the domain field handler
+         * @param handler the handler
+         * @return the handler's byte value plus 1900 (the year's base year) as a short
+         */
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            Byte value = handler.getObjectByte(fmd.fieldNumber);
+            return value==null?null:(short)(value + 1900);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            if (value == null) {
+                handler.setObjectByte(fmd.fieldNumber, null);
+            } else {
+                handler.setByte(fmd.fieldNumber, (byte)(((Short)value) - 1900));
+            }
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerString = new ObjectOperationHandler() {
@@ -2557,6 +2806,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             return context.getString(index);
         }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getString(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setString(fmd.fieldNumber, (String)value);
+        }
+
     };
 
     protected static ObjectOperationHandler objectOperationHandlerUnsupportedType = new ObjectOperationHandler() {
@@ -2616,6 +2873,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         public Object getValue(QueryExecutionContext context, String index) {
             throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
        }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            throw new ClusterJUserException(local.message("ERR_Unsupported_Field_Type", fmd.getTypeName(), fmd.getName()));
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            throw new ClusterJUserException(local.message("ERR_Unsupported_Field_Type", fmd.getTypeName(), fmd.getName()));
+        }
 
     };
 
@@ -2684,6 +2949,14 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
             throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
        }
 
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            return;
+        }
+
     };
 
     protected static abstract class ObjectOperationHandlerNotPersistent implements ObjectOperationHandler {
@@ -2697,7 +2970,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         }
 
         public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
-            // this value is never used
+            // this value is used for transient default values; overridden by a subclass
             return null;
         }
 
@@ -2750,6 +3023,19 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
             handler.setByte(fmd.fieldNumber, (byte) 0);
         }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getByte(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setByte(fmd.fieldNumber, (Byte)value);
+        }
+
+        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
+            return Byte.valueOf((byte) 0);
+        }
+
     };
     protected static ObjectOperationHandler objectOperationHandlerNotPersistentDouble = new ObjectOperationHandlerNotPersistent() {
 
@@ -2760,6 +3046,19 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
             handler.setDouble(fmd.fieldNumber, 0.0D);
         }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getDouble(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setDouble(fmd.fieldNumber, (Double)value);
+        }
+
+        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
+            return Double.valueOf((double)0.0D);
+        }
+
     };
     protected static ObjectOperationHandler objectOperationHandlerNotPersistentFloat = new ObjectOperationHandlerNotPersistent() {
 
@@ -2770,6 +3069,19 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
             handler.setFloat(fmd.fieldNumber, 0.0F);
         }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getFloat(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setFloat(fmd.fieldNumber, (Float)value);
+        }
+
+        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
+            return Float.valueOf((float) 0.0);
+        }
+
     };
     protected static ObjectOperationHandler objectOperationHandlerNotPersistentInt = new ObjectOperationHandlerNotPersistent() {
 
@@ -2780,6 +3092,19 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
             handler.setInt(fmd.fieldNumber, 0);
         }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getInt(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setInt(fmd.fieldNumber, (Integer)value);
+        }
+
+        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
+            return Integer.valueOf((int) 0);
+        }
+
     };
     protected static ObjectOperationHandler objectOperationHandlerNotPersistentLong = new ObjectOperationHandlerNotPersistent() {
 
@@ -2790,6 +3115,19 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
             handler.setLong(fmd.fieldNumber, 0L);
         }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getLong(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setLong(fmd.fieldNumber, (Long)value);
+        }
+
+        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
+            return Long.valueOf((long) 0);
+        }
+
     };
     protected static ObjectOperationHandler objectOperationHandlerNotPersistentObject = new ObjectOperationHandlerNotPersistent() {
 
@@ -2804,6 +3142,15 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
         public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
         }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.get(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setObject(fmd.fieldNumber, value);
+        }
+
     };
     protected static ObjectOperationHandler objectOperationHandlerNotPersistentShort = new ObjectOperationHandlerNotPersistent() {
 
@@ -2814,6 +3161,19 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         public void objectInitializeJavaDefaultValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
             handler.setShort(fmd.fieldNumber, (short) 0);
         }
+
+        public Object objectGetValue(AbstractDomainFieldHandlerImpl fmd, ValueHandler handler) {
+            return handler.getShort(fmd.fieldNumber);
+        }
+
+        public void objectSetValue(AbstractDomainFieldHandlerImpl fmd, Object value, ValueHandler handler) {
+            handler.setShort(fmd.fieldNumber, (Short)value);
+        }
+
+        public Object getDefaultValueFor(AbstractDomainFieldHandlerImpl fmd, String columnDefaultValue) {
+            return Short.valueOf((short) 0);
+        }
+
     };
 
     /* These methods implement ColumnMetadata
@@ -2869,6 +3229,20 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
 
     public String charsetName() {
         return this.charsetName;
+    }
+
+    public boolean isLob() {
+        // should implement this in a subclass
+        throw new ClusterJFatalInternalException(
+                local.message("ERR_Operation_Not_Supported",
+                "isLob()", "AbstractDomainFieldHandlerImpl"));
+    }
+
+    public boolean isPersistent() {
+        // should implement this in a subclass
+        throw new ClusterJFatalInternalException(
+                local.message("ERR_Operation_Not_Supported",
+                "isPersistent()", "AbstractDomainFieldHandlerImpl"));
     }
 
 }

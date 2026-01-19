@@ -1,1273 +1,779 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2015, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1996, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file trx/trx0sys.cc
-Transaction system
+/** @file trx/trx0sys.cc
+ Transaction system
 
-Created 3/26/1996 Heikki Tuuri
-*******************************************************/
+ Created 3/26/1996 Heikki Tuuri
+ *******************************************************/
 
+#include <sys/types.h>
+#include <new>
+
+#include "current_thd.h"
+#include "ha_prototypes.h"
+#include "mysql/plugin.h"
+#include "sql_error.h"
 #include "trx0sys.h"
 
-#ifdef UNIV_NONINL
-#include "trx0sys.ic"
-#endif
-
-#ifdef UNIV_HOTBACKUP
-#include "fsp0types.h"
-
-#else	/* !UNIV_HOTBACKUP */
+#ifndef UNIV_HOTBACKUP
 #include "fsp0fsp.h"
+#include "fsp0sysspace.h"
+#include "log0recv.h"
 #include "mtr0log.h"
-#include "mtr0log.h"
-#include "trx0trx.h"
-#include "trx0rseg.h"
-#include "trx0undo.h"
+#include "os0file.h"
+#include "read0read.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0purge.h"
-#include "log0log.h"
-#include "log0recv.h"
-#include "os0file.h"
-#include "read0read.h"
-
-/** The file format tag structure with id and name. */
-struct file_format_t {
-	ulint		id;		/*!< id of the file format */
-	const char*	name;		/*!< text representation of the
-					file format */
-	ib_mutex_t		mutex;		/*!< covers changes to the above
-					fields */
-};
+#include "trx0rseg.h"
+#include "trx0trx.h"
+#include "trx0undo.h"
 
 /** The transaction system */
-UNIV_INTERN trx_sys_t*		trx_sys		= NULL;
+trx_sys_t *trx_sys = nullptr;
 
-/** In a MySQL replication slave, in crash recovery we store the master log
-file name and position here. */
-/* @{ */
-/** Master binlog file name */
-UNIV_INTERN char	trx_sys_mysql_master_log_name[TRX_SYS_MYSQL_LOG_NAME_LEN];
-/** Master binlog file position.  We have successfully got the updates
-up to this position.  -1 means that no crash recovery was needed, or
-there was no master log position info inside InnoDB.*/
-UNIV_INTERN ib_int64_t	trx_sys_mysql_master_log_pos	= -1;
-/* @} */
+/** Check whether transaction id is valid.
+@param[in]      id      transaction id to check
+@param[in]      name    table name */
+void ReadView::check_trx_id_sanity(trx_id_t id, const table_name_t &name) {
+  if (&name == &dict_sys->dynamic_metadata->name) {
+    /* The table mysql.innodb_dynamic_metadata uses a
+    constant DB_TRX_ID=~0. */
+    ut_ad(id == (1ULL << 48) - 1);
+    return;
+  }
 
-/** If this MySQL server uses binary logging, after InnoDB has been inited
-and if it has done a crash recovery, we store the binlog file name and position
-here. */
-/* @{ */
-/** Binlog file name */
-UNIV_INTERN char	trx_sys_mysql_bin_log_name[TRX_SYS_MYSQL_LOG_NAME_LEN];
-/** Binlog file position, or -1 if unknown */
-UNIV_INTERN ib_int64_t	trx_sys_mysql_bin_log_pos	= -1;
-/* @} */
-#endif /* !UNIV_HOTBACKUP */
+  if (id >= trx_sys_get_next_trx_id_or_no()) {
+    ib::warn(ER_IB_MSG_1196)
+        << "A transaction id"
+        << " in a record of table " << name << " is newer than the"
+        << " system-wide maximum.";
+    ut_d(ut_error);
+#ifndef UNIV_DEBUG
+    THD *thd = current_thd;
+    if (thd != nullptr) {
+      char table_name[MAX_FULL_NAME_LEN + 1];
 
-/** List of animal names representing file format. */
-static const char*	file_format_name_map[] = {
-	"Antelope",
-	"Barracuda",
-	"Cheetah",
-	"Dragon",
-	"Elk",
-	"Fox",
-	"Gazelle",
-	"Hornet",
-	"Impala",
-	"Jaguar",
-	"Kangaroo",
-	"Leopard",
-	"Moose",
-	"Nautilus",
-	"Ocelot",
-	"Porpoise",
-	"Quail",
-	"Rabbit",
-	"Shark",
-	"Tiger",
-	"Urchin",
-	"Viper",
-	"Whale",
-	"Xenops",
-	"Yak",
-	"Zebra"
-};
+      innobase_format_name(table_name, sizeof(table_name), name.m_name);
 
-/** The number of elements in the file format name array. */
-static const ulint	FILE_FORMAT_NAME_N
-	= sizeof(file_format_name_map) / sizeof(file_format_name_map[0]);
+      push_warning_printf(thd, Sql_condition::SL_WARNING, ER_SIGNAL_WARN,
+                          "InnoDB: Transaction id"
+                          " in a record of table"
+                          " %s is newer than system-wide"
+                          " maximum.",
+                          table_name);
+    }
+#endif
+  }
+}
 
-#ifdef UNIV_PFS_MUTEX
-/* Key to register the mutex with performance schema */
-UNIV_INTERN mysql_pfs_key_t	file_format_max_mutex_key;
-UNIV_INTERN mysql_pfs_key_t	trx_sys_mutex_key;
-#endif /* UNIV_PFS_RWLOCK */
-
-#ifndef UNIV_HOTBACKUP
 #ifdef UNIV_DEBUG
 /* Flag to control TRX_RSEG_N_SLOTS behavior debugging. */
-UNIV_INTERN uint	trx_rseg_n_slots_debug = 0;
-#endif
+uint trx_rseg_n_slots_debug = 0;
+#endif /* UNIV_DEBUG */
 
-/** This is used to track the maximum file format id known to InnoDB. It's
-updated via SET GLOBAL innodb_file_format_max = 'x' or when we open
-or create a table. */
-static	file_format_t	file_format_max;
+/** Writes the value of max_trx_id to the file based trx system header. */
+void trx_sys_write_max_trx_id(void) {
+  mtr_t mtr;
+  trx_sysf_t *sys_header;
 
-/*****************************************************************//**
-Writes the value of max_trx_id to the file based trx system header. */
-UNIV_INTERN
-void
-trx_sys_flush_max_trx_id(void)
-/*==========================*/
-{
-	mtr_t		mtr;
-	trx_sysf_t*	sys_header;
+  /* The final synchronization happens here between maximum 2 threads,
+  one holding the trx_sys_t::mutex and one holding the serialisation
+  mutex. They can concurrently enter here, and start their mtrs.
+  They will synchronize inside trx_sysf_get because only one of them
+  could succeed in acquiring the x-lock for the header page to modify.
+  That thread will then read the max_trx_id and write to the page.
+  After it finishes mtr_commit, the another thread will succeed in
+  acquiring the x-lock and it will again read the newest max_trx_id,
+  and possibly re-write it. */
 
-	ut_ad(mutex_own(&trx_sys->mutex));
+  ut_ad(trx_sys_mutex_own() || trx_sys_serialisation_mutex_own());
 
-	if (!srv_read_only_mode) {
-		mtr_start(&mtr);
+  if (!srv_read_only_mode) {
+    DBUG_EXECUTE_IF(
+        "trx_sys_write_max_trx_id__all_blocked",
+        while (true) { std::this_thread::sleep_for(std::chrono::seconds(1)); });
 
-		sys_header = trx_sysf_get(&mtr);
+#ifdef UNIV_DEBUG
+    if (trx_sys_serialisation_mutex_own()) {
+      DEBUG_SYNC_C("trx_sys_write_max_trx_id__ser");
+    }
+#endif /* UNIV_DEBUG */
 
-		mlog_write_ull(
-			sys_header + TRX_SYS_TRX_ID_STORE,
-			trx_sys->max_trx_id, &mtr);
+    mtr_start(&mtr);
 
-		mtr_commit(&mtr);
-	}
+    sys_header = trx_sysf_get(&mtr);
+
+    const trx_id_t max_trx_id = trx_sys->next_trx_id_or_no.load();
+
+    mlog_write_ull(sys_header + TRX_SYS_TRX_ID_STORE, max_trx_id, &mtr);
+
+    mtr_commit(&mtr);
+  }
 }
 
-/*****************************************************************//**
-Updates the offset information about the end of the MySQL binlog entry
-which corresponds to the transaction just being committed. In a MySQL
-replication slave updates the latest master binlog position up to which
-replication has proceeded. */
-UNIV_INTERN
-void
-trx_sys_update_mysql_binlog_offset(
-/*===============================*/
-	const char*	file_name,/*!< in: MySQL log file name */
-	ib_int64_t	offset,	/*!< in: position in that log file */
-	ulint		field,	/*!< in: offset of the MySQL log info field in
-				the trx sys header */
-	mtr_t*		mtr)	/*!< in: mtr */
-{
-	trx_sysf_t*	sys_header;
-
-	if (ut_strlen(file_name) >= TRX_SYS_MYSQL_LOG_NAME_LEN) {
-
-		/* We cannot fit the name to the 512 bytes we have reserved */
-
-		return;
-	}
-
-	sys_header = trx_sysf_get(mtr);
-
-	if (mach_read_from_4(sys_header + field
-			     + TRX_SYS_MYSQL_LOG_MAGIC_N_FLD)
-	    != TRX_SYS_MYSQL_LOG_MAGIC_N) {
-
-		mlog_write_ulint(sys_header + field
-				 + TRX_SYS_MYSQL_LOG_MAGIC_N_FLD,
-				 TRX_SYS_MYSQL_LOG_MAGIC_N,
-				 MLOG_4BYTES, mtr);
-	}
-
-	if (0 != strcmp((char*) (sys_header + field + TRX_SYS_MYSQL_LOG_NAME),
-			file_name)) {
-
-		mlog_write_string(sys_header + field
-				  + TRX_SYS_MYSQL_LOG_NAME,
-				  (byte*) file_name, 1 + ut_strlen(file_name),
-				  mtr);
-	}
-
-	if (mach_read_from_4(sys_header + field
-			     + TRX_SYS_MYSQL_LOG_OFFSET_HIGH) > 0
-	    || (offset >> 32) > 0) {
-
-		mlog_write_ulint(sys_header + field
-				 + TRX_SYS_MYSQL_LOG_OFFSET_HIGH,
-				 (ulint)(offset >> 32),
-				 MLOG_4BYTES, mtr);
-	}
-
-	mlog_write_ulint(sys_header + field
-			 + TRX_SYS_MYSQL_LOG_OFFSET_LOW,
-			 (ulint)(offset & 0xFFFFFFFFUL),
-			 MLOG_4BYTES, mtr);
+void trx_sys_persist_gtid_num(trx_id_t gtid_trx_no) {
+  mtr_t mtr;
+  mtr.start();
+  auto sys_header = trx_sysf_get(&mtr);
+  auto page = sys_header - TRX_SYS;
+  /* Update GTID transaction number. All transactions with lower
+  transaction number are no longer processed for GTID. */
+  mlog_write_ull(page + TRX_SYS_TRX_NUM_GTID, gtid_trx_no, &mtr);
+  mtr.commit();
 }
 
-/*****************************************************************//**
-Stores the MySQL binlog offset info in the trx system header if
-the magic number shows it valid, and print the info to stderr */
-UNIV_INTERN
-void
-trx_sys_print_mysql_binlog_offset(void)
-/*===================================*/
-{
-	trx_sysf_t*	sys_header;
-	mtr_t		mtr;
-	ulint		trx_sys_mysql_bin_log_pos_high;
-	ulint		trx_sys_mysql_bin_log_pos_low;
-
-	mtr_start(&mtr);
-
-	sys_header = trx_sysf_get(&mtr);
-
-	if (mach_read_from_4(sys_header + TRX_SYS_MYSQL_LOG_INFO
-			     + TRX_SYS_MYSQL_LOG_MAGIC_N_FLD)
-	    != TRX_SYS_MYSQL_LOG_MAGIC_N) {
-
-		mtr_commit(&mtr);
-
-		return;
-	}
-
-	trx_sys_mysql_bin_log_pos_high = mach_read_from_4(
-		sys_header + TRX_SYS_MYSQL_LOG_INFO
-		+ TRX_SYS_MYSQL_LOG_OFFSET_HIGH);
-	trx_sys_mysql_bin_log_pos_low = mach_read_from_4(
-		sys_header + TRX_SYS_MYSQL_LOG_INFO
-		+ TRX_SYS_MYSQL_LOG_OFFSET_LOW);
-
-	trx_sys_mysql_bin_log_pos
-		= (((ib_int64_t) trx_sys_mysql_bin_log_pos_high) << 32)
-		+ (ib_int64_t) trx_sys_mysql_bin_log_pos_low;
-
-	ut_memcpy(trx_sys_mysql_bin_log_name,
-		  sys_header + TRX_SYS_MYSQL_LOG_INFO
-		  + TRX_SYS_MYSQL_LOG_NAME, TRX_SYS_MYSQL_LOG_NAME_LEN);
-
-	fprintf(stderr,
-		"InnoDB: Last MySQL binlog file position %lu %lu,"
-		" file name %s\n",
-		trx_sys_mysql_bin_log_pos_high, trx_sys_mysql_bin_log_pos_low,
-		trx_sys_mysql_bin_log_name);
-
-	mtr_commit(&mtr);
+trx_id_t trx_sys_oldest_trx_no() {
+  ut_ad(trx_sys_serialisation_mutex_own());
+  /* Get the oldest transaction from serialisation list. */
+  if (UT_LIST_GET_LEN(trx_sys->serialisation_list) > 0) {
+    auto trx = UT_LIST_GET_FIRST(trx_sys->serialisation_list);
+    return (trx->no);
+  }
+  return trx_sys_get_next_trx_id_or_no();
 }
 
-/*****************************************************************//**
-Prints to stderr the MySQL master log offset info in the trx system header if
-the magic number shows it valid. */
-UNIV_INTERN
-void
-trx_sys_print_mysql_master_log_pos(void)
-/*====================================*/
-{
-	trx_sysf_t*	sys_header;
-	mtr_t		mtr;
-
-	mtr_start(&mtr);
-
-	sys_header = trx_sysf_get(&mtr);
-
-	if (mach_read_from_4(sys_header + TRX_SYS_MYSQL_MASTER_LOG_INFO
-			     + TRX_SYS_MYSQL_LOG_MAGIC_N_FLD)
-	    != TRX_SYS_MYSQL_LOG_MAGIC_N) {
-
-		mtr_commit(&mtr);
-
-		return;
-	}
-
-	fprintf(stderr,
-		"InnoDB: In a MySQL replication slave the last"
-		" master binlog file\n"
-		"InnoDB: position %lu %lu, file name %s\n",
-		(ulong) mach_read_from_4(sys_header
-					 + TRX_SYS_MYSQL_MASTER_LOG_INFO
-					 + TRX_SYS_MYSQL_LOG_OFFSET_HIGH),
-		(ulong) mach_read_from_4(sys_header
-					 + TRX_SYS_MYSQL_MASTER_LOG_INFO
-					 + TRX_SYS_MYSQL_LOG_OFFSET_LOW),
-		sys_header + TRX_SYS_MYSQL_MASTER_LOG_INFO
-		+ TRX_SYS_MYSQL_LOG_NAME);
-	/* Copy the master log position info to global variables we can
-	use in ha_innobase.cc to initialize glob_mi to right values */
-
-	ut_memcpy(trx_sys_mysql_master_log_name,
-		  sys_header + TRX_SYS_MYSQL_MASTER_LOG_INFO
-		  + TRX_SYS_MYSQL_LOG_NAME,
-		  TRX_SYS_MYSQL_LOG_NAME_LEN);
-
-	trx_sys_mysql_master_log_pos
-		= (((ib_int64_t) mach_read_from_4(
-			    sys_header + TRX_SYS_MYSQL_MASTER_LOG_INFO
-			    + TRX_SYS_MYSQL_LOG_OFFSET_HIGH)) << 32)
-		+ ((ib_int64_t) mach_read_from_4(
-			   sys_header + TRX_SYS_MYSQL_MASTER_LOG_INFO
-			   + TRX_SYS_MYSQL_LOG_OFFSET_LOW));
-	mtr_commit(&mtr);
+void trx_sys_get_binlog_prepared(std::vector<trx_id_t> &trx_ids) {
+  trx_sys_mutex_enter();
+  /* Exit fast if no prepared transaction. */
+  if (trx_sys->n_prepared_trx == 0) {
+    trx_sys_mutex_exit();
+    return;
+  }
+  /* Check and find binary log prepared transaction. */
+  for (auto trx : trx_sys->rw_trx_list) {
+    assert_trx_in_rw_list(trx);
+    if (trx_state_eq(trx, TRX_STATE_PREPARED) && trx_is_mysql_xa(trx)) {
+      trx_ids.push_back(trx->id);
+    }
+  }
+  trx_sys_mutex_exit();
 }
 
-/****************************************************************//**
-Looks for a free slot for a rollback segment in the trx system file copy.
-@return	slot index or ULINT_UNDEFINED if not found */
-UNIV_INTERN
-ulint
-trx_sysf_rseg_find_free(
-/*====================*/
-	mtr_t*	mtr)	/*!< in: mtr */
-{
-	ulint		i;
-	trx_sysf_t*	sys_header;
+/** Read binary log positions from buffer passed.
+@param[in]      binlog_buf      binary log buffer from trx sys page
+@param[out]     file_name       binary log file name
+@param[out]     high            offset part high order bytes
+@param[out]     low             offset part low order bytes
+@return true, if buffer has valid binary log position. */
+static bool read_binlog_position(const byte *binlog_buf, const char *&file_name,
+                                 uint32_t &high, uint32_t &low) {
+  /* Initialize out parameters. */
+  file_name = nullptr;
+  high = low = 0;
 
-	sys_header = trx_sysf_get(mtr);
+  /* Check if binary log position is stored. */
+  if (mach_read_from_4(binlog_buf + TRX_SYS_MYSQL_LOG_MAGIC_N_FLD) !=
+      TRX_SYS_MYSQL_LOG_MAGIC_N) {
+    return (true);
+  }
 
-	for (i = 0; i < TRX_SYS_N_RSEGS; i++) {
-		ulint	page_no;
+  /* Read binary log file name. */
+  file_name =
+      reinterpret_cast<const char *>(binlog_buf + TRX_SYS_MYSQL_LOG_NAME);
 
-		page_no = trx_sysf_rseg_get_page_no(sys_header, i, mtr);
+  /* read log file offset. */
+  high = mach_read_from_4(binlog_buf + TRX_SYS_MYSQL_LOG_OFFSET_HIGH);
+  low = mach_read_from_4(binlog_buf + TRX_SYS_MYSQL_LOG_OFFSET_LOW);
 
-		if (page_no == FIL_NULL) {
-
-			return(i);
-		}
-	}
-
-	return(ULINT_UNDEFINED);
+  return (false);
 }
 
-/*****************************************************************//**
-Creates the file page for the transaction system. This function is called only
-at the database creation, before trx_sys_init. */
-static
-void
-trx_sysf_create(
-/*============*/
-	mtr_t*	mtr)	/*!< in: mtr */
-{
-	trx_sysf_t*	sys_header;
-	ulint		slot_no;
-	buf_block_t*	block;
-	page_t*		page;
-	ulint		page_no;
-	byte*		ptr;
-	ulint		len;
+/** Write binary log position into passed buffer.
+@param[in]      file_name       Binary log file name
+@param[in]      offset          Binary log offset
+@param[out]     binlog_buf      Buffer from trx sys page to write to
+@param[in,out]  mtr             Mini-transaction */
+static void write_binlog_position(const char *file_name, uint64_t offset,
+                                  byte *binlog_buf, mtr_t *mtr) {
+  if (file_name == nullptr ||
+      ut_strlen(file_name) >= TRX_SYS_MYSQL_LOG_NAME_LEN) {
+    /* We cannot fit the name to the 512 bytes we have reserved */
+    return;
+  }
+  const char *current_name = nullptr;
+  uint32_t high = 0;
+  uint32_t low = 0;
 
-	ut_ad(mtr);
+  auto empty = read_binlog_position(binlog_buf, current_name, high, low);
 
-	/* Note that below we first reserve the file space x-latch, and
-	then enter the kernel: we must do it in this order to conform
-	to the latching order rules. */
+  if (empty) {
+    mlog_write_ulint(binlog_buf + TRX_SYS_MYSQL_LOG_MAGIC_N_FLD,
+                     TRX_SYS_MYSQL_LOG_MAGIC_N, MLOG_4BYTES, mtr);
+  }
 
-	mtr_x_lock(fil_space_get_latch(TRX_SYS_SPACE, NULL), mtr);
+  if (empty || 0 != strcmp(current_name, file_name)) {
+    mlog_write_string(binlog_buf + TRX_SYS_MYSQL_LOG_NAME, (byte *)file_name,
+                      1 + ut_strlen(file_name), mtr);
+  }
+  auto in_high = static_cast<ulint>(offset >> 32);
+  auto in_low = static_cast<ulint>(offset & 0xFFFFFFFFUL);
 
-	/* Create the trx sys file block in a new allocated file segment */
-	block = fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER,
-			    mtr);
-	buf_block_dbg_add_level(block, SYNC_TRX_SYS_HEADER);
-
-	ut_a(buf_block_get_page_no(block) == TRX_SYS_PAGE_NO);
-
-	page = buf_block_get_frame(block);
-
-	mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_TYPE_TRX_SYS,
-			 MLOG_2BYTES, mtr);
-
-	/* Reset the doublewrite buffer magic number to zero so that we
-	know that the doublewrite buffer has not yet been created (this
-	suppresses a Valgrind warning) */
-
-	mlog_write_ulint(page + TRX_SYS_DOUBLEWRITE
-			 + TRX_SYS_DOUBLEWRITE_MAGIC, 0, MLOG_4BYTES, mtr);
-
-	sys_header = trx_sysf_get(mtr);
-
-	/* Start counting transaction ids from number 1 up */
-	mach_write_to_8(sys_header + TRX_SYS_TRX_ID_STORE, 1);
-
-	/* Reset the rollback segment slots.  Old versions of InnoDB
-	define TRX_SYS_N_RSEGS as 256 (TRX_SYS_OLD_N_RSEGS) and expect
-	that the whole array is initialized. */
-	ptr = TRX_SYS_RSEGS + sys_header;
-	len = ut_max(TRX_SYS_OLD_N_RSEGS, TRX_SYS_N_RSEGS)
-		* TRX_SYS_RSEG_SLOT_SIZE;
-	memset(ptr, 0xff, len);
-	ptr += len;
-	ut_a(ptr <= page + (UNIV_PAGE_SIZE - FIL_PAGE_DATA_END));
-
-	/* Initialize all of the page.  This part used to be uninitialized. */
-	memset(ptr, 0, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - ptr);
-
-	mlog_log_string(sys_header, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END
-			+ page - sys_header, mtr);
-
-	/* Create the first rollback segment in the SYSTEM tablespace */
-	slot_no = trx_sysf_rseg_find_free(mtr);
-	page_no = trx_rseg_header_create(TRX_SYS_SPACE, 0, ULINT_MAX, slot_no,
-					 mtr);
-
-	ut_a(slot_no == TRX_SYS_SYSTEM_RSEG_ID);
-	ut_a(page_no == FSP_FIRST_RSEG_PAGE_NO);
+  if (empty || high != in_high) {
+    mlog_write_ulint(binlog_buf + TRX_SYS_MYSQL_LOG_OFFSET_HIGH, in_high,
+                     MLOG_4BYTES, mtr);
+  }
+  mlog_write_ulint(binlog_buf + TRX_SYS_MYSQL_LOG_OFFSET_LOW, in_low,
+                   MLOG_4BYTES, mtr);
 }
 
-/*****************************************************************//**
-Compare two trx_rseg_t instances on last_trx_no. */
-static
-int
-trx_rseg_compare_last_trx_no(
-/*=========================*/
-	const void*	p1,		/*!< in: elem to compare */
-	const void*	p2)		/*!< in: elem to compare */
-{
-	ib_int64_t	cmp;
+void trx_sys_read_binlog_position(char *file, uint64_t &offset) {
+  const char *current_name = nullptr;
+  uint32_t high = 0;
+  uint32_t low = 0;
 
-	const rseg_queue_t*	rseg_q1 = (const rseg_queue_t*) p1;
-	const rseg_queue_t*	rseg_q2 = (const rseg_queue_t*) p2;
+  mtr_t mtr;
+  mtr_start(&mtr);
 
-	cmp = rseg_q1->trx_no - rseg_q2->trx_no;
+  byte *binlog_pos = trx_sysf_get(&mtr) + TRX_SYS_MYSQL_LOG_INFO;
+  auto empty = read_binlog_position(binlog_pos, current_name, high, low);
 
-	if (cmp < 0) {
-		return(-1);
-	} else if (cmp > 0) {
-		return(1);
-	}
+  if (empty) {
+    file[0] = '\0';
+    offset = 0;
+    mtr_commit(&mtr);
+    return;
+  }
 
-	return(0);
+  strncpy(file, current_name, TRX_SYS_MYSQL_LOG_NAME_LEN);
+  offset = static_cast<uint64_t>(high);
+  offset = (offset << 32);
+  offset |= static_cast<uint64_t>(low);
+
+  mtr_commit(&mtr);
 }
 
-/*****************************************************************//**
-Creates and initializes the central memory structures for the transaction
-system. This is called when the database is started.
-@return min binary heap of rsegs to purge */
-UNIV_INTERN
-ib_bh_t*
-trx_sys_init_at_db_start(void)
-/*==========================*/
-{
-	mtr_t		mtr;
-	ib_bh_t*	ib_bh;
-	trx_sysf_t*	sys_header;
-	ib_uint64_t	rows_to_undo	= 0;
-	const char*	unit		= "";
+/** Check if binary log position is changed.
+@param[in]      file_name       previous binary log file name
+@param[in]      offset          previous binary log file offset
+@param[out]     binlog_buf      buffer from trx sys page to write to
+@return true, iff binary log position is modified from previous position. */
+static bool binlog_position_changed(const char *file_name, uint64_t offset,
+                                    byte *binlog_buf) {
+  const char *cur_name = nullptr;
+  uint32_t high = 0;
+  uint32_t low = 0;
+  bool empty = read_binlog_position(binlog_buf, cur_name, high, low);
 
-	/* We create the min binary heap here and pass ownership to
-	purge when we init the purge sub-system. Purge is responsible
-	for freeing the binary heap. */
+  if (empty) {
+    return (false);
+  }
 
-	ib_bh = ib_bh_create(
-		trx_rseg_compare_last_trx_no,
-		sizeof(rseg_queue_t), TRX_SYS_N_RSEGS);
+  if (0 != strcmp(cur_name, file_name)) {
+    return (true);
+  }
 
-	mtr_start(&mtr);
-
-	/* Allocate the trx descriptors array */
-	trx_sys->descriptors = static_cast<trx_id_t*>(
-		ut_malloc(sizeof(trx_id_t) *
-			  TRX_DESCR_ARRAY_INITIAL_SIZE));
-	trx_sys->descr_n_max = TRX_DESCR_ARRAY_INITIAL_SIZE;
-	trx_sys->descr_n_used = 0;
-	srv_descriptors_memory = TRX_DESCR_ARRAY_INITIAL_SIZE *
-		sizeof(trx_id_t);
-
-	sys_header = trx_sysf_get(&mtr);
-
-	if (srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN) {
-		trx_rseg_array_init(sys_header, ib_bh, &mtr);
-	}
-
-	/* VERY important: after the database is started, max_trx_id value is
-	divisible by TRX_SYS_TRX_ID_WRITE_MARGIN, and the 'if' in
-	trx_sys_get_new_trx_id will evaluate to TRUE when the function
-	is first time called, and the value for trx id will be written
-	to the disk-based header! Thus trx id values will not overlap when
-	the database is repeatedly started! */
-
-	trx_sys->max_trx_id = 2 * TRX_SYS_TRX_ID_WRITE_MARGIN
-		+ ut_uint64_align_up(mach_read_from_8(sys_header
-						   + TRX_SYS_TRX_ID_STORE),
-				     TRX_SYS_TRX_ID_WRITE_MARGIN);
-
-	ut_d(trx_sys->rw_max_trx_id = trx_sys->max_trx_id);
-
-	UT_LIST_INIT(trx_sys->mysql_trx_list);
-
-	trx_dummy_sess = sess_open();
-
-	trx_lists_init_at_db_start();
-
-	/* This S lock is not strictly required, it is here only to satisfy
-	the debug code (assertions). We are still running in single threaded
-	bootstrap mode. */
-
-	mutex_enter(&trx_sys->mutex);
-
-	if (UT_LIST_GET_LEN(trx_sys->rw_trx_list) > 0) {
-		const trx_t*	trx;
-
-		for (trx = UT_LIST_GET_FIRST(trx_sys->rw_trx_list);
-		     trx != NULL;
-		     trx = UT_LIST_GET_NEXT(trx_list, trx)) {
-
-			ut_ad(trx->is_recovered);
-			assert_trx_in_rw_list(trx);
-
-			if (trx_state_eq(trx, TRX_STATE_ACTIVE)) {
-				rows_to_undo += trx->undo_no;
-			}
-		}
-
-		if (rows_to_undo > 1000000000) {
-			unit = "M";
-			rows_to_undo = rows_to_undo / 1000000;
-		}
-
-		fprintf(stderr,
-			"InnoDB: %lu transaction(s) which must be"
-			" rolled back or cleaned up\n"
-			"InnoDB: in total %lu%s row operations to undo\n",
-			(ulong) UT_LIST_GET_LEN(trx_sys->rw_trx_list),
-			(ulong) rows_to_undo, unit);
-
-		fprintf(stderr, "InnoDB: Trx id counter is " TRX_ID_FMT "\n",
-			trx_sys->max_trx_id);
-	}
-
-	mutex_exit(&trx_sys->mutex);
-
-	UT_LIST_INIT(trx_sys->view_list);
-
-	mtr_commit(&mtr);
-
-	return(ib_bh);
+  auto cur_offset = static_cast<uint64_t>(high);
+  cur_offset = (cur_offset << 32);
+  cur_offset |= static_cast<uint64_t>(low);
+  return (offset != cur_offset);
 }
 
-/*****************************************************************//**
-Creates the trx_sys instance and initializes ib_bh and mutex. */
-UNIV_INTERN
-void
-trx_sys_create(void)
-/*================*/
-{
-	ut_ad(trx_sys == NULL);
+bool trx_sys_write_binlog_position(const char *last_file, uint64_t last_offset,
+                                   const char *file, uint64_t offset) {
+  mtr_t mtr;
+  mtr_start(&mtr);
+  byte *binlog_pos = trx_sysf_get(&mtr) + TRX_SYS_MYSQL_LOG_INFO;
 
-	trx_sys = static_cast<trx_sys_t*>(mem_zalloc(sizeof(*trx_sys)));
-
-	mutex_create(trx_sys_mutex_key, &trx_sys->mutex, SYNC_TRX_SYS);
+  /* Return If position is already updated. */
+  if (binlog_position_changed(last_file, last_offset, binlog_pos)) {
+    mtr_commit(&mtr);
+    return (false);
+  }
+  write_binlog_position(file, offset, binlog_pos, &mtr);
+  mtr_commit(&mtr);
+  return (true);
 }
 
-/*****************************************************************//**
-Creates and initializes the transaction system at the database creation. */
-UNIV_INTERN
-void
-trx_sys_create_sys_pages(void)
-/*==========================*/
-{
-	mtr_t	mtr;
+void trx_sys_update_mysql_binlog_offset(trx_t *trx, mtr_t *mtr) {
+  trx_sys_update_binlog_position(trx);
 
-	mtr_start(&mtr);
+  const char *file_name = trx->mysql_log_file_name;
+  uint64_t offset = trx->mysql_log_offset;
 
-	trx_sysf_create(&mtr);
+  /* Reset log file name in transaction. */
+  trx->mysql_log_file_name = nullptr;
 
-	mtr_commit(&mtr);
+  byte *binlog_pos = trx_sysf_get(mtr) + TRX_SYS_MYSQL_LOG_INFO;
+
+  if (file_name == nullptr || file_name[0] == '\0') {
+    /* Don't write blank name in binary log file position. */
+    return;
+  }
+  write_binlog_position(file_name, offset, binlog_pos, mtr);
 }
 
-/*****************************************************************//**
-Update the file format tag.
-@return	always TRUE */
-static
-ibool
-trx_sys_file_format_max_write(
-/*==========================*/
-	ulint		format_id,	/*!< in: file format id */
-	const char**	name)		/*!< out: max file format name, can
-					be NULL */
-{
-	mtr_t		mtr;
-	byte*		ptr;
-	buf_block_t*	block;
-	ib_uint64_t	tag_value;
+/** Find the page number in the TRX_SYS page for a given slot/rseg_id
+@param[in]      rseg_id         slot number in the TRX_SYS page rseg array
+@return page number from the TRX_SYS page rseg array */
+page_no_t trx_sysf_rseg_find_page_no(ulint rseg_id) {
+  page_no_t page_no;
+  mtr_t mtr;
+  mtr.start();
 
-	mtr_start(&mtr);
+  trx_sysf_t *sys_header = trx_sysf_get(&mtr);
 
-	block = buf_page_get(
-		TRX_SYS_SPACE, 0, TRX_SYS_PAGE_NO, RW_X_LATCH, &mtr);
+  page_no = trx_sysf_rseg_get_page_no(sys_header, rseg_id, &mtr);
 
-	file_format_max.id = format_id;
-	file_format_max.name = trx_sys_file_format_id_to_name(format_id);
+  mtr.commit();
 
-	ptr = buf_block_get_frame(block) + TRX_SYS_FILE_FORMAT_TAG;
-	tag_value = format_id + TRX_SYS_FILE_FORMAT_TAG_MAGIC_N;
-
-	if (name) {
-		*name = file_format_max.name;
-	}
-
-	mlog_write_ull(ptr, tag_value, &mtr);
-
-	mtr_commit(&mtr);
-
-	return(TRUE);
+  return (page_no);
 }
 
-/*****************************************************************//**
-Read the file format tag.
-@return	the file format or ULINT_UNDEFINED if not set. */
-static
-ulint
-trx_sys_file_format_max_read(void)
-/*==============================*/
-{
-	mtr_t			mtr;
-	const byte*		ptr;
-	const buf_block_t*	block;
-	ib_id_t			file_format_id;
+/** Look for a free slot for a rollback segment in the trx system file copy.
+@param[in,out]  mtr             mtr
+@return slot index or ULINT_UNDEFINED if not found */
+ulint trx_sysf_rseg_find_free(mtr_t *mtr) {
+  trx_sysf_t *sys_header = trx_sysf_get(mtr);
 
-	/* Since this is called during the startup phase it's safe to
-	read the value without a covering mutex. */
-	mtr_start(&mtr);
+  for (ulint slot_no = 0; slot_no < TRX_SYS_N_RSEGS; slot_no++) {
+    page_no_t page_no = trx_sysf_rseg_get_page_no(sys_header, slot_no, mtr);
 
-	block = buf_page_get(
-		TRX_SYS_SPACE, 0, TRX_SYS_PAGE_NO, RW_X_LATCH, &mtr);
+    if (page_no == FIL_NULL) {
+      return (slot_no);
+    }
+  }
 
-	ptr = buf_block_get_frame(block) + TRX_SYS_FILE_FORMAT_TAG;
-	file_format_id = mach_read_from_8(ptr);
-
-	mtr_commit(&mtr);
-
-	file_format_id -= TRX_SYS_FILE_FORMAT_TAG_MAGIC_N;
-
-	if (file_format_id >= FILE_FORMAT_NAME_N) {
-
-		/* Either it has never been tagged, or garbage in it. */
-		return(ULINT_UNDEFINED);
-	}
-
-	return((ulint) file_format_id);
+  return (ULINT_UNDEFINED);
 }
 
-/*****************************************************************//**
-Get the name representation of the file format from its id.
-@return	pointer to the name */
-UNIV_INTERN
-const char*
-trx_sys_file_format_id_to_name(
-/*===========================*/
-	const ulint	id)	/*!< in: id of the file format */
+/** Creates the file page for the transaction system. This function is called
+ only at the database creation, before trx_sys_init. */
+static void trx_sysf_create(mtr_t *mtr) /*!< in: mtr */
 {
-	ut_a(id < FILE_FORMAT_NAME_N);
+  trx_sysf_t *sys_header;
+  ulint slot_no;
+  buf_block_t *block;
+  page_t *page;
+  ulint page_no;
+  byte *ptr;
+  ulint len;
 
-	return(file_format_name_map[id]);
+  ut_ad(mtr);
+
+  /* Note that below we first reserve the file space x-latch, and
+  then enter the kernel: we must do it in this order to conform
+  to the latching order rules. */
+
+  mtr_x_lock_space(fil_space_get_sys_space(), mtr);
+
+  /* Create the trx sys file block in a new allocated file segment */
+  block = fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, mtr);
+  buf_block_dbg_add_level(block, SYNC_TRX_SYS_HEADER);
+
+  ut_a(block->page.id.page_no() == TRX_SYS_PAGE_NO);
+
+  page = buf_block_get_frame(block);
+
+  mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_TYPE_TRX_SYS, MLOG_2BYTES,
+                   mtr);
+
+  /* Reset the doublewrite buffer magic number to zero so that we
+  know that the doublewrite buffer has not yet been created (this
+  suppresses a Valgrind warning) */
+
+  mlog_write_ulint(page + TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_MAGIC, 0,
+                   MLOG_4BYTES, mtr);
+
+  sys_header = trx_sysf_get(mtr);
+
+  /* Start counting transaction ids from number 1 up */
+  mach_write_to_8(sys_header + TRX_SYS_TRX_ID_STORE, 1);
+
+  /* Reset the rollback segment slots.  Old versions of InnoDB
+  define TRX_SYS_N_RSEGS as 256 (TRX_SYS_OLD_N_RSEGS) and expect
+  that the whole array is initialized. */
+  ptr = TRX_SYS_RSEGS + sys_header;
+  len = std::max(TRX_SYS_OLD_N_RSEGS, TRX_SYS_N_RSEGS) * TRX_SYS_RSEG_SLOT_SIZE;
+  memset(ptr, 0xff, len);
+  ptr += len;
+  ut_a(ptr <= page + (UNIV_PAGE_SIZE - FIL_PAGE_DATA_END));
+
+  /* Initialize all of the page.  This part used to be uninitialized. */
+  memset(ptr, 0, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - ptr);
+
+  mlog_log_string(sys_header,
+                  UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - sys_header, mtr);
+
+  /* Create the first rollback segment in the SYSTEM tablespace */
+  slot_no = trx_sysf_rseg_find_free(mtr);
+  page_no = trx_rseg_header_create(TRX_SYS_SPACE, univ_page_size, PAGE_NO_MAX,
+                                   slot_no, mtr);
+
+  ut_a(slot_no == TRX_SYS_SYSTEM_RSEG_ID);
+  ut_a(page_no == FSP_FIRST_RSEG_PAGE_NO);
 }
 
-/*****************************************************************//**
-Check for the max file format tag stored on disk. Note: If max_format_id
-is == UNIV_FORMAT_MAX + 1 then we only print a warning.
-@return	DB_SUCCESS or error code */
-UNIV_INTERN
-dberr_t
-trx_sys_file_format_max_check(
-/*==========================*/
-	ulint	max_format_id)	/*!< in: max format id to check */
-{
-	ulint	format_id;
+const uint32_t max_rseg_init_threads = 4;
 
-	/* Check the file format in the tablespace. Do not try to
-	recover if the file format is not supported by the engine
-	unless forced by the user. */
-	format_id = trx_sys_file_format_max_read();
-	if (format_id == ULINT_UNDEFINED) {
-		/* Format ID was not set. Set it to minimum possible
-		value. */
-		format_id = UNIV_FORMAT_MIN;
-	}
+/** Creates and initializes the central memory structures for the transaction
+ system. This is called when the database is started.
+ @return min binary heap of rsegs to purge */
+purge_pq_t *trx_sys_init_at_db_start(void) {
+  purge_pq_t *purge_queue;
+  trx_sysf_t *sys_header;
+  uint64_t rows_to_undo = 0;
+  const char *unit = "";
 
-	ib_logf(IB_LOG_LEVEL_INFO,
-		"Highest supported file format is %s.",
-		trx_sys_file_format_id_to_name(UNIV_FORMAT_MAX));
+  /* We create the min binary heap here and pass ownership to
+  purge when we init the purge sub-system. Purge is responsible
+  for freeing the binary heap. */
+  purge_queue = ut::new_withkey<purge_pq_t>(UT_NEW_THIS_FILE_PSI_KEY);
+  ut_a(purge_queue != nullptr);
 
-	if (format_id > UNIV_FORMAT_MAX) {
+  if (srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN) {
+    /* Create the memory objects for all the rollback segments
+    referred to in the TRX_SYS page or any undo tablespace
+    RSEG_ARRAY page. */
+    srv_rseg_init_threads =
+        std::min(std::thread::hardware_concurrency(), max_rseg_init_threads);
 
-		ut_a(format_id < FILE_FORMAT_NAME_N);
+    /* Test hook to initialize the rollback segments using a single
+    thread. */
+    DBUG_EXECUTE_IF("rseg_init_single_thread", srv_rseg_init_threads = 1;);
 
-		ib_logf(max_format_id <= UNIV_FORMAT_MAX
-			? IB_LOG_LEVEL_ERROR : IB_LOG_LEVEL_WARN,
-			"The system tablespace is in a file "
-			"format that this version doesn't support - %s.",
-			trx_sys_file_format_id_to_name(format_id));
+    using Clock = std::chrono::high_resolution_clock;
+    using Clock_point = std::chrono::time_point<Clock>;
+    Clock_point start = Clock::now();
+    if (srv_rseg_init_threads > 1) {
+      trx_rsegs_parallel_init(purge_queue);
+    } else {
+      trx_rsegs_init(purge_queue);
+    }
+    Clock_point end = Clock::now();
+    const auto time_diff =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+            .count();
+    ib::info(ER_IB_MSG_PAR_RSEG_INIT_TIME_MSG, srv_rseg_init_threads,
+             (uint32_t)time_diff);
+  }
 
-		if (max_format_id <= UNIV_FORMAT_MAX) {
-			return(DB_ERROR);
-		}
-	}
+  mtr_t mtr;
+  mtr.start();
 
-	format_id = (format_id > max_format_id) ? format_id : max_format_id;
+  sys_header = trx_sysf_get(&mtr);
 
-	/* We don't need a mutex here, as this function should only
-	be called once at start up. */
-	file_format_max.id = format_id;
-	file_format_max.name = trx_sys_file_format_id_to_name(format_id);
+  const trx_id_t max_trx_id =
+      mach_read_from_8(sys_header + TRX_SYS_TRX_ID_STORE);
 
-	return(DB_SUCCESS);
+  /* VERY important: after the database is started, next_trx_id_or_no value
+  needs to be set to a higher value than the maximum of values that have ever
+  been used for either trx->id or trx->no. After that, it needs to be written
+  to the transaction system header page, before it is used the first time to
+  assign a new value for trx->id or trx->no. This way trx id values will not
+  overlap when the database is repeatedly crashed and restarted!
+
+  Note, that the factor 2 in 2 * TRX_SYS_TRX_ID_WRITE_MARGIN is required,
+  because the next_trx_id_or_no might be increased concurrently in two
+  threads:
+    - one that has acquired trx_sys_mutex,
+    - and one that has acquired the trx_sys_serialisation_mutex.
+  If you decreased the factor 2, the test innodb.max_trx_id should fail. */
+
+  trx_sys->next_trx_id_or_no.store(max_trx_id +
+                                   2 * trx_sys_get_trx_id_write_margin());
+
+  trx_sys->serialisation_min_trx_no.store(trx_sys->next_trx_id_or_no.load());
+
+  mtr.commit();
+
+#ifdef UNIV_DEBUG
+  /* max_trx_id is the next transaction ID to assign. Initialize maximum
+  transaction number to one less if all transactions are already purged. */
+  if (trx_sys->rw_max_trx_no == 0) {
+    trx_sys->rw_max_trx_no = trx_sys_get_next_trx_id_or_no() - 1;
+  }
+#endif /* UNIV_DEBUG */
+
+  trx_sys_mutex_enter();
+  trx_sys_write_max_trx_id();
+  trx_sys_mutex_exit();
+
+  trx_dummy_sess = sess_open();
+
+  trx_lists_init_at_db_start();
+
+  /* This mutex is not strictly required, it is here only to satisfy
+  the debug code (assertions). We are still running in single threaded
+  bootstrap mode. */
+
+  trx_sys_mutex_enter();
+
+  if (UT_LIST_GET_LEN(trx_sys->rw_trx_list) > 0) {
+    for (auto trx : trx_sys->rw_trx_list) {
+      ut_ad(trx->is_recovered);
+      assert_trx_in_rw_list(trx);
+
+      if (trx_state_eq(trx, TRX_STATE_ACTIVE)) {
+        rows_to_undo += trx->undo_no;
+      }
+    }
+
+    if (rows_to_undo > 1000000000) {
+      unit = "M";
+      rows_to_undo = rows_to_undo / 1000000;
+    }
+
+    ib::info(ER_IB_MSG_1198)
+        << UT_LIST_GET_LEN(trx_sys->rw_trx_list)
+        << " transaction(s) which must be rolled back or"
+           " cleaned up in total "
+        << rows_to_undo << unit << " row operations to undo";
+
+    ib::info(ER_IB_MSG_1199)
+        << "Trx id counter is " << trx_sys_get_next_trx_id_or_no();
+  }
+
+  trx_sys->found_prepared_trx = trx_sys->n_prepared_trx > 0;
+
+  trx_sys_mutex_exit();
+
+  return (purge_queue);
 }
 
-/*****************************************************************//**
-Set the file format id unconditionally except if it's already the
-same value.
-@return	TRUE if value updated */
-UNIV_INTERN
-ibool
-trx_sys_file_format_max_set(
-/*========================*/
-	ulint		format_id,	/*!< in: file format id */
-	const char**	name)		/*!< out: max file format name or
-					NULL if not needed. */
-{
-	ibool		ret = FALSE;
+/** Creates the trx_sys instance and initializes purge_queue and mutex. */
+void trx_sys_create(void) {
+  ut_ad(trx_sys == nullptr);
 
-	ut_a(format_id <= UNIV_FORMAT_MAX);
+  trx_sys = static_cast<trx_sys_t *>(
+      ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(*trx_sys)));
 
-	mutex_enter(&file_format_max.mutex);
+  mutex_create(LATCH_ID_TRX_SYS, &trx_sys->mutex);
+  mutex_create(LATCH_ID_TRX_SYS_SERIALISATION, &trx_sys->serialisation_mutex);
 
-	/* Only update if not already same value. */
-	if (format_id != file_format_max.id) {
+  UT_LIST_INIT(trx_sys->serialisation_list);
+  UT_LIST_INIT(trx_sys->rw_trx_list);
+  UT_LIST_INIT(trx_sys->mysql_trx_list);
 
-		ret = trx_sys_file_format_max_write(format_id, name);
-	}
+  trx_sys->mvcc = ut::new_withkey<MVCC>(UT_NEW_THIS_FILE_PSI_KEY, 1024);
 
-	mutex_exit(&file_format_max.mutex);
+  trx_sys->serialisation_min_trx_no.store(0);
 
-	return(ret);
+  ut_d(trx_sys->rw_max_trx_no = 0);
+
+  new (&trx_sys->rw_trx_ids)
+      trx_ids_t(ut::allocator<trx_id_t>(mem_key_trx_sys_t_rw_trx_ids));
+
+  for (auto &shard : trx_sys->shards) {
+    new (&shard) Trx_shard{};
+  }
+
+  new (&trx_sys->rsegs) Rsegs();
+  trx_sys->rsegs.set_empty();
+
+  new (&trx_sys->tmp_rsegs) Rsegs();
+  trx_sys->tmp_rsegs.set_empty();
 }
 
-/********************************************************************//**
-Tags the system table space with minimum format id if it has not been
-tagged yet.
-WARNING: This function is only called during the startup and AFTER the
-redo log application during recovery has finished. */
-UNIV_INTERN
-void
-trx_sys_file_format_tag_init(void)
-/*==============================*/
-{
-	ulint	format_id;
+/** Creates and initializes the transaction system at the database creation. */
+void trx_sys_create_sys_pages(void) {
+  mtr_t mtr;
 
-	format_id = trx_sys_file_format_max_read();
+  mtr_start(&mtr);
 
-	/* If format_id is not set then set it to the minimum. */
-	if (format_id == ULINT_UNDEFINED) {
-		trx_sys_file_format_max_set(UNIV_FORMAT_MIN, NULL);
-	}
+  trx_sysf_create(&mtr);
+
+  mtr_commit(&mtr);
 }
 
-/********************************************************************//**
-Update the file format tag in the system tablespace only if the given
-format id is greater than the known max id.
-@return	TRUE if format_id was bigger than the known max id */
-UNIV_INTERN
-ibool
-trx_sys_file_format_max_upgrade(
-/*============================*/
-	const char**	name,		/*!< out: max file format name */
-	ulint		format_id)	/*!< in: file format identifier */
-{
-	ibool		ret = FALSE;
-
-	ut_a(name);
-	ut_a(file_format_max.name != NULL);
-	ut_a(format_id <= UNIV_FORMAT_MAX);
-
-	mutex_enter(&file_format_max.mutex);
-
-	if (format_id > file_format_max.id) {
-
-		ret = trx_sys_file_format_max_write(format_id, name);
-	}
-
-	mutex_exit(&file_format_max.mutex);
-
-	return(ret);
-}
-
-/*****************************************************************//**
-Get the name representation of the file format from its id.
-@return	pointer to the max format name */
-UNIV_INTERN
-const char*
-trx_sys_file_format_max_get(void)
-/*=============================*/
-{
-	return(file_format_max.name);
-}
-
-/*****************************************************************//**
-Initializes the tablespace tag system. */
-UNIV_INTERN
-void
-trx_sys_file_format_init(void)
-/*==========================*/
-{
-	mutex_create(file_format_max_mutex_key,
-		     &file_format_max.mutex, SYNC_FILE_FORMAT_TAG);
-
-	/* We don't need a mutex here, as this function should only
-	be called once at start up. */
-	file_format_max.id = UNIV_FORMAT_MIN;
-
-	file_format_max.name = trx_sys_file_format_id_to_name(
-		file_format_max.id);
-}
-
-/*****************************************************************//**
-Closes the tablespace tag system. */
-UNIV_INTERN
-void
-trx_sys_file_format_close(void)
-/*===========================*/
-{
-	/* Does nothing at the moment */
-}
-
-/*********************************************************************
-Creates the rollback segments.
-@return number of rollback segments that are active. */
-UNIV_INTERN
-ulint
-trx_sys_create_rsegs(
-/*=================*/
-	ulint	n_spaces,	/*!< number of tablespaces for UNDO logs */
-	ulint	n_rsegs)	/*!< number of rollback segments to create */
-{
-	mtr_t	mtr;
-	ulint	n_used;
-
-	ut_a(n_spaces < TRX_SYS_N_RSEGS);
-	ut_a(n_rsegs <= TRX_SYS_N_RSEGS);
-
-	if (srv_read_only_mode) {
-		return(ULINT_UNDEFINED);
-	}
-
-	/* This is executed in single-threaded mode therefore it is not
-	necessary to use the same mtr in trx_rseg_create(). n_used cannot
-	change while the function is executing. */
-
-	mtr_start(&mtr);
-	n_used = trx_sysf_rseg_find_free(&mtr);
-	mtr_commit(&mtr);
-
-	if (n_used == ULINT_UNDEFINED) {
-		n_used = TRX_SYS_N_RSEGS;
-	}
-
-	/* Do not create additional rollback segments if innodb_force_recovery
-	has been set and the database was not shutdown cleanly. */
-
-	if (!srv_force_recovery && !recv_needed_recovery && n_used < n_rsegs) {
-		ulint	i;
-		ulint	new_rsegs = n_rsegs - n_used;
-
-		for (i = 0; i < new_rsegs; ++i) {
-			ulint	space;
-
-			/* Tablespace 0 is the system tablespace. All UNDO
-			log tablespaces start from 1. */
-
-			if (n_spaces > 0) {
-				space = (i % n_spaces) + 1;
-			} else {
-				space = 0; /* System tablespace */
-			}
-
-			if (trx_rseg_create(space) != NULL) {
-				++n_used;
-			} else {
-				break;
-			}
-		}
-	}
-
-	ib_logf(IB_LOG_LEVEL_INFO,
-		"%lu rollback segment(s) are active.", n_used);
-
-	return(n_used);
-}
-
-#else /* !UNIV_HOTBACKUP */
-/*****************************************************************//**
-Prints to stderr the MySQL binlog info in the system header if the
-magic number shows it valid. */
-UNIV_INTERN
-void
-trx_sys_print_mysql_binlog_offset_from_page(
-/*========================================*/
-	const byte*	page)	/*!< in: buffer containing the trx
-				system header page, i.e., page number
-				TRX_SYS_PAGE_NO in the tablespace */
-{
-	const trx_sysf_t*	sys_header;
-
-	sys_header = page + TRX_SYS;
-
-	if (mach_read_from_4(sys_header + TRX_SYS_MYSQL_LOG_INFO
-			     + TRX_SYS_MYSQL_LOG_MAGIC_N_FLD)
-	    == TRX_SYS_MYSQL_LOG_MAGIC_N) {
-
-		fprintf(stderr,
-			"mysqlbackup: Last MySQL binlog file position %lu %lu,"
-			" file name %s\n",
-			(ulong) mach_read_from_4(
-				sys_header + TRX_SYS_MYSQL_LOG_INFO
-				+ TRX_SYS_MYSQL_LOG_OFFSET_HIGH),
-			(ulong) mach_read_from_4(
-				sys_header + TRX_SYS_MYSQL_LOG_INFO
-				+ TRX_SYS_MYSQL_LOG_OFFSET_LOW),
-			sys_header + TRX_SYS_MYSQL_LOG_INFO
-			+ TRX_SYS_MYSQL_LOG_NAME);
-	}
-}
-
-/*****************************************************************//**
-Reads the file format id from the first system table space file.
-Even if the call succeeds and returns TRUE, the returned format id
-may be ULINT_UNDEFINED signalling that the format id was not present
-in the data file.
-@return TRUE if call succeeds */
-UNIV_INTERN
-ibool
-trx_sys_read_file_format_id(
-/*========================*/
-	const char *pathname,  /*!< in: pathname of the first system
-				        table space file */
-	ulint *format_id)      /*!< out: file format of the system table
-				         space */
-{
-	os_file_t	file;
-	ibool		success;
-	byte		buf[UNIV_PAGE_SIZE * 2];
-	page_t*		page = ut_align(buf, UNIV_PAGE_SIZE);
-	const byte*	ptr;
-	ib_id_t		file_format_id;
-
-	*format_id = ULINT_UNDEFINED;
-
-	file = os_file_create_simple_no_error_handling(
-		innodb_file_data_key,
-		pathname,
-		OS_FILE_OPEN,
-		OS_FILE_READ_ONLY,
-		&success
-	);
-	if (!success) {
-		/* The following call prints an error message */
-		os_file_get_last_error(true);
-
-		ut_print_timestamp(stderr);
-
-		fprintf(stderr,
-			"  mysqlbackup: Error: trying to read system "
-			"tablespace file format,\n"
-			"  mysqlbackup: but could not open the tablespace "
-			"file %s!\n", pathname);
-		return(FALSE);
-	}
-
-	/* Read the page on which file format is stored */
-
-	success = os_file_read_no_error_handling(
-		file, page, TRX_SYS_PAGE_NO * UNIV_PAGE_SIZE, UNIV_PAGE_SIZE);
-
-	if (!success) {
-		/* The following call prints an error message */
-		os_file_get_last_error(true);
-
-		ut_print_timestamp(stderr);
-
-		fprintf(stderr,
-			"  mysqlbackup: Error: trying to read system "
-			"tablespace file format,\n"
-			"  mysqlbackup: but failed to read the tablespace "
-			"file %s!\n", pathname);
-
-		os_file_close(file);
-		return(FALSE);
-	}
-	os_file_close(file);
-
-	/* get the file format from the page */
-	ptr = page + TRX_SYS_FILE_FORMAT_TAG;
-	file_format_id = mach_read_from_8(ptr);
-	file_format_id -= TRX_SYS_FILE_FORMAT_TAG_MAGIC_N;
-
-	if (file_format_id >= FILE_FORMAT_NAME_N) {
-
-		/* Either it has never been tagged, or garbage in it. */
-		return(TRUE);
-	}
-
-	*format_id = (ulint) file_format_id;
-
-	return(TRUE);
-}
-
-/*****************************************************************//**
-Reads the file format id from the given per-table data file.
-@return TRUE if call succeeds */
-UNIV_INTERN
-ibool
-trx_sys_read_pertable_file_format_id(
-/*=================================*/
-	const char *pathname,  /*!< in: pathname of a per-table
-				        datafile */
-	ulint *format_id)      /*!< out: file format of the per-table
-				         data file */
-{
-	os_file_t	file;
-	ibool		success;
-	byte		buf[UNIV_PAGE_SIZE * 2];
-	page_t*		page = ut_align(buf, UNIV_PAGE_SIZE);
-	const byte*	ptr;
-	ib_uint32_t	flags;
-
-	*format_id = ULINT_UNDEFINED;
-
-	file = os_file_create_simple_no_error_handling(
-		innodb_file_data_key,
-		pathname,
-		OS_FILE_OPEN,
-		OS_FILE_READ_ONLY,
-		&success
-	);
-	if (!success) {
-		/* The following call prints an error message */
-		os_file_get_last_error(true);
-
-		ut_print_timestamp(stderr);
-
-		fprintf(stderr,
-			"  mysqlbackup: Error: trying to read per-table "
-			"tablespace format,\n"
-			"  mysqlbackup: but could not open the tablespace "
-			"file %s!\n", pathname);
-
-		return(FALSE);
-	}
-
-	/* Read the first page of the per-table datafile */
-
-	success = os_file_read_no_error_handling(file, page, 0, UNIV_PAGE_SIZE);
-
-	if (!success) {
-		/* The following call prints an error message */
-		os_file_get_last_error(true);
-
-		ut_print_timestamp(stderr);
-
-		fprintf(stderr,
-			"  mysqlbackup: Error: trying to per-table data file "
-			"format,\n"
-			"  mysqlbackup: but failed to read the tablespace "
-			"file %s!\n", pathname);
-
-		os_file_close(file);
-		return(FALSE);
-	}
-	os_file_close(file);
-
-	/* get the file format from the page */
-	ptr = page + 54;
-	flags = mach_read_from_4(ptr);
-
-	if (!fsp_flags_is_valid(flags) {
-		/* bad tablespace flags */
-		return(FALSE);
-	}
-
-	*format_id = FSP_FLAGS_GET_POST_ANTELOPE(flags);
-
-	return(TRUE);
-}
-
-
-/*****************************************************************//**
-Get the name representation of the file format from its id.
-@return	pointer to the name */
-UNIV_INTERN
-const char*
-trx_sys_file_format_id_to_name(
-/*===========================*/
-	const ulint	id)	/*!< in: id of the file format */
-{
-	if (!(id < FILE_FORMAT_NAME_N)) {
-		/* unknown id */
-		return("Unknown");
-	}
-
-	return(file_format_name_map[id]);
-}
-
-#endif /* !UNIV_HOTBACKUP */
-
-#ifndef UNIV_HOTBACKUP
 /*********************************************************************
 Shutdown/Close the transaction system. */
-UNIV_INTERN
-void
-trx_sys_close(void)
-/*===============*/
-{
-	ulint		i;
-	trx_t*		trx;
-	read_view_t*	view;
+void trx_sys_close(void) {
+  ut_ad(srv_shutdown_state.load() == SRV_SHUTDOWN_EXIT_THREADS);
 
-	ut_ad(trx_sys != NULL);
-	ut_ad(srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS);
+  if (trx_sys == nullptr) {
+    return;
+  }
 
-	/* Check that all read views are closed except read view owned
-	by a purge. */
+  ulint size = trx_sys->mvcc->size();
 
-	mutex_enter(&trx_sys->mutex);
+  if (size > 0) {
+    ib::error(ER_IB_MSG_1201) << "All read views were not closed before"
+                                 " shutdown: "
+                              << size << " read views open";
+  }
 
-	if (UT_LIST_GET_LEN(trx_sys->view_list) > 1) {
-		fprintf(stderr,
-			"InnoDB: Error: all read views were not closed"
-			" before shutdown:\n"
-			"InnoDB: %lu read views open \n",
-			UT_LIST_GET_LEN(trx_sys->view_list) - 1);
-	}
+  sess_close(trx_dummy_sess);
+  trx_dummy_sess = nullptr;
 
-	mutex_exit(&trx_sys->mutex);
+  trx_purge_sys_close();
 
-	sess_close(trx_dummy_sess);
-	trx_dummy_sess = NULL;
+  /* Only prepared or active-recovered transactions may be left in the system.
+  The active-recovered transactions are allowed only if we did not force to
+  rollback them during shutdown (which might happen if e.g. it is fast
+  shutdown). Free all of them. */
+  ut_d(trx_sys_after_background_threads_shutdown_validate());
 
-	trx_purge_sys_close();
+  while (auto trx = UT_LIST_GET_FIRST(trx_sys->rw_trx_list)) {
+    trx_free_prepared_or_active_recovered(trx);
+  }
 
-	/* Free the double write data structures. */
-	buf_dblwr_free();
+  /* There can't be any active transactions. */
+  trx_sys->rsegs.~Rsegs();
 
-	/* Only prepared transactions may be left in the system. Free them. */
-	ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == trx_sys->n_prepared_trx);
+  trx_sys->tmp_rsegs.~Rsegs();
 
-	while ((trx = UT_LIST_GET_FIRST(trx_sys->rw_trx_list)) != NULL) {
-		trx_free_prepared(trx);
-	}
+  ut::delete_(trx_sys->mvcc);
 
-	/* There can't be any active transactions. */
-	for (i = 0; i < TRX_SYS_N_RSEGS; ++i) {
-		trx_rseg_t*	rseg;
+  ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
+  ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
+  ut_a(UT_LIST_GET_LEN(trx_sys->serialisation_list) == 0);
 
-		rseg = trx_sys->rseg_array[i];
+  for (auto &shard : trx_sys->shards) {
+    shard.~Trx_shard();
+  }
 
-		if (rseg != NULL) {
-			trx_rseg_mem_free(rseg);
-		} else {
-			break;
-		}
-	}
+  /* We used placement new to create this mutex. Call the destructor. */
+  mutex_free(&trx_sys->serialisation_mutex);
+  mutex_free(&trx_sys->mutex);
 
-	view = UT_LIST_GET_FIRST(trx_sys->view_list);
+  trx_sys->rw_trx_ids.~trx_ids_t();
 
-	while (view != NULL) {
-		read_view_t*	prev_view = view;
+  ut::free(trx_sys);
 
-		view = UT_LIST_GET_NEXT(view_list, prev_view);
-
-		UT_LIST_REMOVE(view_list, trx_sys->view_list, prev_view);
-	}
-
-	ut_a(UT_LIST_GET_LEN(trx_sys->view_list) == 0);
-	ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
-	ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
-
-	mutex_free(&trx_sys->mutex);
-
-	ut_ad(trx_sys->descr_n_used == 0);
-	ut_free(trx_sys->descriptors);
-
-	mem_free(trx_sys);
-
-	trx_sys = NULL;
+  trx_sys = nullptr;
 }
 
-/*********************************************************************
-Check if there are any active (non-prepared) transactions.
-@return total number of active transactions or 0 if none */
-UNIV_INTERN
-ulint
-trx_sys_any_active_transactions(void)
-/*=================================*/
-{
-	ulint	total_trx = 0;
+void trx_sys_before_pre_dd_shutdown_validate() {
+  /** All connections are closed and close_connection unregisters
+  associated trx from mysql_trx_list. We still might have some non
+  started transactions in mysql_trx_list.
+  Purge threads are an exception, they create their own trx_t objects which are
+  not real transactions but are needed for the purge sys to use the query
+  threads framework. Purge sys shutdown happens at a later point in the shutdown
+  sequence so we need to skip its transactions here.
+  IMPORTANT: If allocating transactions for background threads, please use
+  trx_allocate_for_background. This function does not add the trx to the
+  mysql_trx_list so we don't have to add logic to skip these at shutdown.
+  */
+  trx_sys_mutex_enter();
+  for (auto trx : trx_sys->mysql_trx_list) {
+    /** Skip purge thread trx, it will be cleared after purge sys shutdown */
+    if (trx->purge_sys_trx) {
+      continue;
+    }
+    ut_a(trx->state.load(std::memory_order_relaxed) == TRX_STATE_NOT_STARTED);
+  }
+  trx_sys_mutex_exit();
+}
 
-	mutex_enter(&trx_sys->mutex);
+void trx_sys_after_pre_dd_shutdown_validate() {
+  trx_sys_mutex_enter();
+  /** At this point we check the mysql_trx_list again, now we don't expect purge
+  thread transactions in the list */
+  for (auto trx : trx_sys->mysql_trx_list) {
+    ut_a(trx->state.load(std::memory_order_relaxed) == TRX_STATE_NOT_STARTED);
+  }
+  trx_sys_mutex_exit();
 
-	total_trx = UT_LIST_GET_LEN(trx_sys->rw_trx_list)
-		  + UT_LIST_GET_LEN(trx_sys->mysql_trx_list);
+  /* We assert that all transactions are rolled back if
+  [1] Not force recovery mode.
+  [2] Not fast shutdown
+  [3] The rollback thread has started and stopped gracefully.
 
-	ut_a(total_trx >= trx_sys->n_prepared_trx);
-	total_trx -= trx_sys->n_prepared_trx;
+  The only left transactions are those that have state == TRX_STATE_PREPARED.
 
-	mutex_exit(&trx_sys->mutex);
+  Above, [3] could be false during error exit, when the rollback thread might
+  never have started and we don't rollback the recovered transactions in that
+  case. */
 
-	return(total_trx);
+  const auto active_recovered_trxs = trx_sys_recovered_active_trxs_count();
+  if (srv_shutdown_waits_for_rollback_of_recovered_transactions() &&
+      srv_thread_is_stopped(srv_threads.m_trx_recovery_rollback)) {
+    ut_a(active_recovered_trxs == 0);
+  }
+
+  trx_sys_mutex_enter();
+  ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) ==
+       trx_sys->n_prepared_trx + active_recovered_trxs);
+  trx_sys_mutex_exit();
+}
+
+void trx_sys_after_background_threads_shutdown_validate() {
+  trx_sys_after_pre_dd_shutdown_validate();
+
+  ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
+}
+
+size_t trx_sys_recovered_active_trxs_count() {
+  size_t total_trx = 0;
+  trx_sys_mutex_enter();
+  /* Recovered transactions are never citizens of mysql_trx_list,
+  so it's enough to check rw_trx_list. */
+  for (auto trx : trx_sys->rw_trx_list) {
+    if (trx_state_eq(trx, TRX_STATE_ACTIVE) && trx->is_recovered) {
+      total_trx++;
+    }
+  }
+  trx_sys_mutex_exit();
+  return (total_trx);
 }
 
 #ifdef UNIV_DEBUG
-/*************************************************************//**
-Validate the trx_list_t.
-@return TRUE if valid. */
-static
-ibool
-trx_sys_validate_trx_list_low(
-/*===========================*/
-	trx_list_t*	trx_list)	/*!< in: &trx_sys->rw_trx_list */
-{
-	const trx_t*	trx;
-	const trx_t*	prev_trx = NULL;
+/** Validate the trx_sys_t::rw_trx_list.
+ @return true if the list is valid. */
+bool trx_sys_validate_trx_list() {
+  ut_ad(trx_sys_mutex_own());
 
-	ut_ad(mutex_own(&trx_sys->mutex));
+  const trx_t *prev_trx = nullptr;
 
-	ut_ad(trx_list == &trx_sys->rw_trx_list);
+  for (auto trx : trx_sys->rw_trx_list) {
+    check_trx_state(trx);
+    ut_a(prev_trx == nullptr || prev_trx->id > trx->id);
+    prev_trx = trx;
+  }
 
-	for (trx = UT_LIST_GET_FIRST(*trx_list);
-	     trx != NULL;
-	     prev_trx = trx, trx = UT_LIST_GET_NEXT(trx_list, prev_trx)) {
-
-		check_trx_state(trx);
-
-		ut_a(prev_trx == NULL || prev_trx->id > trx->id);
-	}
-
-	return(TRUE);
-}
-
-/*************************************************************//**
-Validate the trx_sys_t::rw_trx_list.
-@return TRUE if lists are valid. */
-UNIV_INTERN
-ibool
-trx_sys_validate_trx_list(void)
-/*===========================*/
-{
-	ut_ad(mutex_own(&trx_sys->mutex));
-
-	ut_a(trx_sys_validate_trx_list_low(&trx_sys->rw_trx_list));
-
-	return(TRUE);
+  return (true);
 }
 #endif /* UNIV_DEBUG */
+
 #endif /* !UNIV_HOTBACKUP */
+
+/** A list of undo tablespace IDs found in the TRX_SYS page. These are the
+old type of undo tablespaces that do not have space_IDs in the reserved
+range nor contain an RSEG_ARRAY page. This cannot be part of the trx_sys_t
+object because it must be built before that is initialized. */
+Space_Ids *trx_sys_undo_spaces;
+
+/** Initialize trx_sys_undo_spaces, called once during srv_start(). */
+void trx_sys_undo_spaces_init() {
+  trx_sys_undo_spaces =
+      ut::new_withkey<Space_Ids>(ut::make_psi_memory_key(mem_key_undo_spaces));
+
+  trx_sys_undo_spaces->reserve(TRX_SYS_N_RSEGS);
+}
+
+/** Free the resources occupied by trx_sys_undo_spaces,
+called once during thread de-initialization. */
+void trx_sys_undo_spaces_deinit() {
+  if (trx_sys_undo_spaces != nullptr) {
+    trx_sys_undo_spaces->clear();
+    ut::delete_(trx_sys_undo_spaces);
+    trx_sys_undo_spaces = nullptr;
+  }
+}

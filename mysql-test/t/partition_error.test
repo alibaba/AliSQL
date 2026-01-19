@@ -1,8 +1,12 @@
 #
-# Simple test for the erroneos statements using the 
+# Simple test for the erroneos statements using the
 # partition storage engine
 #
--- source include/have_partition.inc
+# This test needs MyISAM for some sub tests
+--source include/have_myisam.inc
+
+# Different number of warnings with/without ps-protocol
+--source include/no_ps_protocol.inc
 
 --disable_warnings
 drop table if exists t1, t2;
@@ -59,13 +63,13 @@ PARTITION BY RANGE (DAYOFWEEK(a))
 CREATE TABLE t1 (a DATE)
 PARTITION BY RANGE (DAYOFWEEK(a))
 (PARTITION a1 VALUES LESS THAN (60));
-INSERT INTO t1 VALUES ('test'),('a'),('5');
+INSERT IGNORE INTO t1 VALUES ('test'),('a'),('5');
 SHOW WARNINGS;
 DROP TABLE t1;
 CREATE TABLE t1 (a DATETIME)
 PARTITION BY RANGE (DAYOFWEEK(a))
 (PARTITION a1 VALUES LESS THAN (60));
-INSERT INTO t1 VALUES ('test'),('a'),('5');
+INSERT IGNORE INTO t1 VALUES ('test'),('a'),('5');
 SHOW WARNINGS;
 DROP TABLE t1;
 --error ER_WRONG_EXPR_IN_PARTITION_FUNC_ERROR
@@ -773,7 +777,7 @@ CREATE TABLE t1 (id INT, purchased DATE)
 PARTITION BY RANGE(YEAR(purchased))
 SUBPARTITION BY HASH(TO_DAYS(purchased))
 (PARTITION p0 VALUES LESS THAN MAXVALUE
-  DATA DIRECTORY = '/tmp/not-existing' 
+  DATA DIRECTORY = '/tmp/not-existing'
   INDEX DIRECTORY = '/tmp/not-existing');
 --replace_result MyISAM <curr_engine> InnoDB <curr_engine>
 SHOW CREATE TABLE t1;
@@ -783,7 +787,7 @@ PARTITION BY RANGE(YEAR(purchased))
 SUBPARTITION BY HASH(TO_DAYS(purchased)) SUBPARTITIONS 2
 (PARTITION p0 VALUES LESS THAN MAXVALUE
  (SUBPARTITION sp0
-   DATA DIRECTORY = '/tmp/not-existing' 
+   DATA DIRECTORY = '/tmp/not-existing'
    INDEX DIRECTORY = '/tmp/not-existing',
   SUBPARTITION sp1));
 --replace_result MyISAM <curr_engine> InnoDB <curr_engine>
@@ -792,7 +796,7 @@ DROP TABLE t1;
 CREATE TABLE t1 (id INT, purchased DATE)
 PARTITION BY RANGE(YEAR(purchased))
 (PARTITION p0 VALUES LESS THAN MAXVALUE
-  DATA DIRECTORY = '/tmp/not-existing' 
+  DATA DIRECTORY = '/tmp/not-existing'
   INDEX DIRECTORY = '/tmp/not-existing');
 --replace_result MyISAM <curr_engine> InnoDB <curr_engine>
 SHOW CREATE TABLE t1;
@@ -815,7 +819,12 @@ DROP TABLE t1;
 #
 # Bug 29368:
 # Incorrect error, 1467, for syntax error when creating partition
---error ER_PARTITION_REQUIRES_VALUES_ERROR
+
+CREATE TABLESPACE ts1 ADD DATAFILE 'ts1.ibd';
+CREATE TABLESPACE ts2 ADD DATAFILE 'ts2.ibd';
+CREATE TABLESPACE ts3 ADD DATAFILE 'ts3.ibd';
+
+--error ER_PARSE_ERROR
 CREATE TABLE t1 (
   a int
 )
@@ -1266,11 +1275,11 @@ partitions 2
 (partition x1 values less than (4) tablespace ts1,
  partition x2 values less than (8) tablespace ts2);
 
-# 
+#
 # Partition by range, no values less than definition
-# 
---error ER_PARTITION_REQUIRES_VALUES_ERROR
-CREATE TABLE t1 ( 
+#
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
 a int not null,
 b int not null,
 c int not null,
@@ -1278,7 +1287,7 @@ primary key(a,b))
 partition by range (a)
 partitions 2
 (partition x1 values less than (4),
- partition x2); 
+ partition x2);
 
 #
 # Partition by range, no values in definition allowed
@@ -1309,7 +1318,21 @@ partitions 2
  partition x2 values less than (5));
 
 #
-# Partition by range, missing parenthesis
+# Partition by list, missing parenthesis
+#
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+a int not null,
+b int not null,
+c int not null,
+primary key(a,b))
+partition by list (a)
+partitions 2
+(partition x1 values less than 4,
+ partition x2 values less than (5));
+
+#
+# Partition by list, error: unexpected LESS THAN
 #
 --error ER_PARTITION_WRONG_VALUES_ERROR
 CREATE TABLE t1 (
@@ -1319,7 +1342,7 @@ c int not null,
 primary key(a,b))
 partition by list (a)
 partitions 2
-(partition x1 values less than 4,
+(partition x1 values less than (4),
  partition x2 values less than (5));
 
 #
@@ -1421,20 +1444,20 @@ subpartition by hash (a+b)
 #
 # Subpartition by list => error
 #
---error ER_PARSE_ERROR 
+--error ER_PARSE_ERROR
 CREATE TABLE t1 (
 a int not null,
 b int not null,
 c int not null,
 primary key (a,b))
-partition by key (a) 
+partition by key (a)
 subpartition by list (a+b)
 ( partition x1
-  ( subpartition x11 engine myisam,
-    subpartition x12 engine myisam),
-   partition x2 
-   ( subpartition x21 engine myisam,
-     subpartition x22 engine myisam)
+  ( subpartition x11,
+    subpartition x12),
+   partition x2
+   ( subpartition x21,
+     subpartition x22)
 );
 
 #
@@ -1449,11 +1472,11 @@ primary key (a,b))
 partition by key (a)
 subpartition by list (a+b)
 ( partition x1
-  ( subpartition x11 engine myisam values in (0),
-    subpartition x12 engine myisam values in (1)),
+  ( subpartition x11 values in (0),
+    subpartition x12 values in (1)),
   partition x2
-  ( subpartition x21 engine myisam values in (0),
-    subpartition x22 engine myisam values in (1))
+  ( subpartition x21 values in (0),
+    subpartition x22 values in (1))
 );
 
 #
@@ -1477,7 +1500,7 @@ b int not null,
 c int not null,
 primary key(a,b))
 partition by list (3+4)
-partitions 2 
+partitions 2
 (partition x1 values in (4) tablespace ts1,
  partition x2 values in (8) tablespace ts2);
 
@@ -1495,10 +1518,10 @@ partitions 2
 (partition x1 values in (4) tablespace ts1,
  partition x2 values in (8) tablespace ts2);
 
-# 
+#
 # Partition by list, no values in definition
-# 
---error ER_PARTITION_REQUIRES_VALUES_ERROR
+#
+--error ER_PARSE_ERROR
 CREATE TABLE t1 (
 a int not null,
 b int not null,
@@ -1526,7 +1549,7 @@ partitions 2
 #
 # Partition by list, no values in definition
 #
---error ER_PARTITION_REQUIRES_VALUES_ERROR
+--error ER_PARSE_ERROR
 CREATE TABLE t1 (
 a int not null,
 b int not null,
@@ -1579,6 +1602,10 @@ partitions 2
 (partition x1 values in 4,
  partition x2 values in (5));
 
+DROP TABLESPACE ts1;
+DROP TABLESPACE ts2;
+DROP TABLESPACE ts3;
+
 #
 # Bug #13439: Crash when LESS THAN (non-literal)
 #
@@ -1601,7 +1628,7 @@ create table t1 (a bigint unsigned)
 partition by range (a)
 (partition p0 values less than (-1));
 #
-# Bug 18198 Partitions: Verify that erroneus partition functions doesn't work
+# Bug 18198 Partitions: Verify that erroneus partition functions does not work
 #
 -- error ER_PARTITION_FUNCTION_IS_NOT_ALLOWED
 create table t1 (v varchar(12))
@@ -1621,7 +1648,7 @@ partition by hash (NOW()+a);
 -- error ER_PARTITION_FUNCTION_IS_NOT_ALLOWED
 create table t1 (a int)
 partition by hash (extract(hour from convert_tz(a, '+00:00', '+00:00')));
--- error ER_PARTITION_FUNCTION_IS_NOT_ALLOWED
+-- error ER_PARSE_ERROR
 create table t1 (a int)
 partition by range (a + (select count(*) from t1))
 (partition p1 values less than (1));
@@ -1633,7 +1660,7 @@ partition by hash (extractvalue(a,'a'));
 --echo # Bug #42849: innodb crash with varying time_zone on partitioned
 --echo #             timestamp primary key
 --echo #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 # A correctly partitioned table to test that trying to repartition it using
 # timezone-dependent expression will throw an error.
 CREATE TABLE old (a TIMESTAMP NOT NULL PRIMARY KEY)
@@ -1991,7 +2018,7 @@ DROP TABLE old;
 
 --echo #
 --echo # Bug #56709: Memory leaks at running the 5.1 test suite
---echo # 
+--echo #
 
 CREATE TABLE t1 (a TIMESTAMP NOT NULL PRIMARY KEY);
 
@@ -2015,6 +2042,7 @@ SUBPARTITION BY HASH (a) SUBPARTITIONS 2
  (SUBPARTITION p2spFirst COMMENT "SubPartition comment in p2spFirst",
   SUBPARTITION p2spSecond COMMENT "SubPartition comment in p2spSecond"));
 SHOW CREATE TABLE t1;
+--sorted_result
 SELECT PARTITION_NAME, SUBPARTITION_NAME, PARTITION_COMMENT FROM INFORMATION_SCHEMA.PARTITIONS
 WHERE TABLE_NAME = 't1' AND TABLE_SCHEMA = 'test';
 DROP TABLE t1;
@@ -2029,6 +2057,7 @@ SUBPARTITION BY HASH (a) SUBPARTITIONS 2
  (SUBPARTITION p2spFirst,
   SUBPARTITION p2spSecond COMMENT "SubPartition comment in p2spSecond"));
 SHOW CREATE TABLE t1;
+--sorted_result
 SELECT PARTITION_NAME, SUBPARTITION_NAME, PARTITION_COMMENT FROM INFORMATION_SCHEMA.PARTITIONS
 WHERE TABLE_NAME = 't1' AND TABLE_SCHEMA = 'test';
 DROP TABLE t1;
@@ -2047,6 +2076,110 @@ SUBPARTITION BY HASH (a) SUBPARTITIONS 2
 
 SHOW CREATE TABLE t1;
 SELECT PARTITION_NAME, SUBPARTITION_NAME, PARTITION_COMMENT FROM INFORMATION_SCHEMA.PARTITIONS
-WHERE TABLE_NAME = 't1' AND TABLE_SCHEMA = 'test';
+WHERE TABLE_NAME = 't1' AND TABLE_SCHEMA = 'test' ORDER BY PARTITION_NAME, SUBPARTITION_NAME DESC;
 
 DROP TABLE t1;
+SET sql_mode = default;
+
+--echo #
+--echo # Test for increased coverage of misplaced record handling.
+--echo #
+CREATE TABLE t1 (a int)
+PARTITION BY LIST (a)
+(PARTITION p1 VALUES IN (1),
+ PARTITION p3 VALUES IN (3,5),
+ PARTITION p6 VALUES IN (6,7));
+
+--echo # Intentionally insert illegal rows into p1.
+CREATE TABLE t2 LIKE t1;
+ALTER TABLE t2 REMOVE PARTITIONING;
+INSERT INTO t2 VALUES (2),(3),(4),(6);
+ALTER TABLE t1 EXCHANGE PARTITION p1 WITH TABLE t2 WITHOUT VALIDATION;
+
+--echo # These should fail gracefully (WHERE used to not trigger pruning!)
+CALL mtr.add_suppression(" corrupted: row in wrong partition: ");
+--error ER_NO_PARTITION_FOR_GIVEN_VALUE
+INSERT INTO t1 VALUES (2);
+--error ER_ROW_DOES_NOT_MATCH_GIVEN_PARTITION_SET
+INSERT INTO t1 PARTITION (p1) VALUES (3);
+--error ER_NO_PARTITION_FOR_GIVEN_VALUE
+UPDATE t1 SET a = 3 WHERE (a % 3) != 0;
+--error ER_NO_PARTITION_FOR_GIVEN_VALUE
+UPDATE t1 PARTITION (p1) SET a = 3 WHERE (a % 3) != 0;
+--error ER_ROW_DOES_NOT_MATCH_GIVEN_PARTITION_SET
+UPDATE t1 PARTITION (p1) SET a = 5 WHERE (a % 3) = 0;
+--error ER_NO_PARTITION_FOR_GIVEN_VALUE
+UPDATE t1 PARTITION (p1) SET a = 3 WHERE (a % 5) > 3;
+--error ER_ROW_IN_WRONG_PARTITION
+UPDATE t1 PARTITION (p1,p6) SET a = 7 WHERE (a % 7) > 5;
+--error ER_ROW_DOES_NOT_MATCH_GIVEN_PARTITION_SET
+DELETE FROM t1 PARTITION (p1) WHERE (a % 7) > 2;
+--error ER_ROW_IN_WRONG_PARTITION
+DELETE FROM t1 PARTITION (p1,p6) WHERE (a % 7) > 5;
+--error ER_NO_PARTITION_FOR_GIVEN_VALUE
+DELETE FROM t1 WHERE a > 0;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug #30455845 ASSERTION "!CHECK_DATETIME_RANGE.MY_TIME"
+--echo #
+
+CREATE TABLE t1(a DATETIME)
+PARTITION BY HASH (EXTRACT(HOUR_MICROSECOND FROM a));
+SET sql_mode='';
+SELECT FROM_DAYS(3652499), FROM_DAYS(3652500), FROM_DAYS(3652501);
+SELECT FROM_DAYS(4294967660), FROM_DAYS(4294967661), FROM_DAYS(4294967663);
+INSERT t1 VALUES(ADDTIME(0,0)), (FROM_DAYS(3652499));
+DROP TABLE t1;
+SET sql_mode=default;
+
+--echo # Bug#35476172: MySQL server fails when executing query
+
+CREATE TABLE t0(c1 INTEGER);
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1(c3 INTEGER)
+PARTITION BY HASH ((SELECT c1 FROM t0));
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1(c3 INTEGER)
+PARTITION BY HASH ((SELECT c1 FROM t0))
+AS TABLE t0;
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1(c3 INTEGER)
+PARTITION BY RANGE ((SELECT c1 FROM t0)) (PARTITION a1 VALUES LESS THAN (1));
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1(c3 INTEGER)
+PARTITION BY RANGE ((SELECT c1 FROM t0)) (PARTITION a1 VALUES LESS THAN (1))
+AS TABLE t0;
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1(c3 INTEGER)
+PARTITION BY LIST ((SELECT c1 FROM t0)) (PARTITION p0 VALUES IN (0));
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1(c3 INTEGER)
+PARTITION BY LIST ((SELECT c1 FROM t0)) (PARTITION p0 VALUES IN (0))
+AS TABLE t0;
+
+DROP TABLE t0;
+
+--echo #
+--echo # Bug #35451459 MySQL Server crashes when executing query
+--echo #
+
+#
+# unpack_partition_info() is called before allocating bitmaps,
+# which needs to be done prior to generated columns as
+# they will call fix_fields and functions might want to access bitmaps
+#
+
+--echo # DEFAULT() is not allowed in partitioning expression
+--error ER_WRONG_EXPR_IN_PARTITION_FUNC_ERROR
+
+CREATE TABLE v0 (
+    c1 INT
+)
+PARTITION BY HASH (DEFAULT(c1));

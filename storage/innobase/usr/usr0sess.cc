@@ -1,68 +1,58 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2011, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1996, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file usr/usr0sess.cc
-Sessions
+/** @file usr/usr0sess.cc
+ Sessions
 
-Created 6/25/1996 Heikki Tuuri
-*******************************************************/
+ Created 6/25/1996 Heikki Tuuri
+ *******************************************************/
 
 #include "usr0sess.h"
-
-#ifdef UNIV_NONINL
-#include "usr0sess.ic"
-#endif
-
 #include "trx0trx.h"
 
-/*********************************************************************//**
-Opens a session.
-@return	own: session object */
-UNIV_INTERN
-sess_t*
-sess_open(void)
-/*===========*/
-{
-	sess_t*	sess;
+/** Opens a session.
+ @return own: session object */
+sess_t *sess_open(void) {
+  sess_t *sess;
 
-	sess = static_cast<sess_t*>(mem_zalloc(sizeof(*sess)));
+  sess = static_cast<sess_t *>(
+      ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(*sess)));
 
-	sess->state = SESS_ACTIVE;
+  sess->state = SESS_ACTIVE;
 
-	sess->trx = trx_allocate_for_background();
-	sess->trx->sess = sess;
+  sess->trx = trx_allocate_for_background();
+  sess->trx->sess = sess;
 
-	UT_LIST_INIT(sess->graphs);
-
-	return(sess);
+  return (sess);
 }
 
-/*********************************************************************//**
-Closes a session, freeing the memory occupied by it. */
-UNIV_INTERN
-void
-sess_close(
-/*=======*/
-	sess_t*	sess)	/*!< in, own: session object */
+/** Closes a session, freeing the memory occupied by it. */
+void sess_close(sess_t *sess) /*!< in, own: session object */
 {
-	ut_a(UT_LIST_GET_LEN(sess->graphs) == 0);
-
-	trx_free_for_background(sess->trx);
-	mem_free(sess);
+  trx_free_for_background(sess->trx);
+  ut::free(sess);
 }

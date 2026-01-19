@@ -1,11 +1,6 @@
-#
-# Copyright (c) 2014 Oracle and/or its affiliates. All rights reserved.
-#
-
 # This file contains test cases for checking the functionality "update by
 # delete + insert".
 
---source include/have_innodb.inc
 
 --echo #
 --echo # Bug#14668683 ASSERT REC_GET_DELETED_FLAG(REC, PAGE_IS_COMP(PAGE))
@@ -24,6 +19,7 @@ drop table t1;
 --echo #
 --echo # Another test case
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (f1 char(1), f2 longblob, f3 blob, primary key(f1))
 charset=utf8 engine=innodb;
 
@@ -36,3 +32,4 @@ update t1 set f1=0x82;
 select f1 from t1;
 
 drop table t1;
+SET sql_mode = default;

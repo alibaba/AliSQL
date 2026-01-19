@@ -16,12 +16,9 @@
 #                   Create this script based on older scripts and new code.
 #
 
-# This test cannot be used for the embedded server because we check here
-# privileges.
---source include/not_embedded.inc
 
-let $engine_type       = MEMORY;
-let $other_engine_type = MyISAM;
+let $engine_type       = InnoDB;
+let $other_engine_type = InnoDB;
 
 let $is_table = COLUMN_PRIVILEGES;
 

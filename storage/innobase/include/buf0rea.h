@@ -1,61 +1,85 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2013, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1995, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/buf0rea.h
-The database buffer read
+/** @file include/buf0rea.h
+ The database buffer read
 
-Created 11/5/1995 Heikki Tuuri
-*******************************************************/
+ Created 11/5/1995 Heikki Tuuri
+ *******************************************************/
 
 #ifndef buf0rea_h
 #define buf0rea_h
 
-#include "univ.i"
+#include "buf0buf.h"
 #include "buf0types.h"
 
-/********************************************************************//**
-High-level function which reads a page asynchronously from a file to the
+/** Low-level function which reads a page asynchronously from a file to the
+buffer buf_pool if it is not already there, in which case does nothing.
+Sets the io_fix flag and sets an exclusive lock on the buffer frame. The
+flag is cleared and the x-lock released by an i/o-handler thread.
+@param[out]     err             DB_SUCCESS or DB_TABLESPACE_DELETED
+                                if we are trying to read from a non-existent
+                                tablespace or a tablespace which is just now
+                                being dropped
+@param[in]      sync            whether synchronous aio is desired
+@param[in]      type            Request type
+@param[in]      mode            BUF_READ_IBUF_PAGES_ONLY, ...
+@param[in]      page_id         page id
+@param[in]      page_size       page size
+@param[in]      unzip           true=request uncompressed page
+@return 1 if a read request was queued, 0 if the page already resided in
+buf_pool, or if the page is in the doublewrite buffer blocks in which case it
+is never read into the pool, or if the tablespace does not exist or is being
+dropped */
+ulint buf_read_page_low(dberr_t *err, bool sync, ulint type, ulint mode,
+                        const page_id_t &page_id, const page_size_t &page_size,
+                        bool unzip);
+
+/** High-level function which reads a page asynchronously from a file to the
 buffer buf_pool if it is not already there. Sets the io_fix flag and sets
 an exclusive lock on the buffer frame. The flag is cleared and the x-lock
 released by the i/o-handler thread.
-@return TRUE if page has been read in, FALSE in case of failure */
-UNIV_INTERN
-ibool
-buf_read_page(
-/*==========*/
-	ulint	space,	/*!< in: space id */
-	ulint	zip_size,/*!< in: compressed page size in bytes, or 0 */
-	ulint	offset);/*!< in: page number */
-/********************************************************************//**
-High-level function which reads a page asynchronously from a file to the
+@param[in]      page_id         page id
+@param[in]      page_size       page size
+@return true if page has been read in, false in case of failure */
+bool buf_read_page(const page_id_t &page_id, const page_size_t &page_size);
+
+/** High-level function which reads a page asynchronously from a file to the
 buffer buf_pool if it is not already there. Sets the io_fix flag and sets
 an exclusive lock on the buffer frame. The flag is cleared and the x-lock
 released by the i/o-handler thread.
-@return TRUE if page has been read in, FALSE in case of failure */
-UNIV_INTERN
-ibool
-buf_read_page_async(
-/*================*/
-	ulint	space,	/*!< in: space id */
-	ulint	offset);/*!< in: page number */
-/********************************************************************//**
-Applies a random read-ahead in buf_pool if there are at least a threshold
+@param[in]      page_id         page id
+@param[in]      page_size       page size
+@param[in]      sync            true if synchronous aio is desired
+@return true if page has been read in, false in case of failure */
+bool buf_read_page_background(const page_id_t &page_id,
+                              const page_size_t &page_size, bool sync);
+
+/** Applies a random read-ahead in buf_pool if there are at least a threshold
 value of accessed pages from the random read-ahead area. Does not read any
 page, not even the one at the position (space, offset), if the read-ahead
 mechanism is not activated. NOTE 1: the calling thread may own latches on
@@ -64,23 +88,17 @@ end up waiting for these latches! NOTE 2: the calling thread must want
 access to the page given: this rule is set to prevent unintended read-aheads
 performed by ibuf routines, a situation which could result in a deadlock if
 the OS does not support asynchronous i/o.
+@param[in]      page_id         page id of a page which the current thread
+wants to access
+@param[in]      page_size       page size
+@param[in]      inside_ibuf     true if we are inside ibuf routine
 @return number of page read requests issued; NOTE that if we read ibuf
 pages, it may happen that the page at the given page number does not
-get read even if we return a positive value!
-@return	number of page read requests issued */
-UNIV_INTERN
-ulint
-buf_read_ahead_random(
-/*==================*/
-	ulint	space,		/*!< in: space id */
-	ulint	zip_size,	/*!< in: compressed page size in bytes,
-				or 0 */
-	ulint	offset,		/*!< in: page number of a page which
-				the current thread wants to access */
-	ibool	inside_ibuf);	/*!< in: TRUE if we are inside ibuf
-				routine */
-/********************************************************************//**
-Applies linear read-ahead if in the buf_pool the page is a border page of
+get read even if we return a positive value! */
+ulint buf_read_ahead_random(const page_id_t &page_id,
+                            const page_size_t &page_size, bool inside_ibuf);
+
+/** Applies linear read-ahead if in the buf_pool the page is a border page of
 a linear read-ahead area and all the pages in the area have been accessed.
 Does not read any page if the read-ahead mechanism is not activated. Note
 that the algorithm looks at the 'natural' adjacent successor and
@@ -102,76 +120,43 @@ latches!
 NOTE 3: the calling thread must want access to the page given: this rule is
 set to prevent unintended read-aheads performed by ibuf routines, a situation
 which could result in a deadlock if the OS does not support asynchronous io.
-@return	number of page read requests issued */
-UNIV_INTERN
-ulint
-buf_read_ahead_linear(
-/*==================*/
-	ulint	space,		/*!< in: space id */
-	ulint	zip_size,	/*!< in: compressed page size in bytes, or 0 */
-	ulint	offset,		/*!< in: page number; see NOTE 3 above */
-	ibool	inside_ibuf);	/*!< in: TRUE if we are inside ibuf routine */
-/********************************************************************//**
-Issues read requests for pages which the ibuf module wants to read in, in
+@param[in]      page_id         page id; see NOTE 3 above
+@param[in]      page_size       page size
+@param[in]      inside_ibuf     true if we are inside ibuf routine
+@return number of page read requests issued */
+ulint buf_read_ahead_linear(const page_id_t &page_id,
+                            const page_size_t &page_size, bool inside_ibuf);
+
+/** Issues read requests for pages which the ibuf module wants to read in, in
 order to contract the insert buffer tree. Technically, this function is like
-a read-ahead function. */
-UNIV_INTERN
-void
-buf_read_ibuf_merge_pages(
-/*======================*/
-	bool		sync,		/*!< in: true if the caller
-					wants this function to wait
-					for the highest address page
-					to get read in, before this
-					function returns */
-	const ulint*	space_ids,	/*!< in: array of space ids */
-	const ib_int64_t* space_versions,/*!< in: the spaces must have
-					this version number
-					(timestamp), otherwise we
-					discard the read; we use this
-					to cancel reads if DISCARD +
-					IMPORT may have changed the
-					tablespace size */
-	const ulint*	page_nos,	/*!< in: array of page numbers
-					to read, with the highest page
-					number the last in the
-					array */
-	ulint		n_stored);	/*!< in: number of elements
-					in the arrays */
-/********************************************************************//**
-Issues read requests for pages which recovery wants to read in. */
-UNIV_INTERN
-void
-buf_read_recv_pages(
-/*================*/
-	ibool		sync,		/*!< in: TRUE if the caller
-					wants this function to wait
-					for the highest address page
-					to get read in, before this
-					function returns */
-	ulint		space,		/*!< in: space id */
-	ulint		zip_size,	/*!< in: compressed page size in
-					bytes, or 0 */
-	const ulint*	page_nos,	/*!< in: array of page numbers
-					to read, with the highest page
-					number the last in the
-					array */
-	ulint		n_stored);	/*!< in: number of page numbers
-					in the array */
+a read-ahead function.
+@param[in] sync                 true if the caller wants this function to wait
+                                for the highest address page to get read in,
+                                before this function returns.
+@param[in] space_ids            Array of space ids.
+@param[in] page_nos             Array of page numbers to read, with the highest
+                                page number the last in the array.
+@param[in] n_stored             number of elements in the arrays. */
+void buf_read_ibuf_merge_pages(bool sync, const space_id_t *space_ids,
+                               const page_no_t *page_nos, ulint n_stored);
 
-/** The size in pages of the area which the read-ahead algorithms read if
-invoked */
-#define	BUF_READ_AHEAD_AREA(b)					\
-	ut_min(64, ut_2_power_up((b)->curr_size / 32))
+/** Issues read requests for pages which recovery wants to read in.
+@param[in]      sync            true if the caller wants this function to wait
+for the highest address page to get read in, before this function returns
+@param[in]      space_id        tablespace id
+@param[in]      page_nos        array of page numbers to read, with the
+highest page number the last in the array
+@param[in]      n_stored        number of page numbers in the array */
 
-/** @name Modes used in read-ahead @{ */
+void buf_read_recv_pages(bool sync, space_id_t space_id,
+                         const page_no_t *page_nos, ulint n_stored);
+
+/** @name Modes used in read-ahead
+@{ */
 /** read only pages belonging to the insert buffer tree */
-#define BUF_READ_IBUF_PAGES_ONLY	131
+constexpr uint32_t BUF_READ_IBUF_PAGES_ONLY = 131;
 /** read any page */
-#define BUF_READ_ANY_PAGE		132
-/** read any page, but ignore (return an error) if a page does not exist
-instead of crashing like BUF_READ_ANY_PAGE does */
-#define BUF_READ_IGNORE_NONEXISTENT_PAGES 1024
-/* @} */
+constexpr uint32_t BUF_READ_ANY_PAGE = 132;
+/** @} */
 
 #endif

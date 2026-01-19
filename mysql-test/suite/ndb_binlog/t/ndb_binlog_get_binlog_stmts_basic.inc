@@ -17,22 +17,21 @@
 
 --disable_query_log
 let $MYSQLD_DATADIR= `select @@datadir;`;
---exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/mysqld-bin.000001 > $MYSQLTEST_VARDIR/tmp/ndb_binlog_mysqlbinlog.sql
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000001 > $MYSQLTEST_VARDIR/tmp/ndb_binlog_mysqlbinlog.sql
 
 create table raw_binlog_rows (txt varchar(1000));
 
 --eval load data local infile '$MYSQLTEST_VARDIR/tmp/ndb_binlog_mysqlbinlog.sql' into table raw_binlog_rows columns terminated by '\n';
 
-create table binlog_stmt_parts_unassoc (txt varchar(1000), line_count int, stmt_boundary int);
+create table binlog_stmt_parts_unassoc (txt varchar(1000), line_count int AUTO_INCREMENT PRIMARY KEY, stmt_boundary int);
 
 set @line_count=0;
 set @stmt_boundary=0;
 
 # Use replace() here to get rid of any unwanted Windows
 # CRs
-insert into binlog_stmt_parts_unassoc
+insert into binlog_stmt_parts_unassoc (txt,stmt_boundary)
   select replace(txt, '\r', ''),
-         @line_count:= @line_count + 1,  # So we can preserve order later
          (txt like '%INSERT%' or         # Identify statement boundaries
           txt like '%UPDATE%' or
           txt like '%DELETE%')
@@ -42,21 +41,29 @@ insert into binlog_stmt_parts_unassoc
 
 #select * from binlog_stmt_parts_unassoc;
 
-create table binlog_stmt_parts_assoc (txt varchar(1000), line_count int, stmt_num int);
+create table binlog_stmt_parts_assoc (
+  txt varchar(1000) collate utf8mb4_bin,
+  line_count int,
+  stmt_num int
+);
 
 set @stmt_count = 0;
 
 insert into binlog_stmt_parts_assoc
-  select txt, 
-         line_count, 
-         @stmt_count:= @stmt_count + stmt_boundary   # All rows from same stmt will
-                                                     # have same stmt_num
-    from binlog_stmt_parts_unassoc order by line_count;
+  select t.txt,
+         t.line_count,
+         (SELECT SUM(x.stmt_boundary)
+            FROM binlog_stmt_parts_unassoc x
+           WHERE x.line_count <= t.line_count)
+    from binlog_stmt_parts_unassoc t order by t.line_count;
 
 
 #select * from binlog_stmt_parts_assoc;
 
-create table binlog_stmts (txt varchar(1000), stmt_num int);
+create table binlog_stmts (
+  txt varchar(1000) collate utf8mb4_bin,
+  stmt_num int
+);
 
 insert into binlog_stmts 
   select group_concat(right(txt,             # Combine rows in statment into 1
@@ -89,3 +96,4 @@ drop table binlog_stmt_parts_unassoc;
 drop table binlog_stmt_parts_assoc;
 drop table binlog_stmts;
 --enable_query_log
+--remove_file $MYSQLTEST_VARDIR/tmp/ndb_binlog_mysqlbinlog.sql

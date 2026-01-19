@@ -1,10 +1,10 @@
+
 # regression test for
 # Bug#36099 replicate-do-db affects replaying RBR events with mysqlbinlog
 # The test verifies that the slave side filtering rule does not affect
 # applying of row-events on master via mysqlbinlog
 
 -- source include/have_log_bin.inc
--- source include/not_embedded.inc
 -- source include/have_binlog_format_row.inc
 
 --disable_warnings
@@ -18,7 +18,7 @@ insert into t1 values (1);
 
 let $MYSQLD_DATADIR= `select @@datadir`;
 flush logs;
---exec $MYSQL_BINLOG  $MYSQLD_DATADIR/master-bin.000001 > $MYSQLTEST_VARDIR/tmp/bug36099.sql
+--exec $MYSQL_BINLOG  $MYSQLD_DATADIR/binlog.000001 > $MYSQLTEST_VARDIR/tmp/bug36099.sql
 
 drop table t1;
 

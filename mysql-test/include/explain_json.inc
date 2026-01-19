@@ -1,10 +1,9 @@
 # This file is a collection of regression and coverage tests
 # for WL#5855: Print EXPLAIN in JSON format
 
---source include/have_innodb.inc
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
 
-set @save_storage_engine= @@default_storage_engine;
-set default_storage_engine=MyISAM;
 set end_markers_in_json=on;
 
 --echo # new "FORMAT" keyword doesn't conflict with the FORMAT() function name:
@@ -53,10 +52,15 @@ EXECUTE stmt;
 INSERT INTO t1 VALUES (1), (2), (3), (4), (5), (6), (7);
 INSERT INTO t2 VALUES (1), (2);
 
+--echo # Check materialized derived table
+
+set @optimizer_switch_saved= @@optimizer_switch;
+set optimizer_switch='derived_merge=off';
 EXPLAIN
 SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT a1.i FROM (SELECT * FROM t1) a1, t2) a2) a3) a4;
 EXPLAIN FORMAT=JSON
 SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT a1.i FROM (SELECT * FROM t1) a1, t2) a2) a3) a4;
+set optimizer_switch= @optimizer_switch_saved;
 
 --echo # subquery in WHERE
 EXPLAIN             SELECT * FROM t1 WHERE i IN (SELECT i FROM t2 WHERE t1.i = 10 ORDER BY RAND());
@@ -99,9 +103,11 @@ EXPLAIN FORMAT=JSON (SELECT * FROM t1) UNION (SELECT * FROM t2) ORDER BY (SELECT
 
 --echo # subquery in the GROUP BY clause
 
+--source include/turn_off_only_full_group_by.inc
 --let $query=SELECT * FROM t1 GROUP BY i > ALL (SELECT i FROM t2) OR i < ALL (SELECT i FROM t2);
 --eval EXPLAIN $query
 --eval EXPLAIN FORMAT=JSON $query
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 --echo # subquery in the SELECT list
 
@@ -138,7 +144,7 @@ DROP TABLE t1, t2, t3, t4;
 --echo # semi-join materialization (if enabled)
 
 CREATE TABLE t1 (a INT);
-INSERT INTO t1 VALUES (1), (1), (1);
+INSERT INTO t1 VALUES (1), (1), (1), (1), (1), (1), (1), (1), (1), (1), (1), (1);
 CREATE TABLE t2 (a INT) SELECT * FROM t1;
 CREATE TABLE t3 (a INT) SELECT * FROM t1;
 CREATE TABLE t4 (a INT) SELECT * FROM t1;
@@ -156,7 +162,7 @@ DROP TABLE t1, t2, t3, t4;
 CREATE TABLE t1 (
   i1 INTEGER NOT NULL,
   c1 VARCHAR(1) NOT NULL
-) ENGINE=InnoDB;
+) charset latin1 ENGINE=InnoDB;
 
 INSERT INTO t1 VALUES (2,'w');
 
@@ -165,14 +171,14 @@ CREATE TABLE t2 (
   c1 VARCHAR(1) NOT NULL,
   c2 VARCHAR(1) NOT NULL,
   KEY (c1, i1)
-) ENGINE=InnoDB;
+) charset latin1 ENGINE=InnoDB;
 
 INSERT INTO t2 VALUES (8,'d','d');
 INSERT INTO t2 VALUES (4,'v','v');
 
 CREATE TABLE t3 (
   c1 VARCHAR(1) NOT NULL
-) ENGINE=InnoDB;
+) charset latin1 ENGINE=InnoDB;
 
 INSERT INTO t3 VALUES ('v');
 
@@ -221,9 +227,11 @@ INSERT INTO t3 VALUES (1);
 
 let $query=UPDATE t1 SET i=(SELECT i FROM t2);
 --eval EXPLAIN $query
+--skip_if_hypergraph
 --eval EXPLAIN FORMAT=JSON $query
 let $query=UPDATE t1, t2 SET t1.i=(SELECT i FROM t3);
 --eval EXPLAIN $query
+--skip_if_hypergraph
 --eval EXPLAIN FORMAT=JSON $query
 
 --echo # INSERT ... ON DUPLICATE KEY UPDATE x=(SELECT ...) value list
@@ -248,6 +256,7 @@ DROP TABLE t1, t2, t3;
 
 --echo # Various queries
 
+--source include/turn_off_only_full_group_by.inc
 let $query=
   SELECT a, b FROM 
     (SELECT 1 AS a, 2 AS b
@@ -257,6 +266,7 @@ let $query=
   ORDER BY b DESC;
 --eval EXPLAIN $query
 --eval EXPLAIN FORMAT=JSON $query
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 --echo #
 
@@ -285,14 +295,17 @@ INSERT INTO t2 SELECT i, i * 10 FROM t1;
 let $query=SELECT * FROM t1 ORDER BY (SELECT t2.j FROM t2 WHERE t2.i = t1.i);
 --eval EXPLAIN $query
 --eval EXPLAIN FORMAT=JSON $query
+--source include/turn_off_only_full_group_by.inc
 let $query=SELECT * FROM t1 GROUP BY (SELECT t2.j FROM t2 WHERE t2.i = t1.i);
 --eval EXPLAIN $query
 --eval EXPLAIN FORMAT=JSON $query
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1, t2;
 
-CREATE TABLE t1 (a INT NOT NULL, b INT NOT NULL, PRIMARY KEY(a, b));
+CREATE TABLE t1 (a INT NOT NULL, b INT NOT NULL, KEY k1 (a, b));
 INSERT INTO t1 VALUES (10,1),(10,2),(10,3),(20,4),(20,5),(20,6),
-  (30,7),(30,8),(30,9),(40,10),(40,11),(40,12),(40,13);
+  (30,7),(30,8),(30,9),(40,10),(40,11),(40,12),(40,13),
+  (40,14),(40,15),(40,16),(40,17),(40,18),(40,19),(40,20);
 
 EXPLAIN FORMAT=JSON SELECT a, MIN(b) AS b FROM t1 GROUP BY a ORDER BY b;
 
@@ -300,9 +313,9 @@ DROP TABLE t1;
 
 --echo #
 
-CREATE TABLE t1 (a INT NOT NULL, b CHAR(3) NOT NULL, PRIMARY KEY (a));
+CREATE TABLE t1 (a INT NOT NULL, b CHAR(3) NOT NULL, PRIMARY KEY (a)) charset utf8mb4;
 INSERT INTO t1 VALUES (1,'ABC'), (2,'EFG'), (3,'HIJ');
-CREATE TABLE t2 (a INT NOT NULL,b CHAR(3) NOT NULL,PRIMARY KEY (a, b));
+CREATE TABLE t2 (a INT NOT NULL,b CHAR(3) NOT NULL,PRIMARY KEY (a, b)) charset utf8mb4;
 INSERT INTO t2 VALUES (1,'a'),(1,'b'),(3,'F');
 
 EXPLAIN FORMAT=JSON SELECT t1.a, GROUP_CONCAT(t2.b) AS b FROM t1 LEFT JOIN t2 ON t1.a=t2.a GROUP BY t1.a ORDER BY t1.b;
@@ -333,7 +346,10 @@ let $query=SELECT DISTINCT SUM(b) s FROM t1 GROUP BY a ORDER BY s;
 --eval EXPLAIN FORMAT=JSON $query
 FLUSH STATUS;
 --eval $query
+--disable_warnings
+--skip_if_hypergraph  # Depends on the query plan.
 SHOW SESSION STATUS WHERE (Variable_name LIKE 'Sort_%' OR Variable_name LIKE 'Created_%_tables') AND Value > 0;
+--enable_warnings
 
 DROP TABLE t1;
 
@@ -343,7 +359,9 @@ CREATE TABLE t1 (a INT NOT NULL);
 CREATE TABLE t2 (a INT NOT NULL, PRIMARY KEY (a));
 INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1),(2);
+--source include/turn_off_only_full_group_by.inc
 EXPLAIN FORMAT=JSON SELECT SQL_BIG_RESULT DISTINCT t1.a FROM t1,t2 ORDER BY t2.a;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1, t2;
 
 --echo #
@@ -355,4 +373,87 @@ INSERT INTO t2 VALUES (2), (3), (4), (5);
 EXPLAIN FORMAT=JSON SELECT * FROM t2 WHERE t2.a IN (SELECT a FROM t1 WHERE t1.b <> 30);
 DROP TABLE t1, t2;
 
-set default_storage_engine= @save_storage_engine;
+--echo #
+--echo # WL#11350 extensions
+--echo #
+CREATE TABLE r(a INT);
+INSERT INTO r VALUES (1), (2), (-1), (-2);
+CREATE TABLE s(a INT);
+INSERT INTO s VALUES (1), (10), (20), (-10), (-20);
+CREATE TABLE t(a INT);
+INSERT INTO t VALUES (10), (100), (200), (-100), (-200);
+ANALYZE TABLE r,s,t;
+
+--echo # Test nesting structures
+let $query =
+         ( ( SELECT * FROM r UNION
+             (SELECT * FROM s ORDER BY a LIMIT 1)) UNION
+           ( SELECT * FROM s UNION SELECT 2 LIMIT 3)
+            ORDER BY 1 LIMIT 3)
+         ORDER BY 1;
+
+eval EXPLAIN FORMAT=json $query;
+--echo # For comparison
+--skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT=tree $query;
+
+--echo # Test no result if no materializaton
+EXPLAIN FORMAT=json SELECT 1 UNION ALL SELECT 2;
+
+--echo # Used to not show sorting before WL#11350
+EXPLAIN FORMAT=json (SELECT a FROM r LIMIT 2) ORDER BY 1;
+
+EXPLAIN FORMAT=json ((SELECT a FROM t ORDER BY 1 limit 3) ORDER BY -a limit 2) order by a;
+
+--echo # Test big one
+let $query =
+     (SELECT * FROM r
+      UNION SELECT * FROM s);
+let $1=200;
+while ($1)
+{
+ let $query =
+     ($query
+      UNION SELECT * FROM s);
+ dec $1;
+}
+
+--echo # This query has max nesting and should work
+eval EXPLAIN FORMAT=json $query;
+
+--echo #
+--echo # INTERSECT operator
+--echo #
+let $query = SELECT * FROM r INTERSECT SELECT * FROM s;
+
+eval EXPLAIN FORMAT = json $query;
+
+let $query = SELECT * FROM r INTERSECT ALL SELECT * FROM s;
+eval EXPLAIN FORMAT = json $query;
+
+--echo #
+--echo # EXCEPT operator
+--echo #
+let $query = SELECT * FROM r EXCEPT SELECT * FROM s;
+
+eval EXPLAIN FORMAT = json $query;
+
+let $query = SELECT * FROM r EXCEPT ALL SELECT * FROM s;
+eval EXPLAIN FORMAT = json $query;
+
+DROP TABLE r, s, t;
+
+--echo #
+--echo # Bug#34463119 WL#349 Assertion `current_context->type == CTX_JOIN || ..
+--echo #              at opt_explain_json.cc
+--echo #
+CREATE TABLE t(pk int NOT NULL AUTO_INCREMENT, PRIMARY KEY (pk));
+
+EXPLAIN FORMAT=JSON
+SELECT * FROM (SELECT * FROM t) AS alias1
+              JOIN
+              t AS alias2
+WHERE alias1.pk NOT IN (SELECT 2 INTERSECT SELECT 1) AND
+      alias1.pk = 105;
+DROP TABLE t;

@@ -1,4 +1,5 @@
 drop table if exists t1,t2;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 set time_zone="+03:00";
 CREATE TABLE t1 (a int, t timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 CREATE TABLE t2 (a int, t datetime);
@@ -138,7 +139,9 @@ ix+0
 truncate table t1;
 insert into t1 values ("0000-00-00 00:00:00 some trailer"),("2003-01-01 00:00:00 some trailer");
 Warnings:
+Warning	4096	Delimiter ' ' in position 19 in datetime value '0000-00-00 00:00:00 some trailer' at row 1 is superfluous and is deprecated. Please remove.
 Warning	1265	Data truncated for column 'ix' at row 1
+Warning	4096	Delimiter ' ' in position 19 in datetime value '2003-01-01 00:00:00 some trailer' at row 2 is superfluous and is deprecated. Please remove.
 Warning	1265	Data truncated for column 'ix' at row 2
 select ix+0 from t1;
 ix+0
@@ -162,7 +165,7 @@ t1	CREATE TABLE `t1` (
   `t1` timestamp NOT NULL DEFAULT '2003-01-01 00:00:00',
   `t2` datetime DEFAULT NULL,
   `t3` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show columns from t1;
 Field	Type	Null	Key	Default	Extra
 t1	timestamp	NO		2003-01-01 00:00:00	
@@ -186,10 +189,10 @@ t1	CREATE TABLE `t1` (
   `t1` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `t2` datetime DEFAULT NULL,
   `t3` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show columns from t1;
 Field	Type	Null	Key	Default	Extra
-t1	timestamp	NO		CURRENT_TIMESTAMP	
+t1	timestamp	NO		CURRENT_TIMESTAMP	DEFAULT_GENERATED
 t2	datetime	YES		NULL	
 t3	timestamp	NO		0000-00-00 00:00:00	
 drop table t1;
@@ -212,7 +215,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `t1` timestamp NOT NULL DEFAULT '2003-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP,
   `t2` datetime DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show columns from t1;
 Field	Type	Null	Key	Default	Extra
 t1	timestamp	NO		2003-01-01 00:00:00	on update CURRENT_TIMESTAMP
@@ -237,10 +240,10 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `t1` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `t2` datetime DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show columns from t1;
 Field	Type	Null	Key	Default	Extra
-t1	timestamp	NO		CURRENT_TIMESTAMP	on update CURRENT_TIMESTAMP
+t1	timestamp	NO		CURRENT_TIMESTAMP	DEFAULT_GENERATED on update CURRENT_TIMESTAMP
 t2	datetime	YES		NULL	
 drop table t1;
 create table t1 (t1 timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, t2 datetime, t3 timestamp NOT NULL DEFAULT '0000-00-00 00:00:00');
@@ -263,10 +266,10 @@ t1	CREATE TABLE `t1` (
   `t1` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `t2` datetime DEFAULT NULL,
   `t3` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show columns from t1;
 Field	Type	Null	Key	Default	Extra
-t1	timestamp	NO		CURRENT_TIMESTAMP	on update CURRENT_TIMESTAMP
+t1	timestamp	NO		CURRENT_TIMESTAMP	DEFAULT_GENERATED on update CURRENT_TIMESTAMP
 t2	datetime	YES		NULL	
 t3	timestamp	NO		0000-00-00 00:00:00	
 drop table t1;
@@ -289,10 +292,10 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `t1` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `t2` datetime DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show columns from t1;
 Field	Type	Null	Key	Default	Extra
-t1	timestamp	NO		CURRENT_TIMESTAMP	on update CURRENT_TIMESTAMP
+t1	timestamp	NO		CURRENT_TIMESTAMP	DEFAULT_GENERATED on update CURRENT_TIMESTAMP
 t2	datetime	YES		NULL	
 truncate table t1;
 insert into t1 values ('2004-04-01 00:00:00', '2004-04-01 00:00:00');
@@ -344,7 +347,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` timestamp NULL DEFAULT NULL,
   `b` timestamp NULL DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 insert into t1 values (NULL, NULL);
 SET TIMESTAMP=1000000017;
 insert into t1 values ();
@@ -359,7 +362,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `b` timestamp NULL DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 insert into t1 values (NULL, NULL);
 SET TIMESTAMP=1000000018;
 insert into t1 values ();
@@ -374,7 +377,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` timestamp NULL DEFAULT NULL,
   `b` timestamp NULL DEFAULT '2003-01-01 00:00:00'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 insert into t1 values (NULL, NULL);
 insert into t1 values (DEFAULT, DEFAULT);
 select * from t1;
@@ -398,16 +401,6 @@ select max(t) from t1 group by a;
 max(t)
 2004-01-01 01:00:00
 2004-02-01 00:00:00
-drop table t1;
-set sql_mode='maxdb';
-create table t1 (a timestamp, b timestamp);
-show create table t1;
-Table	Create Table
-t1	CREATE TABLE "t1" (
-  "a" datetime DEFAULT NULL,
-  "b" datetime DEFAULT NULL
-)
-set sql_mode='';
 drop table t1;
 create table t1 (a int auto_increment primary key, b int, c timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 insert into t1 (a, b, c) values (1, 0, '2001-01-01 01:01:01'),
@@ -458,32 +451,6 @@ a	b	c
 drop table t1;
 End of 4.1 tests
 set time_zone= @@global.time_zone;
-CREATE TABLE t1 (
-`id` int(11) NOT NULL auto_increment,
-`username` varchar(80) NOT NULL default '',
-`posted_on` timestamp NOT NULL default '0000-00-00 00:00:00',
-PRIMARY KEY (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 AUTO_INCREMENT=1;
-show fields from t1;
-Field	Type	Null	Key	Default	Extra
-id	int(11)	NO	PRI	NULL	auto_increment
-username	varchar(80)	NO			
-posted_on	timestamp	NO		0000-00-00 00:00:00	
-select is_nullable from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME='t1' and COLUMN_NAME='posted_on';
-is_nullable
-NO
-drop table t1;
-CREATE TABLE t1 ( f1 INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
-f2 TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-f3 TIMESTAMP NOT NULL default '0000-00-00 00:00:00');
-INSERT INTO t1 (f2,f3) VALUES (NOW(), "0000-00-00 00:00:00");
-UPDATE t1 SET f2=NOW(), f3=FROM_UNIXTIME('9999999999') WHERE f1=1;
-Warnings:
-Warning	1048	Column 'f3' cannot be null
-SELECT f1,f2-f3 FROM t1;
-f1	f2-f3
-1	20010909044659
-DROP TABLE t1;
 End of 5.0 tests
 #
 # Bug #55779: select does not work properly in mysql server
@@ -532,16 +499,12 @@ SELECT * FROM t1 WHERE '2010-02-01 09:31:02.0' >= a;
 a
 2010-02-01 09:31:01
 2010-02-01 09:31:02
-EXPLAIN
-SELECT * FROM t1 WHERE a >= '2010-02-01 09:31:02.0';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-x	x	x	range	x	x	x	x	x	x
 SELECT * FROM t1 WHERE a >= '2010-02-01 09:31:02.0';
 a
 2010-02-01 09:31:02
 2010-02-01 09:31:03
 2010-02-01 09:31:04
-CREATE TABLE t2 ( a TIMESTAMP, KEY ( a DESC ) );
+CREATE TABLE t2 ( a TIMESTAMP, KEY ( a ) );
 INSERT INTO t2 VALUES( '2010-02-01 09:31:01' );
 INSERT INTO t2 VALUES( '2010-02-01 09:31:02' );
 INSERT INTO t2 VALUES( '2010-02-01 09:31:03' );
@@ -557,10 +520,6 @@ INSERT INTO t2 VALUES( '2010-02-01 09:31:11' );
 # interval here. This reveals itself only in the number of reads 
 # performed.
 FLUSH STATUS;
-EXPLAIN
-SELECT * FROM t2 WHERE a < '2010-02-01 09:31:02.0';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-x	x	x	range	x	x	x	x	x	x
 SELECT * FROM t2 WHERE a < '2010-02-01 09:31:02.0';
 a
 2010-02-01 09:31:01
@@ -638,6 +597,7 @@ SELECT TIMESTAMP('2000-01-27','23:13:41') - TIMESTAMP('2003-05-16','23:53:29');
 TIMESTAMP('2000-01-27','23:13:41') - TIMESTAMP('2003-05-16','23:53:29')
 -30389003988
 DROP TABLE t1;
+SET sql_mode = default;
 #
 # Test for bug#11747847 - 34280: create table fails if NO_ZERO_DATE
 # or NO_ZERO_IN_DATE SQL mode is set.
@@ -646,20 +606,17 @@ SET @org_mode=@@sql_mode;
 #Table creation in strict mode
 SET @@sql_mode='NO_ZERO_DATE,STRICT_ALL_TABLES';
 Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 CREATE TABLE t1 (c1 TIMESTAMP DEFAULT 0);
 ERROR 42000: Invalid default value for 'c1'
 CREATE TABLE t1 (c1 TIMESTAMP DEFAULT '0000-00-00 00:00:00');
 ERROR 42000: Invalid default value for 'c1'
-SET @@sql_mode='NO_ZERO_IN_DATE,STRICT_ALL_TABLES';
-Warnings:
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
 CREATE TABLE t1 (c1 TIMESTAMP DEFAULT '2012-02-00 12:12:12');
 ERROR 42000: Invalid default value for 'c1'
 #Table creation in non-strict mode but with NO_ZERO_DATE/NO_ZERO_IN_DATE
 SET @@sql_mode='NO_ZERO_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 CREATE TABLE t1 (c1 TIMESTAMP DEFAULT 0);
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
@@ -668,7 +625,7 @@ Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 SET @@sql_mode='NO_ZERO_IN_DATE';
 Warnings:
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 CREATE TABLE t3 (c1 TIMESTAMP DEFAULT '2012-02-00 12:12:12');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
@@ -682,38 +639,19 @@ Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 DROP TABLE t1, t2, t3;
 CREATE TABLE t1 (c1 INT);
-#Alter table in strict mode with NO_ZERO_DATE/NO_ZERO_IN_DATE
+#Alter table in strict mode  with NO_ZERO_DATE/NO_ZERO_IN_DATE
 SET @@sql_mode='NO_ZERO_DATE,STRICT_ALL_TABLES';
 Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 ALTER TABLE t1 ADD c2 TIMESTAMP DEFAULT 0;
 ERROR 42000: Invalid default value for 'c2'
 ALTER TABLE t1 ADD c2 TIMESTAMP DEFAULT '0000-00-00';
 ERROR 42000: Invalid default value for 'c2'
 SET @@sql_mode='NO_ZERO_IN_DATE,STRICT_ALL_TABLES';
 Warnings:
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 ALTER TABLE t1 ADD c2 TIMESTAMP DEFAULT '2012-02-00';
 ERROR 42000: Invalid default value for 'c2'
-#Alter table in non-strict mode but with NO_ZERO_DATE/NO_ZERO_IN_DATE
-SET @@sql_mode='NO_ZERO_DATE';
-Warnings:
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
-ALTER TABLE t1 ADD c2 TIMESTAMP DEFAULT 0;
-Warnings:
-Warning	1264	Out of range value for column 'c2' at row 1
-ALTER TABLE t1 ADD c3 TIMESTAMP DEFAULT '0000-00-00';
-Warnings:
-Warning	1264	Out of range value for column 'c2' at row 1
-Warning	1264	Out of range value for column 'c3' at row 1
-SET @@sql_mode='NO_ZERO_IN_DATE';
-Warnings:
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
-ALTER TABLE t1 ADD c4 TIMESTAMP DEFAULT '2012-02-00';
-Warnings:
-Warning	1264	Out of range value for column 'c4' at row 1
-DROP TABLE t1;
-CREATE TABLE t1 (c1 INT);
 #Alter table with out any SQL modes
 SET @@sql_mode='';
 ALTER TABLE t1 ADD c2 TIMESTAMP DEFAULT 0;
@@ -728,7 +666,26 @@ SET @@sql_mode= @org_mode;
 # End of 5.6 tests
 #
 #
-# WL6292 - Test cases to test new behavior with 
+# Bug#35135132 bool String::copy -
+#              Assertion `!str || str != m_ptr' failed.
+#
+SET SESSION SQL_MODE='';
+CREATE TABLE t1 (
+c1 smallint DEFAULT NULL,
+c2 timestamp NOT NULL
+);
+INSERT INTO t1 VALUES (2,'2006-07-01 22:00:00'),(6,'0000-00-00 00:00:00');
+SELECT
+CONCAT_WS('out', c1, (CASE 42 WHEN c1 THEN c1 ELSE c2 END), c2, 'hello')
+FROM t1;
+CONCAT_WS('out', c1, (CASE 42 WHEN c1 THEN c1 ELSE c2 END), c2, 'hello')
+2out2006-07-01 22:00:00out2006-07-01 22:00:00outhello
+6out0000-00-00 00:00:00out0000-00-00 00:00:00outhello
+DROP TABLE t1;
+SET SESSION SQL_MODE=DEFAULT;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+#
+# WL6292 - Test cases to test new behavior with
 #          --explicit_defaults_for_timestamp
 # Almost all the scenario's required to test this WL, is already tested
 # by most of existing test case. Adding some basic tests here.
@@ -737,6 +694,8 @@ CREATE TABLE t1 (f1 TIMESTAMP, f2 TIMESTAMP);
 ALTER TABLE t1 ADD COLUMN (f3 TIMESTAMP NOT NULL);
 ALTER TABLE t1 ADD COLUMN (f4 TIMESTAMP DEFAULT NULL);
 ALTER TABLE t1 ADD COLUMN (f5 TIMESTAMP DEFAULT '0:0:0');
+Warnings:
+Warning	4095	Delimiter ':' in position 1 in datetime value '0:0:0' at row 1 is deprecated. Prefer the standard '-'.
 ALTER TABLE t1 ADD COLUMN (f6 TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 # Following is expected out of SHOW CREATE TABLE
 #  `f1` timestamp NULL DEFAULT NULL,
@@ -754,7 +713,7 @@ t1	CREATE TABLE `t1` (
   `f4` timestamp NULL DEFAULT NULL,
   `f5` timestamp NULL DEFAULT '0000-00-00 00:00:00',
   `f6` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # The new behavior affects CREATE SELECT with column definitions
 # before SELECT keyword. The columns f1,f2 in t2 do not get promoted
 # with the new behavior.
@@ -768,7 +727,7 @@ t2	CREATE TABLE `t2` (
   `f4` timestamp NULL DEFAULT NULL,
   `f5` timestamp NULL DEFAULT '0000-00-00 00:00:00',
   `f6` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 DROP TABLE t2;
 # With --explicit_defaults_for_timestamp,
@@ -783,8 +742,8 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` timestamp NOT NULL,
   `c2` timestamp NOT NULL DEFAULT '2001-01-01 01:01:01',
-  `c3` int(11) NOT NULL DEFAULT '42'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `c3` int NOT NULL DEFAULT '42'
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 VALUES (NULL, DEFAULT, DEFAULT);
 ERROR 23000: Column 'c1' cannot be null
 INSERT INTO t1 VALUES ('2005-05-05 06:06:06', NULL, DEFAULT);
@@ -803,4 +762,120 @@ Warning	1048	Column 'c3' cannot be null
 SELECT * FROM t1;
 c1	c2	c3
 0000-00-00 00:00:00	0000-00-00 00:00:00	0
+DROP TABLE t1;
+SET sql_mode = default;
+#
+#Bug#19881933 : TABLE CREATION WITH TIMESTAMP IS REJECTED
+#
+SET sql_mode=TRADITIONAL;
+CREATE TABLE t1(
+dummy INT,
+i1_null_const INT NULL DEFAULT 42,
+t1_null_now TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+t1_null_const TIMESTAMP NULL DEFAULT '2001-01-01 03:03:03',
+i2_not_null_const INT NOT NULL DEFAULT 42,
+t2_not_null_now TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+t2_not_null_const TIMESTAMP NOT NULL DEFAULT '2001-01-01 03:03:03',
+i3_null INT NULL,
+t3_null TIMESTAMP NULL,
+i4_not_null INT NOT NULL,
+t4_not_null TIMESTAMP NOT NULL);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `dummy` int DEFAULT NULL,
+  `i1_null_const` int DEFAULT '42',
+  `t1_null_now` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `t1_null_const` timestamp NULL DEFAULT '2001-01-01 03:03:03',
+  `i2_not_null_const` int NOT NULL DEFAULT '42',
+  `t2_not_null_now` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `t2_not_null_const` timestamp NOT NULL DEFAULT '2001-01-01 03:03:03',
+  `i3_null` int DEFAULT NULL,
+  `t3_null` timestamp NULL DEFAULT NULL,
+  `i4_not_null` int NOT NULL,
+  `t4_not_null` timestamp NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a TIMESTAMP, b TIMESTAMP);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` timestamp NULL DEFAULT NULL,
+  `b` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE TABLE t2(a INT);
+ALTER TABLE t2 ADD COLUMN b TIMESTAMP;
+ALTER TABLE t2 ADD COLUMN c TIMESTAMP;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int DEFAULT NULL,
+  `b` timestamp NULL DEFAULT NULL,
+  `c` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t2 ADD COLUMN d TIMESTAMP;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int DEFAULT NULL,
+  `b` timestamp NULL DEFAULT NULL,
+  `c` timestamp NULL DEFAULT NULL,
+  `d` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t2 MODIFY b TIMESTAMP NOT NULL DEFAULT '0000-00-00 00:00:00';
+ERROR 42000: Invalid default value for 'b'
+ALTER TABLE t2 MODIFY b TIMESTAMP DEFAULT '0000-00-00 00:00:00';
+ERROR 42000: Invalid default value for 'b'
+INSERT INTO t1 VALUES();
+SET sql_mode='';
+INSERT INTO t1 VALUES();
+SET sql_mode=TRADITIONAL;
+SELECT b FROM t1;
+b
+NULL
+NULL
+CREATE TABLE t3(a TIMESTAMP, b TIMESTAMP);
+# INSERT SELECT statement
+INSERT INTO t3 SELECT * from t1;
+#CREATE SELECT with data in t1
+CREATE TABLE t4 AS SELECT * FROM t1;
+DELETE FROM t1;
+DROP TABLE t4;
+#CREATE SELECT without data
+CREATE TABLE t4 AS SELECT * FROM t1;
+#DML statements
+INSERT INTO t1 VALUES(default, default);
+INSERT INTO t1 VALUES(default(a), default(b));
+UPDATE t1 SET b=default;
+UPDATE t1 SET b=default(b);
+CREATE TABLE t5(a TIMESTAMP NOT NULL);
+CREATE TABLE t6(a TIMESTAMP, b TIMESTAMP NOT NULL);
+DROP TABLE t1,t2,t3,t4,t5,t6;
+SET sql_mode=default;
+#
+# BUG#27041502: ASSERTION `TYPE() != MYSQL_TYPE_TIMESTAMP'
+#               FAILED.
+CREATE TABLE t1(fld1 TIMESTAMP,PRIMARY KEY (fld1));
+CREATE TRIGGER trg BEFORE INSERT ON t1 FOR EACH ROW SET @a=1;
+# Without patch, an assert is triggered in the below
+# INSERT/UPDATE cases.
+INSERT INTO t1 VALUES(NULL);
+ERROR 23000: Column 'fld1' cannot be null
+DROP TRIGGER trg;
+CREATE TRIGGER trg AFTER INSERT ON t1 FOR EACH ROW SET @a=1;
+INSERT INTO t1 VALUES(NULL);
+ERROR 23000: Column 'fld1' cannot be null
+DROP TRIGGER trg;
+CREATE TRIGGER trg BEFORE UPDATE ON t1 FOR EACH ROW SET @a=1;
+INSERT INTO t1 VALUES("20121231");
+UPDATE t1 SET fld1=NULL WHERE fld1="20121231";
+ERROR 23000: Column 'fld1' cannot be null
+SELECT * from t1;
+fld1
+2012-12-31 00:00:00
+DROP TRIGGER trg;
+CREATE TRIGGER trg AFTER UPDATE ON t1 FOR EACH ROW SET @a=1;
+UPDATE t1 SET fld1=NULL WHERE fld1="20121231";
+ERROR 23000: Column 'fld1' cannot be null
+DROP TRIGGER trg;
 DROP TABLE t1;

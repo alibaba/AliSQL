@@ -3,12 +3,16 @@
 #
 SELECT @@session.show_old_temporals;
 SHOW SESSION VARIABLES LIKE 'show_old_temporals';
-SELECT * FROM information_schema.session_variables WHERE variable_name='show_old_temporals';
+--disable_warnings
+SELECT * FROM performance_schema.session_variables WHERE variable_name='show_old_temporals';
+--enable_warnings
 
 --echo #Also can be set as a global variable.
 SELECT @@global.show_old_temporals;
 SHOW GLOBAL VARIABLES LIKE 'show_old_temporals';
-SELECT * FROM information_schema.global_variables WHERE variable_name='show_old_temporals';
+--disable_warnings
+SELECT * FROM performance_schema.global_variables WHERE variable_name='show_old_temporals';
+--enable_warnings
 
 --echo #Test setting the variable to various values.
 --echo #Boolean values.
@@ -63,3 +67,26 @@ SELECT @@global.show_old_temporals;
 --echo #Test for invalid value.
 --error ER_WRONG_VALUE_FOR_VAR
 SET GLOBAL show_old_temporals= 2;
+
+######################################################################################
+#   Check if changing session variable throws error without sufficient privileges    #
+######################################################################################
+CREATE USER foo, bar;
+GRANT SESSION_VARIABLES_ADMIN ON *.*  TO bar;
+--let $conn_name = foo_connection
+--connect($conn_name, localhost, foo,,,)
+SELECT @@session.show_old_temporals;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET @@session.show_old_temporals = 0;
+--connection default
+disconnect $conn_name;
+--let $conn_name = bar_connection
+--connect($conn_name, localhost, bar,,,)
+SELECT @@session.show_old_temporals;
+SET @@session.show_old_temporals = 0;
+SELECT @@session.show_old_temporals;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET @@global.show_old_temporals = 0;
+--connection default
+disconnect $conn_name;
+DROP USER foo, bar;

@@ -1,0 +1,69 @@
+include/group_replication.inc [rpl_server_count=3]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+
+############################################################
+# 1. Bootstrap group on server1, the primary.
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+
+############################################################
+# 2. server2 joins the grop, as secondary.
+[connection server2]
+include/start_group_replication.inc
+
+############################################################
+# 3. Establish a asynchronous replication channel from server3
+#    into server1.
+#    Transactions from `test.t2` will be filtered out.
+[connection server1]
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PORT=SERVER_3_PORT, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch2_3';
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+CHANGE REPLICATION FILTER Replicate_Ignore_Table=(test.t2) FOR CHANNEL 'ch2_3';
+include/start_slave.inc
+
+############################################################
+# 4. Execute transactions on server3.
+[connection server3]
+CREATE TABLE t0 (c1 INT NOT NULL PRIMARY KEY);
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY);
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY);
+include/rpl_sync.inc
+[connection server1]
+include/assert.inc ['Assert table t2 does not exist on server1']
+[connection server2]
+include/assert.inc ['Assert table t2 does not exist on server2']
+[connection server3]
+INSERT INTO t1 VALUES (1);
+INSERT INTO t2 VALUES (1);
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1';
+BEGIN;
+COMMIT;
+SET GTID_NEXT= 'AUTOMATIC';
+INSERT INTO t1 VALUES (2);
+INSERT INTO t2 VALUES (2);
+DROP TABLE t1;
+INSERT INTO t2 VALUES (3);
+INSERT INTO t2 VALUES (4);
+DROP TABLE t2;
+DROP TABLE t0;
+include/rpl_sync.inc
+
+############################################################
+# 5. Validate applier indexes on server2
+#    `group_replication_applier` channel.
+[connection server2]
+include/include/assert_logical_timestamps.inc [0 0;1 2;2 3;3 4;3 5;3 6;3 7;3 8;3 9;9 10;10 11;10 12;10 13;13 14]
+
+############################################################
+# 6. Clean up.
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+include/stop_group_replication.inc
+RESET REPLICA ALL FOR CHANNEL 'ch2_3';
+include/group_replication_end.inc

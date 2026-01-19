@@ -24,6 +24,7 @@ DROP TABLE IF EXISTS t1 ;
 --enable_connect_log
 --echo # READ_ONLY does nothing to SUPER users
 --echo # so we use a non-SUPER one:
+CREATE USER test@localhost;
 GRANT CREATE, SELECT, DROP ON *.* TO test@localhost;
 
 connect (con1,localhost,test,,test);

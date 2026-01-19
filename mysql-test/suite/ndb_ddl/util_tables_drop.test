@@ -1,0 +1,51 @@
+--source connect.inc
+
+#
+# Test behavior of ndbcluster and in particular the "ndb binlog thread"
+# when its util tables are dropped from NDB.
+# - the tables are important for the functionality of binlog and schema
+#   distribution
+# - currently there are three util tables created by ndbcluster:
+#  1) mysql.ndb_schema
+#  -- communication between the MySQL Servers during schema distribution
+#  -- hidden for both DDL and DML for a MySQL Server user
+#  -- schema distribution will be disabled if table is dropped from NDB
+#  -- the "ndb binlog thread" will continously attempt to recreate the table
+#     in order to enable schema distribution functionality
+#  2) mysql.ndb_schema_result
+#  -- communication between the MySQL Servers during schema distribution
+#  -- hidden for both DDL and DML for a MySQL Server user
+#  -- schema distribution will be disabled if table is dropped from NDB
+#  -- the "ndb binlog thread" will continously attempt to recreate the table
+#     in order to enable schema distribution functionality
+#  3) mysql.ndb_apply_status
+#  -- keeps a record of the operations that have been replicated
+#  -- currently not hidden for either DDL or DML for a MySQL Server user
+#  -- if this table is dropped from NDB, the "ndb binlog thread" will
+#     have an outage, which means it will:
+#  --- stop logging changes from NDB
+#  --- write error message(s) to log file
+#  --- tear everything down and restart itself
+#  --- create the table again while reconnecting to NDB
+#
+
+# Silence the expected errors which occur when util tables are dropped
+--disable_query_log
+let $i = $NUM_MYSQLDS;
+while($i)
+{
+  --connection mysqld$i
+  call mtr.add_suppression("An incident event has been written");
+  dec $i;
+}
+--enable_query_log
+
+let $util_table_name = ndb_schema;
+--source check_util_table_drop.inc
+
+let $util_table_name = ndb_apply_status;
+--source check_util_table_drop.inc
+
+let $util_table_name = ndb_schema_result;
+--source check_util_table_drop.inc
+

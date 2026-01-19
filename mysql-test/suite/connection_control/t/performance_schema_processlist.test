@@ -1,0 +1,32 @@
+# This test checks if entry of an unauthenticated_user is
+# present in performance_schema.processlist when connection is
+# delayed through connection_control plugin
+
+--source include/not_windows.inc
+--source ../inc/have_connection_control_plugin.inc
+--echo # Setup
+--source ../inc/install_connection_control_plugin.inc
+
+--echo # Save original values of connection_control variables
+SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
+SET @saved_min_delay = @@global.connection_control_min_connection_delay;
+
+--echo # set connection_control variables
+SET @@global.connection_control_failed_connections_threshold = 1;
+SET @@global.connection_control_min_connection_delay = 2000;
+
+# Delayed connection
+--exec $MYSQL --user=unauthenticated_user --port=$MASTER_MYPORT --protocol=tcp > /dev/null 2>&1 &
+--exec $MYSQL --user=unauthenticated_user --port=$MASTER_MYPORT --protocol=tcp > /dev/null 2>&1 &
+
+--sleep 2
+
+--echo # processlist output
+--replace_column 1 <Id> 3 <Host> 6 <Time> 7 <State>
+--replace_regex /Daemon/<Command>/ /Connect/<Command>/ /Sleep/<Command>/
+select * from performance_schema.processlist where user='unauthenticated_user';
+
+--echo # Cleanup
+SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
+SET @@global.connection_control_min_connection_delay = @saved_min_delay;
+--source ../inc/uninstall_connection_control_plugin.inc

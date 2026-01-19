@@ -1,4 +1,3 @@
---source include/have_innodb.inc
 # Adding big test option for this test.
 --source include/big_test.inc
 
@@ -43,7 +42,7 @@ delimiter |;
 CREATE PROCEDURE update_t1()
 BEGIN
 	DECLARE i INT DEFAULT 1;
-	while (i <= 5000) DO
+	while (i <= 28000) DO
 		update test.t1 set value2=value2+1, value3=value3+1 where id=12;
 		SET i = i + 1;
 	END WHILE;
@@ -71,7 +70,7 @@ select * from t1 force index(value) where value=12;
 #
 connection conn3;
 let $wait_condition=
-	select * from information_schema.processlist where state = 'Sending data' and
+	select * from information_schema.processlist where state = 'executing' and
 	info = 'select * from t1 force index(value) where value=12';
 --source include/wait_condition.inc
 let $ignore= `SELECT @id := $ID`;

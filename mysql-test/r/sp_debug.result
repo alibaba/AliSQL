@@ -1,0 +1,291 @@
+#
+# WL#7897 -- Use DD API for Stored Routines.
+#
+# Test case to verify stored routine load failure.
+CREATE FUNCTION f1() RETURNS INT return 1;
+CREATE PROCEDURE p1() SELECT 1 AS my_column;
+SET DEBUG='+d,fail_stored_routine_load';
+SELECT f1();
+ERROR HY000: Failed to load routine 'test.f1'.
+CALL p1();
+ERROR HY000: Failed to load routine 'test.p1'.
+SET DEBUG='-d,fail_stored_routine_load';
+SELECT f1();
+f1()
+1
+CALL p1();
+my_column
+1
+DROP FUNCTION f1;
+DROP PROCEDURE p1;
+# Test case to verify stored routine body length error.
+SET DEBUG='+d,simulate_routine_length_error';
+CREATE PROCEDURE p1() SELECT "simulate_routine_length_error";
+ERROR 42000: Routine body for 'p1' is too long
+SET DEBUG='-d,simulate_routine_length_error';
+# Test case to verify the schema state after failure to drop routine.
+CREATE SCHEMA new_db;
+CREATE PROCEDURE new_db.proc() SELECT 1 AS my_column;
+SET DEBUG='+d,fail_drop_db_routines';
+DROP SCHEMA IF EXISTS new_db;
+ERROR HY000: Failed to DROP ROUTINE 
+SET DEBUG='-d,fail_drop_db_routines';
+DROP SCHEMA IF EXISTS new_db;
+CREATE SCHEMA new_db;
+DROP SCHEMA new_db;
+#
+# Bug#26040870 - ASSERT ON KILL'ING A STORED ROUTINE INVOCATION.
+#
+CREATE TABLE t1 (a INT);
+CREATE FUNCTION f1() RETURNS INT
+BEGIN
+INSERT INTO t1 VALUES (1);
+RETURN 1;
+END|
+SET DEBUG_SYNC= "sp_lex_instr_before_exec_core SIGNAL sp_ready WAIT_FOR sp_finish";
+SELECT f1();
+SET DEBUG_SYNC="now WAIT_FOR sp_ready";
+KILL QUERY sp_con_id;
+SET DEBUG_SYNC="now SIGNAL sp_finish";
+# Diagnostics area is not set if routine statement execution is
+# interrupted by the KILL operation. Accessing diagnostics area in such
+# case results in the issue reported.
+# Patch for the bug25586773, checks if diagnostics area is set before
+# accessing it.
+ERROR 70100: Query execution was interrupted
+SET DEBUG_SYNC='RESET';
+DROP TABLE t1;
+DROP FUNCTION f1;
+#
+# Bug#28864244 : DATA DICTIONARY ASSERT IN MEB.UNICODE.
+#
+SET NAMES utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SET DEBUG='+d,simulate_lctn_two_case_for_schema_case_compare';
+CREATE DATABASE `tèst-db`;
+#Without fix, assert condition to check schema name case fails for following
+#statement.
+CREATE PROCEDURE `tèst-db`.test() SELECT 1;
+DROP DATABASE `tèst-db`;
+SET DEBUG='-d,simulate_lctn_two_case_for_schema_case_compare';
+SET NAMES default;
+
+#############################################################
+#  WL#9049 Add a dynamic privilege for stored routine backup.
+#
+#    Test Cases to verify that user with SHOW_ROUTINE can
+#    view all the SP/SF code and maintain behaviour of
+#    statements for user with global SELECT privilege
+#    and for user who is the routine DEFINER.
+#
+#############################################################
+
+CREATE SCHEMA testdb;
+
+# Create users.
+
+CREATE USER usr_no_priv@localhost, usr_show_routine@localhost, usr_global_select@localhost, usr_definer@localhost, usr_role@localhost, usr_create_routine@localhost, usr_alter_routine@localhost, usr_execute@localhost;
+
+# Create and grant role.
+
+CREATE ROLE role_show_routine;
+GRANT role_show_routine to usr_role@localhost;
+
+# Grant privileges.
+
+GRANT SHOW_ROUTINE ON *.* TO usr_show_routine@localhost, role_show_routine;
+GRANT SELECT ON *.* TO usr_global_select@localhost;
+GRANT EXECUTE ON *.* TO usr_execute@localhost;
+GRANT CREATE ROUTINE ON *.* TO usr_create_routine@localhost;
+GRANT ALTER ROUTINE ON *.* TO usr_alter_routine@localhost;
+
+# Create routines whose definer is root@localhost.
+
+CREATE PROCEDURE testdb.proc_root() SELECT "ProcRoot";
+CREATE FUNCTION testdb.func_root() RETURNS VARCHAR(8) DETERMINISTIC RETURN "FuncRoot";
+
+# Create routines whose definer is usr_definer@localhost.
+
+CREATE DEFINER = `usr_definer`@`localhost` PROCEDURE testdb.proc_definer() SELECT "ProcDefiner";
+CREATE DEFINER = `usr_definer`@`localhost` FUNCTION testdb.func_definer() RETURNS VARCHAR(11) DETERMINISTIC RETURN "FuncDefiner";
+
+# Connect as user with no privileges.
+
+
+# Should pretend that routine does not exist.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+ERROR 42000: PROCEDURE proc_root does not exist
+SHOW PROCEDURE CODE testdb.proc_definer;
+ERROR 42000: PROCEDURE proc_definer does not exist
+SHOW FUNCTION CODE testdb.func_root;
+ERROR 42000: FUNCTION func_root does not exist
+SHOW FUNCTION CODE testdb.func_definer;
+ERROR 42000: FUNCTION func_definer does not exist
+
+# Connect as user with SHOW_ROUTINE privilege.
+
+
+# Should show the Instructions of all 4 routines.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+Pos	Instruction
+0	stmt "SELECT "ProcRoot""
+SHOW PROCEDURE CODE testdb.proc_definer;
+Pos	Instruction
+0	stmt "SELECT "ProcDefiner""
+SHOW FUNCTION CODE testdb.func_root;
+Pos	Instruction
+0	freturn 15 'FuncRoot'
+SHOW FUNCTION CODE testdb.func_definer;
+Pos	Instruction
+0	freturn 15 'FuncDefiner'
+
+# Connect as user with role assigned.
+
+
+# Without activating role.
+
+
+# Should pretend that routine does not exist.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+ERROR 42000: PROCEDURE proc_root does not exist
+SHOW PROCEDURE CODE testdb.proc_definer;
+ERROR 42000: PROCEDURE proc_definer does not exist
+SHOW FUNCTION CODE testdb.func_root;
+ERROR 42000: FUNCTION func_root does not exist
+SHOW FUNCTION CODE testdb.func_definer;
+ERROR 42000: FUNCTION func_definer does not exist
+
+# Activate role.
+
+SET ROLE role_show_routine;
+
+# Should show the Instructions of all 4 routines.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+Pos	Instruction
+0	stmt "SELECT "ProcRoot""
+SHOW PROCEDURE CODE testdb.proc_definer;
+Pos	Instruction
+0	stmt "SELECT "ProcDefiner""
+SHOW FUNCTION CODE testdb.func_root;
+Pos	Instruction
+0	freturn 15 'FuncRoot'
+SHOW FUNCTION CODE testdb.func_definer;
+Pos	Instruction
+0	freturn 15 'FuncDefiner'
+
+# Connect as user with global SELECT privilege.
+
+
+# Should show the Instructions of all 4 routines.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+Pos	Instruction
+0	stmt "SELECT "ProcRoot""
+SHOW PROCEDURE CODE testdb.proc_definer;
+Pos	Instruction
+0	stmt "SELECT "ProcDefiner""
+SHOW FUNCTION CODE testdb.func_root;
+Pos	Instruction
+0	freturn 15 'FuncRoot'
+SHOW FUNCTION CODE testdb.func_definer;
+Pos	Instruction
+0	freturn 15 'FuncDefiner'
+
+# Connect as user who is DEFINER of routines proc_definer and func_definer.
+
+
+# Should pretend that proc_root and func_root do not exist.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+ERROR 42000: PROCEDURE proc_root does not exist
+SHOW FUNCTION CODE testdb.func_root;
+ERROR 42000: FUNCTION func_root does not exist
+
+# Should show the Instructions of proc_definer and func_definer.
+
+SHOW PROCEDURE CODE testdb.proc_definer;
+Pos	Instruction
+0	stmt "SELECT "ProcDefiner""
+SHOW FUNCTION CODE testdb.func_definer;
+Pos	Instruction
+0	freturn 15 'FuncDefiner'
+
+# Connect as user who has EXECUTE privilege.
+
+
+# Should pretend that routine does not exist.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+ERROR 42000: PROCEDURE proc_root does not exist
+SHOW PROCEDURE CODE testdb.proc_definer;
+ERROR 42000: PROCEDURE proc_definer does not exist
+SHOW FUNCTION CODE testdb.func_root;
+ERROR 42000: FUNCTION func_root does not exist
+SHOW FUNCTION CODE testdb.func_definer;
+ERROR 42000: FUNCTION func_definer does not exist
+
+# Connect as user who has CREATE ROUTINE privilege.
+
+
+# Should pretend that routine does not exist.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+ERROR 42000: PROCEDURE proc_root does not exist
+SHOW PROCEDURE CODE testdb.proc_definer;
+ERROR 42000: PROCEDURE proc_definer does not exist
+SHOW FUNCTION CODE testdb.func_root;
+ERROR 42000: FUNCTION func_root does not exist
+SHOW FUNCTION CODE testdb.func_definer;
+ERROR 42000: FUNCTION func_definer does not exist
+
+# Connect as user who has ALTER ROUTINE privilege.
+
+
+# Should pretend that routine does not exist.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+ERROR 42000: PROCEDURE proc_root does not exist
+SHOW PROCEDURE CODE testdb.proc_definer;
+ERROR 42000: PROCEDURE proc_definer does not exist
+SHOW FUNCTION CODE testdb.func_root;
+ERROR 42000: FUNCTION func_root does not exist
+SHOW FUNCTION CODE testdb.func_definer;
+ERROR 42000: FUNCTION func_definer does not exist
+
+# Test showing code after partial revoke of SELECT privilege.
+
+
+# Set partial revokes to ON and save the current value.
+
+SET @start_partial_revokes = @@global.partial_revokes;
+SET @@global.partial_revokes=ON;
+REVOKE SELECT ON testdb.* FROM usr_global_select@localhost;
+
+# Should pretend that routine does not exist.
+
+SHOW PROCEDURE CODE testdb.proc_root;
+ERROR 42000: PROCEDURE proc_root does not exist
+SHOW PROCEDURE CODE testdb.proc_definer;
+ERROR 42000: PROCEDURE proc_definer does not exist
+SHOW FUNCTION CODE testdb.func_root;
+ERROR 42000: FUNCTION func_root does not exist
+SHOW FUNCTION CODE testdb.func_definer;
+ERROR 42000: FUNCTION func_definer does not exist
+
+# Restore partial_revokes to its previous value.
+
+DROP USER usr_global_select@localhost;
+SET @@global.partial_revokes = @start_partial_revokes;
+
+# Cleanup.
+
+DROP USER usr_no_priv@localhost, usr_show_routine@localhost, usr_definer@localhost, usr_role@localhost, usr_create_routine@localhost, usr_alter_routine@localhost, usr_execute@localhost;
+Warnings:
+Warning	4005	User 'usr_definer'@'localhost' is referenced as a definer account in a stored routine.
+DROP ROLE role_show_routine;
+DROP SCHEMA testdb;

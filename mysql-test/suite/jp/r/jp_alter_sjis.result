@@ -1,5 +1,7 @@
 SET NAMES sjis;
 SET character_set_database = sjis;
+Warnings:
+Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
 DROP TABLE IF EXISTS `ｱｱｱ`;
 DROP TABLE IF EXISTS `ｲｲｲ`;
 DROP TABLE IF EXISTS `あああ`;
@@ -31,14 +33,14 @@ NULL	ｳｳｳｳｳ	NULL	NULL
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
 ｶｶ	char(1)	YES	MUL	NULL	
-ｷｷｷ	char(6)	NO	PRI		
+ｷｷｷ	char(6)	NO	PRI	NULL	
 ｸｸｸ	char(1)	YES	UNI	NULL	
 ｹｹｹ	char(1)	YES		NULL	
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
   `ｶｶ` char(1) DEFAULT NULL,
-  `ｷｷｷ` char(6) NOT NULL DEFAULT '',
+  `ｷｷｷ` char(6) NOT NULL,
   `ｸｸｸ` char(1) DEFAULT NULL,
   `ｹｹｹ` char(1) DEFAULT NULL,
   PRIMARY KEY (`ｷｷｷ`),
@@ -58,11 +60,11 @@ SELECT * FROM `ｱｱｱ`;
 ｳｳｳｳｳ
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
-ｷｷｷ	char(6)	NO			
+ｷｷｷ	char(6)	NO		NULL	
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
-  `ｷｷｷ` char(6) NOT NULL DEFAULT ''
+  `ｷｷｷ` char(6) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=sjis
 ALTER TABLE `あああ` ADD `かかか` char(1) FIRST;
 ALTER TABLE `あああ` ADD `くくく` char(1) AFTER `ききき`;
@@ -80,14 +82,14 @@ NULL	ううううう	NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かか	char(1)	YES	MUL	NULL	
-ききき	char(6)	NO	PRI		
+ききき	char(6)	NO	PRI	NULL	
 くくく	char(1)	YES	UNI	NULL	
 けけけ	char(1)	YES		NULL	
 SHOW CREATE TABLE `あああ`;
 Table	Create Table
 あああ	CREATE TABLE `あああ` (
   `かか` char(1) DEFAULT NULL,
-  `ききき` char(6) NOT NULL DEFAULT '',
+  `ききき` char(6) NOT NULL,
   `くくく` char(1) DEFAULT NULL,
   `けけけ` char(1) DEFAULT NULL,
   PRIMARY KEY (`ききき`),
@@ -107,11 +109,11 @@ SELECT * FROM `あああ`;
 ううううう
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
-ききき	char(6)	NO			
+ききき	char(6)	NO		NULL	
 SHOW CREATE TABLE `あああ`;
 Table	Create Table
 あああ	CREATE TABLE `あああ` (
-  `ききき` char(6) NOT NULL DEFAULT ''
+  `ききき` char(6) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=sjis
 ALTER TABLE `ソソソ` ADD `構構構` char(1) FIRST;
 ALTER TABLE `ソソソ` ADD `能能能` char(1) AFTER `表表表`;
@@ -129,14 +131,14 @@ NULL	表表表表表	NULL	NULL
 DESC `ソソソ`;
 Field	Type	Null	Key	Default	Extra
 構構	char(1)	YES	MUL	NULL	
-表表表	char(6)	NO	PRI		
+表表表	char(6)	NO	PRI	NULL	
 能能能	char(1)	YES	UNI	NULL	
 予予予	char(1)	YES		NULL	
 SHOW CREATE TABLE `ソソソ`;
 Table	Create Table
 ソソソ	CREATE TABLE `ソソソ` (
   `構構` char(1) DEFAULT NULL,
-  `表表表` char(6) NOT NULL DEFAULT '',
+  `表表表` char(6) NOT NULL,
   `能能能` char(1) DEFAULT NULL,
   `予予予` char(1) DEFAULT NULL,
   PRIMARY KEY (`表表表`),
@@ -156,11 +158,11 @@ SELECT * FROM `ソソソ`;
 表表表表表
 DESC `ソソソ`;
 Field	Type	Null	Key	Default	Extra
-表表表	char(6)	NO			
+表表表	char(6)	NO		NULL	
 SHOW CREATE TABLE `ソソソ`;
 Table	Create Table
 ソソソ	CREATE TABLE `ソソソ` (
-  `表表表` char(6) NOT NULL DEFAULT ''
+  `表表表` char(6) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=sjis
 DROP TABLE `ｱｱｱ`;
 DROP TABLE `ｲｲｲ`;
@@ -193,14 +195,14 @@ NULL	ｳｳｳｳｳ	NULL	NULL
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
 ｶｶ	char(1)	YES	MUL	NULL	
-ｷｷｷ	char(6)	NO	PRI		
+ｷｷｷ	char(6)	NO	PRI	NULL	
 ｸｸｸ	char(1)	YES	UNI	NULL	
 ｹｹｹ	char(1)	YES		NULL	
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
   `ｶｶ` char(1) DEFAULT NULL,
-  `ｷｷｷ` char(6) NOT NULL DEFAULT '',
+  `ｷｷｷ` char(6) NOT NULL,
   `ｸｸｸ` char(1) DEFAULT NULL,
   `ｹｹｹ` char(1) DEFAULT NULL,
   PRIMARY KEY (`ｷｷｷ`),
@@ -220,11 +222,11 @@ SELECT * FROM `ｱｱｱ`;
 ｳｳｳｳｳ
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
-ｷｷｷ	char(6)	NO			
+ｷｷｷ	char(6)	NO		NULL	
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
-  `ｷｷｷ` char(6) NOT NULL DEFAULT ''
+  `ｷｷｷ` char(6) NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=sjis
 ALTER TABLE `あああ` ADD `かかか` char(1) FIRST;
 ALTER TABLE `あああ` ADD `くくく` char(1) AFTER `ききき`;
@@ -242,14 +244,14 @@ NULL	ううううう	NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かか	char(1)	YES	MUL	NULL	
-ききき	char(6)	NO	PRI		
+ききき	char(6)	NO	PRI	NULL	
 くくく	char(1)	YES	UNI	NULL	
 けけけ	char(1)	YES		NULL	
 SHOW CREATE TABLE `あああ`;
 Table	Create Table
 あああ	CREATE TABLE `あああ` (
   `かか` char(1) DEFAULT NULL,
-  `ききき` char(6) NOT NULL DEFAULT '',
+  `ききき` char(6) NOT NULL,
   `くくく` char(1) DEFAULT NULL,
   `けけけ` char(1) DEFAULT NULL,
   PRIMARY KEY (`ききき`),
@@ -269,11 +271,11 @@ SELECT * FROM `あああ`;
 ううううう
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
-ききき	char(6)	NO			
+ききき	char(6)	NO		NULL	
 SHOW CREATE TABLE `あああ`;
 Table	Create Table
 あああ	CREATE TABLE `あああ` (
-  `ききき` char(6) NOT NULL DEFAULT ''
+  `ききき` char(6) NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=sjis
 ALTER TABLE `ソソソ` ADD `構構構` char(1) FIRST;
 ALTER TABLE `ソソソ` ADD `能能能` char(1) AFTER `表表表`;
@@ -291,14 +293,14 @@ NULL	能能能能能	NULL	NULL
 DESC `ソソソ`;
 Field	Type	Null	Key	Default	Extra
 構構	char(1)	YES	MUL	NULL	
-表表表	char(6)	NO	PRI		
+表表表	char(6)	NO	PRI	NULL	
 能能能	char(1)	YES	UNI	NULL	
 予予予	char(1)	YES		NULL	
 SHOW CREATE TABLE `ソソソ`;
 Table	Create Table
 ソソソ	CREATE TABLE `ソソソ` (
   `構構` char(1) DEFAULT NULL,
-  `表表表` char(6) NOT NULL DEFAULT '',
+  `表表表` char(6) NOT NULL,
   `能能能` char(1) DEFAULT NULL,
   `予予予` char(1) DEFAULT NULL,
   PRIMARY KEY (`表表表`),
@@ -318,11 +320,11 @@ SELECT * FROM `ソソソ`;
 能能能能能
 DESC `ソソソ`;
 Field	Type	Null	Key	Default	Extra
-表表表	char(6)	NO			
+表表表	char(6)	NO		NULL	
 SHOW CREATE TABLE `ソソソ`;
 Table	Create Table
 ソソソ	CREATE TABLE `ソソソ` (
-  `表表表` char(6) NOT NULL DEFAULT ''
+  `表表表` char(6) NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=sjis
 DROP TABLE `ｱｱｱ`;
 DROP TABLE `ｲｲｲ`;
@@ -355,14 +357,14 @@ NULL	ｳｳｳｳｳ	NULL	NULL
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
 ｶｶ	char(1)	YES	MUL	NULL	
-ｷｷｷ	char(6)	NO	PRI		
+ｷｷｷ	char(6)	NO	PRI	NULL	
 ｸｸｸ	char(1)	YES	UNI	NULL	
 ｹｹｹ	char(1)	YES		NULL	
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
   `ｶｶ` char(1) DEFAULT NULL,
-  `ｷｷｷ` char(6) NOT NULL DEFAULT '',
+  `ｷｷｷ` char(6) NOT NULL,
   `ｸｸｸ` char(1) DEFAULT NULL,
   `ｹｹｹ` char(1) DEFAULT NULL,
   PRIMARY KEY (`ｷｷｷ`),
@@ -382,11 +384,11 @@ SELECT * FROM `ｱｱｱ`;
 ｳｳｳｳｳ
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
-ｷｷｷ	char(6)	NO			
+ｷｷｷ	char(6)	NO		NULL	
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
-  `ｷｷｷ` char(6) NOT NULL DEFAULT ''
+  `ｷｷｷ` char(6) NOT NULL
 ) ENGINE=MEMORY DEFAULT CHARSET=sjis
 ALTER TABLE `あああ` ADD `かかか` char(1) FIRST;
 ALTER TABLE `あああ` ADD `くくく` char(1) AFTER `ききき`;
@@ -404,14 +406,14 @@ NULL	ううううう	NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かか	char(1)	YES	MUL	NULL	
-ききき	char(6)	NO	PRI		
+ききき	char(6)	NO	PRI	NULL	
 くくく	char(1)	YES	UNI	NULL	
 けけけ	char(1)	YES		NULL	
 SHOW CREATE TABLE `あああ`;
 Table	Create Table
 あああ	CREATE TABLE `あああ` (
   `かか` char(1) DEFAULT NULL,
-  `ききき` char(6) NOT NULL DEFAULT '',
+  `ききき` char(6) NOT NULL,
   `くくく` char(1) DEFAULT NULL,
   `けけけ` char(1) DEFAULT NULL,
   PRIMARY KEY (`ききき`),
@@ -431,11 +433,11 @@ SELECT * FROM `あああ`;
 ううううう
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
-ききき	char(6)	NO			
+ききき	char(6)	NO		NULL	
 SHOW CREATE TABLE `あああ`;
 Table	Create Table
 あああ	CREATE TABLE `あああ` (
-  `ききき` char(6) NOT NULL DEFAULT ''
+  `ききき` char(6) NOT NULL
 ) ENGINE=MEMORY DEFAULT CHARSET=sjis
 ALTER TABLE `ソソソ` ADD `構構構` char(1) FIRST;
 ALTER TABLE `ソソソ` ADD `能能能` char(1) AFTER `表表表`;
@@ -453,14 +455,14 @@ NULL	能能能能能	NULL	NULL
 DESC `ソソソ`;
 Field	Type	Null	Key	Default	Extra
 構構	char(1)	YES	MUL	NULL	
-表表表	char(6)	NO	PRI		
+表表表	char(6)	NO	PRI	NULL	
 能能能	char(1)	YES	UNI	NULL	
 予予予	char(1)	YES		NULL	
 SHOW CREATE TABLE `ソソソ`;
 Table	Create Table
 ソソソ	CREATE TABLE `ソソソ` (
   `構構` char(1) DEFAULT NULL,
-  `表表表` char(6) NOT NULL DEFAULT '',
+  `表表表` char(6) NOT NULL,
   `能能能` char(1) DEFAULT NULL,
   `予予予` char(1) DEFAULT NULL,
   PRIMARY KEY (`表表表`),
@@ -480,11 +482,11 @@ SELECT * FROM `ソソソ`;
 能能能能能
 DESC `ソソソ`;
 Field	Type	Null	Key	Default	Extra
-表表表	char(6)	NO			
+表表表	char(6)	NO		NULL	
 SHOW CREATE TABLE `ソソソ`;
 Table	Create Table
 ソソソ	CREATE TABLE `ソソソ` (
-  `表表表` char(6) NOT NULL DEFAULT ''
+  `表表表` char(6) NOT NULL
 ) ENGINE=MEMORY DEFAULT CHARSET=sjis
 DROP TABLE `ｱｱｱ`;
 DROP TABLE `ｲｲｲ`;

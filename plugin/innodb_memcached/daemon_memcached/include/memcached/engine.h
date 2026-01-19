@@ -75,7 +75,7 @@ extern "C" {
      * @param cas The cas to put in the return packet
      * @param cookie The cookie provided by the frontend
      * @return true if return message was successfully created, false if an
-     *              error occured that prevented the message from being sent
+     *              error occurred that prevented the message from being sent
      */
     typedef bool (*ADD_RESPONSE)(const void *key, uint16_t keylen,
                                  const void *ext, uint8_t extlen,
@@ -160,7 +160,7 @@ extern "C" {
      *
      * @param interface The highest interface level the server supports
      * @param get_server_api function to get the server API from
-     * @param Where to store the interface handle
+     * @param handle Where to store the interface handle
      * @return See description of ENGINE_ERROR_CODE
      */
     typedef ENGINE_ERROR_CODE (*CREATE_INSTANCE)(uint64_t interface,
@@ -204,7 +204,7 @@ extern "C" {
         /**
          * An array containing all of the features the engine supports
          */
-        feature_info features[1];
+        feature_info features[3];
     } engine_info;
 
     /**
@@ -530,7 +530,7 @@ extern "C" {
          * @param handle the engine that owns the object
          * @param cookie connection cookie for this item
          * @param item the item to request information about
-         * @param item_info
+         * @param[out] item_info pointer to destination where item_info shall be stored on success
          * @return true if successful
          */
         bool (*get_item_info)(ENGINE_HANDLE *handle,

@@ -5,12 +5,12 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 [on slave]
-CALL mtr.add_suppression("Slave: Table 't1' already exists Error_code: 1050");
-CALL mtr.add_suppression("Slave SQL: .*Error .Table .t1. already exists. on query.* Error_code: 1050");
-call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+CALL mtr.add_suppression("Replica: Table 't1' already exists Error_code: MY-001050");
+CALL mtr.add_suppression("Replica SQL for channel '': .*Error .Table .t1. already exists. on query.* Error_code: MY-001050");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 # The statement makes SQL thread to fail.
 CREATE TABLE t1(c1 INT);
 [on master]
@@ -19,8 +19,10 @@ CREATE TABLE t1(c1 INT);
 include/wait_for_slave_sql_error.inc [errno=1050]
 DROP TABLE t1;
 # Block SQL thread immediately after it starts.
-SET DEBUG_SYNC='after_start_slave WAIT_FOR signal.continue';
+SET DEBUG_SYNC='after_start_replica WAIT_FOR signal.continue';
 START SLAVE SQL_THREAD;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 include/wait_for_slave_sql_to_start.inc
 # Check Slave_SQL_Error, there should not be an error.
 include/check_slave_no_error.inc

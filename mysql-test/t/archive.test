@@ -3,7 +3,7 @@
 # Taken FROM the select test
 #
 -- source include/have_archive.inc
--- source include/have_binlog_format_mixed_or_statement.inc
+-- source include/force_binlog_format_statement.inc
 
 CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
 
@@ -1351,24 +1351,6 @@ SELECT * FROM t2;
 CHECK TABLE t2;
 SELECT * FROM t2;
 
-
-# Test INSERT DELAYED and wait until the table has one more record
-SELECT COUNT(auto) FROM t2;
-INSERT DELAYED INTO t2 VALUES (99999,011403,37,'the','delayed','insert','');
-
-# Insert another record since in Archive delayed values are only
-# guaranteed to materialize based on either:
-# 1) A new row showing up from a normal insert
-# 2) A flush table  has occurred.
-INSERT INTO t2 VALUES (100000,000001,00,'after','delayed','insert','');
-
-# Wait for the delayed insert to appear
-while (`SELECT COUNT(auto)!=1215 FROM t2`)
-{
-  sleep 0.1;
-}
-SELECT COUNT(auto) FROM t2;
-
 # Adding test for ALTER TABLE
 ALTER TABLE t2 DROP COLUMN fld6; 
 SHOW CREATE TABLE t2;
@@ -1515,7 +1497,7 @@ INSERT INTO t5 VALUES (NULL, "establish justice", "to ourselves and");
 INSERT INTO t5 VALUES (32, "ensure domestic tranquility", NULL);
 INSERT INTO t5 VALUES (23, "provide for the common defense", "posterity");
 INSERT INTO t5 VALUES (NULL, "promote the general welfare", "do ordain");
-INSERT INTO t5 VALUES (NULL, "abcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabc", "do ordain");
+INSERT IGNORE INTO t5 VALUES (NULL, "abcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabcdeghijklmnopqrstuvwxyzabc", "do ordain");
 
 SELECT * FROM t5;
 
@@ -1607,9 +1589,11 @@ DROP TABLE t1;
 # BUG#29203 - archive tables have weird values in show table status
 #
 CREATE TABLE t1(a INT, b BLOB) ENGINE=archive;
+analyze table t1;
 SELECT DATA_LENGTH, AVG_ROW_LENGTH FROM
   INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='t1' AND TABLE_SCHEMA='test';
 INSERT INTO t1 VALUES(1, 'sampleblob1'),(2, 'sampleblob2');
+analyze table t1;
 SELECT DATA_LENGTH, AVG_ROW_LENGTH FROM
   INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='t1' AND TABLE_SCHEMA='test';
 DROP TABLE t1;
@@ -1639,23 +1623,6 @@ INSERT INTO t2 VALUES(NULL,'b'),(NULL,'b');
 SELECT t1.id, t2.id, t1.name, t2.name FROM t1,t2 WHERE t1.id = t2.id;
 DROP TABLE t1,t2;
 
-#
-# BUG#47012 archive tables are not upgradeable, and server crashes on any access
-#
-copy_file std_data/bug47012.frm $MYSQLD_DATADIR/test/t1.frm;
-copy_file std_data/bug47012.ARZ $MYSQLD_DATADIR/test/t1.ARZ;
-copy_file std_data/bug47012.ARM $MYSQLD_DATADIR/test/t1.ARM;
-
-SHOW CREATE TABLE t1;
-
-SELECT * FROM t1;
-
-INSERT INTO t1 (col1, col2) VALUES (1, "value");
-
-REPAIR TABLE t1;
-DROP TABLE t1;
-remove_file $MYSQLD_DATADIR/test/t1.ARM;
-
 --echo #
 --echo # BUG#48757 - missing .ARZ file causes server crash
 --echo #
@@ -1664,8 +1631,7 @@ FLUSH TABLE t1;
 --remove_file $MYSQLD_DATADIR/test/t1.ARZ
 --error ER_FILE_NOT_FOUND
 SELECT * FROM t1;
---error ER_BAD_TABLE_ERROR
-DROP TABLE t1;
+DROP TABLE IF EXISTS t1;
 
 --echo #
 --echo # Ensure that TRUNCATE fails for non-empty archive tables.
@@ -1688,7 +1654,8 @@ DROP TABLE t1;
 # INSERT INTO bug46565 VALUES(2),(3);
 # FLUSH TABLE bug46565;
 # dd if=bug46565.ARZ of=std_data/bug46565.ARZ bs=1 count=8670
-copy_file std_data/bug46565.frm $MYSQLD_DATADIR/test/t1.frm;
+CREATE TABLE t1(a INT) ENGINE=archive;
+--remove_file $MYSQLD_DATADIR/test/t1.ARZ
 copy_file std_data/bug46565.ARZ $MYSQLD_DATADIR/test/t1.ARZ;
 --error ER_CRASHED_ON_USAGE
 SELECT * FROM t1;
@@ -1699,33 +1666,6 @@ REPAIR TABLE t1 EXTENDED;
 SELECT * FROM t1;
 DROP TABLE t1;
 
-
---echo #
---echo # Bug#45377: ARCHIVE tables aren't discoverable after OPTIMIZE
---echo #
-
---disable_warnings
-DROP TABLE IF EXISTS t1;
---enable_warnings
-
-CREATE TABLE t1 (a int) ENGINE=ARCHIVE;
-SHOW CREATE TABLE t1;
-INSERT INTO t1 VALUES (1);
-OPTIMIZE TABLE t1;
-remove_file $MYSQLD_DATADIR/test/t1.frm;
-FLUSH TABLES;
-INSERT INTO t1 VALUES (2);
-SELECT * FROM t1 ORDER BY a;
-SHOW CREATE TABLE t1;
-DROP TABLE t1;
-
---echo #
---echo # BUG#58205 - Valgrind failure in fn_format when called from
---echo #             archive_discover
---echo #
-CREATE TABLE `a/../`(a INT) ENGINE=ARCHIVE;
-remove_file $MYSQLD_DATADIR/test/a@002f@002e@002e@002f.frm;
-DROP TABLE `a/../`;
 
 --echo #
 --echo # BUG#57162 - valgrind errors, random data when returning
@@ -1742,36 +1682,6 @@ SELECT * FROM t1 ORDER BY f LIMIT 1;
 DROP TABLE t1;
 SET sort_buffer_size=DEFAULT;
 
---echo #
---echo # BUG#11756687 - 48633: ARCHIVE TABLES ARE NOT UPGRADEABLE
---echo #
-copy_file std_data/bug48633.frm $MYSQLD_DATADIR/test/t1.frm;
-copy_file std_data/bug48633.ARZ $MYSQLD_DATADIR/test/t1.ARZ;
-copy_file std_data/bug48633.ARM $MYSQLD_DATADIR/test/t1.ARM;
-SHOW CREATE TABLE t1;
-# Test first table scan
-SELECT * FROM t1;
-# Test second table scan
-SELECT * FROM t1;
-# Test table close
-FLUSH TABLE t1;
-SELECT * FROM t1;
-# Test check
-CHECK TABLE t1;
-SELECT * FROM t1;
-# Test insert
-INSERT INTO t1 VALUES(3, 'text', 'varchar', 'blob1', 'blob2');
-SELECT * FROM t1;
-# Test table close after insert
-FLUSH TABLE t1;
-SELECT * FROM t1;
-# Test repair
-REPAIR TABLE t1;
-SELECT * FROM t1;
-# Test check table after upgrade
-CHECK TABLE t1;
-DROP TABLE t1;
-remove_file $MYSQLD_DATADIR/test/t1.ARM;
 
 --echo #
 --echo # BUG 11757503 - 49556: ERROR 1005 (HY000): CAN'T CREATE TABLE '#SQL-B7C_3' (ERRNO: -1)
@@ -1783,11 +1693,10 @@ DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (c1 decimal(19,14) NOT NULL) ENGINE=ARCHIVE; 
 #Suppressing error message in server error log.
 CALL mtr.add_suppression("Found wrong key definition in #sql.* Please do \"ALTER TABLE `#sql.*` FORCE \" to fix it!");
---replace_regex /#sql-[0-9a-f_]*/#sql-temporary/
---error ER_GET_ERRNO
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
+--error ER_GET_ERRNO, ER_GET_ERRNO
 CREATE INDEX i1 ON t1(c1);
---replace_regex /#sql-[0-9a-f_]*/#sql-temporary/
-SHOW WARNINGS; 
+SET sql_mode= default;
 DROP TABLE t1;
 
 --echo #
@@ -1811,3 +1720,112 @@ CREATE TABLE t1 (a INT) ENGINE=ARCHIVE;
 CREATE TABLE t2 SELECT * FROM t1;
 SELECT * FROM t2;
 DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#28923281: UPDATE ON JSON COLUMN IN ARCHIVE ENGINE HITS AN ASSERTION
+--echo #
+CREATE TABLE t (j JSON) ENGINE=ARCHIVE;
+INSERT INTO t VALUES ('{}');
+--error ER_ILLEGAL_HA
+UPDATE t SET j = '[1]';
+SELECT * FROM t;
+DROP TABLE t;
+
+--echo #
+--echo # Verify that all UPDATE and DELETE operations on archive
+--echo # tables are rejected.
+--echo #
+CREATE TABLE archive_table (id INT, x INT) ENGINE=ARCHIVE;
+CREATE TABLE innodb_table (id INT PRIMARY KEY, x INT) ENGINE=InnoDB;
+CREATE VIEW v AS SELECT * FROM archive_table;
+
+--echo # Delete on empty tables should be rejected.
+--error ER_ILLEGAL_HA
+DELETE FROM archive_table;
+--error ER_ILLEGAL_HA
+DELETE FROM v;
+--error ER_ILLEGAL_HA
+DELETE t1, t2 FROM archive_table AS t1, innodb_table AS t2
+       WHERE t1.id = t2.id;
+--error ER_ILLEGAL_HA
+DELETE t1 FROM v AS t1, innodb_table AS t2 WHERE t1.id = t2.id;
+
+--echo # Update of empty tables should be rejected.
+--error ER_ILLEGAL_HA
+UPDATE archive_table SET x = 1000;
+--error ER_ILLEGAL_HA
+UPDATE archive_table AS t1, innodb_table AS t2
+       SET t1.x = 1000, t2.x = 2000 WHERE t1.id = t2.id;
+--error ER_ILLEGAL_HA
+UPDATE v SET x = 1000;
+--error ER_ILLEGAL_HA
+UPDATE v AS t1, innodb_table AS t2
+       SET t1.x = 1000, t2.x = 2000 WHERE t1.id = t2.id;
+
+INSERT INTO archive_table VALUES (1, 1), (2, 2), (3, 3);
+INSERT INTO innodb_table VALUES (1, 2), (3, 4), (5, 6);
+
+--echo # No-op updates should be rejected.
+--error ER_ILLEGAL_HA
+UPDATE archive_table SET x = 1 WHERE id = 1;
+--error ER_ILLEGAL_HA
+UPDATE archive_table SET x = x + 1 WHERE FALSE;
+--error ER_ILLEGAL_HA
+UPDATE archive_table AS t1, innodb_table AS t2
+       SET t1.x = 1, t2.x = 2
+       WHERE t1.id = t2.id AND t1.id = 1;
+--error ER_ILLEGAL_HA
+UPDATE v SET x = 1 WHERE id = 1;
+--error ER_ILLEGAL_HA
+UPDATE v AS t1, innodb_table AS t2
+       SET t1.x = 1, t2.x = 2
+       WHERE t1.id = t2.id AND t1.id = 1;
+
+--echo # Actual updates should be rejected.
+--error ER_ILLEGAL_HA
+UPDATE archive_table SET x = x + 1;
+--error ER_ILLEGAL_HA
+UPDATE archive_table SET x = NULL;
+--error ER_ILLEGAL_HA
+UPDATE archive_table AS t1, innodb_table AS t2
+       SET t1.x = t1.x + 1, t2.x = t2.x + 1
+       WHERE t1.id = t2.id AND t1.id = 1;
+--error ER_ILLEGAL_HA
+UPDATE v SET x = x + 1 WHERE id = 1;
+--error ER_ILLEGAL_HA
+UPDATE v AS t1, innodb_table AS t2
+       SET t1.x = t1.x + 1, t2.x = t2.x + 1
+       WHERE t1.id = t2.id AND t1.id = 1;
+
+SELECT * FROM archive_table ORDER BY id;
+SELECT * FROM innodb_table ORDER BY id;
+
+--echo # Allow multi-table updates if the archive table is only read from.
+UPDATE archive_table AS t1, innodb_table AS t2
+       SET t2.x = t2.x + 1 WHERE t1.id = t2.id;
+SELECT * FROM archive_table ORDER BY id;
+SELECT * FROM innodb_table ORDER BY id;
+
+--echo # Delete should be rejected.
+--error ER_ILLEGAL_HA
+DELETE FROM archive_table;
+--error ER_ILLEGAL_HA
+DELETE FROM v;
+--error ER_ILLEGAL_HA
+DELETE t1, t2 FROM archive_table AS t1, innodb_table AS t2
+       WHERE t1.id = t2.id;
+--error ER_ILLEGAL_HA
+DELETE t1 FROM v AS t1, innodb_table AS t2 WHERE t1.id = t2.id;
+
+SELECT * FROM archive_table ORDER BY id;
+SELECT * FROM innodb_table ORDER BY id;
+
+--echo # Delete is allowed if the archive table is only read from.
+DELETE t2 FROM archive_table AS t1, innodb_table AS t2 WHERE t1.id = t2.id;
+SELECT * FROM archive_table ORDER BY id;
+SELECT * FROM innodb_table ORDER BY id;
+
+DROP VIEW v;
+DROP TABLE archive_table, innodb_table;
+
+--source include/restore_default_binlog_format.inc

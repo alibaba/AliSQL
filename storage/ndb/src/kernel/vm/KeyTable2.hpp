@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005, 2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,97 +28,95 @@
 
 #include <DLHashTable2.hpp>
 
+#define JAM_FILE_ID 258
+
 /**
  * KeyTable2 is DLHashTable2 with hardcoded Uint32 key named "key".
  */
-template <class T, class U>
-class KeyTable2 : public DLHashTable2<T, U> {
-public:
-  KeyTable2(ArrayPool<U>& pool) :
-    DLHashTable2<T, U>(pool) {
+template <class P, class T = typename P::Type>
+class KeyTable2 : public DLHashTable2<P, T> {
+ public:
+  KeyTable2(P &pool) : DLHashTable2<P, T>(pool) {}
+
+  bool find(Ptr<T> &ptr, const T &rec) const {
+    return DLHashTable2<P, T>::find(ptr, rec);
   }
 
-  bool find(Ptr<T>& ptr, const T& rec) const {
-    return DLHashTable2<T, U>::find(ptr, rec);
-  }
-
-  bool find(Ptr<T>& ptr, Uint32 key) const {
+  bool find(Ptr<T> &ptr, Uint32 key) const {
     T rec;
     rec.key = key;
-    return DLHashTable2<T, U>::find(ptr, rec);
+    return DLHashTable2<P, T>::find(ptr, rec);
   }
 };
 
-template <class T, class U>
-class KeyTable2C : public KeyTable2<T, U> {
+template <class P, class T = typename P::Type>
+class KeyTable2C : public KeyTable2<P, T> {
   Uint32 m_count;
-public:
-  KeyTable2C(ArrayPool<U>& pool) :
-    KeyTable2<T, U>(pool), m_count(0) {
-  }
+
+ public:
+  KeyTable2C(P &pool) : KeyTable2<P, T>(pool), m_count(0) {}
 
   Uint32 get_count() const { return m_count; }
-  
-  bool seize(Ptr<T> & ptr) {
-    if (KeyTable2<T, U>::seize(ptr))
-    {
-      m_count ++;
+
+  bool seize(Ptr<T> &ptr) {
+    if (KeyTable2<P, T>::seize(ptr)) {
+      m_count++;
       return true;
     }
     return false;
   }
 
-  void add(Ptr<T> & ptr) {
-    KeyTable2<T, U>::add(ptr);
-    m_count ++;
+  void add(Ptr<T> &ptr) {
+    KeyTable2<P, T>::add(ptr);
+    m_count++;
   }
 
-  void remove(Ptr<T> & ptr, const T & key) {
-    KeyTable2<T, U>::remove(ptr, key);
-    if (ptr.i != RNIL)
-    {
+  void remove(Ptr<T> &ptr, const T &key) {
+    KeyTable2<P, T>::remove(ptr, key);
+    if (ptr.i != RNIL) {
       assert(m_count);
-      m_count --;
+      m_count--;
     }
   }
 
   void remove(Uint32 i) {
-    KeyTable2<T, U>::remove(i);
+    KeyTable2<P, T>::remove(i);
     assert(m_count);
-    m_count --;
+    m_count--;
   }
 
-  void remove(Ptr<T> & ptr) {
-    KeyTable2<T, U>::remove(ptr);
+  void remove(Ptr<T> &ptr) {
+    KeyTable2<P, T>::remove(ptr);
     assert(m_count);
-    m_count --;
+    m_count--;
   }
 
   void removeAll() {
-    KeyTable2<T, U>::removeAll();
+    KeyTable2<P, T>::removeAll();
     m_count = 0;
   }
-  
-  void release(Ptr<T> & ptr, const T & key) {
-    KeyTable2<T, U>::release(ptr, key);
-    if (ptr.i != RNIL)
-    {
+
+  void release(Ptr<T> &ptr, const T &key) {
+    KeyTable2<P, T>::release(ptr, key);
+    if (ptr.i != RNIL) {
       assert(m_count);
-      m_count --;
+      m_count--;
     }
   }
 
   void release(Uint32 i) {
-    KeyTable2<T, U>::release(i);
+    KeyTable2<P, T>::release(i);
     assert(m_count);
-    m_count --;
+    m_count--;
   }
 
-  void release(Ptr<T> & ptr) {
-    KeyTable2<T, U>::release(ptr);
+  void release(Ptr<T> &ptr) {
+    KeyTable2<P, T>::release(ptr);
     assert(m_count);
-    m_count --;
+    m_count--;
   }
 };
+
+#undef JAM_FILE_ID
 
 #endif

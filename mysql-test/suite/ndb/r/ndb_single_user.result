@@ -1,6 +1,11 @@
-drop table if exists t1,t2;
+Node 1: SINGLE USER MODE
+Node 2: SINGLE USER MODE
 create table t1 (a int key, b int unique, c int) engine ndb;
-ERROR HY000: Can't create table 'test.t1' (errno: 299)
+ERROR HY000: Can't create table 't1' (use SHOW WARNINGS for more info).
+show warnings;
+Level	Code	Message
+Warning	1296	Got error 299 'Operation not allowed or aborted due to single user mode' from NDB
+Error	1005	Can't create table 't1' (use SHOW WARNINGS for more info).
 CREATE LOGFILE GROUP lg1
 ADD UNDOFILE 'undofile.dat'
 INITIAL_SIZE 16M
@@ -10,6 +15,7 @@ ERROR HY000: Failed to create LOGFILE GROUP
 show warnings;
 Level	Code	Message
 Warning	1296	Got error 299 'Operation not allowed or aborted due to single user mode' from NDB
+Warning	1296	Failed to create logfile group 'lg1' in NDB
 Error	1528	Failed to create LOGFILE GROUP
 create table t1 (a int key, b int unique, c int) engine ndb;
 CREATE LOGFILE GROUP lg1
@@ -26,6 +32,7 @@ ERROR HY000: Failed to create TABLESPACE
 show warnings;
 Level	Code	Message
 Warning	1296	Got error 299 'Operation not allowed or aborted due to single user mode' from NDB
+Warning	1296	Failed to create tablespace 'ts1' in NDB
 Error	1528	Failed to create TABLESPACE
 DROP LOGFILE GROUP lg1 
 ENGINE =NDB;
@@ -33,6 +40,7 @@ ERROR HY000: Failed to drop LOGFILE GROUP
 show warnings;
 Level	Code	Message
 Warning	1296	Got error 299 'Operation not allowed or aborted due to single user mode' from NDB
+Warning	1296	Failed to drop logfile group 'lg1' from NDB
 Error	1529	Failed to drop LOGFILE GROUP
 CREATE TABLESPACE ts1
 ADD DATAFILE 'datafile.dat'
@@ -40,25 +48,23 @@ USE LOGFILE GROUP lg1
 INITIAL_SIZE 12M
 ENGINE NDB;
 ALTER TABLESPACE ts1
-DROP DATAFILE 'datafile.dat'
-ENGINE NDB;
-ERROR HY000: Failed to alter:  DROP DATAFILE
+DROP DATAFILE 'datafile.dat';
+ERROR HY000: Failed to alter: DROP DATAFILE FAILED
 show warnings;
 Level	Code	Message
 Warning	1296	Got error 299 'Operation not allowed or aborted due to single user mode' from NDB
-Error	1533	Failed to alter:  DROP DATAFILE
+Warning	1296	Failed to drop datafile 'datafile.dat' from NDB
+Error	1533	Failed to alter: DROP DATAFILE FAILED
 ALTER TABLESPACE ts1
-DROP DATAFILE 'datafile.dat'
-ENGINE NDB;
-DROP TABLESPACE ts1
-ENGINE NDB;
+DROP DATAFILE 'datafile.dat';
+DROP TABLESPACE ts1;
 ERROR HY000: Failed to drop TABLESPACE
 show warnings;
 Level	Code	Message
 Warning	1296	Got error 299 'Operation not allowed or aborted due to single user mode' from NDB
+Warning	1296	Failed to drop tablespace 'ts1' from NDB
 Error	1529	Failed to drop TABLESPACE
-DROP TABLESPACE ts1
-ENGINE NDB;
+DROP TABLESPACE ts1;
 DROP LOGFILE GROUP lg1 
 ENGINE =NDB;
 insert into t1 values (1,1,0),(2,2,0),(3,3,0),(4,4,0),(5,5,0),(6,6,0),(7,7,0),(8,8,0),(9,9,0),(10,10,0);
@@ -84,9 +90,34 @@ update t1 set b=b+100 where a > 7;
 delete from t1;
 insert into t1 select * from t2;
 create unique index new_index on t1 (b,c);
+Cluster Configuration
+---------------------
+[ndbd(NDB)]	2 node(s)
+id=1	LOCALHOST  (MYSQL_VERSION NDB_VERSION, single user mode, Nodegroup: 0, *)
+id=2	LOCALHOST  (MYSQL_VERSION NDB_VERSION, single user mode, Nodegroup: 0)
+
+[ndb_mgmd(MGM)]	1 node(s)
+id=3	LOCALHOST  (MYSQL_VERSION NDB_VERSION)
+
+[MYSQL_VERSION NDB_VERSION)]	14 node(s)
+id=16	LOCALHOST  (MYSQL_VERSION NDB_VERSION)
+id=32 (not connected, accepting connect from localhost)
+id=48 (not connected, accepting connect from localhost)
+id=49	LOCALHOST  (MYSQL_VERSION NDB_VERSION, allowed single user)
+id=63 (not connected, accepting connect from localhost)
+id=127 (not connected, accepting connect from localhost)
+id=192 (not connected, accepting connect from localhost)
+id=228 (not connected, accepting connect from localhost)
+id=229 (not connected, accepting connect from localhost)
+id=230 (not connected, accepting connect from localhost)
+id=231 (not connected, accepting connect from localhost)
+id=232 (not connected, accepting connect from localhost)
+id=233 (not connected, accepting connect from localhost)
+id=255 (not connected, accepting connect from localhost)
+
 drop table t2;
 drop table t1;
-ERROR 42S02: Unknown table 'test.t1'
+ERROR HY000: Storage engine can't drop table 'test.t1'
 create index new_index_fail on t1 (c);
 ERROR HY000: Got error 299 'Operation not allowed or aborted due to single user mode' from NDBCLUSTER
 insert into t1 values (21,21,0),(22,22,0),(23,23,0),(24,24,0),(25,25,0),(26,26,0),(27,27,0),(28,28,0),(29,29,0),(210,210,0);
@@ -103,10 +134,14 @@ update t1 set b=b+100;
 ERROR HY000: Got error 299 'Operation not allowed or aborted due to single user mode' from NDBCLUSTER
 update t1 set b=b+100 where a > 7;
 ERROR HY000: Got error 299 'Operation not allowed or aborted due to single user mode' from NDBCLUSTER
+Node 1: STARTED
+Node 2: STARTED
 BEGIN;
 update t1 set b=b+100 where a=1;
 BEGIN;
 update t1 set b=b+100 where a=2;
+Node 1: SINGLE USER MODE
+Node 2: SINGLE USER MODE
 update t1 set b=b+100 where a=3;
 COMMIT;
 update t1 set b=b+100 where a=4;
@@ -114,5 +149,7 @@ ERROR HY000: Got error 299 'Operation not allowed or aborted due to single user 
 ROLLBACK;
 create table t2 (a int) engine myisam;
 alter table t2 add column (b int);
+Node 1: STARTED
+Node 2: STARTED
 drop table t2;
 drop table t1;

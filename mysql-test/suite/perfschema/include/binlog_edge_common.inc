@@ -26,7 +26,6 @@ call mtr.add_suppression("Unsafe statement written to the binary log using state
 create database my_replicated_db;
 
 create table my_replicated_db.my_tx_table(a bigint) engine = innodb;
-create table my_replicated_db.my_non_tx_table(a bigint) engine = myisam;
 create table my_replicated_db.my_bh_table(a bigint) engine = blackhole;
 
 use test;
@@ -35,9 +34,6 @@ drop table if exists marker_start;
 use my_replicated_db;
 
 insert into my_tx_table(a)
-  values (1000), (2000), (3000);
-
-insert into my_non_tx_table(a)
   values (1000), (2000), (3000);
 
 insert into my_bh_table(a)
@@ -58,9 +54,6 @@ use my_replicated_db;
 insert into my_tx_table(a)
   select thread_id from performance_schema.threads;
 
-insert into my_non_tx_table(a)
-  select thread_id from performance_schema.threads;
-
 insert into my_bh_table(a)
   select thread_id from performance_schema.threads;
 
@@ -71,52 +64,34 @@ insert into my_bh_table(a)
 insert into my_tx_table(a)
   select id from information_schema.processlist;
 
-insert into my_non_tx_table(a)
-  select id from information_schema.processlist;
-
 insert into my_bh_table(a)
   select id from information_schema.processlist;
 
 insert into my_tx_table(a)
   select thread_id from mysql.general_log;
 
-insert into my_non_tx_table(a)
-  select thread_id from mysql.general_log;
-
 insert into my_bh_table(a)
   select thread_id from mysql.general_log;
 
 insert into my_tx_table(a)
   select thread_id from mysql.slow_log;
 
-insert into my_non_tx_table(a)
-  select thread_id from mysql.slow_log;
-
 insert into my_bh_table(a)
   select thread_id from mysql.slow_log;
 
 insert into my_tx_table(a)
   select Relay_log_pos from mysql.slave_relay_log_info;
 
-insert into my_non_tx_table(a)
-  select Relay_log_pos from mysql.slave_relay_log_info;
-
 insert into my_bh_table(a)
   select Relay_log_pos from mysql.slave_relay_log_info;
 
 insert into my_tx_table(a)
   select Master_log_pos from mysql.slave_master_info;
 
-insert into my_non_tx_table(a)
-  select Master_log_pos from mysql.slave_master_info;
-
 insert into my_bh_table(a)
   select Master_log_pos from mysql.slave_master_info;
 
 insert into my_tx_table(a)
-  select Relay_log_pos from mysql.slave_worker_info;
-
-insert into my_non_tx_table(a)
   select Relay_log_pos from mysql.slave_worker_info;
 
 insert into my_bh_table(a)
@@ -133,11 +108,6 @@ update my_tx_table, performance_schema.setup_instruments
   performance_schema.setup_instruments.timed= 'NO';
 
 --error 0, ER_BINLOG_STMT_MODE_AND_NO_REPL_TABLES
-update my_non_tx_table, performance_schema.setup_instruments
-  set my_non_tx_table.a = my_non_tx_table.a + 1,
-  performance_schema.setup_instruments.timed= 'NO';
-
---error 0, ER_BINLOG_STMT_MODE_AND_NO_REPL_TABLES
 update my_bh_table, performance_schema.setup_instruments
   set my_bh_table.a = my_bh_table.a + 1,
   performance_schema.setup_instruments.timed= 'NO';
@@ -148,7 +118,7 @@ drop table if exists marker_multi_delete;
 use my_replicated_db;
 
 insert into performance_schema.setup_actors
-  values ('FOO', 'FOO', 'FOO');
+  values ('FOO', 'FOO', 'FOO', 'YES', 'YES');
 
 --error 0, ER_BINLOG_STMT_MODE_AND_NO_REPL_TABLES
 delete my_tx_table.*, performance_schema.setup_actors.*
@@ -157,16 +127,7 @@ delete my_tx_table.*, performance_schema.setup_actors.*
   or performance_schema.setup_actors.role='FOO';
 
 insert into performance_schema.setup_actors
-  values ('BAR', 'BAR', 'BAR');
-
---error 0, ER_BINLOG_STMT_MODE_AND_NO_REPL_TABLES
-delete my_non_tx_table.*, performance_schema.setup_actors.*
-  from my_non_tx_table, performance_schema.setup_actors
-  where my_non_tx_table.a != 1000
-  or performance_schema.setup_actors.role='BAR';
-
-insert into performance_schema.setup_actors
-  values ('BAZ', 'BAZ', 'BAZ');
+  values ('BAZ', 'BAZ', 'BAZ', 'YES', 'YES');
 
 --error 0, ER_BINLOG_STMT_MODE_AND_NO_REPL_TABLES
 delete my_bh_table.*, performance_schema.setup_actors.*
@@ -184,5 +145,5 @@ drop database my_replicated_db;
 # Restore performance_schema.setup_actors, damaged by this script
 
 truncate table performance_schema.setup_actors;
-insert into performance_schema.setup_actors values ('%', '%', '%');
+insert into performance_schema.setup_actors values ('%', '%', '%', 'YES', 'YES');
 

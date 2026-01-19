@@ -1,6 +1,24 @@
 -- source include/have_multi_ndb.inc
 
 
+# Configure the second mysqld to not wait for lock so long during
+# schema distribution.
+connection server2;
+let $save_lock_wait_timeout = `select @@ndb_schema_dist_lock_wait_timeout`;
+set @@global.ndb_schema_dist_lock_wait_timeout = 1;
+
+--disable_query_log
+# This test provokes various failures to lock metadata on second mysqld
+call mtr.add_suppression("Failed to acquire exclusive metadata lock");
+call mtr.add_suppression("Failed to rename table definition in DD, continue");
+call mtr.add_suppression("Failed to update table definition in DD");
+call mtr.add_suppression("Failed to update schema version for database");
+call mtr.add_suppression("Failed to execute 'ALTER DATABASE'");
+call mtr.add_suppression("Failed to execute 'DROP DATABASE'");
+call mtr.add_suppression("Distribution of ALTER TABLE");
+call mtr.add_suppression("Got error '1062: Duplicate entry");
+--enable_query_log
+
 #
 # alter - rename
 #
@@ -12,6 +30,7 @@ begin;
 insert into t1 values(1);
 
 connection server1;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 alter table t1 rename t2;
 
 connection server2;
@@ -22,11 +41,11 @@ drop table t2;
 
 connection server1;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 connection server2;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 #
 # alter online add column
@@ -39,7 +58,8 @@ begin;
 insert into t1 values(1);
 
 connection server1;
-alter online table t1 add column b int column_format dynamic;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
+alter table t1 algorithm=inplace, add column b int column_format dynamic;
 
 connection server2;
 commit;
@@ -49,11 +69,12 @@ drop table t1;
 
 connection server1;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 connection server2;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
+
 
 #
 # alter offline add column
@@ -67,7 +88,7 @@ insert into t1 values(1);
 
 connection server1;
 --error ER_LOCK_WAIT_TIMEOUT
-alter offline table t1 add column b int column_format dynamic;
+alter table t1 algorithm=copy, add column b int column_format dynamic;
 
 connection server2;
 commit;
@@ -77,11 +98,11 @@ drop table t1;
 
 connection server1;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 connection server2;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 #
 # online create index
@@ -94,7 +115,8 @@ begin;
 insert into t1 values(1, 1);
 
 connection server1;
-create online index ind_b on t1(b);
+replace_regex /Node [0-9]+:/Node <nodeid>/;
+create index ind_b on t1(b) algorithm=inplace;
 
 connection server2;
 commit;
@@ -104,11 +126,11 @@ drop table t1;
 
 connection server1;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 connection server2;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 #
 # online drop index
@@ -121,6 +143,7 @@ begin;
 insert into t1 values(1, 1);
 
 connection server1;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 drop index ind_b on t1;
 
 connection server2;
@@ -131,16 +154,20 @@ drop table t1;
 
 connection server1;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 connection server2;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 #
 # alter db
 #
 connection server1;
+# Disable ps protocol for the next test case since the
+# ALTER DATABASE doesn't fail on the participant with
+# ps protocol enabled
+--disable_ps_protocol
 create database testdb;
 create table testdb.t1 (a int) engine = ndb;
 
@@ -149,18 +176,229 @@ begin;
 insert into testdb.t1 values(1);
 
 connection server1;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 alter database testdb charset = latin1;
 
 connection server2;
 commit;
+--enable_ps_protocol
 
 connection server1;
 drop database testdb;
 
 connection server1;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
 
 connection server2;
 --error 0,1193
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
+
+# Restore intial ndb_schema_dist_lock_wait_timeout value
+--disable_query_log ONCE
+eval set @@global.ndb_schema_dist_lock_wait_timeout = $save_lock_wait_timeout;
+
+
+
+--echo Remote MDL lock claim failure
+
+connection server1;
+--echo Server1 Create table
+create table t1 (a int primary key, b int) engine=ndb;
+insert into t1 values (1,1);
+
+--echo Add column c on server1
+connection server2;
+--echo
+--echo Server2 Get + hold MDL on table t1, no row locks
+begin;
+select * from t1;
+
+connection server1;
+--echo
+--echo Server1 Send Alter add column, will stall due to remote MDL lock
+--send alter table t1 add column c int; # Online alter
+
+connection server2;
+
+--echo Server2 Issue normal queries on table, causing table access, rollback etc
+--let $ct=15
+--disable_query_log
+--disable_result_log
+while($ct)
+{
+  --error 1412,0
+  select * from t1;
+  --sleep 0.5
+  --dec $ct
+}
+--enable_query_log
+--enable_result_log
+
+connection server1;
+--echo
+--echo Server1 Allow ALTER to complete successfully
+--reap
+
+--echo
+--echo Server 1 Show table schema at origin
+select * from t1;
+show create table t1;
+desc t1;
+select column_name from information_schema.columns where table_name='t1';
+
+
+connection server2;
+--echo
+--echo Server2 Show schema at participant
+select * from t1;
+desc t1;
+select column_name from information_schema.columns where table_name='t1';
+show create table t1;
+
+--echo Add index c on server 1
+
+connection server2;
+--echo Server2 Take + hold MDL lock again
+begin;
+select * from test.t1;
+
+connection server1;
+--echo Server1 Issue another online DDL, will stall due to remote MDL lock
+--send alter table t1 add index(c);
+
+connection server2;
+--echo Server2 Issue normal queries on table, causing table access, rollback etc
+--let $ct=15
+--disable_query_log
+--disable_result_log
+while($ct)
+{
+  --error 1412,0
+  select * from t1;
+  --sleep 0.5
+  --dec $ct
+}
+--enable_query_log
+--enable_result_log
+
+connection server1;
+--echo
+--echo Server1 Allow ALTER to complete successfully
+--reap
+
+--echo
+--echo Server 1 Show table schema at origin
+select * from t1;
+show create table t1;
+desc t1;
+select column_name from information_schema.columns where table_name='t1';
+
+
+connection server2;
+--echo
+--echo Server2 Show schema at participant
+select * from t1;
+desc t1;
+select column_name from information_schema.columns where table_name='t1';
+show create table t1;
+
+--echo Now further changes in the opposite direction
+--echo Server2 -> Server1
+
+connection server1;
+--echo Server1 Take and hold MDL lock
+begin;
+select * from test.t1;
+
+connection server2;
+--echo Server2 Send Alter table add column, will stall due to remote MDL lock
+--send alter table t1 add column d int;
+
+connection server1;
+--echo Server1 Issue normal queries on table, causing table access, rollback etc
+--let $ct=15
+--disable_query_log
+--disable_result_log
+while($ct)
+{
+  --error 1412,0
+  select * from t1;
+  --sleep 0.5
+  --dec $ct
+}
+--enable_query_log
+--enable_result_log
+
+connection server2;
+--echo
+--echo Server2 Allow ALTER to complete successfully
+--reap
+
+--echo
+--echo Server 2 Show table schema at origin
+select * from t1;
+show create table t1;
+desc t1;
+select column_name from information_schema.columns where table_name='t1';
+
+
+connection server1;
+--echo
+--echo Server1 Show schema at participant
+select * from t1;
+desc t1;
+select column_name from information_schema.columns where table_name='t1';
+show create table t1;
+
+--echo Add index d on server 2
+
+connection server1;
+--echo Server1 Take and hold MDL lock again
+begin;
+select * from test.t1;
+
+connection server2;
+--echo Server2 Issue another online DDL, will stall due to remote MDL lock
+--send alter table t1 add index(d);
+
+connection server1;
+--echo Server1 Issue normal queries on table, causing table access, rollback etc
+--let $ct=15
+--disable_query_log
+--disable_result_log
+while($ct)
+{
+  --error 1412,0
+  select * from t1;
+  --sleep 0.5
+  --dec $ct
+}
+--enable_query_log
+--enable_result_log
+
+connection server2;
+--echo
+--echo Server2 Allow ALTER to complete successfully
+--reap
+
+--echo
+--echo Server 2 Show table schema
+select * from t1;
+show create table t1;
+desc t1;
+select column_name from information_schema.columns where table_name='t1';
+
+
+connection server1;
+
+--echo
+--echo Server1 Show schema at participant
+select * from t1;
+desc t1;
+select column_name from information_schema.columns where table_name='t1';
+show create table t1;
+
+
+drop table t1;
+

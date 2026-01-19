@@ -1,0 +1,70 @@
+[/
+  Copyright 2011 - 2020 John Maddock.
+  Copyright 2013 - 2019 Paul A. Bristow.
+  Copyright 2013 Christopher Kormanyos.
+
+  Distributed under the Boost Software License, Version 1.0.
+  (See accompanying file LICENSE_1_0.txt or copy at
+  http://www.boost.org/LICENSE_1_0.txt).
+]
+
+[section:int_real_world Integer Real World Tests]
+
+The first set of [@../../performance/voronoi_performance.cpp tests] measure the times taken to
+execute the multiprecision part of the Voronoi-diagram builder from Boost.Polygon.  The tests
+mainly create a large number of temporaries "just in case" multiprecision arithmetic is required,
+for comparison, also included in the tests is Boost.Polygon's own partial-multiprecision integer
+type which was custom written for this specific task:
+
+[table
+[[Integer Type][Relative Performance (Actual time in parenthesis)]]
+[[checked_int1024_t][1.53714(0.0415328s)]]
+[[checked_int256_t][1.20715(0.0326167s)]]
+[[checked_int512_t][1.2587(0.0340095s)]]
+[[cpp_int][1.80575(0.0487904s)]]
+[[extended_int][1.35652(0.0366527s)]]
+[[int1024_t][1.36237(0.0368107s)]]
+[[int256_t][1(0.0270196s)]]
+[[int512_t][1.0779(0.0291243s)]]
+[[mpz_int][3.83495(0.103619s)]]
+[[tom_int][41.6378(1.12504s)]]
+]
+
+Note how for this use case, any dynamic allocation is a performance killer.
+
+The next [@../../performance/miller_rabin_performance.cpp tests] measure the time taken to generate 1000 128-bit
+random numbers and test for primality using the Miller Rabin test.  This is primarily a test of modular-exponentiation
+since that is the rate limiting step:
+
+[table
+[[Integer Type][Relative Performance (Actual time in parenthesis)]]
+[[checked_uint1024_t][6.90638(0.0477963s)]]
+[[cpp_int][8.63811(0.0597808s)]]
+[[cpp_int (1024-bit cache)][7.4261(0.051393s)]]
+[[cpp_int (128-bit cache)][8.88868(0.061515s)]]
+[[cpp_int (256-bit cache)][8.83724(0.061159s)]]
+[[cpp_int (512-bit cache)][7.53024(0.0521137s)]]
+[[cpp_int (no Expression templates)][9.1372(0.0632349s)]]
+[[mpz_int][1(0.00692059s)]]
+[[mpz_int (no Expression templates)][1.08118(0.00748244s)]]
+[[tom_int][4.16719(0.0288394s)]]
+[[tom_int (no Expression templates)][4.1723(0.0288748s)]]
+[[uint1024_t][6.82875(0.047259s)]]
+]
+
+It's interesting to note that expression templates have little effect here - perhaps because the actual expressions involved
+are relatively trivial in this case - so the time taken for multiplication and division tends to dominate.  The much 
+quicker times from GMP and tommath are down to their
+much better modular-exponentiation algorithms (GMP's is about 5x faster).  That's an issue which needs to be addressed
+in a future release for __cpp_int.
+
+[table:platform Platform Details
+[[Platform][Linux 5.3.0-24-generic, version \#26-Ubuntu SMP Thu Nov 14 01:33:18 UTC 2019, x86_64]]
+[[Compiler][GNU C++ version 9.2.1 20191008]]
+[[GMP][6.1.2]]
+[[MPFR][262146]]
+[[Boost][107200]]
+[[Run date][Dec 13 2019]]
+]
+
+[endsect]

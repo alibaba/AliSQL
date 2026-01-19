@@ -1,0 +1,391 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Per-Operation Cancellation</title>
+<link rel="stylesheet" href="../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../core.html" title="Core Concepts and Functionality">
+<link rel="prev" href="allocation.html" title="Custom Memory Allocation">
+<link rel="next" href="handler_tracking.html" title="Handler Tracking">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="allocation.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../core.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="handler_tracking.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h4 class="title">
+<a name="boost_asio.overview.core.cancellation"></a><a class="link" href="cancellation.html" title="Per-Operation Cancellation">Per-Operation
+        Cancellation</a>
+</h4></div></div></div>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+            These type requirements and classes are the low level building blocks
+            of cancellation. For most use cases, consider using a higher level abstraction,
+            such as <a class="link" href="../../reference/experimental__make_parallel_group.html" title="experimental::make_parallel_group">experimental::make_parallel_group</a>
+            or the <a class="link" href="cpp20_coroutines.html#boost_asio.overview.core.cpp20_coroutines.co_ordinating_parallel_coroutines">logical
+            operators</a> for <code class="computeroutput"><span class="identifier">awaitable</span></code>.
+          </p></td></tr>
+</table></div>
+<p>
+          I/O objects, such as sockets and timers, support object-wide cancellation
+          of outstanding asynchronous operations via their <code class="computeroutput"><span class="identifier">close</span></code>
+          or <code class="computeroutput"><span class="identifier">cancel</span></code> member functions.
+          However, certain asynchronous operations also support individual, targeted
+          cancellation. This per-operation cancellation is enabled by specifying
+          that a completion handler has an <a class="link" href="../../reference/associated_cancellation_slot.html" title="associated_cancellation_slot">associated
+          cancellation slot</a> which satisfies the <a class="link" href="../../reference/CancellationSlot.html" title="Cancellation slot requirements">CancellationSlot</a>
+          type requirements. A cancellation slot is a lightweight channel used for
+          delivering a cancellation request.
+        </p>
+<p>
+          Given a copy of a user-defined <code class="computeroutput"><span class="identifier">Handler</span></code>
+          object <code class="computeroutput"><span class="identifier">h</span></code>, if an asynchronous
+          operation supports cancellation it will obtain a cancellation slot using
+          the <code class="computeroutput"><span class="identifier">get_associated_cancellation_slot</span></code>
+          function. For example:
+        </p>
+<pre class="programlisting"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">associated_cancellation_slot_t</span><span class="special">&lt;</span><span class="identifier">Handler</span><span class="special">&gt;</span> <span class="identifier">s</span>
+  <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">get_associated_cancellation_slot</span><span class="special">(</span><span class="identifier">h</span><span class="special">);</span>
+</pre>
+<p>
+          The associated cancellation slot must satisfy the CancellationSlot type
+          requirements.
+        </p>
+<p>
+          By default, handlers use a default-constructed <a class="link" href="../../reference/cancellation_slot.html" title="cancellation_slot"><code class="computeroutput"><span class="identifier">cancellation_slot</span></code></a>, which means
+          that per-operation cancellation is disabled. The cancellation slot may
+          be customised for a particular handler type by specifying a nested type
+          <code class="computeroutput"><span class="identifier">cancellation_slot_type</span></code>
+          and member function <code class="computeroutput"><span class="identifier">get_cancellation_slot</span><span class="special">()</span></code>:
+        </p>
+<pre class="programlisting"><span class="keyword">class</span> <span class="identifier">my_handler</span>
+<span class="special">{</span>
+<span class="keyword">public</span><span class="special">:</span>
+  <span class="comment">// Custom implementation of CancellationSlot type requirements.</span>
+  <span class="keyword">typedef</span> <span class="identifier">my_cancellation_slot</span> <span class="identifier">cancellation_slot_type</span><span class="special">;</span>
+
+  <span class="comment">// Return a custom cancellation slot implementation.</span>
+  <span class="identifier">cancellation_slot_type</span> <span class="identifier">get_cancellation_slot</span><span class="special">()</span> <span class="keyword">const</span> <span class="keyword">noexcept</span>
+  <span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">my_cancellation_slot</span><span class="special">(...);</span>
+  <span class="special">}</span>
+
+  <span class="keyword">void</span> <span class="keyword">operator</span><span class="special">()()</span> <span class="special">{</span> <span class="special">...</span> <span class="special">}</span>
+<span class="special">};</span>
+</pre>
+<p>
+          In more complex cases, the <code class="computeroutput"><span class="identifier">associated_cancellation_slot</span></code>
+          template may be partially specialised directly:
+        </p>
+<pre class="programlisting"><span class="keyword">namespace</span> <span class="identifier">boost</span> <span class="special">{</span> <span class="keyword">namespace</span> <span class="identifier">asio</span> <span class="special">{</span>
+
+  <span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">typename</span> <span class="identifier">CancellationSlot</span><span class="special">&gt;</span>
+  <span class="keyword">struct</span> <span class="identifier">associated_cancellation_slot</span><span class="special">&lt;</span><span class="identifier">my_handler</span><span class="special">,</span> <span class="identifier">CancellationSlot</span><span class="special">&gt;</span>
+  <span class="special">{</span>
+    <span class="comment">// Custom implementation of CancellationSlot type requirements.</span>
+    <span class="keyword">typedef</span> <span class="identifier">my_cancellation_slot</span> <span class="identifier">type</span><span class="special">;</span>
+
+    <span class="comment">// Return a custom cancellation_slot implementation.</span>
+    <span class="keyword">static</span> <span class="identifier">type</span> <span class="identifier">get</span><span class="special">(</span><span class="keyword">const</span> <span class="identifier">my_handler</span><span class="special">&amp;,</span>
+        <span class="keyword">const</span> <span class="identifier">CancellationSlot</span><span class="special">&amp;</span> <span class="identifier">a</span> <span class="special">=</span> <span class="identifier">CancellationSlot</span><span class="special">())</span> <span class="keyword">noexcept</span>
+    <span class="special">{</span>
+      <span class="keyword">return</span> <span class="identifier">my_cancellation_slot</span><span class="special">(...);</span>
+    <span class="special">}</span>
+  <span class="special">};</span>
+
+<span class="special">}</span> <span class="special">}</span> <span class="comment">// namespace boost::asio</span>
+</pre>
+<p>
+          For convenience, a cancellation slot may be associated with a handler by
+          using the <a class="link" href="../../reference/bind_cancellation_slot.html" title="bind_cancellation_slot"><code class="computeroutput"><span class="identifier">bind_cancellation_slot</span></code></a> function.
+          This is particularly useful when associating a cancellation slot with a
+          lambda:
+        </p>
+<pre class="programlisting"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">async_read</span><span class="special">(</span><span class="identifier">my_socket</span><span class="special">,</span> <span class="identifier">my_buffer</span><span class="special">,</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">bind_cancellation_slot</span><span class="special">(</span>
+      <span class="identifier">my_cancellation_slot</span><span class="special">,</span>
+      <span class="special">[](</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">system</span><span class="special">::</span><span class="identifier">error_code</span> <span class="identifier">e</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">size_t</span> <span class="identifier">n</span><span class="special">)</span>
+      <span class="special">{</span>
+        <span class="special">...</span>
+      <span class="special">}</span>
+    <span class="special">)</span>
+  <span class="special">);</span>
+</pre>
+<p>
+          Boost.Asio provides a ready-to-use cancellation slot in the form of <a class="link" href="../../reference/cancellation_slot.html" title="cancellation_slot"><code class="computeroutput"><span class="identifier">cancellation_slot</span></code></a>
+          and its counterpart <a class="link" href="../../reference/cancellation_signal.html" title="cancellation_signal"><code class="computeroutput"><span class="identifier">cancellation_signal</span></code></a>. These two
+          classes implement a one-to-one pairing of producer (signal) and consumer
+          (slot) interfaces. The following example shows its use:
+        </p>
+<pre class="programlisting"><span class="keyword">class</span> <span class="identifier">session</span>
+  <span class="special">:</span> <span class="keyword">public</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">enable_shared_from_this</span><span class="special">&lt;</span><span class="identifier">proxy</span><span class="special">&gt;</span>
+<span class="special">{</span>
+  <span class="special">...</span>
+
+  <span class="keyword">void</span> <span class="identifier">do_read</span><span class="special">()</span>
+  <span class="special">{</span>
+    <span class="keyword">auto</span> <span class="identifier">self</span> <span class="special">=</span> <span class="identifier">shared_from_this</span><span class="special">();</span>
+    <span class="identifier">socket_</span><span class="special">.</span><span class="identifier">async_read_some</span><span class="special">(</span>
+        <span class="identifier">buffer</span><span class="special">(</span><span class="identifier">data_</span><span class="special">),</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">bind_cancellation_slot</span><span class="special">(</span>
+          <span class="identifier">cancel_signal_</span><span class="special">.</span><span class="identifier">slot</span><span class="special">(),</span>
+          <span class="special">[</span><span class="identifier">self</span><span class="special">](</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">system</span><span class="special">::</span><span class="identifier">error_code</span> <span class="identifier">error</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">size_t</span> <span class="identifier">n</span><span class="special">)</span>
+          <span class="special">{</span>
+            <span class="special">...</span>
+          <span class="special">}</span>
+        <span class="special">)</span>
+      <span class="special">);</span>
+  <span class="special">}</span>
+
+  <span class="special">...</span>
+
+  <span class="keyword">void</span> <span class="identifier">request_cancel</span><span class="special">()</span>
+  <span class="special">{</span>
+    <span class="identifier">cancel_signal_</span><span class="special">.</span><span class="identifier">emit</span><span class="special">(</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">cancellation_type</span><span class="special">::</span><span class="identifier">total</span><span class="special">);</span>
+  <span class="special">}</span>
+
+  <span class="special">...</span>
+
+  <span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">cancellation_signal</span> <span class="identifier">cancel_signal_</span><span class="special">;</span>
+<span class="special">};</span>
+</pre>
+<p>
+          A <code class="computeroutput"><span class="identifier">cancellation_signal</span></code> contains
+          a single slot, and consequently a cancellation signal/slot pair may be
+          used with at most one operation at a time. However, the same slot may be
+          reused for subsequent operations.
+        </p>
+<p>
+          To support cancellation, an asynchronous operation installs a cancellation
+          handler into the slot by calling the slot's <code class="computeroutput"><span class="identifier">assign</span></code>
+          or <code class="computeroutput"><span class="identifier">emplace</span></code> functions. This
+          handler will be invoked when a cancellation signal is emitted. A slot holds
+          exactly one handler at a time, and installing a new handler will overwrite
+          any previously installed handler.
+        </p>
+<p>
+          When emitting a cancellation signal, the caller must specify a <a class="link" href="../../reference/cancellation_type.html" title="cancellation_type">cancellation
+          type</a>. This value is a bitmask that dictates what guarantees the
+          cancellation target must make if successful cancellation occurs. The possible
+          bit values are, from weakest to strongest guarantee, are:
+        </p>
+<div class="table">
+<a name="boost_asio.overview.core.cancellation.t0"></a><p class="title"><b>Table 1. cancellation types</b></p>
+<div class="table-contents"><table class="table" summary="cancellation types">
+<colgroup>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                  <p>
+                    Bit
+                  </p>
+                </th>
+<th>
+                  <p>
+                    Guarantee if cancellation is successful
+                  </p>
+                </th>
+<th>
+                  <p>
+                    Examples where this is the strongest supported guarantee
+                  </p>
+                </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+                  <p>
+                    <code class="computeroutput"><span class="identifier">terminal</span></code>
+                  </p>
+                </td>
+<td>
+                  <p>
+                    The operation had unspecified side effects, and it is only safe
+                    to close or destroy the I/O object.
+                  </p>
+                </td>
+<td>
+                  <p>
+                    A stateful implementation of a message framing protocol, where
+                    an asynchronous operation sends or receives a complete message.
+                    If cancellation occurs part-way through the message body, it
+                    is not possible to report a sensible state to the completion
+                    handler.
+                  </p>
+                </td>
+</tr>
+<tr>
+<td>
+                  <p>
+                    <code class="computeroutput"><span class="identifier">partial</span></code>
+                  </p>
+                </td>
+<td>
+                  <p>
+                    The operation had well-defined side effects, and the completion
+                    handler for the operation indicates what these side effects were.
+                  </p>
+                </td>
+<td>
+                  <p>
+                    Composed operations such as <code class="computeroutput"><span class="identifier">async_read</span></code>
+                    and <code class="computeroutput"><span class="identifier">async_write</span></code>.
+                    If cancellation occurs before all bytes are transferred, the
+                    completion handler is passed the total bytes transferred so far.
+                    The caller may use this information to start another operation
+                    to transfer the remaining bytes.
+                  </p>
+                </td>
+</tr>
+<tr>
+<td>
+                  <p>
+                    <code class="computeroutput"><span class="identifier">total</span></code>
+                  </p>
+                </td>
+<td>
+                  <p>
+                    The operation had no side effects that are observable through
+                    the API.
+                  </p>
+                </td>
+<td>
+                  <p>
+                    Low level system calls that transfer either zero or non-zero
+                    bytes.<br> <br> Wait-for-readiness operations that have no
+                    side effects, even when successful.<br> <br> A fully buffered
+                    message framing protocol implementation, where partial messages
+                    are stored so that they may be reused on the next operation.
+                  </p>
+                </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+          For example, if application logic requires that an operation complete with
+          all-or-nothing side effects, it should emit only the <code class="computeroutput"><span class="identifier">total</span></code>
+          cancellation type. If this type is unsupported by the target operation,
+          no cancellation will occur.
+        </p>
+<p>
+          Furthermore, a stronger guarantee always satisfies the requirements of
+          a weaker guarantee. The <code class="computeroutput"><span class="identifier">partial</span></code>
+          guarantee still satisfies the <code class="computeroutput"><span class="identifier">terminal</span></code>
+          guarantee. The <code class="computeroutput"><span class="identifier">total</span></code> guarantee
+          satisfies both <code class="computeroutput"><span class="identifier">partial</span></code>
+          and <code class="computeroutput"><span class="identifier">total</span></code>. This means that
+          when an operation supports a given cancellation type as its strongest guarantee,
+          it should honour cancellation requests for any of the weaker guarantees.
+        </p>
+<p>
+          Cancellation requests should not be emitted during an asynchronous operation's
+          initiating function. Cancellation requests that are emitted before an operation
+          starts have no effect. Similarly, cancellation requests made after completion
+          have no effect.
+        </p>
+<p>
+          When emitting a cancellation signal, the thread safety rules apply as if
+          calling a member function on the target operation's I/O object. For non-composed
+          operations, this means that it is safe to emit the cancellation signal
+          from any thread provided there are no other concurrent calls to the I/O
+          object, and no other concurrent cancellation signal requests. For composed
+          operations, care must be taken to ensure the cancellation request does
+          not occur concurrently with the operation's intermediate completion handlers.
+        </p>
+<h6>
+<a name="boost_asio.overview.core.cancellation.h0"></a>
+          <span class="phrase"><a name="boost_asio.overview.core.cancellation.supported_operations"></a></span><a class="link" href="cancellation.html#boost_asio.overview.core.cancellation.supported_operations">Supported
+          Operations</a>
+        </h6>
+<p>
+          Consult the documentation for individual asynchronous operations for their
+          supported cancellation types, if any. The ability to cancel individual
+          operations, or composed operations, is currently supported by:
+        </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+              timers
+            </li>
+<li class="listitem">
+              sockets on POSIX and Windows
+            </li>
+<li class="listitem">
+              POSIX descriptors
+            </li>
+<li class="listitem">
+              Windows HANDLEs
+            </li>
+<li class="listitem">
+              SSL streams
+            </li>
+<li class="listitem">
+              all Boost.Asio-provided composed operations such as <code class="computeroutput"><span class="identifier">async_read</span></code>
+              and <code class="computeroutput"><span class="identifier">async_write</span></code>
+            </li>
+<li class="listitem">
+              compositions based on <code class="computeroutput"><span class="identifier">async_compose</span></code>
+            </li>
+<li class="listitem">
+              C++20 coroutines that use <code class="computeroutput"><span class="identifier">awaitable</span></code>
+            </li>
+<li class="listitem">
+              C++20 coroutines that use <code class="computeroutput"><span class="identifier">experimental</span><span class="special">::</span><span class="identifier">coro</span></code>
+            </li>
+<li class="listitem">
+              the <code class="computeroutput"><span class="identifier">experimental</span><span class="special">::</span><span class="identifier">parallel_group</span></code> operation
+            </li>
+<li class="listitem">
+              the <code class="computeroutput"><span class="identifier">experimental</span><span class="special">::</span><span class="identifier">promise</span></code> class
+            </li>
+</ul></div>
+<h6>
+<a name="boost_asio.overview.core.cancellation.h1"></a>
+          <span class="phrase"><a name="boost_asio.overview.core.cancellation.see_also"></a></span><a class="link" href="cancellation.html#boost_asio.overview.core.cancellation.see_also">See
+          Also</a>
+        </h6>
+<p>
+          <a class="link" href="../../reference/CancellationSlot.html" title="Cancellation slot requirements">CancellationSlot</a>,
+          <a class="link" href="../../reference/associated_cancellation_slot.html" title="associated_cancellation_slot">associated_cancellation_slot</a>,
+          <a class="link" href="../../reference/bind_cancellation_slot.html" title="bind_cancellation_slot">bind_cancellation_slot</a>,
+          <a class="link" href="../../reference/cancellation_signal.html" title="cancellation_signal">cancellation_signal</a>,
+          <a class="link" href="../../reference/cancellation_slot.html" title="cancellation_slot">cancellation_slot</a>,
+          <a class="link" href="../../reference/cancellation_state.html" title="cancellation_state">cancellation_state</a>,
+          <a class="link" href="../../reference/cancellation_type.html" title="cancellation_type">cancellation_type</a>,
+          <a class="link" href="../../reference/get_associated_cancellation_slot.html" title="get_associated_cancellation_slot">get_associated_cancellation_slot</a>,
+          <a class="link" href="../../reference/experimental__parallel_group.html" title="experimental::parallel_group">experimental::parallel_group</a>,
+          <a class="link" href="../../reference/experimental__make_parallel_group.html" title="experimental::make_parallel_group">experimental::make_parallel_group</a>
+        </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="allocation.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../core.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="handler_tracking.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

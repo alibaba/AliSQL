@@ -101,16 +101,16 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 TRUNCATE TABLE t1;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 VALUES (1), (2), (3);
 INSERT INTO t1 VALUES (NULL), (NULL), (NULL);
 SELECT c1 FROM t1;
@@ -124,9 +124,9 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 CREATE TABLE t1(c1 INT PRIMARY KEY AUTO_INCREMENT) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1), (2), (3);
@@ -142,16 +142,16 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DELETE FROM t1;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 VALUES (1), (2), (3);
 INSERT INTO t1 VALUES (NULL), (NULL), (NULL);
 SELECT c1 FROM t1;
@@ -165,9 +165,9 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 DROP TABLE IF EXISTS t1;
 Warnings:
@@ -323,7 +323,7 @@ DROP TABLE IF EXISTS t1;
 Warnings:
 Note	1051	Unknown table 'test.t1'
 CREATE TABLE t1 (c1 INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(c1)) ENGINE=InnoDB;
-INSERT INTO t1 VALUES(-1);
+INSERT IGNORE INTO t1 VALUES(-1);
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 SELECT * FROM t1;
@@ -334,7 +334,7 @@ SHOW VARIABLES LIKE "%auto_inc%";
 Variable_name	Value
 auto_increment_increment	100
 auto_increment_offset	10
-INSERT INTO t1 VALUES (-2);
+INSERT IGNORE INTO t1 VALUES (-2);
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 INSERT INTO t1 VALUES (NULL);
@@ -378,7 +378,7 @@ DROP TABLE IF EXISTS t1;
 Warnings:
 Note	1051	Unknown table 'test.t1'
 CREATE TABLE t1 (c1 INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(c1)) ENGINE=InnoDB;
-INSERT INTO t1 VALUES(-1);
+INSERT IGNORE INTO t1 VALUES(-1);
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 SELECT * FROM t1;
@@ -389,7 +389,7 @@ SHOW VARIABLES LIKE "%auto_inc%";
 Variable_name	Value
 auto_increment_increment	100
 auto_increment_offset	10
-INSERT INTO t1 VALUES (-2),(NULL),(2),(NULL);
+INSERT IGNORE INTO t1 VALUES (-2),(NULL),(2),(NULL);
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 INSERT INTO t1 VALUES (250),(NULL);
@@ -580,6 +580,8 @@ Variable_name	Value
 auto_increment_increment	1
 auto_increment_offset	1
 CREATE TABLE t1 (c1 DOUBLE NOT NULL AUTO_INCREMENT, c2 INT, PRIMARY KEY (c1)) ENGINE=InnoDB;
+Warnings:
+Warning	3856	AUTO_INCREMENT support for FLOAT/DOUBLE columns is deprecated and will be removed in a future release. Consider removing AUTO_INCREMENT from column 'c1'.
 INSERT INTO t1 VALUES(NULL, 1);
 INSERT INTO t1 VALUES(NULL, 2);
 SELECT * FROM t1;
@@ -601,6 +603,8 @@ c1	c2
 4	4
 DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (c1 FLOAT NOT NULL AUTO_INCREMENT, c2 INT, PRIMARY KEY (c1)) ENGINE=InnoDB;
+Warnings:
+Warning	3856	AUTO_INCREMENT support for FLOAT/DOUBLE columns is deprecated and will be removed in a future release. Consider removing AUTO_INCREMENT from column 'c1'.
 INSERT INTO t1 VALUES(NULL, 1);
 INSERT INTO t1 VALUES(NULL, 2);
 SELECT * FROM t1;
@@ -633,31 +637,37 @@ a INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
 b INT(10) UNSIGNED NOT NULL,
 c ENUM('FALSE','TRUE') DEFAULT NULL,
 PRIMARY KEY (a)) ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE TABLE t2 (
 m INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
 n INT(10) UNSIGNED NOT NULL,
 o enum('FALSE','TRUE') DEFAULT NULL,
 PRIMARY KEY (m)) ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 (n,o) VALUES
 (1 , 'true'), (1 , 'false'), (2 , 'true'), (2 , 'false'), (3 , 'true'),
 (3 , 'false'), (4 , 'true'), (4 , 'false'), (5 , 'true'), (5 , 'false');
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `m` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `n` int(10) unsigned NOT NULL,
+  `m` int unsigned NOT NULL AUTO_INCREMENT,
+  `n` int unsigned NOT NULL,
   `o` enum('FALSE','TRUE') DEFAULT NULL,
   PRIMARY KEY (`m`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 (b,c) SELECT n,o FROM t2 ;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `b` int(10) unsigned NOT NULL,
+  `a` int unsigned NOT NULL AUTO_INCREMENT,
+  `b` int unsigned NOT NULL,
   `c` enum('FALSE','TRUE') DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 (b,c) SELECT n,o FROM t2 ;
 SELECT * FROM t1;
 a	b	c
@@ -684,11 +694,11 @@ a	b	c
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `b` int(10) unsigned NOT NULL,
+  `a` int unsigned NOT NULL AUTO_INCREMENT,
+  `b` int unsigned NOT NULL,
   `c` enum('FALSE','TRUE') DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 (b,c) SELECT n,o FROM t2 WHERE o = 'false';
 SELECT * FROM t1;
 a	b	c
@@ -720,11 +730,11 @@ a	b	c
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `b` int(10) unsigned NOT NULL,
+  `a` int unsigned NOT NULL AUTO_INCREMENT,
+  `b` int unsigned NOT NULL,
   `c` enum('FALSE','TRUE') DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=InnoDB AUTO_INCREMENT=38 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=38 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 (b,c) SELECT n,o FROM t2 WHERE o = 'false';
 SELECT * FROM t1;
 a	b	c
@@ -761,29 +771,29 @@ a	b	c
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `b` int(10) unsigned NOT NULL,
+  `a` int unsigned NOT NULL AUTO_INCREMENT,
+  `b` int unsigned NOT NULL,
   `c` enum('FALSE','TRUE') DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=InnoDB AUTO_INCREMENT=45 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=45 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 (b,c) SELECT n,o FROM t2 WHERE o = 'false';
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `b` int(10) unsigned NOT NULL,
+  `a` int unsigned NOT NULL AUTO_INCREMENT,
+  `b` int unsigned NOT NULL,
   `c` enum('FALSE','TRUE') DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 (b,c) SELECT n,o FROM t2 WHERE o = 'false';
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `b` int(10) unsigned NOT NULL,
+  `a` int unsigned NOT NULL AUTO_INCREMENT,
+  `b` int unsigned NOT NULL,
   `c` enum('FALSE','TRUE') DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 (b,c) SELECT n,o FROM t2 WHERE o = 'false';
 SELECT * FROM t1;
 a	b	c
@@ -835,11 +845,11 @@ a	b	c
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `b` int(10) unsigned NOT NULL,
+  `a` int unsigned NOT NULL AUTO_INCREMENT,
+  `b` int unsigned NOT NULL,
   `c` enum('FALSE','TRUE') DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=InnoDB AUTO_INCREMENT=66 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=66 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 DROP TABLE t2;
 DROP TABLE IF EXISTS t1;
@@ -851,12 +861,18 @@ Note	1051	Unknown table 'test.t2'
 CREATE TABLE t1(
 c1 INT(10) UNSIGNED NOT NULL AUTO_INCREMENT
 PRIMARY KEY) ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL);
 CREATE TABLE t2(
 c1 TINYINT(3) UNSIGNED NOT NULL AUTO_INCREMENT
 PRIMARY KEY) ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 INSERT INTO t2 SELECT c1 FROM t1;
 Got one of the listed errors
+SET sql_mode = default;
 INSERT INTO t2 SELECT NULL FROM t1;
 Got one of the listed errors
 DROP TABLE t1;
@@ -874,10 +890,10 @@ INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` tinyint(4) NOT NULL AUTO_INCREMENT,
+  `c1` tinyint NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 -127	innodb
@@ -887,20 +903,20 @@ c1	c2
 DROP TABLE t1;
 CREATE TABLE t1 (c1 TINYINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES (-127, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-127, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` tinyint(3) unsigned NOT NULL AUTO_INCREMENT,
+  `c1` tinyint unsigned NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 1	NULL
@@ -916,10 +932,10 @@ INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` smallint(6) NOT NULL AUTO_INCREMENT,
+  `c1` smallint NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 -32767	innodb
@@ -929,20 +945,20 @@ c1	c2
 DROP TABLE t1;
 CREATE TABLE t1 (c1 SMALLINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES (-32757, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-32757, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` smallint(5) unsigned NOT NULL AUTO_INCREMENT,
+  `c1` smallint unsigned NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 1	NULL
@@ -958,10 +974,10 @@ INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` mediumint(9) NOT NULL AUTO_INCREMENT,
+  `c1` mediumint NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 -8388607	innodb
@@ -971,20 +987,20 @@ c1	c2
 DROP TABLE t1;
 CREATE TABLE t1 (c1 MEDIUMINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES (-8388607, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-8388607, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` mediumint(8) unsigned NOT NULL AUTO_INCREMENT,
+  `c1` mediumint unsigned NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 1	NULL
@@ -1000,10 +1016,10 @@ INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 -2147483647	innodb
@@ -1013,20 +1029,20 @@ c1	c2
 DROP TABLE t1;
 CREATE TABLE t1 (c1 INT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES (-2147483647, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-2147483647, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `c1` int unsigned NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 1	NULL
@@ -1042,10 +1058,10 @@ INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` bigint(20) NOT NULL AUTO_INCREMENT,
+  `c1` bigint NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 -9223372036854775807	innodb
@@ -1055,20 +1071,20 @@ c1	c2
 DROP TABLE t1;
 CREATE TABLE t1 (c1 BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1, NULL);
-INSERT INTO t1 VALUES (-1, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-1, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES (-9223372036854775807, 'innodb');
+INSERT IGNORE INTO t1 VALUES (-9223372036854775807, 'innodb');
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 INSERT INTO t1 VALUES (NULL, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `c1` bigint unsigned NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 1	NULL
@@ -1081,11 +1097,11 @@ CREATE INDEX i1 on t1(c2);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  `c2` int(11) DEFAULT NULL,
+  `c1` int NOT NULL AUTO_INCREMENT,
+  `c2` int DEFAULT NULL,
   PRIMARY KEY (`c1`),
   KEY `i1` (`c2`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 (c2) values (0);
 SELECT * FROM t1;
 c1	c2
@@ -1095,7 +1111,10 @@ DROP TABLE IF EXISTS t1;
 Warnings:
 Note	1051	Unknown table 'test.t1'
 CREATE TABLE t1(C1 DOUBLE AUTO_INCREMENT KEY, C2 CHAR(10)) ENGINE=InnoDB;
+Warnings:
+Warning	3856	AUTO_INCREMENT support for FLOAT/DOUBLE columns is deprecated and will be removed in a future release. Consider removing AUTO_INCREMENT from column 'C1'.
 INSERT INTO t1(C1, C2) VALUES (1, 'innodb'), (3, 'innodb');
+# restart
 INSERT INTO t1(C2) VALUES ('innodb');
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -1103,10 +1122,13 @@ t1	CREATE TABLE `t1` (
   `C1` double NOT NULL AUTO_INCREMENT,
   `C2` char(10) DEFAULT NULL,
   PRIMARY KEY (`C1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 CREATE TABLE t1(C1 FLOAT AUTO_INCREMENT KEY, C2 CHAR(10)) ENGINE=InnoDB;
+Warnings:
+Warning	3856	AUTO_INCREMENT support for FLOAT/DOUBLE columns is deprecated and will be removed in a future release. Consider removing AUTO_INCREMENT from column 'C1'.
 INSERT INTO t1(C1, C2) VALUES (1, 'innodb'), (3, 'innodb');
+# restart
 INSERT INTO t1(C2) VALUES ('innodb');
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -1114,7 +1136,7 @@ t1	CREATE TABLE `t1` (
   `C1` float NOT NULL AUTO_INCREMENT,
   `C2` char(10) DEFAULT NULL,
   PRIMARY KEY (`C1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 DROP TABLE IF EXISTS t1;
 Warnings:
@@ -1124,9 +1146,9 @@ INSERT INTO t1 SET c1 = 1;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 SET c1 = 2;
 INSERT INTO t1 SET c1 = -1;
 SELECT * FROM t1;
@@ -1139,9 +1161,9 @@ Got one of the listed errors
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 REPLACE INTO t1 VALUES (-1);
 SELECT * FROM t1;
 c1
@@ -1151,9 +1173,9 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 DROP TABLE IF EXISTS t1;
 Warnings:
@@ -1169,9 +1191,9 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 CREATE TABLE t1  (c1 INTEGER AUTO_INCREMENT, PRIMARY KEY (c1)) ENGINE=InnoDB;
 INSERT INTO  t1 VALUES (-685113344), (2), (NULL), (NULL);
@@ -1184,9 +1206,9 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 CREATE TABLE t1  (c1 INTEGER AUTO_INCREMENT, PRIMARY KEY (c1)) ENGINE=InnoDB;
 INSERT INTO  t1 VALUES (NULL), (2), (-685113344), (NULL);
@@ -1204,9 +1226,9 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 CREATE TABLE t1  (c1 INTEGER AUTO_INCREMENT, PRIMARY KEY (c1)) ENGINE=InnoDB;
 INSERT INTO  t1 VALUES (NULL), (2), (-685113344), (5);
@@ -1219,9 +1241,9 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 CREATE TABLE t1  (c1 INTEGER AUTO_INCREMENT, PRIMARY KEY (c1)) ENGINE=InnoDB;
 INSERT INTO  t1 VALUES (1), (2), (-685113344), (NULL);
@@ -1234,9 +1256,9 @@ c1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 DROP TABLE IF EXISTS t1;
 Warnings:
@@ -1244,12 +1266,13 @@ Note	1051	Unknown table 'test.t1'
 CREATE TABLE t1(c1 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (NULL);
 INSERT INTO t1 VALUES (18446744073709551615);
+# restart
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `c1` bigint unsigned NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 SET @@SESSION.AUTO_INCREMENT_INCREMENT=1, @@SESSION.AUTO_INCREMENT_OFFSET=256;
 SHOW VARIABLES LIKE "%auto_inc%";
@@ -1261,10 +1284,10 @@ INSERT INTO t1 VALUES (1, NULL);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` tinyint(4) NOT NULL AUTO_INCREMENT,
+  `c1` tinyint NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 1	NULL
@@ -1279,24 +1302,27 @@ INSERT INTO t1 VALUES (2147483648, 'a');
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `c1` int unsigned NOT NULL AUTO_INCREMENT,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=2147483649 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=2147483649 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 2147483648	a
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 ALTER TABLE t1 CHANGE c1 c1 INT;
 Warnings:
 Warning	1264	Out of range value for column 'c1' at row 1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL DEFAULT '0',
+  `c1` int NOT NULL,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1(c2) VALUES('b');
+Warnings:
+Warning	1364	Field 'c1' doesn't have a default value
 SELECT * FROM t1;
 c1	c2
 0	b
@@ -1304,56 +1330,57 @@ c1	c2
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL DEFAULT '0',
+  `c1` int NOT NULL,
   `c2` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
+SET sql_mode = default;
 CREATE TABLE t1 (c1 INT AUTO_INCREMENT PRIMARY KEY, c2 INT) ENGINE = MyISAM;
 INSERT INTO t1 (c1) VALUES (NULL), (-290783232), (NULL);
-Warnings:
-Warning	1264	Out of range value for column 'c1' at row 3
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  `c2` int(11) DEFAULT NULL,
+  `c1` int NOT NULL AUTO_INCREMENT,
+  `c2` int DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=MyISAM AUTO_INCREMENT=2147483648 DEFAULT CHARSET=latin1
+) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
 c1	c2
 1	NULL
 -290783232	NULL
-2147483647	NULL
+2	NULL
 ALTER TABLE t1 ENGINE = InnoDB;
 SELECT * FROM t1;
 c1	c2
 -290783232	NULL
 1	NULL
-2147483647	NULL
+2	NULL
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  `c2` int(11) DEFAULT NULL,
+  `c1` int NOT NULL AUTO_INCREMENT,
+  `c2` int DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=2147483648 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 REPLACE INTO t1 (c2 ) VALUES (0);
-ERROR HY000: Failed to read auto-increment value from storage engine
 SELECT * FROM t1;
 c1	c2
 -290783232	NULL
 1	NULL
-2147483647	NULL
+2	NULL
+3	0
 DROP TABLE t1;
 CREATE TABLE t1 (c1 DOUBLE NOT NULL PRIMARY KEY AUTO_INCREMENT) ENGINE=InnoDB
 AUTO_INCREMENT=10000000000000000000;
+Warnings:
+Warning	3856	AUTO_INCREMENT support for FLOAT/DOUBLE columns is deprecated and will be removed in a future release. Consider removing AUTO_INCREMENT from column 'c1'.
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `c1` double NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=10000000000000000000 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=10000000000000000000 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 VALUES ();
 ERROR HY000: Failed to read auto-increment value from storage engine
 DROP TABLE t1;
@@ -1367,112 +1394,206 @@ INSERT INTO t VALUES (NULL), (NULL);
 SHOW CREATE TABLE t;
 Table	Create Table
 t	CREATE TABLE `t` (
-  `i` int(11) NOT NULL AUTO_INCREMENT,
+  `i` int NOT NULL AUTO_INCREMENT,
   KEY `i` (`i`)
-) ENGINE=InnoDB AUTO_INCREMENT=601 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=601 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SET auto_increment_increment = 50;
 INSERT INTO t VALUES (NULL);
 SELECT * FROM t;
 i
 1
 301
-351
+601
 SHOW CREATE TABLE t;
 Table	Create Table
 t	CREATE TABLE `t` (
-  `i` int(11) NOT NULL AUTO_INCREMENT,
+  `i` int NOT NULL AUTO_INCREMENT,
   KEY `i` (`i`)
-) ENGINE=InnoDB AUTO_INCREMENT=401 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=651 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
-SET @@SESSION.AUTO_INCREMENT_INCREMENT=1, @@SESSION.AUTO_INCREMENT_OFFSET=1;
-SET @@INSERT_ID=1;
-SHOW VARIABLES LIKE "%auto_inc%";
-Variable_name	Value
-auto_increment_increment	1
-auto_increment_offset	1
-DROP TABLE IF EXISTS t1;
-Warnings:
-Note	1051	Unknown table 'test.t1'
-CREATE TABLE t1 (c1 INT AUTO_INCREMENT, PRIMARY KEY(c1)) ENGINE=InnoDB;
-INSERT INTO t1 VALUES(null);
-INSERT INTO t1 VALUES(null);
-SELECT * FROM t1;
-c1
-1
-2
+#
+# Bug#15851528 DUPLICATE KEY ERROR ON AUTO-INC PK WITH MIXED AUTO_INCREMENT_INCREMENT CLIENTS
+#
+# This test shows that the next record to be inserted is not affected
+# by a change in auto_increment_increment.
+# In addition, current value of auto_increment_increment by the client
+# that uses the existing autoinc value with be used to set next autoinc
+# value, which will be used by next client reguardless of its own session
+# setting for auto_increment_increment.
+#
+# Client 1: Insert a record with auto_increment_increment=2
+CREATE TABLE t(
+a SERIAL PRIMARY KEY,
+b VARCHAR(200)) ENGINE=InnoDB;
+SET SESSION auto_increment_increment=2;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t(b) VALUES('S1');
+SELECT a,b FROM t;
+a	b
+1	S1
+# Client 2: Insert records with auto_increment_increment 2,1
+SET SESSION auto_increment_increment=2;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t(b) VALUES('S2');
+SELECT a,b FROM t;
+a	b
+1	S1
+3	S2
+SET SESSION auto_increment_increment=1;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t(b) VALUES('S2');
+SELECT a,b FROM t;
+a	b
+1	S1
+3	S2
+5	S2
+# Client 1: Insert a record with auto_increment_increment=1
+SET SESSION auto_increment_increment=1;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t(b) VALUES('S1');
+SELECT a,b FROM t;
+a	b
+1	S1
+3	S2
+5	S2
+6	S1
+DROP TABLE t;
+# Autoincrement behaviour with mixed insert.
+CREATE TABLE t(
+a TINYINT AUTO_INCREMENT PRIMARY KEY,
+b VARCHAR(200)) ENGINE=InnoDB;
+SET SESSION auto_increment_increment=100;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` tinyint NOT NULL AUTO_INCREMENT,
+  `b` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t(b) VALUES('S0'),('S1');
+SELECT a,b FROM t;
+a	b
+1	S0
+101	S1
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` tinyint NOT NULL AUTO_INCREMENT,
+  `b` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t(a,b) VALUES(28,'S2');
+SELECT a,b FROM t;
+a	b
+1	S0
+28	S2
+101	S1
+SET SESSION auto_increment_increment=1;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` tinyint NOT NULL AUTO_INCREMENT,
+  `b` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t(b) VALUES('S3');
+SELECT a,b FROM t;
+a	b
+1	S0
+28	S2
+101	S1
+127	S3
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` tinyint NOT NULL AUTO_INCREMENT,
+  `b` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t(b) VALUES('S4');
+ERROR 23000: Duplicate entry '127' for key 't.PRIMARY'
+DROP TABLE t;
+#
+# Bug 26906787 - INCORRECT AUTO_INCREMENT IDS ISSUED WHEN CLOSE TO ULLONG_MAX
+#
+SET auto_increment_increment = 300;
+CREATE TABLE t1 (a BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, b CHAR(8))
+ENGINE=innodb;
+INSERT INTO t1 VALUES (18446744073709551613, 'a');
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
-# restart: --innodb_autoinc_persistent=on
+  `a` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b` char(8) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=18446744073709551614 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 VALUES (NULL, 'b');
+ERROR 22003: Out of range value for column 't1' at row 167
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(null);
-INSERT INTO t1 VALUES(null);
-SELECT * FROM t1;
-c1
-1
-2
-3
-4
-DELETE FROM t1 WHERE c1 in(3,4);
-SELECT * FROM t1;
-c1
-1
-2
-# restart: --innodb_autoinc_persistent=on
+  `a` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b` char(8) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1 (
+a BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+b CHAR(8)
+) ENGINE=innodb
+PARTITION BY RANGE (a) (
+PARTITION p0 VALUES LESS THAN (6),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO t1 VALUES (18446744073709551613, 'a');
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
-update t1 set c1=1000 where c1=1;
-select * from t1;
-c1
-2
-1000
+  `a` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b` char(8) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=18446744073709551614 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`a`)
+(PARTITION p0 VALUES LESS THAN (6) TABLESPACE = `innodb_system` ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN MAXVALUE TABLESPACE = `innodb_system` ENGINE = InnoDB) */
+INSERT INTO t1 VALUES (NULL, 'b');
+ERROR 22003: Out of range value for column 't1' at row 167
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
-# restart: --innodb_autoinc_persistent=on --innodb_autoinc_persistent_interval=10
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1
-insert into t1 values(null),(null),(null),(null),(null),(null),(null),(null),(null),(null),(null),(null);
-select * from t1;
-c1
-2
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-1000
-# restart: --innodb_autoinc_persistent=on innodb_autoinc_persistent_interval=10
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=latin1
+  `a` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b` char(8) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`a`)
+(PARTITION p0 VALUES LESS THAN (6) TABLESPACE = `innodb_system` ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN MAXVALUE TABLESPACE = `innodb_system` ENGINE = InnoDB) */
 DROP TABLE t1;

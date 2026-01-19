@@ -1,7 +1,9 @@
--- source include/not_embedded.inc
 -- source include/have_log_bin.inc
 
-call mtr.add_suppression('Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.'); 
+call mtr.add_suppression('Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.');
+
+SET @old_log_output=@@global.log_output;
+SET GLOBAL log_output="FILE,TABLE";
 #
 # SQL Syntax for Prepared Statements test
 #
@@ -205,6 +207,7 @@ drop table t1;
 # SHOW TABLE STATUS test
 #
 create table t1 ( a int primary key, b varchar(30)) engine = MYISAM ;
+analyze table t1;
 prepare stmt1 from ' show table status from test like ''t1%'' ';
 --replace_column 8 4294967295 12 # 13 # 14 #
 execute stmt1;
@@ -240,10 +243,8 @@ prepare stmt1 from "select 1 into @var";
 execute stmt1;
 execute stmt1;
 prepare stmt1 from "create table t1 select 1 as i";
---disable_warnings ONCE
 execute stmt1;
 drop table t1;
---disable_warnings ONCE
 execute stmt1;
 prepare stmt1 from "insert into t1 select i from t1";
 execute stmt1;
@@ -272,9 +273,11 @@ set names utf8;
 prepare `Ã¼` from 'select 1234';
 execute `Ã¼` ;
 set names latin1;
+--character_set latin1
 execute `ü`;
 deallocate prepare `ü`;
 set names default;
+--character_set utf8mb4
 
 
 # 
@@ -312,8 +315,8 @@ drop table t1;
 # check the same for timestamps
 #
 create table t1 (a timestamp not null);
-prepare stmt from "insert into t1 (a) values (?)";
-execute stmt using @var;
+prepare stmt from "insert into t1 (a) values (CURRENT_TIMESTAMP)";
+execute stmt;
 --disable_result_log ONCE
 select * from t1;
 deallocate prepare stmt;
@@ -362,7 +365,7 @@ deallocate prepare stmt;
 # statements): check that the query plan changes whenever we change
 # placeholder value.
 #
-create table t1 (a int, b int);
+create table t1 (a int, b int) engine = myisam;
 insert into t1 (a, b) values (1,1), (1,2), (2,1), (2,2);
 prepare stmt from
 "explain select * from t1 where t1.a=2 and t1.a=t1.b and t1.b > 1 + ?";
@@ -625,7 +628,7 @@ execute stmt using @a;
 select t2.id from t2, t1 where (t1.id=1 and t2.t1_id=t1.id);
 
 deallocate prepare stmt;
-drop table t1, t2;
+drop table t2, t1;
 
 #
 # Bug#11060 "Server crashes on calling stored procedure with INSERT SELECT
@@ -666,8 +669,8 @@ insert into t2 values ("1", "1", "sup", "0"), ("2", "1", "sup", "1"),
 
 create table t3 (
   id int(11) not null default '0',
-  preceeding_id int(11) not null default '0',
-  primary key  (id,preceeding_id)
+  preceding_id int(11) not null default '0',
+  primary key  (id,preceding_id)
 );
 
 create table t4 (
@@ -681,7 +684,7 @@ insert into t4 values("nicke", "imp");
 prepare stmt from
 'select distinct t1.partner_id
 from t1 left join t3 on t1.id = t3.id
-     left join t1 pp on pp.id = t3.preceeding_id
+     left join t1 pp on pp.id = t3.preceding_id
 where
   exists (
     select *
@@ -752,13 +755,13 @@ prepare stmt from "select @@time_zone";
 execute stmt;
 set @@time_zone:='Japan';
 execute stmt;
-prepare stmt from "select @@tx_isolation";
+prepare stmt from "select @@transaction_isolation";
 execute stmt;
 set transaction isolation level read committed;
 execute stmt;
 set transaction isolation level serializable;
 execute stmt;
-set @@tx_isolation=default;
+set @@transaction_isolation=default;
 execute stmt;
 deallocate prepare stmt;
 
@@ -824,21 +827,21 @@ drop table t1;
 # Bug#13134 "Length of VARCHAR() utf8 column is increasing when table is
 # recreated with PS/SP"
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 prepare stmt from 'create table t1 (a varchar(10) character set utf8)';
 execute stmt;
---disable_warnings ONCE
+--disable_warnings WARN_DATA_TRUNCATED ONCE
 insert into t1 (a) values (repeat('a', 20));
 select length(a) from t1;
 drop table t1;
 execute stmt;
---disable_warnings ONCE
+--disable_warnings WARN_DATA_TRUNCATED ONCE
 insert into t1 (a) values (repeat('a', 20));
 # Check that the data is truncated to the same length
 select length(a) from t1;
 drop table t1;
 deallocate prepare stmt;
-
+SET sql_mode = default;
 #
 # Bug#16248 "WHERE (col1,col2) IN ((?,?)) gives wrong results":
 # check that ROW implementation is reexecution-friendly.
@@ -1140,8 +1143,6 @@ DROP TABLE t1;
 # The cause of a bug was that cached LEX::create_list was modified,
 # and then together with LEX::key_list was reset.
 #
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1, t2;
 
 CREATE TABLE t1 (i INT);
 
@@ -1178,7 +1179,6 @@ create database mysqltest character set utf8;
 prepare stmt1 from "create table mysqltest.t1 (c char(10))";
 prepare stmt2 from "create table mysqltest.t2 select 'test'";
 execute stmt1;
---disable_warnings ONCE
 execute stmt2;
 show create table mysqltest.t1;
 show create table mysqltest.t2;
@@ -1186,7 +1186,6 @@ drop table mysqltest.t1;
 drop table mysqltest.t2;
 alter database mysqltest character set latin1;
 execute stmt1;
---disable_warnings ONCE
 execute stmt2;
 show create table mysqltest.t1;
 show create table mysqltest.t2;
@@ -1437,7 +1436,7 @@ drop table t1;
 # Bug#19308 "REPAIR/OPTIMIZE/ANALYZE supported in SP but not in PS".
 # Add test coverage for the added commands.
 #
-create table t1 (a int);
+create table t1 (a int) engine=myisam;
 create table t2 like t1;
 create table t3 like t2;
 prepare stmt from "repair table t1";
@@ -1596,8 +1595,6 @@ use test;
 # registered and went unnoticed, which resulted in preliminary freeing
 # of used memory.
 #
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1, t2, t3;
 
 CREATE TABLE t1 (i BIGINT, j BIGINT);
 CREATE TABLE t2 (i BIGINT);
@@ -1618,8 +1615,6 @@ DROP TABLE IF EXISTS t1, t2, t3;
 #
 # BUG#21081: SELECT inside stored procedure returns wrong results
 #
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1, t2;
 
 CREATE TABLE t1 (i INT KEY);
 CREATE TABLE t2 (i INT);
@@ -1667,8 +1662,6 @@ DROP TABLE t1;
 #
 # BUG#21856: Prepared Statments: crash if bad create
 #
---disable_warnings ONCE
-DROP PROCEDURE IF EXISTS p1;
 
 let $iterations= 100;
 --disable_query_log
@@ -1681,21 +1674,6 @@ while ($iterations)
 }
 --enable_query_log
 --enable_result_log
-
-#
-# Bug 19764:  SHOW commands end up in the slow log as table scans
-#
-
-flush status;
-prepare sq from 'show status like "slow_queries"';
-execute sq;
-prepare no_index from 'select 1 from information_schema.tables limit 1';
-execute sq;
-execute no_index;
-execute sq;
-deallocate prepare no_index;
-deallocate prepare sq;
-
 
 #
 # Bug 25027: query with a single-row non-correlated subquery
@@ -1726,8 +1704,6 @@ DROP TABLE t1,t2;
 # fails with weird error", however ALTER TABLE is not re-execution friendly
 # and that caused a valgrind warning. Check that the warning is gone.
 #
---disable_warnings ONCE
-drop table if exists t1;
 create table t1 (s1 char(20));
 prepare stmt from "alter table t1 modify s1 int";
 execute stmt;
@@ -1738,8 +1714,6 @@ deallocate prepare stmt;
 #
 # Bug#6895 "Prepared Statements: ALTER TABLE DROP COLUMN does nothing"
 #
---disable_warnings ONCE
-drop table if exists t1;
 create table t1 (a int, b int);
 prepare s_6895 from "alter table t1 drop column b";
 execute s_6895;
@@ -1793,28 +1767,19 @@ set @@character_set_server= @old_character_set_server;
 #
 # BUG#24491 "using alias from source table in insert ... on duplicate key"
 #
---disable_warnings ONCE
-drop tables if exists t1;
 create table t1 (id int primary key auto_increment, value varchar(10));
 insert into t1 (id, value) values (1, 'FIRST'), (2, 'SECOND'), (3, 'THIRD');
-# Let us prepare INSERT ... SELECT ... ON DUPLICATE KEY UPDATE statement
+# Prepare INSERT ... SELECT ... ON DUPLICATE KEY UPDATE statement
 # which in its ON DUPLICATE KEY clause erroneously tries to assign value
-# to a column which is mentioned only in SELECT part.
-prepare stmt from "insert into t1 (id, value) select * from (select 4 as i, 'FOURTH' as v) as y on duplicate key update v = 'DUP'";
-# Both first and second attempts to execute it should fail
---error ER_BAD_FIELD_ERROR 
-execute stmt;
+# to a column which is mentioned only in SELECT part. This is now caught
+# during preparation.
 --error ER_BAD_FIELD_ERROR
-execute stmt;
-deallocate prepare stmt;
+prepare stmt from "insert into t1 (id, value) select * from (select 4 as i, 'FOURTH' as v) as y on duplicate key update v = 'DUP'";
+#
 # And now the same test for more complex case which is more close
 # to the one that was reported originally.
-prepare stmt from "insert into t1 (id, value) select * from (select 4 as id, 'FOURTH' as value) as y on duplicate key update y.value = 'DUP'";
---error ER_BAD_FIELD_ERROR 
-execute stmt;
 --error ER_BAD_FIELD_ERROR
-execute stmt;
-deallocate prepare stmt;
+prepare stmt from "insert into t1 (id, value) select * from (select 4 as id, 'FOURTH' as value) as y on duplicate key update y.value = 'DUP'";
 drop tables t1;
 
 #
@@ -1829,8 +1794,6 @@ drop table t1;
 #
 # Bug#33798: prepared statements improperly handle large unsigned ints
 #
---disable_warnings ONCE
-drop table if exists t1;
 create table t1 (a bigint unsigned, b bigint(20) unsigned);
 prepare stmt from "insert into t1 values (?,?)";
 set @a= 9999999999999999;
@@ -1941,12 +1904,8 @@ show create view v1;
 select * from v1;
 drop view v1;
 
+--error ER_VIEW_WRONG_LIST
 prepare stmt from "create view v1 (a,b,c) as select * from t1";
---error ER_VIEW_WRONG_LIST
-execute stmt;
---error ER_VIEW_WRONG_LIST
-execute stmt;
-deallocate prepare stmt;
 
 drop table t1;
 create temporary table t1 (a int, b int);
@@ -2029,26 +1988,6 @@ DROP TABLE t1;
 # Bug #20665: All commands supported in Stored Procedures should work in
 # Prepared Statements
 #
-create procedure proc_1() reset query cache;
-call proc_1();
-call proc_1();
-call proc_1();
-delimiter |;
---error ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG
-create function func_1() returns int deterministic begin reset query cache; return 1; end|
-create function func_1() returns int deterministic begin call proc_1(); return 1; end|
-delimiter ;|
---error ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG
-select func_1(), func_1(), func_1() from dual;
-drop function func_1;
-drop procedure proc_1;
-prepare abc from "reset query cache";
-execute abc;
-execute abc;
-execute abc;
-deallocate prepare abc;
-
-
 create procedure proc_1() reset master;
 delimiter |;
 --error ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG
@@ -2198,24 +2137,32 @@ deallocate prepare abc;
 
 create procedure proc_1() flush tables;
 flush tables;
+--sorted_result
 show open tables from mysql;
 select Host, User from mysql.user limit 0;
 select Host, Db from mysql.db limit 0;
+--sorted_result
 show open tables from mysql;
 call proc_1();
+--sorted_result
 show open tables from mysql;
 select Host, User from mysql.user limit 0;
 select Host, Db from mysql.db limit 0;
+--sorted_result
 show open tables from mysql;
 call proc_1();
+--sorted_result
 show open tables from mysql;
 select Host, User from mysql.user limit 0;
 select Host, Db from mysql.db limit 0;
+--sorted_result
 show open tables from mysql;
 call proc_1();
+--sorted_result
 show open tables from mysql;
 select Host, User from mysql.user limit 0;
 select Host, Db from mysql.db limit 0;
+--sorted_result
 show open tables from mysql;
 flush tables;
 delimiter |;
@@ -2235,24 +2182,31 @@ drop procedure proc_1;
 flush tables;
 select Host, User from mysql.user limit 0;
 select Host, Db from mysql.db limit 0;
+--sorted_result
 show open tables from mysql;
 --enable_ps_protocol
 
 prepare abc from "flush tables";
 execute abc;
+--sorted_result
 show open tables from mysql;
 select Host, User from mysql.user limit 0;
 select Host, Db from mysql.db limit 0;
+--sorted_result
 show open tables from mysql;
 execute abc;
+--sorted_result
 show open tables from mysql;
 select Host, User from mysql.user limit 0;
 select Host, Db from mysql.db limit 0;
+--sorted_result
 show open tables from mysql;
 execute abc;
+--sorted_result
 show open tables from mysql;
 select Host, User from mysql.user limit 0;
 select Host, Db from mysql.db limit 0;
+--sorted_result
 show open tables from mysql;
 flush tables;
 deallocate prepare abc;
@@ -2298,26 +2252,6 @@ execute abc;
 deallocate prepare abc;
 
 
-create procedure proc_1() flush des_key_file;
-call proc_1();
-call proc_1();
-call proc_1();
-delimiter |;
---error ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG
-create function func_1() returns int begin flush des_key_file; return 1; end|
-create function func_1() returns int begin call proc_1(); return 1; end|
-delimiter ;|
---error ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG
-select func_1(), func_1(), func_1() from dual;
-drop function func_1;
-drop procedure proc_1;
-prepare abc from "flush des_key_file";
-execute abc;
-execute abc;
-execute abc;
-deallocate prepare abc;
-
-
 create procedure proc_1() flush user_resources;
 call proc_1();
 call proc_1();
@@ -2341,9 +2275,10 @@ deallocate prepare abc;
 create procedure proc_1() start slave;
 drop procedure proc_1;
 delimiter |;
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
 create function func_1() returns int begin start slave; return 1; end|
 delimiter ;|
-drop function func_1;
+
 prepare abc from "start slave";
 deallocate prepare abc;
 
@@ -2351,9 +2286,10 @@ deallocate prepare abc;
 create procedure proc_1() stop slave;
 drop procedure proc_1;
 delimiter |;
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
 create function func_1() returns int begin stop slave; return 1; end|
 delimiter ;|
-drop function func_1;
+
 prepare abc from "stop slave";
 deallocate prepare abc;
 
@@ -2434,8 +2370,6 @@ execute abc;
 deallocate prepare abc;
 
 
---disable_warnings ONCE
-drop procedure if exists a;
 create procedure a() select 42;
 create procedure proc_1(a char(2)) show create procedure a;
 call proc_1("bb");
@@ -2458,8 +2392,6 @@ deallocate prepare abc;
 drop procedure a;
 
 
---disable_warnings ONCE
-drop function if exists a;
 create function a() returns int return 42+13;
 create procedure proc_1(a char(2)) show create function a;
 call proc_1("bb");
@@ -2482,8 +2414,6 @@ deallocate prepare abc;
 drop function a;
 
 
---disable_warnings ONCE
-drop table if exists tab1;
 create table tab1(a int, b char(1), primary key(a,b));
 create procedure proc_1() show create table tab1;
 call proc_1();
@@ -2587,8 +2517,6 @@ execute abc;
 deallocate prepare abc;
 
 
---disable_warnings ONCE
-drop database if exists mysqltest_xyz;
 create procedure proc_1() create database mysqltest_xyz;
 call proc_1();
 drop database if exists mysqltest_xyz;
@@ -2619,8 +2547,6 @@ drop database if exists mysqltest_xyz;
 deallocate prepare abc;
 
 
---disable_warnings ONCE
-drop table if exists t1;
 create table t1 (a int, b char(5));
 insert into t1 values (1, "one"), (2, "two"), (3, "three");
 create procedure proc_1() checksum table xyz;
@@ -2673,8 +2599,6 @@ drop user pstest_xyz@localhost;
 deallocate prepare abc;
 
 
---disable_warnings ONCE
-drop event if exists xyz;
 #create procedure proc_1() create event xyz on schedule every 5 minute disable do select 123;
 #call proc_1();
 #drop event xyz;
@@ -2816,8 +2740,10 @@ delimiter |;
 --error ER_SP_NO_RETSET
 create function func_1() returns int begin show errors; return 1; end|
 delimiter ;|
+# WL#5928: prepare of diagnostics statements fails now, cos the standard says it should.
+--error ER_UNSUPPORTED_PS
 prepare abc from "show errors";
-deallocate prepare abc;
+# deallocate prepare abc;
 
 --disable_warnings
 drop table if exists t1;
@@ -2835,29 +2761,13 @@ delimiter |;
 --error ER_SP_NO_RETSET
 create function func_1() returns int begin show warnings; return 1; end|
 delimiter ;|
+# WL#5928: prepare of diagnostics statements fails now, cos the standard says it should.
+--error ER_UNSUPPORTED_PS
 prepare abc from "show warnings";
-drop table if exists t1;
-execute abc;
-drop table if exists t2;
-execute abc;
-drop table if exists t1, t2;
-execute abc;
-deallocate prepare abc;
 
 #
 # Bug#22684: The Functions ENCODE, DECODE and FORMAT are not real functions
 #
-
-set @my_password="password";
-set @my_data="clear text to encode";
-
-prepare stmt1 from 'select decode(encode(?, ?), ?)';
-execute stmt1 using @my_data, @my_password, @my_password;
-set @my_data="more text to encode";
-execute stmt1 using @my_data, @my_password, @my_password;
-set @my_password="new password";
-execute stmt1 using @my_data, @my_password, @my_password;
-deallocate prepare stmt1;
 
 set @to_format="123456789.123456789";
 set @dec=0;
@@ -2882,8 +2792,6 @@ deallocate prepare stmt2;
 #
 # BUG#18326: Do not lock table for writing during prepare of statement
 #
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1, t2;
 
 CREATE TABLE t1 (i INT);
 INSERT INTO t1 VALUES (1);
@@ -2956,8 +2864,6 @@ drop table t1;
 # Test that there is an error for prepared delete just like for the normal
 # one.
 #
---disable_warnings ONCE
-drop table if exists t1, t2;
 create table t1 (a int, b int);
 create table t2 like t1;
 
@@ -2981,47 +2887,12 @@ deallocate prepare stmt;
 drop table t1, t2;
 
 --echo #
---echo # Bug#27430 Crash in subquery code when in PS and table DDL changed
---echo # after PREPARE
---echo #
---echo # This part of the test doesn't work in embedded server, this is
---echo # why it's here. For the main test see ps_ddl*.test
---echo
---disable_warnings ONCE
-drop table if exists t1;
-create table t1 (a int);
-prepare stmt from "show events where (1) in (select * from t1)";
-execute stmt;
-drop table t1;
-create table t1 (x int);
-execute stmt;
-drop table t1;
-deallocate prepare stmt;
-
---echo #
---echo # Bug#49141: Encode function is significantly slower in 5.1 compared to 5.0
---echo #
-
-prepare encode from "select encode(?, ?) into @ciphertext";
-prepare decode from "select decode(?, ?) into @plaintext";
-set @str="abc", @key="cba";
-execute encode using @str, @key;
-execute decode using @ciphertext, @key;
-select @plaintext;
-set @str="bcd", @key="dcb";
-execute encode using @str, @key;
-execute decode using @ciphertext, @key;
-select @plaintext;
-deallocate prepare encode;
-deallocate prepare decode;
-
---echo #
 --echo # Bug#52124 memory leaks like a sieve in datetime, timestamp, time, date fields + warnings
 --echo #
-CREATE TABLE t1 (a DATETIME NOT NULL, b TINYINT);
-INSERT INTO t1 VALUES (0, 0),(0, 0);
+CREATE TABLE t1 (a TIME NOT NULL, b TINYINT);
+INSERT IGNORE INTO t1 VALUES (0, 0),(0, 0);
 PREPARE stmt FROM "SELECT 1 FROM t1 WHERE
-ROW(a, b) >= ROW('1', (SELECT 1 FROM t1 WHERE a > 1234))";
+ROW(a, b) >= ROW('1', (SELECT 1 FROM t1 WHERE a > '1234abc'))";
 --disable_warnings
 EXECUTE stmt;
 EXECUTE stmt;
@@ -3030,11 +2901,11 @@ DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
 
 --echo #
---echo # Bug#54494 crash with explain extended and prepared statements
+--echo # Bug#54494 crash with explain and prepared statements
 --echo #
 CREATE TABLE t1(a INT);
 INSERT INTO t1 VALUES (1),(2);
-PREPARE stmt FROM 'EXPLAIN EXTENDED SELECT 1 FROM t1 RIGHT JOIN t1 t2 ON 1';
+PREPARE stmt FROM 'EXPLAIN SELECT 1 FROM t1 RIGHT JOIN t1 t2 ON 1';
 EXECUTE stmt;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
@@ -3248,7 +3119,7 @@ DROP PROCEDURE p2;
 
 ###########################################################################
 
---source t/wl4435_generated.inc
+--source include/ps_out_params_generated.inc
 
 ###########################################################################
 
@@ -3262,8 +3133,6 @@ DROP PROCEDURE p2;
 --echo # WL#4284: Transactional DDL locking
 --echo #
 
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (a INT);
 BEGIN;
 SELECT * FROM t1;
@@ -3282,8 +3151,6 @@ DROP TABLE t1;
 
 connect(con1,localhost,root,,);
 connection default;
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (a INT);
 connection con1;
 BEGIN;
@@ -3326,7 +3193,8 @@ FROM
   SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
   ) AS t2
 WHERE t2.c2 = t1.c2
-GROUP BY c1, c2
+GROUP BY c1,c2
+ORDER BY c1,c2
 ";
 
 --echo
@@ -3346,7 +3214,8 @@ FROM
   SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
   ) AS t2
 WHERE t2.c2 = t1.c2
-GROUP BY c1, c2;
+GROUP BY c1, c2
+ORDER BY c1, c2;
 --echo
 EXECUTE s1;
 
@@ -3367,7 +3236,8 @@ FROM
   SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
   ) AS t2
 WHERE t2.c2 = t1.c2
-GROUP BY c1, c2;
+GROUP BY c1, c2
+ORDER BY c1, c2;
 --echo
 EXECUTE s1;
 
@@ -3388,7 +3258,8 @@ FROM
   SELECT '2012-03-01 01:00:00',       2,       1       FROM dual
   ) AS t2
 WHERE t2.c2 = t1.c2
-GROUP BY c1, c2;
+GROUP BY c1, c2
+ORDER BY c1, c2;
 --echo
 EXECUTE s1;
 
@@ -3486,37 +3357,369 @@ DEALLOCATE PREPARE stmt;
 
 DROP TABLE t1, t2;
 
-###########################################################################
-
-
 --echo #
---echo # Bug#12661349 assert in protocol::end_statement
+--echo # Bug#16820562: Bad column names are not rejected at 'prepare'
 --echo #
 
---echo # Note: This test case should be run with --ps-protocol
+--echo Resolver errors should be given at prepare time in insert select
 
---disable_warnings ONCE
-DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (a INTEGER);
+CREATE TABLE t2 (b INTEGER);
 
-CREATE TABLE t1 (col1 INT);
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "INSERT INTO t1 VALUES(1) ON DUPLICATE KEY UPDATE absent=2";
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "INSERT INTO t1 VALUES(1) ON DUPLICATE KEY UPDATE a=absent";
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "INSERT INTO t1 SELECT 1 ON DUPLICATE KEY UPDATE absent=2";
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "INSERT INTO t1 SELECT 1 ON DUPLICATE KEY UPDATE a=absent";
 
---echo # Connection con1
-connect(con1, localhost, root);
-let $con1_id= `SELECT CONNECTION_ID()`;
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "INSERT INTO t1(absent) VALUES(1) ON DUPLICATE KEY UPDATE a=1";
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "INSERT INTO t1(absent) SELECT 1 ON DUPLICATE KEY UPDATE a=1";
 
---echo # Connection default
-connection default;
---replace_result $con1_id <con1_id>
-eval KILL QUERY $con1_id;
+--echo Resolver errors should be given at prepare time in multi-table update
 
---echo # Connection con1
-connection con1;
-# Here the server asserts when running with "--ps-protocol"
---error ER_QUERY_INTERRUPTED
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "UPDATE t1 JOIN t2 ON t1.a=t2.b SET t1.a=absent";
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "UPDATE t1 JOIN t2 ON t1.a=t2.b SET t1.a=t1.absent";
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "UPDATE t1 JOIN t2 ON t1.a=t2.b SET t1.a=t2.absent";
+--error ER_BAD_FIELD_ERROR
+PREPARE s FROM "UPDATE t1 JOIN t2 ON t1.a=t2.b SET t1.a=absent.absent";
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#19894382 - SERVER SIDE PREPARED STATEMENTS LEADS TO POTENTIAL OFF-BY-SECOND
+--echo #                TIMESTAMP ON SLAVE.
+--echo #
+
+CREATE TABLE bug19894382(f1 CHAR(64) DEFAULT 'slave',
+                         f2 TIME, f3 TIMESTAMP NULL, f4 DATETIME,
+                         f5 TIME(3), f6 TIMESTAMP(3) NULL, f7 DATETIME(3));
+
+--echo # Execute prepared statements from mysql_client_test.
+--exec echo "$MYSQL_CLIENT_TEST" > $MYSQLTEST_VARDIR/log/bug19894382.out.log 2>&1
+--exec $MYSQL_CLIENT_TEST -d -u root test_bug19894382 >> $MYSQLTEST_VARDIR/log/bug19894382.out.log 2>&1
+
+--echo # Insert tuples from the client_test_db.bug19894382 to the test.bug19894382.
+--echo # Tuples in the client_test_db.bug19894382 are inserted from the mysql_client_test.
+INSERT INTO bug19894382 SELECT * FROM client_test_db.bug19894382;
+
+--echo # Replay binlog events
+let $MYSQLD_DATADIR= `select @@datadir`;
+--exec $MYSQL_BINLOG --force-if-open -d client_test_db $MYSQLD_DATADIR/binlog.000001 > $MYSQLTEST_VARDIR/tmp/mysqlbinlog_bug19894382.binlog
+--exec $MYSQL -e "source $MYSQLTEST_VARDIR/tmp/mysqlbinlog_bug19894382.binlog"
+
+--echo # Insert tuples from the client_test_db.bug19894382 to the test.bug19894382.
+--echo # Tuples in the client_test_db.bug19894382 are inserted from the binlog.
+INSERT INTO bug19894382(f2, f3, f4, f5, f6, f7)
+  SELECT f2, f3, f4, f5, f6, f7 FROM client_test_db.bug19894382;
+--echo # With fix, tuples of "master" and "slave" will be same. There will not be any difference
+--echo # in values inserted for time, timestamp and datetime type columns.
+SELECT * FROM bug19894382 ORDER BY f2;
+
+--echo # Cleanup
+DROP TABLE bug19894382;
+--remove_file $MYSQLTEST_VARDIR/log/bug19894382.out.log
+--remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog_bug19894382.binlog
+--rmdir $MYSQLTEST_VARDIR/tmp/test
+
+--echo # Test parameter string longer than 65k
+SET @a=repeat('a', 100000);
+prepare s from "select length(?)";
+execute s using @a;
+
+DROP DATABASE client_test_db;
+
+--echo # Bug#28929657: Assertion !is_temporal() at Item::get_time_from_int()
+
+CREATE TABLE t1 (t time DEFAULT NULL);
+INSERT INTO t1 VALUES ('16:07:44');
+SET @var1 = 5;
+PREPARE s FROM "DELETE FROM t1 WHERE t = ?";
+EXECUTE s USING @var1;
+DEALLOCATE PREPARE s;
+DROP TABLE t1;
+
+CREATE TABLE t1 (dt datetime DEFAULT NULL);
+INSERT INTO t1 VALUES ('2018-11-11 16:07:44');
+SET @var1 = 5;
+PREPARE s FROM "DELETE FROM t1 WHERE dt = ?";
+--error ER_TRUNCATED_WRONG_VALUE
+EXECUTE s USING @var1;
+DEALLOCATE PREPARE s;
+DROP TABLE t1;
+
+CREATE TABLE t1 (d date DEFAULT NULL);
+INSERT INTO t1 VALUES ('2018-11-11');
+SET @var1 = 5;
+PREPARE s FROM "DELETE FROM t1 WHERE d = ?";
+--error ER_TRUNCATED_WRONG_VALUE
+EXECUTE s USING @var1;
+DEALLOCATE PREPARE s;
+DROP TABLE t1;
+--echo #
+--echo # Bug#30438038: MAIN.LOCK_MULTI_BUG38499 FAILS ON PB2
+--echo #
+CREATE TABLE t(a INT, b INT);
+INSERT INTO t VALUES (1, 1), (2, 2), (3, 3), (4, 4);
+PREPARE ps FROM
+  'UPDATE t, (SELECT 1 FROM t UNION SELECT 2 FROM t) e SET a = 0 WHERE FALSE';
+EXECUTE ps;
+EXECUTE ps;  # The second execution used to fail.
+DROP PREPARE ps;
+DROP TABLE t;
+
+--echo # Bug#31437028: SIG11 AT FIELD::HIDDEN() IN SQL/FIELD.H WITH PREPARED SHOW CREATE VIEW
+
+CREATE TABLE t1(c1 int);
+INSERT INTO t1 VALUES(1),(2);
+CREATE FUNCTION f1() returns INT deterministic return 1;
+CREATE VIEW v1 AS SELECT c1 FROM t1 WHERE c1 = f1();
+DROP FUNCTION f1;
+PREPARE stmt FROM "SHOW CREATE VIEW v1";
+EXECUTE stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+DROP VIEW v1;
+DROP TABLE t1;
+
+--echo # Bug#32077842: "Illegal mix of collations" errors when matching ASCII field and UNICODE
+
+CREATE TABLE t1 (a char (64) character set latin1, b int unsigned);
+PREPARE s FROM 'SELECT a FROM t1 WHERE a=? AND b=?';
+SET @a = 'test';
+SET @b = 2;
+EXECUTE s USING @a, @b;
+DEALLOCATE PREPARE s;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #32751973: REGRESSION: HEAP-USE-AFTER-FREE IN ITEM_FIELD::BIND_FIELDS
+--echo #
+
+CREATE TABLE t1 (a INTEGER);
+PREPARE s FROM 'SELECT 1 FROM t1 WHERE TRUE OR ( SELECT 1 FROM (SELECT a) q ) = 1';
+EXECUTE s;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #32808790: DON'T ADD CACHES AROUND PREPARED STATEMENT PARAMETERS
+--echo #
+
+CREATE TABLE t1 ( pk INTEGER NOT NULL, a INTEGER );
+
+# Verify there's no <cache> around the 2.
+PREPARE q FROM 'EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE pk = ?';
+SET @v = 2;
+--replace_regex /  \(cost=.*//
+EXECUTE q USING @v;
+
+DROP TABLE t1;
+
+--echo # Bug#32213576: MySQL tries to parse string-bound float as integer
+--echo #               and returns wrong error
+
+CREATE TABLE t (f INT NOT NULL) ENGINE=InnoDB;
+INSERT INTO t (f) VALUES (0);
+PREPARE stmt FROM 'UPDATE t SET f = 100 * ?';
+SET @a = '0.3';
+EXECUTE stmt USING @a;
+DEALLOCATE PREPARE stmt;
+SELECT * FROM t;
+DROP TABLE t;
+
+--echo # Bug#32787037: Passed string type binding for integer column
+--echo #               incorrectly cast to integer
+
+CREATE TABLE t1 (int_column INT NOT NULL);
+INSERT INTO t1 VALUES (1), (2), (3), (4);
+
+SELECT * from t1 where int_column < '1.9';
+
+PREPARE stmt FROM 'SELECT * from t1 where int_column < ?';
+SET @a = '1.9';
+EXECUTE stmt USING @a;
+DEALLOCATE PREPARE stmt;
+
+DROP TABLE t1;
+
+SET GLOBAL log_output=@old_log_output;
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+
+--echo # Bug#34213338: Broken integer value empty string validation with
+--echo #               bind vars (8.0.27 to 8.0.28)
+
+CREATE TABLE ints(i INTEGER);
+CREATE TABLE deci(d DECIMAL(12,4));
+CREATE TABLE dbls(r DOUBLE);
+CREATE TABLE flts(f FLOAT);
+
+SET @empty = '';
+SET @spaces = '   ';
+SET @intval = '666';
+SET @decval = '777.777';
+SET @dblval = '888.888e100';
+SET @fltval = '1e38';
+SET @intvalx = '  666  ';
+SET @decvalx = '  777.777  ';
+SET @dblvalx = '  888.888e100  ';
+SET @fltvalx = '  1e38  ';
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO ints VALUES ('');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO deci VALUES ('');
+--error 1265
+INSERT INTO dbls VALUES ('');
+--error 1265
+INSERT INTO flts VALUES ('');
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO ints VALUES ('   ');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO deci VALUES ('   ');
+--error 1265
+INSERT INTO dbls VALUES ('   ');
+--error 1265
+INSERT INTO flts VALUES ('   ');
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO ints VALUES (@empty);
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO deci VALUES (@empty);
+--error 1265
+INSERT INTO dbls VALUES (@empty);
+--error 1265
+INSERT INTO flts VALUES (@empty);
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO ints VALUES (@spaces);
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO deci VALUES (@spaces);
+--error 1265
+INSERT INTO dbls VALUES (@spaces);
+--error 1265
+INSERT INTO flts VALUES (@spaces);
+
+INSERT INTO ints VALUES ('666');
+INSERT INTO deci VALUES ('777.777');
+INSERT INTO dbls VALUES ('888.888e100');
+INSERT INTO flts VALUES ('1e38');
+
+INSERT INTO ints VALUES ('  666  ');
+INSERT INTO deci VALUES ('  777.777  ');
+INSERT INTO dbls VALUES ('  888.888e100  ');
+INSERT INTO flts VALUES ('  1e38  ');
+
+INSERT INTO ints VALUES (@intval);
+INSERT INTO deci VALUES (@decval);
+INSERT INTO dbls VALUES (@dblval);
+INSERT INTO flts VALUES (@fltval);
+
+INSERT INTO ints VALUES (@intvalx);
+INSERT INTO deci VALUES (@decvalx);
+INSERT INTO dbls VALUES (@dblvalx);
+INSERT INTO flts VALUES (@fltvalx);
+
+PREPARE ps1 FROM 'INSERT INTO ints VALUES (?)';
+PREPARE ps2 FROM 'INSERT INTO deci VALUES (?)';
+PREPARE ps3 FROM 'INSERT INTO dbls VALUES (?)';
+PREPARE ps4 FROM 'INSERT INTO flts VALUES (?)';
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE ps1 USING @empty;
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE ps2 USING @empty;
+--error 1265
+EXECUTE ps3 USING @empty;
+--error 1265
+EXECUTE ps4 USING @empty;
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE ps1 USING @spaces;
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE ps2 USING @spaces;
+--error 1265
+EXECUTE ps3 USING @spaces;
+--error 1265
+EXECUTE ps4 USING @spaces;
+
+EXECUTE ps1 USING @intval;
+EXECUTE ps1 USING @intvalx;
+
+EXECUTE ps2 USING @decval;
+EXECUTE ps2 USING @decvalx;
+
+EXECUTE ps3 USING @dblval;
+EXECUTE ps3 USING @dblvalx;
+
+EXECUTE ps4 USING @fltval;
+EXECUTE ps4 USING @fltvalx;
+
+DEALLOCATE PREPARE ps1;
+DEALLOCATE PREPARE ps2;
+DEALLOCATE PREPARE ps3;
+DEALLOCATE PREPARE ps4;
+
+SELECT * FROM ints;
+SELECT * FROM deci;
+SELECT * FROM dbls;
+SELECT * FROM flts;
+
+DROP TABLE ints, deci, dbls, flts;
+
+--echo # Bug#33521861: Server fails to update row via PS but works via query
+
+CREATE TABLE t1 (
+ id INT NOT NULL,
+ value VARCHAR(100) NULL
+);
+
+INSERT INTO t1 VALUES ROW(1,'A');
+
+flush status;
+
+set @a=1;
+set @b='B';
+
+prepare ps from "
+UPDATE t1 AS ut
+       INNER JOIN (VALUES ROW(?, ?)) AS vt (id, value)
+       ON ut.id = vt.id
+SET ut.value = vt.value";
+
+execute ps using @a, @b;
+
 SELECT * FROM t1;
-disconnect con1;
---source include/wait_until_disconnected.inc
 
---echo # Connection default
-connection default;
+SHOW STATUS LIKE 'Com_stmt_reprepare';
+
+UPDATE t1 SET id = 1, value = 'A';
+
+--echo Notice the above statement is implicitly reprepared, as there
+--echo is no context available to guess the desired types.
+--echo Using explicit CAST avoids the reprepare.
+
+prepare ps from "
+UPDATE t1 AS ut
+       INNER JOIN (VALUES ROW(CAST(? AS SIGNED), CAST(? AS CHAR))
+                  ) AS vt (id, value)
+       ON ut.id = vt.id
+SET ut.value = vt.value";
+
+execute ps using @a, @b;
+
+SELECT * FROM t1;
+
+SHOW STATUS LIKE 'Com_stmt_reprepare';
+
+deallocate prepare ps;
+
 DROP TABLE t1;

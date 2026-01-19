@@ -140,6 +140,7 @@ SET @@session.optimizer_prune_level = ONF;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@session.optimizer_prune_level = ON;
 --Error ER_WRONG_TYPE_FOR_VAR
+--error ER_PARSE_ERROR
 SET @@session.optimizer_prune_level = OF;
 
 --Error ER_WRONG_TYPE_FOR_VAR
@@ -160,20 +161,22 @@ SET @@session.optimizer_prune_level = test;
 #   Check if the value in GLOBAL Table matches value in variable   #
 ####################################################################
 
-
+--disable_warnings
 SELECT @@global.optimizer_prune_level = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='optimizer_prune_level';
+--enable_warnings
 
 --echo '#------------------FN_DYNVARS_115_07-----------------------#'
 ####################################################################
 #  Check if the value in SESSION Table matches value in variable   #
 ####################################################################
 
+--disable_warnings
 SELECT @@session.optimizer_prune_level = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='optimizer_prune_level';
-
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_115_08----------------------#'

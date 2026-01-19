@@ -1,12 +1,9 @@
 # Tests for PERFORMANCE_SCHEMA
 
---source include/not_embedded.inc
---source include/have_perfschema.inc
-
 -- error ER_DBACCESS_DENIED_ERROR
 alter table performance_schema.performance_timers add column foo integer;
 
--- error ER_WRONG_PERFSCHEMA_USAGE
+-- error ER_TABLEACCESS_DENIED_ERROR
 truncate table performance_schema.performance_timers;
 
 -- error ER_DBACCESS_DENIED_ERROR
@@ -15,3 +12,7 @@ ALTER TABLE performance_schema.performance_timers ADD INDEX test_index(TIMER_NAM
 -- error ER_DBACCESS_DENIED_ERROR
 CREATE UNIQUE INDEX test_index ON performance_schema.performance_timers(TIMER_NAME);
 
+CREATE TABLE test.create_select
+  AS SELECT * from performance_schema.performance_timers;
+
+DROP TABLE test.create_select;

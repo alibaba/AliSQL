@@ -1,0 +1,83 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>posix::basic_descriptor::basic_descriptor</title>
+<link rel="stylesheet" href="../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../posix__basic_descriptor.html" title="posix::basic_descriptor">
+<link rel="prev" href="async_wait.html" title="posix::basic_descriptor::async_wait">
+<link rel="next" href="basic_descriptor/overload1.html" title="posix::basic_descriptor::basic_descriptor (1 of 5 overloads)">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="async_wait.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../posix__basic_descriptor.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="basic_descriptor/overload1.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h4 class="title">
+<a name="boost_asio.reference.posix__basic_descriptor.basic_descriptor"></a><a class="link" href="basic_descriptor.html" title="posix::basic_descriptor::basic_descriptor">posix::basic_descriptor::basic_descriptor</a>
+</h4></div></div></div>
+<p>
+          <a class="indexterm" name="boost_asio.indexterm.posix__basic_descriptor.basic_descriptor"></a> 
+Construct
+          a descriptor without opening it.
+        </p>
+<pre class="programlisting">explicit <a class="link" href="basic_descriptor/overload1.html" title="posix::basic_descriptor::basic_descriptor (1 of 5 overloads)">basic_descriptor</a>(
+    const executor_type &amp; ex);
+  <span class="emphasis"><em>» <a class="link" href="basic_descriptor/overload1.html" title="posix::basic_descriptor::basic_descriptor (1 of 5 overloads)">more...</a></em></span>
+
+template&lt;
+    typename ExecutionContext&gt;
+explicit <a class="link" href="basic_descriptor/overload2.html" title="posix::basic_descriptor::basic_descriptor (2 of 5 overloads)">basic_descriptor</a>(
+    ExecutionContext &amp; context,
+    typename constraint&lt; is_convertible&lt; ExecutionContext &amp;, execution_context &amp; &gt;::value, defaulted_constraint &gt;::type  = defaulted_constraint());
+  <span class="emphasis"><em>» <a class="link" href="basic_descriptor/overload2.html" title="posix::basic_descriptor::basic_descriptor (2 of 5 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Construct a descriptor on an existing native descriptor.
+        </p>
+<pre class="programlisting"><a class="link" href="basic_descriptor/overload3.html" title="posix::basic_descriptor::basic_descriptor (3 of 5 overloads)">basic_descriptor</a>(
+    const executor_type &amp; ex,
+    const native_handle_type &amp; native_descriptor);
+  <span class="emphasis"><em>» <a class="link" href="basic_descriptor/overload3.html" title="posix::basic_descriptor::basic_descriptor (3 of 5 overloads)">more...</a></em></span>
+
+template&lt;
+    typename ExecutionContext&gt;
+<a class="link" href="basic_descriptor/overload4.html" title="posix::basic_descriptor::basic_descriptor (4 of 5 overloads)">basic_descriptor</a>(
+    ExecutionContext &amp; context,
+    const native_handle_type &amp; native_descriptor,
+    typename constraint&lt; is_convertible&lt; ExecutionContext &amp;, execution_context &amp; &gt;::value &gt;::type  = 0);
+  <span class="emphasis"><em>» <a class="link" href="basic_descriptor/overload4.html" title="posix::basic_descriptor::basic_descriptor (4 of 5 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Move-construct a descriptor from another.
+        </p>
+<pre class="programlisting"><a class="link" href="basic_descriptor/overload5.html" title="posix::basic_descriptor::basic_descriptor (5 of 5 overloads)">basic_descriptor</a>(
+    basic_descriptor &amp;&amp; other);
+  <span class="emphasis"><em>» <a class="link" href="basic_descriptor/overload5.html" title="posix::basic_descriptor::basic_descriptor (5 of 5 overloads)">more...</a></em></span>
+</pre>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="async_wait.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../posix__basic_descriptor.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="basic_descriptor/overload1.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

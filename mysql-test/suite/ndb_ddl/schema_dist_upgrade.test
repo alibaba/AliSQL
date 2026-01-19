@@ -1,0 +1,149 @@
+--source include/have_debug.inc
+# Test need restart to make sure ndb_schema table is created the "old" way
+--source include/force_restart.inc
+
+--source connect.inc
+
+#
+# Test ndb_schema table upgrade.
+#
+
+# The variable ndb-schema-dist-upgrade-allowed controls if ndbcluster
+# is allowed to upgrade the ndb_schema table. The variable can only be
+# set when starting MySQL Server.
+#
+# Check that variable is off when test start
+select @@ndb_schema_dist_upgrade_allowed;
+
+# Check that variable is readonly
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+set @@ndb_schema_dist_upgrade_allowed = true;
+
+# 1) The MySQL Servers are started with --ndb-schema-dist-upgrade-allowed=false
+# and a special debug flag forcing the ndb_schema table to be created without
+# the new "schema_op_id" column. This will produce warnings in the log file, the
+# MySQL Server will start as usual and allow DDL(although with any
+# functionality that requires the new column disabled)
+
+# Supress warnings in all MySQL Servers, any of them may create the table
+let $i = $NUM_MYSQLDS;
+while($i)
+{
+  connection mysqld$i;
+  --disable_query_log
+  call mtr.add_suppression("Creating table definition without .* column");
+  call mtr.add_suppression("table need upgrade");
+  --enable_query_log
+  dec $i;
+}
+connection default;
+
+# Verify that all the mysqlds detected this as a proper initial start
+--let $assert_select= Detected an initial system start
+--let $assert_only_after= NDB Binlog: Detected server start
+--let $assert_count= 1
+let $i = $NUM_MYSQLDS;
+while($i)
+{
+  --let $assert_text= Detect initial start in MySQL Server $i
+  --let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.$i.1.err
+  --source include/assert_grep.inc
+  --dec $i
+}
+
+# 2) Check that DDL works without the "schema_op_id" column
+CREATE TABLE t1(
+  pk int not null,
+  a varchar(37) not null
+) ENGINE = NDB;
+
+INSERT INTO t1 VALUES(1, "hello");
+
+ALTER TABLE t1 ADD COLUMN b int NULL DEFAULT 24;
+ALTER TABLE t1 MODIFY COLUMN b int NOT NULL;
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+# 3) Restart the first MySQL Server with ndb-schema-dist-upgrade-allowed=true
+# and pop off the special debug flag. The ndb_schema table will now be upgraded
+# during restart.
+let $param1 = --ndb-schema-dist-upgrade-allowed=true;
+let $param2 = --debug=-d,ndb_schema_skip_create_schema_op_id;
+let $restart_parameters = restart: $param1 $param2;
+let $mysqld_name=mysqld.1.1;
+--source include/restart_mysqld.inc
+
+# Check that variable is on after mysqld restart
+select @@ndb_schema_dist_upgrade_allowed;
+
+# Verify that the binlog setup detected this upgrade as a normal restart
+--let $assert_text= Detect normal system restart in MySQL Server 1
+--let $assert_select= Detected a normal system restart
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.1.err
+--let $assert_only_after= NDB Binlog: Detected server start
+--let $assert_count= 1
+--source include/assert_grep.inc
+
+# Supress warning which occurs when restarting
+--disable_query_log ONCE
+call mtr.add_suppression("incident event has been written to the binary log");
+
+# 4) Check that DDL works _with_ the "schema_op_id" column
+CREATE TABLE t1(
+  pk int not null,
+  a varchar(37) not null
+) ENGINE = NDB;
+
+INSERT INTO t1 VALUES(1, "hello");
+
+ALTER TABLE t1 ADD COLUMN b int NULL DEFAULT 24;
+ALTER TABLE t1 MODIFY COLUMN b int NOT NULL;
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+# 5) Check DDL on the other MySQL Servers. The injector thread should handle
+# this gracefully by disabling schema distribution functionality when the
+# ndb_schema table is dropped. Then it will create or set it up again to
+# enable schema distribution functionality without restarting the
+# injector thread.
+
+let $i = $NUM_MYSQLDS;
+while($i > 1)
+{
+  connection mysqld$i;
+
+  echo Checking mysqld$i;
+
+  # Wait until not readonly after ndb_schema table upgrade
+  --source include/ndb_not_readonly.inc
+
+  # Verify that this was detected as a normal restart
+  --let $assert_text= Detect schema dist setup in MySQL Server $i
+  --let $assert_select= Schema distribution setup completed
+  --let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.$i.1.err
+  --let $assert_only_after= NDB: The 'mysql.ndb_schema' table has been dropped
+  --let $assert_count= 1
+  --source include/assert_grep.inc
+
+  CREATE TABLE t1(
+    pk int not null,
+    a varchar(37) not null
+  ) ENGINE = NDB;
+
+  INSERT INTO t1 VALUES(1, "hello");
+
+  ALTER TABLE t1 ADD COLUMN b int NULL DEFAULT 24;
+  ALTER TABLE t1 MODIFY COLUMN b int NOT NULL;
+
+  SELECT * FROM t1;
+
+  DROP TABLE t1;
+
+  dec $i;
+}
+
+connection default;

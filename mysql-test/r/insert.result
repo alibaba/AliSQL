@@ -1,4 +1,4 @@
-drop table if exists t1,t2,t3;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (a int not null);
 insert into t1 values (1);
 insert into t1 values (a+2);
@@ -42,23 +42,6 @@ a	t>0	c	i
 5	0	a	NULL
 6	1	hello	NULL
 drop table t1;
-create table t1 (sid char(20), id int(2) NOT NULL auto_increment, key(sid, id));
-insert into t1 values ('skr',NULL),('skr',NULL),('test',NULL);
-select * from t1;
-sid	id
-skr	1
-skr	2
-test	1
-insert into t1 values ('rts',NULL),('rts',NULL),('test',NULL);
-select * from t1;
-sid	id
-rts	1
-rts	2
-skr	1
-skr	2
-test	1
-test	2
-drop table t1;
 create table t1 (id int NOT NULL DEFAULT 8);
 insert into t1 values(NULL);
 ERROR 23000: Column 'id' cannot be null
@@ -74,16 +57,18 @@ drop table t1;
 create table t1 (email varchar(50));
 insert into t1 values ('sasha@mysql.com'),('monty@mysql.com'),('foo@hotmail.com'),('foo@aol.com'),('bar@aol.com');
 create table t2(id int not null auto_increment primary key, t2 varchar(50), unique(t2));
-insert delayed into t2 (t2) select distinct substring(email, locate('@', email)+1) from t1;
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-select * from t2;
-id	t2
-1	mysql.com
-2	hotmail.com
-3	aol.com
+insert into t2 (t2) select distinct substring(email, locate('@', email)+1) from t1;
+select id from t2;
+id
+1
+2
+3
+select t2 from t2;
+t2
+aol.com
+hotmail.com
+mysql.com
 drop table t1,t2;
-drop database if exists mysqltest;
 create database mysqltest;
 use mysqltest;
 create table t1 (c int);
@@ -91,6 +76,15 @@ insert into mysqltest.t1 set mysqltest.t1.c = '1';
 drop database mysqltest;
 use test;
 create table t1(number int auto_increment primary key, original_value varchar(50), f_double double, f_float float, f_double_7_2 double(7,2), f_float_4_3 float (4,3), f_double_u double unsigned, f_float_u float unsigned, f_double_15_1_u double(15,1) unsigned, f_float_3_1_u float (3,1) unsigned);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 set @value= "aa";
 insert into t1 values(null,@value,@value,@value,@value,@value,@value,@value,@value,@value);
 Warnings:
@@ -302,18 +296,44 @@ select count(*) from t2;
 count(*)
 25500
 drop table t1,t2,t3;
+CREATE TABLE t1(a INTEGER, b INTEGER);
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(1);
+ERROR 21S01: Column count doesn't match value count at row 1
+INSERT INTO t1 VALUES(1, 1, 1);
+ERROR 21S01: Column count doesn't match value count at row 1
+INSERT INTO t1 VALUES(1, 1), (2);
+ERROR 21S01: Column count doesn't match value count at row 2
+INSERT INTO t1 VALUES(1, 1), (2);
+ERROR 21S01: Column count doesn't match value count at row 2
+INSERT INTO t1 VALUES(1, 1), (3, 3, 3);
+ERROR 21S01: Column count doesn't match value count at row 2
+INSERT INTO t1(a, b) VALUES(1);
+ERROR 21S01: Column count doesn't match value count at row 1
+INSERT INTO t1(a, b) VALUES(1, 1, 1);
+ERROR 21S01: Column count doesn't match value count at row 1
+INSERT INTO t1(a, b) VALUES(1, 1), (2);
+ERROR 21S01: Column count doesn't match value count at row 2
+INSERT INTO t1(a, b) VALUES(1, 1), (2);
+ERROR 21S01: Column count doesn't match value count at row 2
+INSERT INTO t1(a, b) VALUES(1, 1), (3, 3, 3);
+ERROR 21S01: Column count doesn't match value count at row 2
+DROP TABLE t1;
 create table t1 (a int, b int);
 insert into t1 (a,b) values (a,b);
 insert into t1 SET a=1, b=a+1;
 insert into t1 (a,b) select 1,2;
 INSERT INTO t1 ( a ) SELECT 0 ON DUPLICATE KEY UPDATE a = a + VALUES (a);
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
 prepare stmt1 from ' replace into t1 (a,a) select 100, ''hundred'' ';
-execute stmt1;
 ERROR 42000: Column 'a' specified twice
+insert into t1 (a,b) values (1,1,1);
+ERROR 21S01: Column count doesn't match value count at row 1
 insert into t1 (a,b,b) values (1,1,1);
 ERROR 42000: Column 'b' specified twice
 insert into t1 (a,a) values (1,1,1);
-ERROR 21S01: Column count doesn't match value count at row 1
+ERROR 42000: Column 'a' specified twice
 insert into t1 (a,a) values (1,1);
 ERROR 42000: Column 'a' specified twice
 insert into t1 SET a=1,b=2,a=1;
@@ -329,9 +349,11 @@ select row_count();
 row_count()
 3
 insert ignore into t1 values (1, 1);
+Warnings:
+Warning	1062	Duplicate entry '1' for key 't1.PRIMARY'
 select row_count();
 row_count()
-0
+-1
 replace into t1 values (1, 11);
 select row_count();
 row_count()
@@ -370,159 +392,6 @@ f1	f2
 2	22
 drop view v1;
 drop table t1,t2;
-create table t1 (id int primary key auto_increment, data int, unique(data));
-insert ignore into t1 values(NULL,100),(NULL,110),(NULL,120);
-insert ignore into t1 values(NULL,10),(NULL,20),(NULL,110),(NULL,120),(NULL,100),(NULL,90);
-insert ignore into t1 values(NULL,130),(NULL,140),(500,110),(550,120),(450,100),(NULL,150);
-select * from t1 order by id;
-id	data
-1	100
-2	110
-3	120
-4	10
-5	20
-6	90
-7	130
-8	140
-9	150
-drop table t1;
-DROP TABLE IF EXISTS t1;
-DROP FUNCTION IF EXISTS f1;
-DROP FUNCTION IF EXISTS f2;
-CREATE TABLE t1 (i INT);
-CREATE FUNCTION f1() RETURNS INT
-BEGIN
-INSERT INTO t1 VALUES (1);
-RETURN 1;
-END |
-CREATE FUNCTION f2() RETURNS INT
-BEGIN
-INSERT DELAYED INTO t1 VALUES (2);
-RETURN 1;
-END |
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT f1();
-f1()
-1
-SELECT f2();
-f2()
-1
-INSERT INTO t1 VALUES (3);
-INSERT DELAYED INTO t1 VALUES (4);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-INSERT INTO t1 VALUES (f1());
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-INSERT DELAYED INTO t1 VALUES (f1());
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-INSERT INTO t1 VALUES (f2());
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-INSERT DELAYED INTO t1 VALUES (f2());
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW
-INSERT INTO t1 VALUES (NEW.i);
-INSERT INTO t1 VALUES (1);
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-INSERT DELAYED INTO t1 VALUES (1);
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-SELECT * FROM t1;
-i
-1
-2
-3
-4
-DROP FUNCTION f2;
-DROP FUNCTION f1;
-DROP TABLE t1;
-DROP TABLE IF EXISTS t1, t2;
-CREATE TABLE t1 (i INT);
-CREATE TABLE t2 (i INT);
-CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (NEW.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-CREATE TRIGGER t1_bu BEFORE UPDATE ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (NEW.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-CREATE TRIGGER t1_bd BEFORE DELETE ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (OLD.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-INSERT INTO t1 VALUES (1);
-INSERT DELAYED INTO t1 VALUES (2);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT * FROM t1;
-i
-1
-2
-UPDATE t1 SET i = 3 WHERE i = 1;
-SELECT * FROM t1;
-i
-3
-2
-DELETE FROM t1 WHERE i = 3;
-SELECT * FROM t1;
-i
-2
-SELECT * FROM t2;
-i
-1
-2
-3
-3
-DROP TABLE t1, t2;
-DROP TABLE IF EXISTS t1, t2;
-CREATE TABLE t1 (i INT);
-CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW
-SET @a= NEW.i;
-SET @a= 0;
-INSERT DELAYED INTO t1 VALUES (1);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT @a;
-@a
-1
-INSERT DELAYED INTO t1 VALUES (2);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT @a;
-@a
-2
-DROP TABLE t1;
-CREATE TABLE t1 (i INT);
-CREATE TABLE t2 (i INT);
-CREATE TRIGGER t1_ai AFTER INSERT ON t1 FOR EACH ROW
-INSERT INTO t2 VALUES (NEW.i);
-CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (NEW.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-CREATE TRIGGER t1_ad AFTER DELETE ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (OLD.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-INSERT DELAYED INTO t1 VALUES (1);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT * FROM t1;
-i
-1
-UPDATE t1 SET i = 2 WHERE i = 1;
-SELECT * FROM t1;
-i
-2
-DELETE FROM t1 WHERE i = 2;
-SELECT * FROM t1;
-i
-SELECT * FROM t2;
-i
-1
-2
-2
-DROP TABLE t1, t2;
 CREATE TABLE t1 (
 a char(20) NOT NULL,
 b char(7) DEFAULT NULL,
@@ -631,6 +500,7 @@ a	b	c
 5000	NULL	5000
 -5000	NULL	-5000
 DROP TABLE t1;
+SET sql_mode = default;
 CREATE TABLE t (a CHAR(10),b INT);
 INSERT INTO t VALUES (),(),();
 INSERT INTO t(a) SELECT rand() FROM t;
@@ -661,30 +531,36 @@ End of 5.0 tests.
 # Check that the number of warnings reported by
 # mysql_info() is correct.
 #
-drop table if exists t1;
 create table t1 (data varchar(4) not null);
-set sql_mode='error_for_division_by_zero';
-Warnings:
-Warning	1681	'ERROR_FOR_DIVISION_BY_ZERO' is deprecated and will be removed in a future release.
 #
 # Demonstrate that the number of warnings matches
 # the information in mysql_info().
 #
-insert t1 (data) values ('letter'), (1/0);
+prepare stmt from "insert ignore t1 (data) values ('letter'), (1/0)";
+affected rows: 0
+info: Statement prepared
+execute stmt;
 affected rows: 2
 info: Records: 2  Duplicates: 0  Warnings: 3
 Warnings:
 Warning	1265	Data truncated for column 'data' at row 1
 Warning	1365	Division by 0
 Warning	1048	Column 'data' cannot be null
-update t1 set data='envelope' where 1/0 or 1;
-affected rows: 2
-info: Rows matched: 2  Changed: 2  Warnings: 3
+prepare stmt from "update ignore t1 set data='envelope' where 1/0 or 1";
+affected rows: 0
+info: Statement prepared
 Warnings:
 Warning	1365	Division by 0
+execute stmt;
+affected rows: 2
+info: Rows matched: 2  Changed: 2  Warnings: 2
+Warnings:
 Warning	1265	Data truncated for column 'data' at row 1
 Warning	1265	Data truncated for column 'data' at row 2
-insert t1 (data) values (default), (1/0), ('dead beef');
+prepare stmt from "insert ignore t1 (data) values (default), (1/0), ('dead beef')";
+affected rows: 0
+info: Statement prepared
+execute stmt;
 affected rows: 3
 info: Records: 3  Duplicates: 0  Warnings: 4
 Warnings:
@@ -692,7 +568,6 @@ Warning	1364	Field 'data' doesn't have a default value
 Warning	1365	Division by 0
 Warning	1048	Column 'data' cannot be null
 Warning	1265	Data truncated for column 'data' at row 3
-set sql_mode=default;
 drop table t1;
 #
 # End of 5.4 tests
@@ -701,7 +576,6 @@ drop table t1;
 # Bug#54106 assert in Protocol::end_statement,
 #           INSERT IGNORE ... SELECT ... UNION SELECT ...
 #
-DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (a INT);
 INSERT INTO t1 (a, a) VALUES (1, 1);
 ERROR 42000: Column 'a' specified twice
@@ -711,6 +585,243 @@ INSERT IGNORE t1 (a, a) SELECT 1,1;
 ERROR 42000: Column 'a' specified twice
 INSERT IGNORE t1 (a, a) SELECT 1,1 UNION SELECT 2,2;
 ERROR 42000: Column 'a' specified twice
+DROP TABLE t1;
+#
+# Worklog #6073: Remove INSERT DELAYED
+#
+CREATE TABLE t1( a INT );
+INSERT DELAYED INTO t1 VALUES ( 1 );
+Warnings:
+Warning	3005	INSERT DELAYED is no longer supported. The statement was converted to INSERT.
+REPLACE DELAYED INTO t1 VALUES ( 1 );
+Warnings:
+Warning	3005	REPLACE DELAYED is no longer supported. The statement was converted to REPLACE.
+DROP TABLE t1;
+SET GLOBAL delayed_insert_limit = DEFAULT;
+Warnings:
+Warning	1287	'@@delayed_insert_limit' is deprecated and will be removed in a future release.
+SET GLOBAL delayed_insert_timeout = DEFAULT;
+Warnings:
+Warning	1287	'@@delayed_insert_timeout' is deprecated and will be removed in a future release.
+SET GLOBAL delayed_queue_size = DEFAULT;
+Warnings:
+Warning	1287	'@@delayed_queue_size' is deprecated and will be removed in a future release.
+SET GLOBAL max_insert_delayed_threads = DEFAULT;
+Warnings:
+Warning	1287	'@@max_insert_delayed_threads' is deprecated and will be removed in a future release.
+SET GLOBAL max_delayed_threads = DEFAULT;
+Warnings:
+Warning	1287	'@@max_delayed_threads' is deprecated and will be removed in a future release.
+#
+# Bug#18064775 Assertion failed: fields.elements == values.elements
+#
+CREATE TABLE t1(a INTEGER);
+INSERT INTO t1(a) values();
+ERROR 21S01: Column count doesn't match value count at row 1
+DROP TABLE t1;
+#
+# Bug#11745889 Traditional: INSERT accepts invalid date from default val
+#
+SET sql_mode='';
+CREATE TABLE default_date(a DATE NOT NULL DEFAULT '0000-00-00');
+INSERT INTO default_date VALUES();
+INSERT INTO default_date VALUES(DEFAULT);
+SET sql_mode=default;
+INSERT INTO default_date VALUES();
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+INSERT INTO default_date VALUES(DEFAULT);
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+INSERT INTO default_date VALUES('0000-00-00');
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+SELECT * FROM default_date;
+a
+0000-00-00
+0000-00-00
+DROP TABLE default_date;
+
+# Bug#11744960 : INSERT IGNORE SHOULD RETURN WARNINGS
+#
+CREATE TABLE t (a INT PRIMARY KEY);
+affected rows: 0
+INSERT IGNORE INTO t VALUES (1);
+affected rows: 1
+INSERT IGNORE INTO t VALUES (1),(1);
+affected rows: 0
+info: Records: 2  Duplicates: 2  Warnings: 2
+Warnings:
+Warning	1062	Duplicate entry '1' for key 't.PRIMARY'
+Warning	1062	Duplicate entry '1' for key 't.PRIMARY'
+DROP TABLE t;
+affected rows: 0
+#
+# WL#5275 Process subqueries in FROM clause in the same way as view
+#
+CREATE TABLE t1(pk INTEGER PRIMARY KEY, a INTEGER);
+CREATE TABLE t2(pk INTEGER PRIMARY KEY, a INTEGER);
+CREATE TABLE t3(a INTEGER);
+CREATE TABLE t4(b INTEGER);
+INSERT INTO t2 VALUES(1, 10), (2, 20), (3, 30), (4, 40);
+INSERT INTO t3 VALUES(1), (3);
+INSERT INTO t4 VALUES(1);
+CREATE VIEW v1 AS
+SELECT * FROM t1 WHERE pk IN (SELECT a FROM t3);
+CREATE VIEW v2 AS
+SELECT * FROM t2 WHERE pk IN (SELECT a FROM t3);
+CREATE VIEW v3 AS
+SELECT t1.pk,t1.a FROM t1 JOIN t4 ON pk IN (SELECT a FROM t3);
+EXPLAIN INSERT INTO v1
+SELECT * FROM v2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	PRIMARY	<subquery5>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	Using where
+1	PRIMARY	t2	NULL	eq_ref	PRIMARY	PRIMARY	4	<subquery5>.a	1	100.00	NULL
+5	MATERIALIZED	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+3	DEPENDENT SUBQUERY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
+Warnings:
+Note	1003	insert into `test`.`t1` /* select#1 */ select `test`.`t2`.`pk` AS `pk`,`test`.`t2`.`a` AS `a` from `test`.`t2` semi join (`test`.`t3`) where (`test`.`t2`.`pk` = `<subquery5>`.`a`)
+INSERT INTO v1
+SELECT * FROM v2;
+DELETE FROM t1;
+EXPLAIN INSERT INTO v3(pk,a)
+SELECT * FROM v2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	PRIMARY	<subquery5>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	Using where
+1	PRIMARY	t2	NULL	eq_ref	PRIMARY	PRIMARY	4	<subquery5>.a	1	100.00	NULL
+5	MATERIALIZED	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+3	DEPENDENT SUBQUERY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
+Warnings:
+Note	1003	insert into `test`.`t1` (`test`.`t1`.`pk`,`test`.`t1`.`a`) /* select#1 */ select `test`.`t2`.`pk` AS `pk`,`test`.`t2`.`a` AS `a` from `test`.`t2` semi join (`test`.`t3`) where (`test`.`t2`.`pk` = `<subquery5>`.`a`)
+INSERT INTO v3(pk,a)
+SELECT * FROM v2;
+DELETE FROM t1;
+EXPLAIN INSERT INTO v1
+SELECT dt.pk, v2.a
+FROM (SELECT * FROM v2) AS dt JOIN v2 ON dt.pk=v2.pk;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	PRIMARY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where; Start temporary
+1	PRIMARY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where; Using join buffer (hash join)
+1	PRIMARY	t2	NULL	eq_ref	PRIMARY	PRIMARY	4	test.t3.a	1	100.00	NULL
+1	PRIMARY	t2	NULL	eq_ref	PRIMARY	PRIMARY	4	test.t3.a	1	100.00	End temporary
+4	DEPENDENT SUBQUERY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
+Warnings:
+Note	1003	insert into `test`.`t1` /* select#1 */ select `test`.`t2`.`pk` AS `pk`,`test`.`t2`.`a` AS `a` from `test`.`t2` semi join (`test`.`t3`) join `test`.`t2` semi join (`test`.`t3`) where ((`test`.`t3`.`a` = `test`.`t3`.`a`) and (`test`.`t2`.`pk` = `test`.`t3`.`a`) and (`test`.`t2`.`pk` = `test`.`t3`.`a`))
+INSERT INTO v1
+SELECT dt.pk, v2.a
+FROM (SELECT * FROM v2) AS dt JOIN v2 ON dt.pk=v2.pk;
+DROP VIEW v1, v2, v3;
+DROP TABLE t1, t2, t3, t4;
+# Bug#20310257 Explain for insert into a view show wrong table for ins.
+CREATE TABLE t1(a INTEGER);
+CREATE TABLE t2(b INTEGER);
+CREATE VIEW v AS SELECT * FROM t1 JOIN t2 ON TRUE;
+explain INSERT INTO v(a) VALUES(1);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+Warnings:
+Note	1003	insert into `test`.`t1` (`test`.`t1`.`a`) values (1)
+INSERT INTO v(a) VALUES(1);
+explain INSERT INTO v(b) VALUES(1);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t2	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+Warnings:
+Note	1003	insert into `test`.`t2` (`test`.`t2`.`b`) values (1)
+INSERT INTO v(b) VALUES(1);
+explain INSERT INTO v(a) SELECT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+Warnings:
+Note	1003	insert into `test`.`t1` (`test`.`t1`.`a`) /* select#1 */ select 2 AS `2` from dual
+INSERT INTO v(a) SELECT 2;
+explain INSERT INTO v(b) SELECT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t2	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+Warnings:
+Note	1003	insert into `test`.`t2` (`test`.`t2`.`b`) /* select#1 */ select 2 AS `2` from dual
+INSERT INTO v(b) SELECT 2;
+SELECT * FROM t1;
+a
+1
+2
+SELECT * FROM t2;
+b
+1
+2
+DROP VIEW v;
+DROP TABLE t1, t2;
+CREATE TABLE t1(a1 INTEGER PRIMARY KEY, b1 INTEGER);
+CREATE TABLE t2(a2 INTEGER PRIMARY KEY, b2 INTEGER);
+CREATE VIEW v AS SELECT * FROM t1 JOIN t2 ON TRUE;
+INSERT INTO v(a1,b1) VALUES (11, 0) ON DUPLICATE KEY UPDATE b1=b1+1;
+INSERT INTO v(a1,b1) VALUES (11, 0) ON DUPLICATE KEY UPDATE b1=b1+1;
+INSERT INTO v(a2,b2) VALUES (21, 0) ON DUPLICATE KEY UPDATE b2=b2+1;
+INSERT INTO v(a2,b2) VALUES (21, 0) ON DUPLICATE KEY UPDATE b2=b2+1;
+SELECT * FROM v;
+a1	b1	a2	b2
+11	1	21	1
+DELETE FROM t1;
+DELETE FROM t2;
+INSERT INTO v(a1,b1) SELECT 11, 0 ON DUPLICATE KEY UPDATE b1=b1+1;
+INSERT INTO v(a1,b1) SELECT 11, 0 ON DUPLICATE KEY UPDATE b1=b1+1;
+INSERT INTO v(a2,b2) SELECT 21, 0 ON DUPLICATE KEY UPDATE b2=b2+1;
+INSERT INTO v(a2,b2) SELECT 21, 0 ON DUPLICATE KEY UPDATE b2=b2+1;
+SELECT * FROM v;
+a1	b1	a2	b2
+11	1	21	1
+DROP VIEW v;
+DROP TABLE t1, t2;
+# Bug#20753569: handle_fatal_signal (sig=11) in
+#               st_select_lex::merge_derived
+CREATE TABLE t1(a INTEGER);
+CREATE VIEW v1 AS SELECT a FROM t1 ORDER BY a;
+INSERT INTO v1 SELECT 3;
+REPLACE INTO v1 SELECT 3;
+INSERT INTO v1 VALUES(3);
+REPLACE INTO v1 VALUES(3);
+DROP VIEW v1;
+DROP TABLE t1;
+#
+# Bug#21696206: ASSERTION `TRANSL->ITEM->FIXED' FAILED IN
+#               SELECT_LEX::DELETE_UNUSED_MERGED_COLUMN
+#
+CREATE TABLE t1 ( pk INT, PRIMARY KEY (pk));
+CREATE TABLE t2 LIKE t1;
+INSERT INTO t1 VALUES (2);
+INSERT INTO t2 VALUES (2);
+CREATE VIEW v1 AS SELECT * FROM t2 AS a
+WHERE a.pk IN ( SELECT pk FROM t1 AS b WHERE b.pk = a.pk );
+CREATE VIEW v2 AS SELECT * FROM t1 AS a
+WHERE a.pk IN ( SELECT pk FROM v1 AS b WHERE b.pk = a.pk );
+PREPARE st1 FROM 'INSERT INTO v2 (pk) VALUES ( 1 )';
+EXECUTE st1;
+SELECT * FROM t1;
+pk
+1
+2
+SELECT * FROM t2;
+pk
+2
+DROP TABLE t1, t2;
+DROP VIEW v1, v2;
+#
+# Bug#21696641: ASSERTION !(WANT_PRIVILEGE & ~(GRANT->WANT_PRIVILEGE |
+#               GRANT->PRIVILEGE))'
+#
+CREATE TABLE t1 (pk INT, PRIMARY KEY (pk));
+INSERT INTO t1 VALUES (1);
+CREATE ALGORITHM = TEMPTABLE VIEW v2 AS
+SELECT * FROM t1 AS a NATURAL JOIN t1 b WHERE pk BETWEEN 1 AND 2;
+CREATE ALGORITHM = UNDEFINED VIEW v1 AS
+SELECT * FROM t1 AS a
+WHERE a.pk IN ( SELECT pk FROM v2 AS b WHERE b.pk = a.pk );
+PREPARE st1 FROM "INSERT INTO v1 (pk) VALUES (2)";
+EXECUTE st1;
+SELECT * FROM t1;
+pk
+1
+2
+DROP VIEW v1, v2;
 DROP TABLE t1;
 #
 # BUG#22037930: INSERT IGNORE FAILS TO IGNORE
@@ -724,20 +835,20 @@ INSERT INTO t2 VALUES(0);
 # Without fix, an error is reported.
 INSERT IGNORE INTO t2 VALUES(1);
 Warnings:
-Warning	1452	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1452	Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 UPDATE IGNORE t2 SET fld2=20 WHERE fld2=0;
 Warnings:
-Warning	1452	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1452	Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 UPDATE IGNORE t1 SET fld1=20 WHERE fld1=0;
 Warnings:
-Warning	1451	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 # Test for multi update.
 UPDATE IGNORE t1, t2 SET t2.fld2= t2.fld2 + 3;
 Warnings:
-Warning	1452	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1452	Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 UPDATE IGNORE t1, t2 SET t1.fld1= t1.fld1 + 3;
 Warnings:
-Warning	1451	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 # Reports an error since IGNORE is not used.
 INSERT INTO t2 VALUES(1);
 ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
@@ -763,5 +874,267 @@ REPLACE INTO t2 VALUES('abc', 2);
 ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 INSERT IGNORE INTO t2 VALUES('abc', 2) ON DUPLICATE KEY UPDATE fld1= 'def';
 Warnings:
-Warning	1452	`test`.`t2`, CONSTRAINT `fk` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1452	Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 DROP TABLE t2, t1;
+CREATE DATABASE meow;
+CREATE TABLE table_target   ( mexs_id CHAR(8), messzeit TIMESTAMP, PRIMARY KEY (mexs_id));
+CREATE TABLE table_target2  ( mexs_id CHAR(8), messzeit TIMESTAMP, PRIMARY KEY (mexs_id));
+CREATE TABLE table_target3  ( mexs_id CHAR(8), messzeit TIMESTAMP, PRIMARY KEY (mexs_id));
+CREATE VIEW view_target2 AS SELECT mexs_id,messzeit FROM table_target2;
+CREATE SQL SECURITY INVOKER VIEW view_target3 AS SELECT mexs_id,messzeit FROM table_target3;
+CREATE TABLE table_countries ( country CHAR(2), iso_short_en VARCHAR(64), PRIMARY KEY (country));
+INSERT INTO table_countries VALUES ('YY','Entenhausen');
+CREATE TABLE table_stations ( mexs_id VARCHAR(8), icao VARCHAR(4), country CHAR(2), PRIMARY KEY (mexs_id), UNIQUE KEY icao (icao), KEY country (country), CONSTRAINT stations_ibfk_8 FOREIGN KEY (country) REFERENCES table_countries (country) ON UPDATE CASCADE);
+INSERT INTO table_stations VALUES ('87654321','XXXX','YY');
+CREATE ALGORITHM=MERGE SQL SECURITY INVOKER VIEW view_stations AS select table_stations.mexs_id AS mexs_id, table_stations.icao AS icao, table_stations.country AS landescode from (table_stations join table_countries on((table_stations.country = table_countries.country)));
+CREATE TABLE table_source ( id varchar(4), datetime TIMESTAMP, PRIMARY KEY (id));
+INSERT INTO  table_source VALUES ('XXXX','2006-07-12 07:50:00');
+CREATE USER user20989@localhost;
+GRANT  SELECT                ON table_source    TO   user20989@localhost;
+GRANT  SELECT                ON table_countries TO   user20989@localhost;
+GRANT  SELECT                ON table_stations  TO   user20989@localhost;
+GRANT  SELECT                ON view_stations   TO   user20989@localhost;
+GRANT  SELECT                ON table_target    TO   user20989@localhost;
+GRANT  SELECT                ON table_target2   TO   user20989@localhost;
+GRANT  INSERT,DELETE,SELECT  ON view_target3    TO   user20989@localhost;
+REPLACE INTO    table_target
+SELECT          stations.mexs_id AS mexs_id, datetime AS messzeit
+FROM            table_source
+INNER JOIN      view_stations AS stations
+ON              table_source.id = stations.icao
+LEFT JOIN       table_target AS old
+USING           (mexs_id);
+ERROR 42000: INSERT, DELETE command denied to user 'user20989'@'localhost' for table 'table_target'
+REPLACE INTO    view_target2
+SELECT          stations.mexs_id AS mexs_id, datetime AS messzeit
+FROM            table_source
+INNER JOIN      view_stations AS stations
+ON              table_source.id = stations.icao
+LEFT JOIN       view_target2 AS old
+USING           (mexs_id);
+ERROR 42000: INSERT, DELETE command denied to user 'user20989'@'localhost' for table 'view_target2'
+REPLACE INTO    view_target3
+SELECT          stations.mexs_id AS mexs_id, datetime AS messzeit
+FROM            table_source
+INNER JOIN      view_stations AS stations
+ON              table_source.id = stations.icao
+LEFT JOIN       view_target3 AS old
+USING           (mexs_id);
+ERROR HY000: View 'meow.view_target3' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+GRANT  INSERT,DELETE         ON table_target    TO   user20989@localhost;
+GRANT  INSERT,DELETE,SELECT  ON view_target2    TO   user20989@localhost;
+GRANT  INSERT,DELETE,SELECT  ON table_target3   TO   user20989@localhost;
+REPLACE INTO    table_target
+SELECT          stations.mexs_id AS mexs_id, datetime AS messzeit
+FROM            table_source
+INNER JOIN      view_stations AS stations
+ON              table_source.id = stations.icao
+LEFT JOIN       table_target AS old
+USING           (mexs_id);
+REPLACE INTO    table_target2 VALUES ('00X45Y78','2006-07-12 07:50:00');
+ERROR 42000: INSERT, DELETE command denied to user 'user20989'@'localhost' for table 'table_target2'
+REPLACE INTO    view_target2  VALUES ('12X45Y78','2006-07-12 07:50:00');
+SELECT          stations.mexs_id AS mexs_id, datetime AS messzeit
+FROM            table_source
+INNER JOIN      view_stations AS stations
+ON              table_source.id = stations.icao
+LEFT JOIN       view_target2 AS old
+USING           (mexs_id);
+mexs_id	messzeit
+87654321	2006-07-12 07:50:00
+REPLACE INTO    view_target2
+SELECT          stations.mexs_id AS mexs_id, datetime AS messzeit
+FROM            table_source
+INNER JOIN      view_stations AS stations
+ON              table_source.id = stations.icao
+LEFT JOIN       view_target2 AS old
+USING           (mexs_id);
+REPLACE INTO    view_target3
+SELECT          stations.mexs_id AS mexs_id, datetime AS messzeit
+FROM            table_source
+INNER JOIN      view_stations AS stations
+ON              table_source.id = stations.icao
+LEFT JOIN       view_target3 AS old
+USING           (mexs_id);
+SELECT * FROM table_target;
+mexs_id	messzeit
+87654321	2006-07-12 07:50:00
+SELECT * FROM view_target2;
+mexs_id	messzeit
+12X45Y78	2006-07-12 07:50:00
+87654321	2006-07-12 07:50:00
+SELECT * FROM view_target3;
+mexs_id	messzeit
+87654321	2006-07-12 07:50:00
+DROP VIEW  view_stations;
+DROP TABLE table_source;
+DROP TABLE table_stations;
+DROP TABLE table_countries;
+DROP TABLE table_target;
+DROP TABLE table_target2;
+DROP TABLE table_target3;
+DROP VIEW  view_target2;
+DROP VIEW  view_target3;
+DROP USER  user20989@localhost;
+DROP DATABASE meow;
+#
+# Bug#28836669: Only first set of duplicate columns are reported for INSERT
+#
+CREATE TABLE t1(a INT, b INT);
+INSERT INTO t1(a, a) VALUES (1, 1);
+ERROR 42000: Column 'a' specified twice
+INSERT INTO t1(a, a, b, b) VALUES (1, 1, 2, 2);
+ERROR 42000: Column 'a' specified twice
+SHOW ERRORS;
+Level	Code	Message
+Error	1110	Column 'a' specified twice
+INSERT INTO t1(a, a, a, a) VALUES (1, 1, 1, 1);
+ERROR 42000: Column 'a' specified twice
+SHOW ERRORS;
+Level	Code	Message
+Error	1110	Column 'a' specified twice
+DROP TABLE t1;
+CREATE TABLE t1(a INT,
+b INT GENERATED ALWAYS AS (-a) VIRTUAL,
+c INT GENERATED ALWAYS AS (-a) STORED);
+INSERT INTO t1(a) VALUES (1);
+INSERT INTO t1(a,a) VALUES (1,1);
+ERROR 42000: Column 'a' specified twice
+INSERT INTO t1(a, a, b, c) VALUES (1, 1, DEFAULT, DEFAULT);
+ERROR 42000: Column 'a' specified twice
+INSERT INTO t1(b, b) VALUES (DEFAULT, DEFAULT);
+ERROR 42000: Column 'b' specified twice
+DROP TABLE t1;
+#
+# Bug #29899614: SIG 6 -`M_PSI_BATCH_MODE == PSI_BATCH_MODE_NONE' | SQL/HANDLER.CC
+#
+CREATE TABLE t1 ( f1 INTEGER, INDEX ( f1 ) );
+CREATE TABLE t2 ( f1 INTEGER );
+INSERT INTO t1 VALUES (10);
+INSERT INTO t2
+SELECT STRAIGHT_JOIN *
+FROM t1 AS alias1
+WHERE EXISTS (
+SELECT * FROM (
+SELECT * FROM t1 JOIN t1 AS alias2 USING ( f1 )
+) AS alias3
+WHERE alias1.f1 < 20
+);
+FLUSH TABLES;
+DROP TABLE t1, t2;
+#
+# WL#13325: Deprecate VALUES syntax in INSERT ... ON DUPLICATE KEY UPDATE
+#
+CREATE TABLE t(id INT PRIMARY KEY, x INT);
+INSERT INTO t VALUES (0, 0) ON DUPLICATE KEY UPDATE x = VALUES(x) + 1;
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+INSERT INTO t VALUES (0, 0)
+ON DUPLICATE KEY UPDATE x = (SELECT VALUES(x)+1 FROM t t1);
+Warnings:
+Warning	1287	The VALUES function is deprecated and will be removed in a future release. It always returns NULL in this context. If you meant to access a value from the VALUES clause of the INSERT statement, consider using an alias (INSERT INTO ... VALUES (...) AS alias) and reference alias.col instead of VALUES(col) in the ON DUPLICATE KEY UPDATE clause.
+SELECT VALUES(x) FROM t;
+VALUES(x)
+NULL
+Warnings:
+Warning	1681	'VALUES function' is deprecated and will be removed in a future release.
+INSERT INTO t VALUES (1, VALUES(x));
+Warnings:
+Warning	1681	'VALUES function' is deprecated and will be removed in a future release.
+DROP TABLE t;
+# Bug#31417951: Assert `!bulk_insert_started' in sql/sql_insert.cc
+#               on reexecuting prepared stmt
+CREATE TABLE t1 (
+pk INTEGER NOT NULL,
+col_varchar VARCHAR(64) DEFAULT NULL,
+col_blob BLOB,
+PRIMARY KEY (pk)
+);
+CREATE VIEW v1 AS
+SELECT col_blob, pk, col_varchar
+FROM t1
+WHERE pk between 4 and 5;
+CREATE TABLE t2 (
+pk INTEGER NOT NULL,
+col_int INTEGER DEFAULT NULL,
+col_blob BLOB,
+PRIMARY KEY (pk)
+);
+INSERT INTO t2 VALUES (7,8, 0xEFBFBDEFBFBDEFBFBDEFBFBD004A);
+PREPARE stmt FROM
+"INSERT INTO v1 (col_blob, pk, col_varchar)
+ SELECT col_blob, col_int, col_blob
+ FROM t2
+ WHERE pk BETWEEN 7 AND 8
+ LIMIT 1";
+EXECUTE stmt;
+EXECUTE stmt;
+ERROR 23000: Duplicate entry '8' for key 't1.PRIMARY'
+EXECUTE stmt;
+ERROR 23000: Duplicate entry '8' for key 't1.PRIMARY'
+DEALLOCATE PREPARE stmt;
+DROP VIEW v1;
+DROP TABLE t1, t2;
+#
+# Bug #32169656: MYSQL GIVING QUERY RESULT FOR WRONG COLUMN
+#
+CREATE TABLE t1 (
+Ñ INTEGER,
+N INTEGER,
+a INTEGER,
+b INTEGER,
+c INTEGER,
+d INTEGER,
+e INTEGER,
+f INTEGER,
+g INTEGER,
+h INTEGER,
+i INTEGER,
+j INTEGER,
+k INTEGER,
+l INTEGER,
+m INTEGER,
+na INTEGER,
+o INTEGER,
+p INTEGER,
+q INTEGER,
+r INTEGER,
+s INTEGER,
+t INTEGER,
+u INTEGER,
+v INTEGER,
+w INTEGER,
+x INTEGER,
+y INTEGER,
+z INTEGER,
+aa INTEGER,
+ab INTEGER,
+ac INTEGER,
+ad INTEGER
+);
+INSERT INTO t1 (Ñ, N) VALUES (1, 2);
+DROP TABLE t1;
+#
+# Bug#32774799: ASSERTION `ITEM->TYPE() != ITEM::FIELD_ITEM ||
+#              !STATIC_CAST<CONST ITEM_FIELD *>(ITEM)->
+#              FIELD->IS_HIDDEN_BY_SYSTEM()' FAILED.
+#
+CREATE TABLE t1 (f1 INTEGER, KEY k1 ((1)));
+INSERT INTO t1 VALUES() AS f2 ON DUPLICATE KEY UPDATE f1=1;
+CREATE VIEW v1 AS SELECT * FROM t1;
+INSERT INTO v1 VALUES() AS f2 ON DUPLICATE KEY UPDATE f1=1;
+DROP VIEW v1;
+DROP TABLE t1;
+CREATE TABLE t1 (f1 INTEGER, b INTEGER AS ((1)) INVISIBLE, KEY k1(b));
+INSERT INTO t1 VALUES() AS f2 ON DUPLICATE KEY UPDATE f1=1;
+DROP TABLE t1;
+#
+# Bug #33142665: THE NINTH SIGABRT CAUSE SERVER CRASH OF MYSQL
+# The fix removes unsupported syntax from the parser: wildcard
+#
+CREATE TABLE t1 (a INT, b INT);
+INSERT INTO t1 (t1.*) VALUES (0, 1);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '*) VALUES (0, 1)' at line 1
+INSERT INTO t1 (*) VALUES (0, 1);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '*) VALUES (0, 1)' at line 1
+DROP TABLE t1;

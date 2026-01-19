@@ -1,0 +1,1 @@
+- **[changes-in-alisql-8.0.44-2025-12-31](./changes/changes-in-alisql-8.0.44.2025-12-31.md)**

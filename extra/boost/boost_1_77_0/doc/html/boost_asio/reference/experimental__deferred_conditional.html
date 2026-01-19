@@ -1,0 +1,139 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>experimental::deferred_conditional</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="experimental__deferred_async_operation.html" title="experimental::deferred_async_operation">
+<link rel="next" href="experimental__deferred_conditional/deferred_conditional.html" title="experimental::deferred_conditional::deferred_conditional">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="experimental__deferred_async_operation.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="experimental__deferred_conditional/deferred_conditional.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.experimental__deferred_conditional"></a><a class="link" href="experimental__deferred_conditional.html" title="experimental::deferred_conditional">experimental::deferred_conditional</a>
+</h3></div></div></div>
+<p>
+        <a class="indexterm" name="boost_asio.indexterm.experimental__deferred_conditional"></a>
+      </p>
+<p>
+        Used to represent a deferred conditional branch.
+      </p>
+<pre class="programlisting">template&lt;
+    typename OnTrue = deferred_noop,
+    typename OnFalse = deferred_noop&gt;
+class deferred_conditional
+</pre>
+<h5>
+<a name="boost_asio.reference.experimental__deferred_conditional.h0"></a>
+        <span class="phrase"><a name="boost_asio.reference.experimental__deferred_conditional.member_functions"></a></span><a class="link" href="experimental__deferred_conditional.html#boost_asio.reference.experimental__deferred_conditional.member_functions">Member
+        Functions</a>
+      </h5>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Name
+                </p>
+              </th>
+<th>
+                <p>
+                  Description
+                </p>
+              </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="experimental__deferred_conditional/deferred_conditional.html" title="experimental::deferred_conditional::deferred_conditional"><span class="bold"><strong>deferred_conditional</strong></span></a> <span class="silver">[constructor]</span>
+                </p>
+              </td>
+<td>
+                <p>
+                  Construct a deferred conditional with the value to determine which
+                  branch will be executed.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="experimental__deferred_conditional/operator_lp__rp_.html" title="experimental::deferred_conditional::operator()"><span class="bold"><strong>operator()</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  Invoke the conditional branch bsaed on the stored alue.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="experimental__deferred_conditional/otherwise.html" title="experimental::deferred_conditional::otherwise"><span class="bold"><strong>otherwise</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  Set the false branch of the conditional.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <a class="link" href="experimental__deferred_conditional/then.html" title="experimental::deferred_conditional::then"><span class="bold"><strong>then</strong></span></a>
+                </p>
+              </td>
+<td>
+                <p>
+                  Set the true branch of the conditional.
+                </p>
+              </td>
+</tr>
+</tbody>
+</table></div>
+<h5>
+<a name="boost_asio.reference.experimental__deferred_conditional.h1"></a>
+        <span class="phrase"><a name="boost_asio.reference.experimental__deferred_conditional.requirements"></a></span><a class="link" href="experimental__deferred_conditional.html#boost_asio.reference.experimental__deferred_conditional.requirements">Requirements</a>
+      </h5>
+<p>
+        <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/experimental/deferred.hpp</code>
+      </p>
+<p>
+        <span class="emphasis"><em>Convenience header: </em></span>None
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="experimental__deferred_async_operation.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="experimental__deferred_conditional/deferred_conditional.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

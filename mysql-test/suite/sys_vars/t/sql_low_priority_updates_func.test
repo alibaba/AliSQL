@@ -19,7 +19,10 @@
 #                                                                              #
 ################################################################################
 
---source include/not_embedded.inc
+--source include/force_myisam_default.inc
+
+# Skip the test if MyISAM is not available
+--source include/have_myisam.inc
 
 ################################################################
 # sql_low_priority_updates was renamed to low_priority_updates #
@@ -85,9 +88,8 @@ delimiter ;|
 
 --echo ** Connection con0 **
 connection con0;
-
 let $wait_condition = SELECT COUNT(*) > 0 FROM information_schema.processlist
-                      WHERE state='Waiting for table level lock' AND
+                      WHERE state='Waiting for table metadata lock' AND
                             info LIKE  'UPDATE t1 SET a = CONCAT(a,"-updated")';
 --source include/wait_condition.inc
 
@@ -105,7 +107,7 @@ delimiter ;|
 connection default;
 
 let $wait_condition= SELECT count(*) = 2 FROM information_schema.processlist
-                     WHERE state LIKE 'Waiting for table level lock';
+                     WHERE state LIKE 'Waiting for table metadata lock';
 --source include/wait_condition.inc
 UNLOCK TABLES;
 
@@ -161,7 +163,7 @@ delimiter ;|
 connection con0;
 
 let $wait_condition = SELECT COUNT(*) > 0 FROM information_schema.processlist
-                      WHERE state='Waiting for table level lock' AND
+                      WHERE state='Waiting for table metadata lock' AND
                             info LIKE  'UPDATE t1 SET a = CONCAT(a,"-updated")';
 --source include/wait_condition.inc
 
@@ -170,7 +172,7 @@ delimiter |;
 
 send
 LOCK TABLE t1 READ;
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY a ASC;
 UNLOCK TABLES;|
 
 delimiter ;|
@@ -179,7 +181,7 @@ delimiter ;|
 connection default;
 
 let $wait_condition= SELECT count(*) = 2 FROM information_schema.processlist
-                     WHERE state LIKE 'Waiting for table level lock';
+                     WHERE state LIKE 'Waiting for table metadata lock';
 --source include/wait_condition.inc
 UNLOCK TABLES;
 
@@ -248,6 +250,28 @@ disconnect con1;
 
 drop view v1;
 DROP TABLE t1;
+
+######################################################################################
+#   Check if changing session variable throws error without sufficient privileges    #
+######################################################################################
+CREATE USER foo, bar;
+GRANT SESSION_VARIABLES_ADMIN ON *.*  TO bar;
+--let $conn_name = foo_connection
+--connect($conn_name, localhost, foo,,,)
+SELECT @@session.low_priority_updates;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET @@session.low_priority_updates = TRUE;
+--connection default
+disconnect $conn_name;
+--let $conn_name = bar_connection
+--connect($conn_name, localhost, bar,,,)
+SELECT @@session.low_priority_updates;
+SET @@session.low_priority_updates = TRUE;
+SELECT @@session.low_priority_updates;
+--connection default
+disconnect $conn_name;
+DROP USER foo, bar;
+
 
 SET @@GLOBAL.low_priority_updates = @global_low_priority_updates;
 SET @@SESSION.low_priority_updates = @session_low_priority_updates;

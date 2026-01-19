@@ -1,0 +1,116 @@
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+--echo ###########################################################################
+--echo # 0. Prepare
+--echo ###########################################################################
+--source include/rpl_connection_master.inc
+SET autocommit = 1;
+CREATE TABLE t1 (
+    id BIGINT NOT NULL,
+    c0 VARCHAR(20) NOT NULL,
+    c1 CHAR(10) DEFAULT 'duckdb',
+    PRIMARY KEY(id, c0)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+ALTER TABLE t1 ENGINE=DuckDB;
+SHOW CREATE TABLE t1;
+
+--echo ###########################################################################
+--echo # Test switch off duckdb_multi_trx_in_batch after start Batch
+--echo ###########################################################################
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_sql.inc
+
+--source include/rpl_connection_master.inc
+--echo # 1. Execute three Transactions on Master
+INSERT INTO t1 (id, c0, c1) VALUES (1, 'abc', NULL), (3, 'xxx', 'sgss');
+UPDATE t1 SET id=6, c1='AliSQL' WHERE id=1;
+
+BEGIN;
+DELETE FROM t1 WHERE id=3;
+INSERT INTO t1 (id, c0, c1) VALUES (3, 'yyy', 'sgss');
+COMMIT;
+
+--echo # 2. Make SQL Thread stop before the Trx2's Update Event executed
+--source include/rpl_connection_slave.inc
+SET GLOBAL debug="+d,debug_sync_before_apply_update_rows_event";
+--source include/start_slave_sql.inc
+
+--echo # 3. switch off duckdb_multi_trx_in_batch
+SET debug_sync="now WAIT_FOR apply_signal";
+SET GLOBAL duckdb_multi_trx_in_batch = OFF;
+SET GLOBAL debug="-d,debug_sync_before_apply_update_rows_event";
+SET debug_sync="now SIGNAL resume_signal";
+
+--echo # 4. Check the result
+--source include/rpl_sync.inc
+--let $rpl_diff_statement = SELECT id, c0, c1 FROM test.t1 ORDER BY id;
+--source include/rpl_diff.inc
+
+--echo ###########################################################################
+--echo # Test switch off duckdb_multi_trx_in_batch before start Batch
+--echo ###########################################################################
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_sql.inc
+SET GLOBAL duckdb_multi_trx_in_batch = ON;
+
+--source include/rpl_connection_master.inc
+--echo # 1. Execute 1 Transaction on Master
+UPDATE t1 SET c1 = 'xxx' WHERE id =3;
+
+--echo # 2. Make SQL Thread stop before the Trx1's Update Event executed
+--source include/rpl_connection_slave.inc
+SET GLOBAL debug="+d,debug_sync_before_apply_update_rows_event";
+--source include/start_slave_sql.inc
+
+--echo # 3. switch off duckdb_multi_trx_in_batch
+SET debug_sync="now WAIT_FOR apply_signal";
+SET GLOBAL duckdb_multi_trx_in_batch = OFF;
+SET GLOBAL debug="-d,debug_sync_before_apply_update_rows_event";
+SET debug_sync="now SIGNAL resume_signal";
+
+--echo # 4. Check the result
+--source include/rpl_sync.inc
+--let $rpl_diff_statement = SELECT id, c0, c1 FROM test.t1 ORDER BY id;
+--source include/rpl_diff.inc
+
+--echo ###########################################################################
+--echo # Test switch on duckdb_multi_trx_in_batch during parallel replay
+--echo ###########################################################################
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_sql.inc
+SET GLOBAL duckdb_multi_trx_in_batch = OFF;
+
+--source include/rpl_connection_master.inc
+--echo # 1. Execute 1 Transaction on Master
+UPDATE t1 SET c1 = 'zzz' WHERE id =3;
+
+--echo # 2. Make SQL Thread stop before the Trx1's Update Event executed
+--source include/rpl_connection_slave.inc
+SET GLOBAL debug="+d,debug_sync_before_apply_update_rows_event";
+--source include/start_slave_sql.inc
+
+--echo # 3. switch off duckdb_multi_trx_in_batch
+SET debug_sync="now WAIT_FOR apply_signal";
+SET GLOBAL duckdb_multi_trx_in_batch = ON;
+SET GLOBAL debug="-d,debug_sync_before_apply_update_rows_event";
+SET debug_sync="now SIGNAL resume_signal";
+
+--echo # 4. Check the result
+--source include/rpl_sync.inc
+--let $rpl_diff_statement = SELECT id, c0, c1 FROM test.t1 ORDER BY id;
+--source include/rpl_diff.inc
+
+--echo ###########################################################################
+--echo # Cleanup
+--echo ###########################################################################
+--source include/rpl_connection_slave.inc
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

@@ -15,39 +15,78 @@ DROP TABLE IF EXISTS `龡龡龡`;
 DROP TABLE IF EXISTS `龢龢龢`;
 SET NAMES ujis;
 SET character_set_database = ucs2;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
 CREATE TABLE `ｱｱｱ`(`ｶｶｶ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `ｲｲｲ`(`ｷｷｷ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `あああ`(`かかか` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `いいい`(`ききき` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `龖龖龖`(`丂丂丂` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `龗龗龗`(`丄丄丄` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `ｱｱｱ`(`ｶｶｶ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'ｱｱｱ' already exists
 CREATE TABLE IF NOT EXISTS `ｲｲｲ`(`ｷｷｷ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'ｲｲｲ' already exists
 CREATE TABLE IF NOT EXISTS `あああ`(`かかか` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'あああ' already exists
 CREATE TABLE IF NOT EXISTS `いいい`(`ききき` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'いいい' already exists
 CREATE TABLE IF NOT EXISTS `龖龖龖`(`丂丂丂` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table '龖龖龖' already exists
 CREATE TABLE IF NOT EXISTS `龗龗龗`(`丄丄丄` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table '龗龗龗' already exists
 CREATE TABLE IF NOT EXISTS `ｳｳｳ`(`ｸｸｸ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `ううう`(`くくく` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `龞龞龞`(`丅丅丅`char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `ｴｴｴ`(`ｹｹｹ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `ｵｵｵ`(`ｺｺｺ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `えええ`(`けけけ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `おおお`(`こここ` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `龡龡龡`(`丌丌丌` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `龢龢龢`(`丒丒丒` char(1)) DEFAULT CHARSET = ucs2 engine=INNODB;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
 ｶｶｶ	char(1)	YES		NULL	
@@ -59,10 +98,10 @@ Field	Type	Null	Key	Default	Extra
 ｸｸｸ	char(1)	YES		NULL	
 DESC `ｴｴｴ`;
 Field	Type	Null	Key	Default	Extra
-ｹｹｹ	char(1)	YES		NULL	
+ｹｹｹ	char(1)	YES		NULL	NULL
 DESC `ｵｵｵ`;
 Field	Type	Null	Key	Default	Extra
-ｺｺｺ	char(1)	YES		NULL	
+ｺｺｺ	char(1)	YES		NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かかか	char(1)	YES		NULL	
@@ -74,10 +113,10 @@ Field	Type	Null	Key	Default	Extra
 くくく	char(1)	YES		NULL	
 DESC `えええ`;
 Field	Type	Null	Key	Default	Extra
-けけけ	char(1)	YES		NULL	
+けけけ	char(1)	YES		NULL	NULL
 DESC `おおお`;
 Field	Type	Null	Key	Default	Extra
-こここ	char(1)	YES		NULL	
+こここ	char(1)	YES		NULL	NULL
 DESC `龖龖龖`;
 Field	Type	Null	Key	Default	Extra
 丂丂丂	char(1)	YES		NULL	
@@ -89,10 +128,10 @@ Field	Type	Null	Key	Default	Extra
 丅丅丅	char(1)	YES		NULL	
 DESC `龡龡龡`;
 Field	Type	Null	Key	Default	Extra
-丌丌丌	char(1)	YES		NULL	
+丌丌丌	char(1)	YES		NULL	NULL
 DESC `龢龢龢`;
 Field	Type	Null	Key	Default	Extra
-丒丒丒	char(1)	YES		NULL	
+丒丒丒	char(1)	YES		NULL	NULL
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
@@ -184,38 +223,74 @@ DROP TABLE `龞龞龞`;
 DROP TABLE `龡龡龡`;
 DROP TABLE `龢龢龢`;
 CREATE TABLE `ｱｱｱ`(`ｶｶｶ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `ｲｲｲ`(`ｷｷｷ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `あああ`(`かかか` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `いいい`(`ききき` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `龖龖龖`(`丂丂丂` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `龗龗龗`(`丄丄丄` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `ｱｱｱ`(`ｶｶｶ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'ｱｱｱ' already exists
 CREATE TABLE IF NOT EXISTS `ｲｲｲ`(`ｷｷｷ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'ｲｲｲ' already exists
 CREATE TABLE IF NOT EXISTS `あああ`(`かかか` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'あああ' already exists
 CREATE TABLE IF NOT EXISTS `いいい`(`ききき` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'いいい' already exists
 CREATE TABLE IF NOT EXISTS `龖龖龖`(`丂丂丂` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table '龖龖龖' already exists
 CREATE TABLE IF NOT EXISTS `龗龗龗`(`丄丄丄` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table '龗龗龗' already exists
 CREATE TABLE IF NOT EXISTS `ｳｳｳ`(`ｸｸｸ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `ううう`(`くくく` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `龞龞龞`(`丅丅丅`char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `ｴｴｴ`(`ｹｹｹ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `ｵｵｵ`(`ｺｺｺ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `えええ`(`けけけ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `おおお`(`こここ` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `龡龡龡`(`丌丌丌` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `龢龢龢`(`丒丒丒` char(1)) DEFAULT CHARSET = ucs2 engine=MyISAM;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
 ｶｶｶ	char(1)	YES		NULL	
@@ -227,10 +302,10 @@ Field	Type	Null	Key	Default	Extra
 ｸｸｸ	char(1)	YES		NULL	
 DESC `ｴｴｴ`;
 Field	Type	Null	Key	Default	Extra
-ｹｹｹ	char(1)	YES		NULL	
+ｹｹｹ	char(1)	YES		NULL	NULL
 DESC `ｵｵｵ`;
 Field	Type	Null	Key	Default	Extra
-ｺｺｺ	char(1)	YES		NULL	
+ｺｺｺ	char(1)	YES		NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かかか	char(1)	YES		NULL	
@@ -242,10 +317,10 @@ Field	Type	Null	Key	Default	Extra
 くくく	char(1)	YES		NULL	
 DESC `えええ`;
 Field	Type	Null	Key	Default	Extra
-けけけ	char(1)	YES		NULL	
+けけけ	char(1)	YES		NULL	NULL
 DESC `おおお`;
 Field	Type	Null	Key	Default	Extra
-こここ	char(1)	YES		NULL	
+こここ	char(1)	YES		NULL	NULL
 DESC `龖龖龖`;
 Field	Type	Null	Key	Default	Extra
 丂丂丂	char(1)	YES		NULL	
@@ -257,10 +332,10 @@ Field	Type	Null	Key	Default	Extra
 丅丅丅	char(1)	YES		NULL	
 DESC `龡龡龡`;
 Field	Type	Null	Key	Default	Extra
-丌丌丌	char(1)	YES		NULL	
+丌丌丌	char(1)	YES		NULL	NULL
 DESC `龢龢龢`;
 Field	Type	Null	Key	Default	Extra
-丒丒丒	char(1)	YES		NULL	
+丒丒丒	char(1)	YES		NULL	NULL
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
@@ -352,38 +427,74 @@ DROP TABLE `龞龞龞`;
 DROP TABLE `龡龡龡`;
 DROP TABLE `龢龢龢`;
 CREATE TABLE `ｱｱｱ`(`ｶｶｶ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `ｲｲｲ`(`ｷｷｷ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `あああ`(`かかか` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `いいい`(`ききき` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `龖龖龖`(`丂丂丂` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE `龗龗龗`(`丄丄丄` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `ｱｱｱ`(`ｶｶｶ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'ｱｱｱ' already exists
 CREATE TABLE IF NOT EXISTS `ｲｲｲ`(`ｷｷｷ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'ｲｲｲ' already exists
 CREATE TABLE IF NOT EXISTS `あああ`(`かかか` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'あああ' already exists
 CREATE TABLE IF NOT EXISTS `いいい`(`ききき` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table 'いいい' already exists
 CREATE TABLE IF NOT EXISTS `龖龖龖`(`丂丂丂` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table '龖龖龖' already exists
 CREATE TABLE IF NOT EXISTS `龗龗龗`(`丄丄丄` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Note	1050	Table '龗龗龗' already exists
 CREATE TABLE IF NOT EXISTS `ｳｳｳ`(`ｸｸｸ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `ううう`(`くくく` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE IF NOT EXISTS `龞龞龞`(`丅丅丅`char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `ｴｴｴ`(`ｹｹｹ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `ｵｵｵ`(`ｺｺｺ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `えええ`(`けけけ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `おおお`(`こここ` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `龡龡龡`(`丌丌丌` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TEMPORARY TABLE `龢龢龢`(`丒丒丒` char(1)) DEFAULT CHARSET = ucs2 engine=MEMORY;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 DESC `ｱｱｱ`;
 Field	Type	Null	Key	Default	Extra
 ｶｶｶ	char(1)	YES		NULL	
@@ -395,10 +506,10 @@ Field	Type	Null	Key	Default	Extra
 ｸｸｸ	char(1)	YES		NULL	
 DESC `ｴｴｴ`;
 Field	Type	Null	Key	Default	Extra
-ｹｹｹ	char(1)	YES		NULL	
+ｹｹｹ	char(1)	YES		NULL	NULL
 DESC `ｵｵｵ`;
 Field	Type	Null	Key	Default	Extra
-ｺｺｺ	char(1)	YES		NULL	
+ｺｺｺ	char(1)	YES		NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かかか	char(1)	YES		NULL	
@@ -410,10 +521,10 @@ Field	Type	Null	Key	Default	Extra
 くくく	char(1)	YES		NULL	
 DESC `えええ`;
 Field	Type	Null	Key	Default	Extra
-けけけ	char(1)	YES		NULL	
+けけけ	char(1)	YES		NULL	NULL
 DESC `おおお`;
 Field	Type	Null	Key	Default	Extra
-こここ	char(1)	YES		NULL	
+こここ	char(1)	YES		NULL	NULL
 DESC `龖龖龖`;
 Field	Type	Null	Key	Default	Extra
 丂丂丂	char(1)	YES		NULL	
@@ -425,10 +536,10 @@ Field	Type	Null	Key	Default	Extra
 丅丅丅	char(1)	YES		NULL	
 DESC `龡龡龡`;
 Field	Type	Null	Key	Default	Extra
-丌丌丌	char(1)	YES		NULL	
+丌丌丌	char(1)	YES		NULL	NULL
 DESC `龢龢龢`;
 Field	Type	Null	Key	Default	Extra
-丒丒丒	char(1)	YES		NULL	
+丒丒丒	char(1)	YES		NULL	NULL
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (

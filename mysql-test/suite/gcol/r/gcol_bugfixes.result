@@ -1,0 +1,1804 @@
+# Bug#21230709: Alter table statement fails with division by zero
+CREATE TABLE t1 (
+col1 INTEGER NOT NULL,
+col2 INTEGER NOT NULL,
+col3 INTEGER NOT NULL,
+gcol1 INTEGER GENERATED ALWAYS AS (col3 + col3) VIRTUAL,
+col4 INTEGER DEFAULT NULL,
+col5 INTEGER DEFAULT NULL,
+col6 INTEGER DEFAULT NULL,
+col7 INTEGER DEFAULT NULL,
+col8 INTEGER DEFAULT NULL,
+col9 INTEGER DEFAULT NULL,
+col10 INTEGER DEFAULT NULL,
+col11 INTEGER DEFAULT NULL,
+col12 INTEGER DEFAULT NULL,
+col13 INTEGER DEFAULT NULL,
+col14 INTEGER DEFAULT NULL,
+col15 INTEGER DEFAULT NULL,
+col16 INTEGER DEFAULT NULL,
+col17 INTEGER DEFAULT NULL,
+col18 INTEGER DEFAULT NULL,
+col19 INTEGER DEFAULT NULL,
+col20 INTEGER DEFAULT NULL,
+col21 INTEGER DEFAULT NULL,
+col22 INTEGER DEFAULT NULL,
+col23 INTEGER DEFAULT NULL,
+col24 INTEGER DEFAULT NULL,
+col25 INTEGER DEFAULT NULL,
+col26 INTEGER DEFAULT NULL,
+col27 INTEGER DEFAULT NULL,
+col28 INTEGER DEFAULT NULL,
+col29 INTEGER DEFAULT NULL,
+col30 INTEGER DEFAULT NULL,
+col31 INTEGER DEFAULT NULL,
+col32 INTEGER DEFAULT NULL,
+col33 INTEGER DEFAULT NULL,
+gcol2 INTEGER GENERATED ALWAYS AS (col2 + col2) VIRTUAL,
+gcol3 INTEGER GENERATED ALWAYS AS (gcol2 / gcol2) VIRTUAL,
+PRIMARY KEY (col1),
+KEY idx1 (gcol1)
+) engine=innodb;
+INSERT INTO t1 (col1, col2, col3)
+VALUES (0,1,2), (1,2,3), (2,3,4), (3,4,5), (4,5,6);
+FLUSH TABLE t1;
+ALTER TABLE t1 ADD COLUMN extra INTEGER;
+DROP TABLE t1;
+#
+# Bug 21340801 WL8149:ASSERTION `IS_VIRTUAL_GCOL()' FAILED
+#
+CREATE TABLE t1 (
+c_blob BLOB,
+c_blob_key BLOB GENERATED ALWAYS AS (REPEAT(c_blob,15)) STORED,
+KEY (c_blob_key(200))
+);
+INSERT  INTO t1 (c_blob) VALUES ('xceks');
+DROP TABLE t1;
+#
+# Bug#21345972 WL8149:JOIN_CACHE::FILTER_VIRTUAL_GCOL_BASE_COLS(): ASSERTION `FALSE' FAILED.
+#
+CREATE TABLE c (
+pk INTEGER AUTO_INCREMENT,
+col_int_nokey INTEGER /*! NULL */,
+col_int_key INTEGER GENERATED ALWAYS AS
+(col_int_nokey + col_int_nokey) VIRTUAL not null,
+col_date_nokey DATE /*! NULL */,
+col_date_key DATE GENERATED ALWAYS AS
+(DATE_ADD(col_date_nokey,interval 30 day)) VIRTUAL not null,
+col_datetime_nokey DATETIME /*! NULL */,
+col_time_nokey TIME /*! NULL */,
+col_datetime_key DATETIME GENERATED ALWAYS AS
+(ADDTIME(col_datetime_nokey, col_time_nokey)) VIRTUAL not null,
+col_time_key TIME GENERATED ALWAYS AS
+(ADDTIME(col_datetime_nokey, col_time_nokey)) VIRTUAL not null,
+col_varchar_nokey VARCHAR(1) /*! NULL */,
+col_varchar_key VARCHAR(2) GENERATED ALWAYS AS
+(CONCAT(col_varchar_nokey, col_varchar_nokey)) VIRTUAL not null,
+PRIMARY KEY (pk),
+UNIQUE KEY (col_int_key),
+UNIQUE KEY (col_varchar_key),
+UNIQUE KEY (col_date_key),
+KEY (col_time_key),
+KEY (col_datetime_key),
+UNIQUE KEY (col_int_key, col_varchar_key),
+KEY (col_int_key, col_int_nokey),
+KEY(col_int_key,col_date_key),
+KEY(col_int_key, col_time_key),
+KEY(col_int_key, col_datetime_key),
+UNIQUE
+KEY(col_date_key,col_time_key,col_datetime_key),
+UNIQUE KEY (col_varchar_key, col_varchar_nokey),
+UNIQUE KEY (col_int_key, col_varchar_key,
+col_date_key, col_time_key, col_datetime_key)
+)  ENGINE=INNODB;
+INSERT /*! IGNORE */ INTO c (
+col_int_nokey,
+col_date_nokey,
+col_time_nokey,
+col_datetime_nokey,
+col_varchar_nokey
+) VALUES (7, '2004-04-09', '14:03:03.042673',
+'2001-11-28 00:50:27.051028', 'c'),(1, '2006-05-13', '01:46:09.016386',
+'2007-10-09 19:53:04.008332', NULL);
+Warnings:
+Warning	1048	Column 'col_varchar_key' cannot be null
+CREATE TABLE bb (
+pk INTEGER AUTO_INCREMENT,
+col_int_nokey INTEGER /*! NULL */,
+col_int_key INTEGER GENERATED ALWAYS AS
+(col_int_nokey + col_int_nokey) VIRTUAL not null,
+col_date_nokey DATE /*! NULL */,
+col_date_key DATE GENERATED ALWAYS AS
+(DATE_ADD(col_date_nokey,interval 30 day)) VIRTUAL not null,
+col_datetime_nokey DATETIME /*! NULL */,
+col_time_nokey TIME /*! NULL */,
+col_datetime_key DATETIME GENERATED ALWAYS AS
+(ADDTIME(col_datetime_nokey, col_time_nokey)) VIRTUAL not null,
+col_time_key TIME GENERATED ALWAYS AS
+(ADDTIME(col_datetime_nokey, col_time_nokey)) VIRTUAL not null,
+col_varchar_nokey VARCHAR(1) /*! NULL */,
+col_varchar_key VARCHAR(2) GENERATED ALWAYS AS
+(CONCAT(col_varchar_nokey, col_varchar_nokey)) VIRTUAL not null,
+PRIMARY KEY (pk),
+UNIQUE KEY (col_int_key),
+UNIQUE KEY (col_varchar_key),
+UNIQUE KEY (col_date_key),
+KEY (col_time_key),
+KEY (col_datetime_key),
+UNIQUE KEY (col_int_key, col_varchar_key),
+KEY (col_int_key, col_int_nokey),
+KEY(col_int_key,col_date_key),
+KEY(col_int_key, col_time_key),
+KEY(col_int_key, col_datetime_key),
+UNIQUE
+KEY(col_date_key,col_time_key,col_datetime_key),
+UNIQUE KEY (col_varchar_key, col_varchar_nokey),
+UNIQUE KEY (col_int_key, col_varchar_key,
+col_date_key, col_time_key, col_datetime_key)
+)  AUTO_INCREMENT=10 ENGINE=INNODB;
+INSERT /*! IGNORE */ INTO bb (
+col_int_nokey,
+col_date_nokey,
+col_time_nokey,
+col_datetime_nokey,
+col_varchar_nokey
+) VALUES (0, '2003-08-04', '01:48:05.048577',
+'2006-11-03 00:00:00', 'p'),(2, '2007-11-06', '00:00:00', '2009-11-26 19:28:11.005115', 'n');
+CREATE TABLE cc (
+pk INTEGER AUTO_INCREMENT,
+col_int_nokey INTEGER /*! NULL */,
+col_int_key INTEGER GENERATED ALWAYS AS
+(col_int_nokey + col_int_nokey) VIRTUAL not null,
+col_date_nokey DATE /*! NULL */,
+col_date_key DATE GENERATED ALWAYS AS
+(DATE_ADD(col_date_nokey,interval 30 day)) VIRTUAL not null,
+col_datetime_nokey DATETIME /*! NULL */,
+col_time_nokey TIME /*! NULL */,
+col_datetime_key DATETIME GENERATED ALWAYS AS
+(ADDTIME(col_datetime_nokey, col_time_nokey)) VIRTUAL not null,
+col_time_key TIME GENERATED ALWAYS AS
+(ADDTIME(col_datetime_nokey, col_time_nokey)) VIRTUAL not null,
+col_varchar_nokey VARCHAR(1) /*! NULL */,
+col_varchar_key VARCHAR(2) GENERATED ALWAYS AS
+(CONCAT(col_varchar_nokey, col_varchar_nokey)) VIRTUAL not null,
+PRIMARY KEY (pk),
+UNIQUE KEY (col_int_key),
+UNIQUE KEY (col_varchar_key),
+UNIQUE KEY (col_date_key),
+KEY (col_time_key),
+KEY (col_datetime_key),
+UNIQUE KEY (col_int_key, col_varchar_key),
+KEY (col_int_key, col_int_nokey),
+KEY(col_int_key,col_date_key),
+KEY(col_int_key, col_time_key),
+KEY(col_int_key, col_datetime_key),
+UNIQUE
+KEY(col_date_key,col_time_key,col_datetime_key),
+UNIQUE KEY (col_varchar_key, col_varchar_nokey),
+UNIQUE KEY (col_int_key, col_varchar_key,
+col_date_key, col_time_key, col_datetime_key)
+)  AUTO_INCREMENT=10 ENGINE=INNODB;
+INSERT /*! IGNORE */ INTO cc (
+col_int_nokey,
+col_date_nokey,
+col_time_nokey,
+col_datetime_nokey,
+col_varchar_nokey
+) VALUES (172, '2009-04-23', '00:00:00', '2000-12-07 10:17:40.013275', 'h'),(NULL, '2002-10-06', '00:50:49.017545', NULL, 'm');
+Warnings:
+Warning	1048	Column 'col_int_key' cannot be null
+Warning	1048	Column 'col_datetime_key' cannot be null
+Warning	1048	Column 'col_time_key' cannot be null
+EXPLAIN SELECT
+gp1 . col_datetime_key AS g1
+FROM cc AS gp1 LEFT JOIN c AS gp2 ON ( gp2 . col_datetime_key <> gp1 .
+col_time_nokey )
+WHERE
+gp1 . col_varchar_nokey IN
+(
+SELECT
+DISTINCT p1 . col_varchar_key AS p1
+FROM bb AS p1 LEFT JOIN bb AS p2
+ON ( p1 . col_int_key = p2 . pk )
+)
+AND gp1 . col_varchar_nokey = 'b'
+HAVING g1 > 6;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	gp1	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
+1	SIMPLE	p1	NULL	const	col_varchar_key,col_varchar_key_2	col_varchar_key	10	const	1	100.00	NULL
+1	SIMPLE	p2	NULL	eq_ref	PRIMARY	PRIMARY	4	test.p1.col_int_key	1	100.00	Using index; FirstMatch(gp1)
+1	SIMPLE	gp2	NULL	index	NULL	col_datetime_key	5	NULL	2	100.00	Using where; Using index; Using join buffer (hash join)
+Warnings:
+Warning	1292	Incorrect datetime value: '6' for column 'col_datetime_key' at row 1
+Note	1003	/* select#1 */ select `test`.`gp1`.`col_datetime_key` AS `g1` from `test`.`cc` `gp1` left join `test`.`c` `gp2` on((`test`.`gp2`.`col_datetime_key` <> cast(`test`.`gp1`.`col_time_nokey` as datetime))) semi join (`test`.`bb` `p1` left join `test`.`bb` `p2` on((`test`.`p1`.`col_int_key` = `test`.`p2`.`pk`))) where ((`test`.`gp1`.`col_varchar_nokey` = 'b') and ('b' = `test`.`p1`.`col_varchar_key`)) having (`g1` > 6)
+SELECT
+gp1 . col_datetime_key AS g1
+FROM cc AS gp1 LEFT JOIN c AS gp2 ON ( gp2 . col_datetime_key <> gp1 .
+col_time_nokey )
+WHERE
+gp1 . col_varchar_nokey IN
+(
+SELECT
+DISTINCT p1 . col_varchar_key AS p1
+FROM bb AS p1 LEFT JOIN bb AS p2
+ON ( p1 . col_int_key = p2 . pk )
+)
+AND gp1 . col_varchar_nokey = 'b'
+HAVING g1 > 6;
+g1
+Warnings:
+Warning	1292	Incorrect datetime value: '6' for column 'col_datetime_key' at row 1
+DROP TABLE bb, c, cc;
+# Bug#21284646: Assertion !(table || table->read_set || bitmap_is_set())
+CREATE TABLE c (
+pk INTEGER AUTO_INCREMENT,
+col_int_nokey INTEGER NOT NULL,
+col_int_key INTEGER GENERATED ALWAYS AS (col_int_nokey + col_int_nokey) VIRTUAL not null,
+col_date_nokey DATE NOT NULL,
+col_date_key DATE GENERATED ALWAYS AS (DATE_ADD(col_date_nokey,interval 30 day)) VIRTUAL not null,
+col_datetime_nokey DATETIME NOT NULL,
+col_time_nokey TIME NOT NULL,
+col_datetime_key DATETIME GENERATED ALWAYS AS (ADDTIME(col_datetime_nokey, col_time_nokey)) VIRTUAL not null,
+col_time_key TIME GENERATED ALWAYS AS (ADDTIME(col_datetime_nokey, col_time_nokey)) VIRTUAL not null,
+col_varchar_nokey VARCHAR(1) NOT NULL,
+col_varchar_key VARCHAR(2) GENERATED ALWAYS AS (CONCAT(col_varchar_nokey, col_varchar_nokey)) VIRTUAL not null,
+PRIMARY KEY (pk,col_int_nokey),
+UNIQUE KEY (col_int_key),
+UNIQUE KEY (col_varchar_key),
+UNIQUE KEY (col_date_key),
+KEY (col_time_key),
+KEY (col_datetime_key),
+UNIQUE KEY (col_int_key, col_varchar_key),
+KEY (col_int_key, col_int_nokey),
+KEY(col_int_key,col_date_key),
+KEY(col_int_key, col_time_key),
+KEY(col_int_key, col_datetime_key),
+UNIQUE KEY (col_date_key,col_time_key,col_datetime_key),
+UNIQUE KEY (col_varchar_key, col_varchar_nokey),
+UNIQUE KEY (col_int_key, col_varchar_key, col_date_key, col_time_key, col_datetime_key)
+)  ENGINE=INNODB;
+INSERT INTO c (col_int_nokey, col_date_nokey, col_time_nokey, col_datetime_nokey, col_varchar_nokey) VALUES
+(1, '2009-12-01', '00:21:38.058143', '2007-05-28 00:00:00', 'c'),
+(8, '2004-12-17', '04:08:02.046897', '2009-07-25 09:21:20.064099', 'm'),
+(9, '2000-03-14', '16:25:11.040240', '2002-01-16 00:00:00', 'd'),
+(6, '2006-05-25', '19:47:59.011283', '2001-02-15 03:08:38.035426', 'y'),
+(2, '2002-10-13', '00:00:00', '1900-01-01 00:00:00', 's'),
+(4, '1900-01-01', '15:57:25.019666', '2005-08-15 00:00:00', 'r');
+ANALYZE TABLE c;
+Table	Op	Msg_type	Msg_text
+test.c	analyze	status	OK
+explain SELECT COUNT(DISTINCT col_varchar_key) AS x
+FROM c
+WHERE col_varchar_key IN ('rr', 'rr') OR
+col_int_nokey <> 9 AND
+pk >= 8
+HAVING x > '2000-02-06'
+ORDER BY col_time_nokey, pk;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	c	NULL	index_merge	PRIMARY,col_varchar_key,col_int_key_2,col_varchar_key_2,col_int_key_7	col_varchar_key,PRIMARY	10,4	NULL	2	100.00	Using sort_union(col_varchar_key,PRIMARY); Using where
+Warnings:
+Note	1003	/* select#1 */ select count(distinct `test`.`c`.`col_varchar_key`) AS `x` from `test`.`c` where ((`test`.`c`.`col_varchar_key` in ('rr','rr')) or ((`test`.`c`.`col_int_nokey` <> 9) and (`test`.`c`.`pk` >= 8))) having (`x` > '2000-02-06')
+SELECT COUNT(DISTINCT col_varchar_key) AS x
+FROM c
+WHERE col_varchar_key IN ('rr', 'rr') OR
+col_int_nokey <> 9 AND
+pk >= 8
+HAVING x > '2000-02-06'
+ORDER BY col_time_nokey, pk;
+x
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '2000-02-06'
+DROP TABLE c;
+# Bug#21341044: Conditional jump at sort_param::make_sort_key
+CREATE TABLE t1 (
+pk INTEGER AUTO_INCREMENT,
+col_int_nokey INTEGER /*! NULL */,
+col_int_key INTEGER GENERATED ALWAYS AS (col_int_nokey + col_int_nokey) VIRTUAL,
+col_blob_nokey BLOB /*! NULL */,
+col_blob_key BLOB GENERATED ALWAYS AS (REPEAT(col_blob_nokey,15)) VIRTUAL,
+col_longblob_nokey LONGBLOB /*! NULL */,
+col_longtext_nokey LONGTEXT /*! NULL */,
+col_longblob_key LONGBLOB GENERATED ALWAYS AS (REPEAT(col_longblob_nokey, 20)) VIRTUAL,
+col_longtext_key LONGTEXT GENERATED ALWAYS AS (REPEAT(col_longblob_nokey, 18)) VIRTUAL,
+col_text_nokey TEXT /*! NULL */,
+col_text_key TEXT GENERATED ALWAYS AS (REPEAT(col_text_nokey, 30)) VIRTUAL,
+PRIMARY KEY (pk),
+KEY (col_int_key),
+KEY (col_text_key(50)),
+KEY (col_blob_key(200)),
+KEY (col_longtext_key(200)),
+KEY (col_longblob_key(200)),
+KEY (col_int_key, col_text_key(100)),
+KEY (col_int_key, col_longtext_key(100)),
+KEY (col_int_key, col_blob_key(100)),
+KEY (col_int_key, col_longblob_key(100)),
+KEY (col_longtext_key(10), col_longblob_key(100)),
+KEY (col_int_key, col_text_key(10), col_blob_key(100), col_longtext_key(50), col_longblob_key(50))
+) engine=innodb;
+INSERT INTO t1 (col_int_nokey,col_blob_nokey,col_longtext_nokey,col_longblob_nokey,col_text_nokey)
+VALUES
+(0, 'ijcszxw', 'ijcszxw', 'ijcszxw', 'ijcszxw'),
+(5, 'jcszxwb', 'jcszxwb', 'jcszxwb', 'jcszxwb'),
+(4, 'cszxwbjjvv', 'cszxwbjjvv', 'cszxwbjjvv', 'cszxwbjjvv'),
+(3, 'szxw', 'szxw', 'szxw', 'szxw'),
+(7, 'zxwb', 'zxwb', 'zxwb', 'zxwb'),
+(42, 'xwbjjvvky', 'xwbjjvvky', 'xwbjjvvky', 'xwbjjvvky'),
+(142, 'wbjj', 'wbjj', 'wbjj', 'wbjj'),
+(5, 'bjjv', 'bjjv', 'bjjv', 'bjjv'),
+(0, 'jjvvkymalu', 'jjvvkymalu', 'jjvvkymalu', 'jjvvkymalu'),
+(3, 'j', 'j', 'j', 'j');
+SELECT alias1.pk AS field1
+FROM t1 AS alias1 LEFT OUTER JOIN t1 AS alias2
+ON alias1.col_int_key = alias2.col_int_key
+WHERE alias2.col_int_key BETWEEN 8 AND (8 + 1 ) OR
+alias2.col_int_key  BETWEEN 8 AND (8 + 5 ) AND
+alias2.col_int_key != 20 OR
+alias2.col_int_key IN (8, 5, 8) AND
+alias2.col_int_key >= 0 AND
+alias2.col_int_key <= ( 8 + 75 ) AND
+alias1.pk IS NOT NULL
+ORDER BY field1;
+field1
+2
+2
+3
+8
+8
+DROP TABLE t1;
+# bug#21487651: gcols: memory leak after failed alter table
+CREATE TABLE t(a int);
+ALTER TABLE t ADD COLUMN b int GENERATED ALWAYS AS (
+date_sub(a,interval a month)) VIRTUAL;
+ALTER TABLE t ADD COLUMN c int GENERATED ALWAYS AS (sum(a));
+ERROR HY000: Invalid use of group function
+DROP TABLE t;
+#
+# Bug#21628840: CRASH/MEMORY CORRUPTION ADDING INDEXES TO VIRTUAL COLUMN
+#               (II)
+#
+CREATE TABLE t1( a INT ) ENGINE = INNODB;
+INSERT INTO t1( a ) VALUES ( 1 ), ( 2 ), ( 3 ), ( 4 ), ( 5 );
+ALTER TABLE t1 ADD COLUMN b INT GENERATED ALWAYS AS (a - 1) STORED;
+ALTER TABLE t1 ADD COLUMN c INT GENERATED ALWAYS AS (b + 1) VIRTUAL;
+# Used to cause valgrind warning.
+ALTER TABLE t1 ADD INDEX( c );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+# Make sure the index is correct. That's kinda important.
+EXPLAIN
+SELECT c FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	c	5	NULL	5	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c` AS `c` from `test`.`t1`
+SELECT c FROM t1;
+c
+1
+2
+3
+4
+5
+DROP TABLE t1;
+#
+# Bug#21797776 ASSERTION `BIT < MAP->N_BITS' FAILED.
+#
+CREATE TABLE C (
+col_int_1 INT,
+col_int_2 INT GENERATED ALWAYS AS (col_int_1 + col_int_1) STORED,
+col_int_3 INT GENERATED ALWAYS AS (col_int_2 + col_int_1) VIRTUAL
+);
+CREATE ALGORITHM=TEMPTABLE VIEW v1 AS
+SELECT
+col_int_2 AS field1, col_int_2 AS field2,
+col_int_3 AS field3, col_int_3 AS field4
+FROM C;
+SELECT * FROM v1;
+field1	field2	field3	field4
+DROP TABLE C;
+DROP VIEW v1;
+#
+# Bug#21613615 GCOLS: ASSERTION FAILED: !TABLE || (!TABLE->READ_SET || BITMAP_IS_SET
+#
+CREATE TABLE t (a INT);
+CREATE TABLE v (
+a INT,
+c INT,
+b CHAR(2) GENERATED ALWAYS AS (a IN (1)) VIRTUAL,
+KEY(c,b(1)));
+INSERT INTO v (a,c) VALUES (1,1);
+EXPLAIN SELECT 1 FROM t WHERE ( SELECT 1 FROM t ) >=ANY( SELECT c FROM v );
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+3	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Not optimized, outer query is empty
+2	SUBQUERY	t	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t` where false
+SELECT 1 FROM t WHERE ( SELECT 1 FROM t ) >=ANY( SELECT c FROM v );
+1
+EXPLAIN SELECT (SELECT MAX(c) FROM v);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Select tables optimized away
+Warnings:
+Note	1003	/* select#1 */ select (/* select#2 */ select max(`test`.`v`.`c`) from `test`.`v`) AS `(SELECT MAX(c) FROM v)`
+SELECT (SELECT MAX(c) FROM v);
+(SELECT MAX(c) FROM v)
+1
+DROP TABLE t, v;
+CREATE TABLE v (
+a INT,
+c INT,
+b CHAR(2) GENERATED ALWAYS AS (a IN (1)) VIRTUAL, KEY(c,b(1)));
+INSERT INTO v (a,c) VALUES (1,1);
+SELECT MAX(c), COUNT(b) FROM v;
+MAX(c)	COUNT(b)
+1	1
+DROP TABLE v;
+CREATE TABLE v (
+a INT PRIMARY KEY,
+b INT, KEY(b));
+INSERT INTO v (a,b) VALUES (1,1);
+SELECT MAX(a) FROM v WHERE b=1;
+MAX(a)
+1
+DROP TABLE v;
+#
+# Bug#21824519: ASSERTION IN DROP TRIGGER WHEN TABLE HAS
+#               VIRTUAL GENERATED COLUMN
+#
+CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a) VIRTUAL);
+CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN END;
+INSERT INTO t (a) VALUES (1);
+SELECT * FROM t;
+a	b
+1	1
+DROP TRIGGER tr;
+SELECT * FROM t;
+a	b
+1	1
+CREATE FUNCTION f() RETURNS INT RETURN (SELECT COUNT(*) FROM t);
+SELECT f();
+f()
+1
+DROP FUNCTION f;
+SELECT * FROM t;
+a	b
+1	1
+DROP TABLE t;
+#
+# Bug#21833760 CALC_DAYNR: ASSERTION `DELSUM+(INT) Y/4-TEMP >= 0' FAILED.
+#
+CREATE TABLE C(
+c1 INT AUTO_INCREMENT,
+c8 DATETIME,
+c9 TIME,
+c11 TIME GENERATED ALWAYS AS(ADDTIME(c8,c9)) VIRTUAL,
+c13 TIME GENERATED ALWAYS AS(ADDTIME(c8,c11)) VIRTUAL,
+PRIMARY KEY(c1),
+UNIQUE KEY(c13)
+);
+INSERT INTO C (c8,c9) VALUES('1970-01-01',0),('1970-01-01',1);
+CREATE VIEW view_C AS SELECT * FROM C;
+SELECT /*+ NO_BNL(t1) */ t1.c13 FROM C AS t2 STRAIGHT_JOIN C AS t1 FORCE INDEX(c13);
+c13
+00:00:00
+00:00:00
+00:00:01
+00:00:01
+SELECT DISTINCT t1.c13 FROM C AS t1, view_C AS t2;
+c13
+00:00:00
+00:00:01
+DROP TABLE C;
+DROP VIEW view_C;
+#
+# Bug #21808680: JSON + GENERATED COLUMN CORRUPTS TABLE CACHE
+#                MEMORY, CRASHES
+#
+CREATE TABLE t (a INT, b JSON, c TEXT GENERATED ALWAYS AS (REPEAT(a=b, 2)));
+INSERT INTO t (a, b) VALUES (1, '2'), (3, '3');
+SELECT * FROM t;
+a	b	c
+1	2	00
+3	3	11
+DROP TABLE t;
+#
+# Bug#21810529: CRASH IN ITEM_FUNC::WALK WHEN CODE JUMPS TO GARBAGE
+# LOCATION
+#
+CREATE TABLE t (a TIME,b INT GENERATED ALWAYS AS (a=1) VIRTUAL);
+ALTER TABLE t CHANGE COLUMN q w INT;
+ERROR 42S22: Unknown column 'q' in 't'
+ALTER TABLE t CHANGE COLUMN q w INT;
+ERROR 42S22: Unknown column 'q' in 't'
+ALTER TABLE t CHANGE COLUMN q w INT;
+ERROR 42S22: Unknown column 'q' in 't'
+ALTER TABLE t CHANGE COLUMN q w INT;
+ERROR 42S22: Unknown column 'q' in 't'
+DROP TABLE t;
+#
+# Bug#21940542 TOO MUCH SPAM: INNODB: COMPUTE VIRTUAL COLUMN VALUES FAILED
+#
+CREATE TABLE t(b BLOB);
+ALTER TABLE t ADD COLUMN c INT GENERATED ALWAYS AS ((1,1)) VIRTUAL;
+ERROR HY000: Expression of generated column 'c' cannot refer to a row value.
+DROP TABLE t;
+CREATE TABLE t(b BLOB, c INT GENERATED ALWAYS AS ((1,1)) VIRTUAL);
+ERROR HY000: Expression of generated column 'c' cannot refer to a row value.
+#
+# Bug#21929967 GCOLS: GCOL VALUE CHANGES WHEN SESSION CHANGES SQL_MODE
+#
+CREATE TABLE t1(a CHAR(1), b CHAR(1), c CHAR(2) AS (a || b));
+Warnings:
+Warning	1287	'|| as a synonym for OR' is deprecated and will be removed in a future release. Please use OR instead
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` char(1) DEFAULT NULL,
+  `b` char(1) DEFAULT NULL,
+  `c` char(2) GENERATED ALWAYS AS (((0 <> `a`) or (0 <> `b`))) VIRTUAL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (a,b) VALUES('1','1');
+SELECT * FROM t1;
+a	b	c
+1	1	1
+SET SQL_MODE=PIPES_AS_CONCAT;
+SELECT * FROM t1;
+a	b	c
+1	1	1
+FLUSH TABLES;
+SELECT * FROM t1;
+a	b	c
+1	1	1
+DROP TABLE t1;
+CREATE TABLE t1(a CHAR(1), b CHAR(1), c CHAR(2) AS (a || b));
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` char(1) DEFAULT NULL,
+  `b` char(1) DEFAULT NULL,
+  `c` char(2) GENERATED ALWAYS AS (concat(`a`,`b`)) VIRTUAL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (a,b) VALUES('1','1');
+SELECT * FROM t1;
+a	b	c
+1	1	11
+SET SQL_MODE=DEFAULT;
+SELECT * FROM t1;
+a	b	c
+1	1	11
+FLUSH TABLES;
+SELECT * FROM t1;
+a	b	c
+1	1	11
+DROP TABLE t1;
+# Bug#22018999: gcols: assertion failed: !error
+SET @save_old_sql_mode= @@sql_mode;
+SET sql_mode="";
+CREATE TABLE t (a INTEGER AS (SUBSTR('','a',1))) engine=innodb;
+ERROR 22007: Truncated incorrect INTEGER value: 'a'
+CREATE TABLE t (a INTEGER) engine=innodb;
+ALTER TABLE t ADD b INTEGER AS (SUBSTR('','a',1));
+ERROR 22007: Truncated incorrect INTEGER value: 'a'
+DROP TABLE t;
+set sql_mode= @save_old_sql_mode;
+#
+# Bug#22157531 WITH NO MORE .FRM 64K LIMIT WE CAN CREATE MASSIVE TABLES,
+#              BUT TOO SLOWLY..
+#
+set @s:=concat("CREATE TABLE t(a LONGBLOB GENERATED ALWAYS AS
+('",REPEAT("a",1024*1024),"') STORED) ENGINE=INNODB;");
+PREPARE r FROM @s;
+EXECUTE r;
+DEALLOCATE PREPARE r;
+DROP TABLE t;
+#
+# Bug#22239803 WITH NO MORE .FRM 64K LIMIT WE CAN CREATE MASSIVE TABLES,
+#              BUT TOO SLOW (II)
+#
+set @s:=concat("CREATE TABLE t(w INT, A INT GENERATED ALWAYS
+AS('",REPEAT("\\0",1024*1024),"') STORED) ENGINE=INNODB;");
+PREPARE r FROM @s;
+EXECUTE r;
+DEALLOCATE PREPARE r;
+DROP TABLE t;
+# Bug#21875520 Problems with virtual column indexes
+CREATE TABLE t(
+a TIMESTAMP,
+b BLOB,
+c TIMESTAMP GENERATED ALWAYS AS (GREATEST(a, '2000-01-01 00:00:00')) VIRTUAL,
+UNIQUE KEY(c)
+);
+INSERT INTO t(b) VALUES ('');
+UPDATE t SET a='2001-01-01 00:00:00';
+SELECT c FROM t;
+c
+2001-01-01 00:00:00
+SELECT c, a FROM t;
+c	a
+2001-01-01 00:00:00	2001-01-01 00:00:00
+UPDATE t SET b='xyz';
+DO (SELECT @c1:= c FROM t);
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+DO (SELECT (@c2:= c) - a FROM t);
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1292	Truncated incorrect DOUBLE value: '2001-01-01 00:00:00'
+SELECT @c2 - @c1;
+@c2 - @c1
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '2001-01-01 00:00:00'
+Warning	1292	Truncated incorrect DOUBLE value: '2001-01-01 00:00:00'
+DROP TABLE t;
+#
+# Bug#22133710 GCOLS: READ UNCOMMITTED: ASSERT !TABLE || (!TABLE->WRITE_SET || BITMAP_IS_SET(TA
+#
+CREATE TABLE t (
+a INT,
+b INT GENERATED ALWAYS AS (1) VIRTUAL,
+c INT GENERATED ALWAYS AS (1) VIRTUAL,
+d INT GENERATED ALWAYS AS (1) VIRTUAL,
+KEY (b,d)
+) ENGINE=INNODB;
+INSERT INTO t VALUES();
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;
+SELECT 1 FROM t WHERE c GROUP BY b;
+1
+1
+COMMIT;
+DROP TABLE t;
+#
+# bug#21982792: TOO MUCH SPAM: 'GOT ERROR 1 WHEN READING TABLE'
+#
+CREATE TABLE t (
+a INT GENERATED ALWAYS AS (1) VIRTUAL NOT NULL,
+b DATE GENERATED ALWAYS AS (1) VIRTUAL NOT NULL,
+KEY(b)
+);
+SET @old_sql_mode=@@sql_mode;
+SET sql_mode='';
+INSERT INTO t VALUES();
+Warnings:
+Warning	1265	Data truncated for column 'b' at row 1
+SET sql_mode= STRICT_ALL_TABLES;
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+DELETE d2 FROM t AS d1, t AS d2 WHERE d1.a = d2.b;
+ERROR 22007: Incorrect date value: '1' for column 'b' at row 1
+DROP TABLE t;
+SET sql_mode=@old_sql_mode;
+CREATE TABLE t (
+a INT,
+b INT GENERATED ALWAYS AS (1),
+KEY i(a,b)
+);
+INSERT INTO t (a) VALUES(1), (2);
+SELECT 1 FROM t a RIGHT JOIN t USING(b)
+WHERE 1 NOT LIKE(SELECT a FROM t WHERE a.b);
+ERROR 21000: Subquery returns more than 1 row
+DROP TABLE t;
+# Bug#22748217 gcols: assert in Item_func_in::resolve_type
+SET @old_sql_mode= @@sql_mode;
+SET sql_mode="";
+CREATE TABLE t (a TIMESTAMP AS (0) VIRTUAL) engine=innodb;
+ALTER TABLE t ADD COLUMN b JSON AS (a NOT IN (1,1)) STORED;
+ERROR 22007: Incorrect datetime value: '1' for column 'a' at row 1
+DROP TABLE t;
+SET sql_mode= @old_sql_mode;
+#
+# Bug#22987899: ALTER TABLE MODIFY COLUMN DOES NOT SET
+#               ALTER_CHANGE_COLUMN_DEFAULT FLAG
+#
+CREATE TABLE t1(
+a INTEGER DEFAULT 5,
+b INTEGER NOT NULL,
+gc1 INTEGER AS (a + DEFAULT(a)) VIRTUAL,
+gc2 INTEGER AS (a + DEFAULT(a)) STORED,
+KEY k1(gc1)
+);
+INSERT INTO t1(a, b) VALUES (1 ,1);
+SELECT * FROM t1;
+a	b	gc1	gc2
+1	1	6	6
+SELECT gc1 FROM t1;
+gc1
+6
+ALTER TABLE t1 MODIFY COLUMN a INT DEFAULT 6;
+affected rows: 1
+info: Records: 1  Duplicates: 0  Warnings: 0
+SELECT * FROM t1;
+a	b	gc1	gc2
+1	1	7	7
+SELECT gc1 FROM t1;
+gc1
+7
+ALTER TABLE t1 MODIFY COLUMN b INTEGER NULL;
+affected rows: 0
+info: Records: 0  Duplicates: 0  Warnings: 0
+SELECT * FROM t1;
+a	b	gc1	gc2
+1	1	7	7
+SELECT gc1 FROM t1;
+gc1
+7
+DROP TABLE t1;
+#
+# Bug#22991924 GCOLS: UTF16 STRING OPERATIONS GIVE DOUBLED \0\0 STRINGS
+# ON EACH TABLE REBUILD
+#
+CREATE TABLE t1 (
+a TEXT CHARSET utf16,
+b BLOB GENERATED ALWAYS AS ( concat( 'ABC', a ) ) VIRTUAL
+);
+# Results change due to bug fix.
+INSERT INTO t1 ( a ) VALUES ( 'abc' );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` text CHARACTER SET utf16 COLLATE utf16_general_ci,
+  `b` blob GENERATED ALWAYS AS (concat(_utf16'\0A\0B\0C',`a`)) VIRTUAL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT HEX(b) FROM t1;
+HEX(b)
+004100420043006100620063
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SELECT HEX(b) FROM t1;
+HEX(b)
+004100420043006100620063
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` text CHARACTER SET utf16 COLLATE utf16_general_ci,
+  `b` blob GENERATED ALWAYS AS (concat(_utf16'\0A\0B\0C',`a`)) VIRTUAL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT
+length( convert( b USING utf8 ) ),
+char_length ( convert( b USING utf8 ) )
+FROM t1;
+length( convert( b USING utf8 ) )	char_length ( convert( b USING utf8 ) )
+12	12
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SELECT
+length( convert( b USING utf16 ) ),
+char_length ( convert( b USING utf16 ) )
+FROM t1;
+length( convert( b USING utf16 ) )	char_length ( convert( b USING utf16 ) )
+12	6
+SELECT
+length( convert( b USING latin1 ) ),
+char_length ( convert( b USING latin1 ) )
+FROM t1;
+length( convert( b USING latin1 ) )	char_length ( convert( b USING latin1 ) )
+12	12
+DROP TABLE t1;
+#
+# Bug#25615803: ASSERT IN SQL/FIELD.CC:...
+#               VIRTUAL STRING* FIELD_VARSTRING::VAL_STR
+#
+CREATE TABLE t1 (
+a INT,
+b INT,
+c INT,
+d INT GENERATED ALWAYS AS ( b + 1 ) STORED
+)
+PARTITION BY RANGE( a ) ( PARTITION p0 VALUES LESS THAN (1) );
+INSERT INTO t1 ( b ) VALUES ( 1 );
+UPDATE t1 SET c = d;
+DROP TABLE t1;
+#
+# Bug #25793677 INNODB: FAILING ASSERTION: CLUST_TEMPL_FOR_SEC || LEN ....
+#
+CREATE TABLE v (
+a INT,
+c INT,
+b CHAR(2) GENERATED ALWAYS AS (a IN (1)) VIRTUAL,
+KEY(c,b(1))) charset utf8mb4;
+INSERT INTO v (a,c) VALUES (1,1);
+SELECT (SELECT MAX(c) FROM v);
+(SELECT MAX(c) FROM v)
+1
+DROP TABLE v;
+# Bug#23021693 gcol:assertion '!table->in_use->is_error()' failed
+CREATE TABLE t1 (
+pk INTEGER AUTO_INCREMENT,
+c1 INTEGER,
+gc1 INTEGER GENERATED ALWAYS AS (c1+c1) VIRTUAL,
+gc2 INTEGER GENERATED ALWAYS AS (gc1 + c1) VIRTUAL,
+c2 VARCHAR(5),
+gc3 VARCHAR(10) GENERATED ALWAYS AS (CONCAT(c2, c2)) VIRTUAL,
+gc4 VARCHAR(10) GENERATED ALWAYS AS (CONCAT(gc3, 'x')) VIRTUAL,
+PRIMARY KEY (pk DESC),
+KEY(gc1),
+KEY(gc3),
+UNIQUE KEY (gc1, gc3),
+UNIQUE KEY (gc2, gc4)
+)  ENGINE=InnoDB;
+INSERT INTO t1 (c1, c2) VALUES (3, 'cek'),(3,'eks');
+CREATE TABLE t2 (
+pk INTEGER AUTO_INCREMENT,
+c1 INTEGER,
+gc1 INTEGER GENERATED ALWAYS AS (c1 + c1) VIRTUAL,
+gc2 INTEGER GENERATED ALWAYS AS (gc1 + c1) VIRTUAL,
+c2 VARCHAR(5),
+gc3 VARCHAR(10) GENERATED ALWAYS AS (CONCAT(c2, c2)) VIRTUAL,
+gc4 VARCHAR(10) GENERATED ALWAYS AS (CONCAT(gc3, 'x')) VIRTUAL,
+PRIMARY KEY (pk DESC),
+KEY(gc1),
+KEY(gc3),
+UNIQUE KEY (gc1, gc3),
+UNIQUE KEY (gc2, gc4)
+)  ENGINE=InnoDB;
+INSERT INTO t2 (c1, c2) VALUES
+(3, 'ksa'), (6,'sate'), (3, 'a'), (NULL, 't'), (9, 'efq'),
+(NULL, 'f'), (6, 'qsdk'), (63, NULL), (3, 's'), (1,NULL);
+DELETE outr1.*
+FROM t2 AS outr1 INNER JOIN t1 AS outr2
+ON outr1.gc4 = outr2.gc4
+WHERE outr1.pk > (SELECT innr1.gc2 AS y
+FROM t1 AS innr1
+WHERE innr1.pk = 5 OR outr2.pk <> 7
+);
+ERROR 21000: Subquery returns more than 1 row
+DROP TABLE t1, t2;
+#
+# Bug#23321196: GCOLS: ASSERTION FAILURE:
+#               DFIELD_IS_NULL(DFIELD2) || DFIELD2->DATA
+#
+CREATE TABLE t(gc TEXT GENERATED ALWAYS AS (NULL) NOT NULL, KEY (gc(1)));
+INSERT IGNORE INTO t VALUES ();
+Warnings:
+Warning	1048	Column 'gc' cannot be null
+SELECT * FROM t;
+gc
+
+DELETE FROM t;
+SELECT * FROM t;
+gc
+DROP TABLE t;
+#
+# Bug #27041382: ASSERTION `!TABLE->IN_USE->IS_ERROR()' FAILED.
+#
+CREATE TABLE t1 (c1 VARCHAR(100),
+c2 VARCHAR(400) GENERATED ALWAYS AS (CONCAT(c1,c1)));
+CREATE TRIGGER trg1 BEFORE INSERT ON t1
+FOR EACH ROW INSERT/*!INTO*/t1 VALUES (1);
+INSERT INTO t1  VALUES (),();
+ERROR 42000: Trigger 'trg1' has an error in its body: 'You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 't1 VALUES (1)' at line 1'
+INSERT INTO t1(c1)  SELECT 1 FROM DUAL;
+ERROR 42000: Trigger 'trg1' has an error in its body: 'You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 't1 VALUES (1)' at line 1'
+LOAD DATA INFILE '../../std_data/loaddata5.dat'
+ INTO TABLE t1 FIELDS TERMINATED BY '' ENCLOSED BY '' (c1) ;
+ERROR 42000: Trigger 'trg1' has an error in its body: 'You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 't1 VALUES (1)' at line 1'
+DROP TABLE t1;
+#
+# Bug#27452082 ASSERTION FAILED: !TABLE->IN_USE->IS_ERROR() IN UPDATE_GENERATED_READ_FIELDS
+#
+CREATE TABLE t (
+a INT,
+b INT GENERATED ALWAYS AS (MAKETIME(1,1,1)) STORED,
+KEY (a)
+);
+INSERT INTO t (a) VALUES (32767),(-1);
+SELECT * FROM t WHERE a>-19106 AND a-0x4d;
+ERROR 22003: BIGINT UNSIGNED value is out of range in '(`test`.`t`.`a` - 0x4d)'
+DROP TABLE t;
+#
+# Bug#27954073 ASSERTION FAILED: !TABLE || (!TABLE->WRITE_SET || BITMAP_IS_SET
+#
+SET BINLOG_FORMAT=STATEMENT;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+CREATE TABLE t(
+a INT,
+b INT GENERATED ALWAYS AS (0) VIRTUAL NOT NULL,
+KEY (a)
+) ENGINE=INNODB PARTITION BY KEY(b) PARTITIONS 2;
+INSERT INTO t(a) VALUES(1),(1),(1),(1);
+DELETE FROM t WHERE a=1;
+DROP TABLE t;
+SET BINLOG_FORMAT=DEFAULT;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+#
+# Bug #28652826  THE CONTINUATION OF BUG 27968952 .. CRASH & CORRUPTION
+# WITH GCOLS
+#
+CREATE TABLE t(
+a INT NOT NULL,
+b INT NOT NULL,
+c INT NOT NULL,
+g MEDIUMTEXT GENERATED ALWAYS AS((a <> b)) VIRTUAL,
+UNIQUE KEY i0000 (a),
+UNIQUE KEY i0001 (g(78))
+) ENGINE=INNODB;
+REPLACE INTO t(a, b, c) VALUES (1,8,9);
+REPLACE INTO t(a, b, c) VALUES (0,0,10);
+REPLACE INTO t(a, b, c) VALUES (4,4,11);
+REPLACE INTO t(a, b, c) VALUES (0,7,12);
+REPLACE INTO t(a, b, c) VALUES (0,0,13);
+SELECT * FROM t;
+a	b	c	g
+0	0	13	0
+DROP TABLE t;
+#
+# Bug #28772251 "SWAPPING COLUMN BY ALTER TABLE RENAME COLUMN BREAKS
+#                STORED GENERATED COLUMN".
+#
+#
+# 0) Original test case.
+#
+CREATE TABLE t1 (a INT, b INT, gcol INT AS (a + 1) STORED);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `gcol` int GENERATED ALWAYS AS ((`a` + 1)) STORED
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (a, b) VALUES (1, 2);
+SELECT * FROM t1;
+a	b	gcol
+1	2	2
+# We block renaming of columns on which generated columns depend.
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a;
+ERROR HY000: Column 'a' has a generated column dependency.
+# However, it is OK to rename such column in dependent expression
+# is redefined in the same ALTER TABLE.
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a, MODIFY gcol INT AS (a + 1) STORED;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `b` int DEFAULT NULL,
+  `a` int DEFAULT NULL,
+  `gcol` int GENERATED ALWAYS AS ((`a` + 1)) STORED
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check that generated column value reflect the fact that columns
+# were swapped.
+SELECT * FROM t1;
+b	a	gcol
+1	2	3
+# Similarly, we disallow replacement (via DROP + ADD) of columns on
+# which generated columns depend. Replacement is allowed if
+# dependent expression is updated within the same ALTER.
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 3;
+ERROR HY000: Column 'a' has a generated column dependency.
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 3, MODIFY gcol INT AS (a + 1) STORED;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `b` int DEFAULT NULL,
+  `gcol` int GENERATED ALWAYS AS ((`a` + 1)) STORED,
+  `a` int DEFAULT '3'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check that generated column value reflect the fact that column
+# was replaced.
+SELECT * FROM t1;
+b	gcol	a
+1	4	3
+DROP TABLE t1;
+#
+# More systematic test coverage.
+#
+# 1) Renaming columns on which generated columns depend.
+#
+# 1.1) Renaming column on which generated column depends is
+#      prohibited (for both stored and virtual columns).
+CREATE TABLE t1 (a INT, gcol INT AS (a + 1) STORED);
+CREATE TABLE t2 (a INT, gcol INT AS (a + 1) VIRTUAL);
+ALTER TABLE t1 RENAME COLUMN a TO b;
+ERROR HY000: Column 'a' has a generated column dependency.
+ALTER TABLE t2 RENAME COLUMN a TO b;
+ERROR HY000: Column 'a' has a generated column dependency.
+# Cases when rename happens through CHANGE COLUMN are also detected.
+ALTER TABLE t1 CHANGE COLUMN a b INT;
+ERROR HY000: Column 'a' has a generated column dependency.
+ALTER TABLE t2 CHANGE COLUMN a b INT;
+ERROR HY000: Column 'a' has a generated column dependency.
+#
+# 1.2) It is OK to rename such columns if dependent generated column
+#      is dropped in the same ALTER.
+ALTER TABLE t1 RENAME COLUMN a TO b, DROP COLUMN gcol;
+ALTER TABLE t2 RENAME COLUMN a TO b, DROP COLUMN gcol;
+# This works even if dropped column comes earlier than renamed column.
+ALTER TABLE t1 ADD gcol INT AS (b + 1) STORED FIRST;
+ALTER TABLE t2 ADD gcol INT AS (b + 1) VIRTUAL FIRST;
+ALTER TABLE t1 DROP COLUMN gcol, RENAME COLUMN b TO c;
+ALTER TABLE t2 DROP COLUMN gcol, RENAME COLUMN b TO c;
+#
+# 1.3) It is also OK to rename such columns if dependent generated
+#      column expression is updated/redefined.
+ALTER TABLE t1 ADD COLUMN gcol INT AS (c + 1) STORED;
+ALTER TABLE t2 ADD COLUMN gcol INT AS (c + 1) VIRTUAL;
+ALTER TABLE t1 RENAME COLUMN c TO d, MODIFY gcol INT AS (d + 1) STORED;
+ALTER TABLE t2 RENAME COLUMN c TO d, MODIFY gcol INT AS (d + 1) VIRTUAL;
+# And again this works even if generated column comes earlier than
+# renamed column.
+ALTER TABLE t1 DROP COLUMN gcol, ADD COLUMN gcol INT AS (d + 1) STORED FIRST;
+ALTER TABLE t2 DROP COLUMN gcol, ADD COLUMN gcol INT AS (d + 1) VIRTUAL FIRST;
+ALTER TABLE t1 MODIFY gcol INT AS (e + 1) STORED, RENAME COLUMN d TO e;
+ALTER TABLE t2 MODIFY gcol INT AS (e + 1) VIRTUAL, RENAME COLUMN d TO e;
+# If updated expression uses wrong column name, error is reported.
+# Note that error code and message are different because technically
+# it is issue with new generation expression.
+ALTER TABLE t1 MODIFY gcol INT AS (e + 1) STORED, RENAME COLUMN e TO f;
+ERROR 42S22: Unknown column 'e' in 'generated column function'
+ALTER TABLE t2 MODIFY gcol INT AS (e + 1) VIRTUAL, RENAME COLUMN e TO f;
+ERROR 42S22: Unknown column 'e' in 'generated column function'
+DROP TABLES t1, t2;
+#
+# 1.4) Complex case. Renaming of columns which causes generated
+#      column re-evaluation.
+CREATE TABLE t1 (a INT, b INT, gcol INT AS (a + 10) STORED);
+INSERT INTO t1 (a, b) VALUES (1, 2), (3, 4), (5, 6);
+CREATE TABLE t2 (a INT, b INT, gcol INT AS (a + 10) VIRTUAL, KEY(gcol));
+INSERT INTO t2 (a, b) VALUES (1, 2), (3, 4), (5, 6);
+# We block simple renaming of columns even if dependent generation
+# expression stays valid. This is intentional -- we want user to
+# realize and explicitly confirm what is done (in most cases such
+# rename is likely to be an error).
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a;
+ERROR HY000: Column 'a' has a generated column dependency.
+ALTER TABLE t2 RENAME COLUMN a TO b, RENAME COLUMN b TO a;
+ERROR HY000: Column 'a' has a generated column dependency.
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a, MODIFY gcol INT AS (a + 10) STORED;
+ALTER TABLE t2 RENAME COLUMN a TO b, RENAME COLUMN b TO a, MODIFY gcol INT AS (a + 10) VIRTUAL;
+# Contents of generated column should be updated accordingly.
+SELECT * FROM t1;
+b	a	gcol
+1	2	12
+3	4	14
+5	6	16
+SELECT * FROM t2;
+b	a	gcol
+1	2	12
+3	4	14
+5	6	16
+SELECT * FROM t2 WHERE gcol = 14;
+b	a	gcol
+3	4	14
+# Such ALTER TABLEs are not inplace/instant due to generated
+# column re-evaluation.
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a, MODIFY gcol INT AS (a + 10) STORED, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+ALTER TABLE t2 RENAME COLUMN a TO b, RENAME COLUMN b TO a, MODIFY gcol INT AS (a + 10) VIRTUAL, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+DROP TABLES t1, t2;
+#
+# 2) Renaming columns on which generated default depends.
+#
+# 2.1) Renaming column on which generated default depends is
+#      prohibited.
+CREATE TABLE t1 (a INT, def INT DEFAULT (a + 1));
+ALTER TABLE t1 RENAME COLUMN a TO b;
+ERROR HY000: Column 'a' of table 't1' has a default value expression dependency and cannot be dropped or renamed.
+# Cases when rename happens through CHANGE COLUMN are also detected.
+ALTER TABLE t1 CHANGE COLUMN a b INT;
+ERROR HY000: Column 'a' of table 't1' has a default value expression dependency and cannot be dropped or renamed.
+#
+# 2.2) It is OK to rename such columns if dependent generated default
+#      is dropped:
+#
+#      a) By dropping column
+ALTER TABLE t1 RENAME COLUMN a TO b, DROP COLUMN def;
+#      b) By dropping default using DROP DEFAULT
+ALTER TABLE t1 ADD COLUMN def INT DEFAULT (b + 1);
+ALTER TABLE t1 RENAME COLUMN b TO c, ALTER COLUMN def DROP DEFAULT;
+#      c) By dropping default using CHANGE/MODIFY COLUMN
+ALTER TABLE t1 MODIFY COLUMN def INT DEFAULT (c + 1);
+ALTER TABLE t1 RENAME COLUMN c TO d, MODIFY COLUMN def INT;
+# This works even if column with generated default comes earlier than
+# renamed column.
+ALTER TABLE t1 DROP COLUMN def, ADD COLUMN def INT DEFAULT (d + 1) FIRST;
+ALTER TABLE t1 DROP COLUMN def, RENAME COLUMN d TO e;
+ALTER TABLE t1 ADD COLUMN def INT DEFAULT (e + 1) FIRST;
+ALTER TABLE t1 ALTER COLUMN def DROP DEFAULT, RENAME COLUMN e TO f;
+ALTER TABLE t1 MODIFY COLUMN def INT DEFAULT (f + 1);
+ALTER TABLE t1 MODIFY COLUMN def INT, RENAME COLUMN f TO g;
+DROP TABLE t1;
+#
+# 2.3) It is also OK to rename such columns if dependent generated
+#      default value is updated/redefined:
+#
+#      a) Using SET DEFAULT
+CREATE TABLE t1 (a INT, def INT DEFAULT (a + 1));
+ALTER TABLE t1 RENAME COLUMN a TO b, ALTER COLUMN def SET DEFAULT (b + 1);
+#      b) Using MODIFY/CHANGE column
+ALTER TABLE t1 RENAME COLUMN b TO c, MODIFY COLUMN def INT DEFAULT (c + 1);
+# And again this works even if generated default comes earlier than
+# renamed column.
+ALTER TABLE t1 DROP COLUMN def, ADD COLUMN def INT DEFAULT (c + 1) FIRST;
+ALTER TABLE t1 ALTER COLUMN def SET DEFAULT (d + 1), RENAME COLUMN c TO d;
+ALTER TABLE t1 MODIFY COLUMN def INT DEFAULT (e + 1), RENAME COLUMN d TO e;
+# If updated expression uses wrong column name, error is reported.
+# Again, error code and message are different because technically
+# it is issue with new generated default.
+ALTER TABLE t1 MODIFY def INT DEFAULT (e + 1), RENAME COLUMN e TO f;
+ERROR 42S22: Unknown column 'e' in 'default value expression'
+DROP TABLES t1;
+#
+# 2.4) Complex case. Swapping of columns on which generated
+#      default depends.
+CREATE TABLE t1 (a INT, b INT, def INT DEFAULT (a));
+INSERT INTO t1 (a, b) VALUES (1, 2);
+# Similarly to the above we block simple renaming of columns even
+# if dependent default expression stays valid. This is intentional
+# -- we want user to realize and explicitly confirm what is done
+# (in most cases such rename is likely to be an error).
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a;
+ERROR HY000: Column 'a' of table 't1' has a default value expression dependency and cannot be dropped or renamed.
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a, ALTER COLUMN def SET DEFAULT (a);
+# Old rows should stay the same, new default will only affect new rows.
+INSERT INTO t1 (a, b) VALUES (3, 4);
+SELECT * FROM t1;
+b	a	def
+1	2	1
+4	3	3
+# Unlike for generated columns case, such ALTER TABLE can be done
+# inplace, since it doesn't affect table data.
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a, ALTER COLUMN def SET DEFAULT (a), ALGORITHM=INPLACE;
+DROP TABLES t1;
+#
+# 3) Renaming columns on which functional index depends.
+#
+# 3.1) Renaming column on which functional index depends is
+#      prohibited.
+CREATE TABLE t1 (a INT, KEY fi((a + 1)));
+ALTER TABLE t1 RENAME COLUMN a TO b;
+ERROR HY000: Column 'a' has a functional index dependency and cannot be dropped or renamed.
+# Cases when rename happens through CHANGE COLUMN are also detected.
+ALTER TABLE t1 CHANGE COLUMN a b INT;
+ERROR HY000: Column 'a' has a functional index dependency and cannot be dropped or renamed.
+#
+# 3.2) It is OK to rename such columns if dependent index is dropped.
+ALTER TABLE t1 RENAME COLUMN a TO b, DROP KEY fi;
+# This works even if hidden column for functional index processed
+# earlier than renamed column.
+ALTER TABLE t1 ADD KEY fi ((b + 1));
+# Move column 'b' to the table's end first.
+ALTER TABLE t1 ADD c INT;
+ALTER TABLE t1 MODIFY b INT AFTER c;
+ALTER TABLE t1 DROP KEY fi, RENAME COLUMN b TO d;
+#
+# Note that the only way to update/redefine functional index is to
+# drop and re-create it. So the this section also covers the case
+# when functional index is updated/redefined along with rename.
+# Let us check such scenario for completeness.
+ALTER TABLE t1 ADD KEY fi ((d + 1));
+ALTER TABLE t1 RENAME COLUMN d TO e, DROP KEY fi, ADD KEY fi ((e + 1));
+# If updated expression uses wrong column name, error is reported.
+# Again, error code and message are different because technically
+# it is issue with new functional index.
+ALTER TABLE t1 RENAME COLUMN e TO f, DROP KEY fi, ADD KEY fi ((e + 1));
+ERROR 42S22: Unknown column 'e' in 'functional index'
+DROP TABLE t1;
+#
+# 3.3) Complex case. Swapping of columns on which functional index
+#      depends.
+CREATE TABLE t1 (a INT, b INT, KEY fi ((a + 10)));
+INSERT INTO t1 (a, b) VALUES (1, 2), (3, 4), (5, 6);
+SELECT * FROM t1 WHERE a + 10 = 13;
+a	b
+3	4
+# We block simple renaming of columns even if dependent functional
+# index stays valid. This is intentional -- we want user to realize
+# and explicitly confirm what is done (in most cases such rename is
+# likely to be an error).
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a;
+ERROR HY000: Column 'a' has a functional index dependency and cannot be dropped or renamed.
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a, DROP KEY fi, ADD KEY fi((a + 10));
+# Contents of functional index/hidden generated column should be
+# updated accordingly.
+SELECT * FROM t1 WHERE a + 10 = 14;
+b	a
+3	4
+# Such ALTER TABLEs are not inplace/instant due to re-evaluation
+# (and other reasons).
+ALTER TABLE t1 RENAME COLUMN a TO b, RENAME COLUMN b TO a, DROP KEY fi, ADD KEY fi((a + 10)), ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: INPLACE ADD or DROP of virtual columns cannot be combined with other ALTER TABLE actions. Try ALGORITHM=COPY.
+DROP TABLES t1;
+#
+# 4) Dropping columns on which generated columns depend.
+#
+# 4.1) Dropping column on which generated column depends is
+#      prohibited (for both stored and virtual columns).
+CREATE TABLE t1 (a INT, b INT, gcol INT AS (a + 1) STORED);
+CREATE TABLE t2 (a INT, b INT, gcol INT AS (a + 1) VIRTUAL);
+ALTER TABLE t1 DROP COLUMN a;
+ERROR HY000: Column 'a' has a generated column dependency.
+ALTER TABLE t2 DROP COLUMN a;
+ERROR HY000: Column 'a' has a generated column dependency.
+#
+# 4.2) It is OK to drop such columns if dependent generated column
+#      is dropped in the same ALTER.
+ALTER TABLE t1 DROP COLUMN a, DROP COLUMN gcol;
+ALTER TABLE t2 DROP COLUMN a, DROP COLUMN gcol;
+# This works even if generated column is processed earlier than
+# base column.
+ALTER TABLE t1 ADD gcol INT AS (a + 1) STORED FIRST, ADD COLUMN a INT;
+ALTER TABLE t1 DROP COLUMN gcol, DROP COLUMN a;
+#
+# 4.3) It is also OK to drop such columns if dependent generated
+#      column expression is updated/redefined.
+ALTER TABLE t1 ADD COLUMN gcol INT AS (a + 1) STORED, ADD COLUMN a INT;
+ALTER TABLE t2 ADD COLUMN gcol INT AS (a + 1) VIRTUAL, ADD COLUMN a INT;
+ALTER TABLE t1 DROP COLUMN a, MODIFY gcol INT AS (b + 1) STORED;
+ALTER TABLE t2 DROP COLUMN a, MODIFY gcol INT AS (b + 1) VIRTUAL;
+# And again this works even if generated column is processed earlier
+# than base  column.
+ALTER TABLE t1 DROP COLUMN gcol, ADD COLUMN gcol INT AS (a + 1) STORED FIRST, ADD COLUMN a INT;
+ALTER TABLE t1 MODIFY gcol INT AS (b + 1) STORED, DROP COLUMN a;
+ALTER TABLE t2 DROP COLUMN gcol, ADD COLUMN gcol INT AS (a + 1) VIRTUAL FIRST, ADD COLUMN a INT;
+ALTER TABLE t2 MODIFY gcol INT AS (b + 1) VIRTUAL, DROP COLUMN a;
+# If updated expression uses wrong column name, error is reported.
+# Note that error code and message are different because technically
+# it is issue with new generation expression.
+ALTER TABLE t1 ADD COLUMN c INT;
+ALTER TABLE t2 ADD COLUMN c INT;
+ALTER TABLE t1 MODIFY gcol INT AS (e + 1) STORED, DROP COLUMN b;
+ERROR 42S22: Unknown column 'e' in 'generated column function'
+ALTER TABLE t2 MODIFY gcol INT AS (e + 1) VIRTUAL, DROP COLUMN b;
+ERROR 42S22: Unknown column 'e' in 'generated column function'
+DROP TABLES t1, t2;
+#
+# 4.4) Complex case. Replacement (dropping and addition) of columns
+#      which causes generated column re-evaluation.
+CREATE TABLE t1 (a INT, b INT, gcol INT AS (a + 10) STORED);
+INSERT INTO t1 (a, b) VALUES (1, 2), (3, 4), (5, 6);
+CREATE TABLE t2 (a INT, b INT, gcol INT AS (a + 10) VIRTUAL, KEY(gcol));
+INSERT INTO t2 (a, b) VALUES (1, 2), (3, 4), (5, 6);
+# We block simple replacement of columns even if dependent generation
+# expression stays valid. This is intentional -- we want user to
+# realize and explicitly confirm what is done (in most cases this
+# is likely to be an error).
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0;
+ERROR HY000: Column 'a' has a generated column dependency.
+ALTER TABLE t2 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0;
+ERROR HY000: Column 'a' has a generated column dependency.
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0, MODIFY gcol INT AS (a + 10) STORED;
+ALTER TABLE t2 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0, MODIFY gcol INT AS (a + 10) VIRTUAL;
+# Contents of generated column should be updated accordingly.
+SELECT * FROM t1;
+b	gcol	a
+2	10	0
+4	10	0
+6	10	0
+SELECT * FROM t2;
+b	gcol	a
+2	10	0
+4	10	0
+6	10	0
+SELECT * FROM t2 WHERE gcol = 10;
+b	gcol	a
+2	10	0
+4	10	0
+6	10	0
+# Such ALTER TABLEs are not inplace/instant due to generated
+# column re-evaluation.
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0, MODIFY gcol INT AS (a + 10) STORED, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+ALTER TABLE t2 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0, MODIFY gcol INT AS (a + 10) VIRTUAL, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+DROP TABLES t1, t2;
+#
+# 5) Dropping column on which generated default depends.
+#
+# 5.1) Dropping column on which generated default depends is
+#      prohibited.
+CREATE TABLE t1 (a INT, b INT, def INT DEFAULT (a + 1));
+ALTER TABLE t1 DROP COLUMN a;
+ERROR HY000: Column 'a' of table 't1' has a default value expression dependency and cannot be dropped or renamed.
+#
+# 5.2) It is OK to drop such columns if dependent generated default
+#      is dropped:
+#
+#      a) By dropping column
+ALTER TABLE t1 DROP COLUMN a, DROP COLUMN def;
+#      b) By dropping default using DROP DEFAULT
+ALTER TABLE t1 ADD COLUMN a INT, ADD COLUMN def INT DEFAULT (a + 1);
+ALTER TABLE t1 DROP COLUMN a, ALTER COLUMN def DROP DEFAULT;
+#      c) By dropping default using CHANGE/MODIFY COLUMN
+ALTER TABLE t1 ADD COLUMN a INT, MODIFY COLUMN def INT DEFAULT (a + 1);
+ALTER TABLE t1 DROP COLUMN a, MODIFY COLUMN def INT;
+# This works even if column with generated default comes earlier than
+# dropped column.
+ALTER TABLE t1 DROP COLUMN def, ADD COLUMN def INT DEFAULT (a + 1) FIRST, ADD COLUMN a INT;
+ALTER TABLE t1 DROP COLUMN def, DROP COLUMN a;
+ALTER TABLE t1 ADD COLUMN def INT DEFAULT (a + 1) FIRST, ADD COLUMN a INT;
+ALTER TABLE t1 ALTER COLUMN def DROP DEFAULT, DROP COLUMN a;
+ALTER TABLE t1 MODIFY COLUMN def INT DEFAULT (a + 1), ADD COLUMN a INT;
+ALTER TABLE t1 MODIFY COLUMN def INT, DROP COLUMN a;
+DROP TABLE t1;
+#
+# 5.3) It is also OK to drop such columns if dependent generated
+#      default value is updated/redefined:
+#
+#      a) Using SET DEFAULT
+CREATE TABLE t1 (a INT, b INT, c INT, d INT, def INT DEFAULT (a + 1));
+ALTER TABLE t1 DROP COLUMN a, ALTER COLUMN def SET DEFAULT (b + 1);
+#      b) Using MODIFY/CHANGE column
+ALTER TABLE t1 DROP COLUMN b, MODIFY COLUMN def INT DEFAULT (c + 1);
+# And again this works even if generated default comes earlier than
+# dropped column.
+ALTER TABLE t1 DROP COLUMN def, ADD COLUMN def INT DEFAULT (a + 1) FIRST, ADD COLUMN a INT, ADD COLUMN b INT;
+ALTER TABLE t1 ALTER COLUMN def SET DEFAULT (b + 1), DROP COLUMN a;
+ALTER TABLE t1 MODIFY COLUMN def INT DEFAULT (c + 1), DROP COLUMN b;
+# If updated expression uses wrong column name, error is reported.
+# Again, error code and message are different because technically
+# it is issue with new generated default.
+ALTER TABLE t1 MODIFY def INT DEFAULT (e + 1), DROP COLUMN c;
+ERROR 42S22: Unknown column 'e' in 'default value expression'
+DROP TABLES t1;
+#
+# 5.4) Complex case. Replacement of column on which generated
+#      default depends.
+CREATE TABLE t1 (a INT, b INT, def INT DEFAULT (a));
+INSERT INTO t1 (a, b) VALUES (1, 2);
+# Similarly to the above we block simple replacement of columns even
+# if dependent default expression stays valid. This is intentional
+# -- we want user to realize and explicitly confirm what is done
+# (in most cases such replacement is likely to be an error).
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT;
+ERROR HY000: Column 'a' of table 't1' has a default value expression dependency and cannot be dropped or renamed.
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 10, ALTER COLUMN def SET DEFAULT (a);
+# Old rows should stay the same, new generated default will only affect new rows.
+INSERT INTO t1 (a, b) VALUES (3, 4);
+SELECT * FROM t1;
+b	def	a
+2	1	10
+4	3	3
+# Unlike for generated columns case, such ALTER TABLE can be done
+# inplace, since it doesn't affect table data.
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 42, ALTER COLUMN def SET DEFAULT (a), ALGORITHM=INPLACE;
+DROP TABLES t1;
+#
+# 6) Dropping column on which functional index depends.
+#
+# 6.1) Dropping column on which functional index depends is
+#      prohibited.
+CREATE TABLE t1 (a INT, b INT, KEY fi((a + 1)));
+ALTER TABLE t1 DROP COLUMN a;
+ERROR HY000: Column 'a' has a functional index dependency and cannot be dropped or renamed.
+#
+# 6.2) It is OK to drop such column if dependent index is dropped.
+ALTER TABLE t1 DROP COLUMN a, DROP KEY fi;
+# This works even if hidden column for functional index processed
+# earlier than dropped column.
+ALTER TABLE t1 ADD KEY fi ((b + 1));
+# Move column 'b' to the table's end first.
+ALTER TABLE t1 ADD c INT;
+ALTER TABLE t1 MODIFY b INT AFTER c;
+ALTER TABLE t1 DROP KEY fi, DROP COLUMN b;
+#
+# Note that the only way to update/redefine functional index is to
+# drop and re-create it. So the this section also covers the case
+# when functional index is updated/redefined along with drop of
+# base column. Let us check such scenario for completeness.
+ALTER TABLE t1 ADD KEY fi ((c + 1)), ADD COLUMN d INT, ADD COLUMN e INT;
+ALTER TABLE t1 DROP COLUMN c, DROP KEY fi, ADD KEY fi ((d + 1));
+# If updated expression uses wrong column name, error is reported.
+# Again, error code and message are different because technically
+# it is issue with new functional index.
+ALTER TABLE t1 DROP COLUMN d, DROP KEY fi, ADD KEY fi ((f + 1));
+ERROR 42S22: Unknown column 'f' in 'functional index'
+DROP TABLE t1;
+#
+# 6.3) Complex case. Replacing column on which functional index
+#      depends.
+CREATE TABLE t1 (a INT, b INT, KEY fi ((a + 10)));
+INSERT INTO t1 (a, b) VALUES (1, 2), (3, 4), (5, 6);
+SELECT * FROM t1 WHERE a + 10 = 13;
+a	b
+3	4
+# We block simple replacement of column even if dependent functional
+# index stays valid. This is intentional -- we want user to realize
+# and explicitly confirm what is done (in most cases such replacement
+# is likely to be an error).
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0;
+ERROR HY000: Column 'a' has a functional index dependency and cannot be dropped or renamed.
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0, DROP KEY fi, ADD KEY fi((a + 10));
+# Contents of functional index/hidden generated column should be
+# updated accordingly.
+SELECT * FROM t1 WHERE a + 10 = 10;
+b	a
+2	0
+4	0
+6	0
+# Such ALTER TABLEs are not inplace/instant due to re-evaluation
+# (and other reasons).
+ALTER TABLE t1 DROP COLUMN a, ADD COLUMN a INT DEFAULT 0, DROP KEY fi, ADD KEY fi((a + 10)), ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: INPLACE ADD or DROP of virtual columns cannot be combined with other ALTER TABLE actions. Try ALGORITHM=COPY.
+DROP TABLES t1;
+#
+# Bug #30417361: MAKE THE SORTING CODE INDEPENDENT OF QEP_TABS
+#
+CREATE TABLE t1 (i INTEGER, a INTEGER, vgc INTEGER GENERATED ALWAYS AS (-a) VIRTUAL);
+INSERT INTO t1 (i, a) VALUES (1, 1), (2, 2);
+SELECT i FROM t1 ORDER BY vgc;
+i
+2
+1
+DROP TABLE t1;
+#
+# Bug #30664660 GCOLS, CRASH AND CORRUPTIONS WITH DELETE IGNORE + JSON
+#
+CREATE TABLE t (
+a JSON NOT NULL,
+b TIMESTAMP GENERATED ALWAYS AS (a) VIRTUAL NOT NULL,
+KEY (b)
+) ENGINE=INNODB;
+INSERT IGNORE INTO t(a) VALUES ('{}');
+Warnings:
+Warning	3156	Invalid JSON value for CAST to DATE/TIME/DATETIME/TIMESTAMP from column a at row 1
+Warning	1264	Out of range value for column 'b' at row 1
+DELETE IGNORE FROM t;
+Warnings:
+Warning	3156	Invalid JSON value for CAST to DATE/TIME/DATETIME/TIMESTAMP from column a at row 1
+Warning	1292	Incorrect datetime value: '0000-00-00 00:00:00' for column 'b' at row 1
+Warning	3156	Invalid JSON value for CAST to DATE/TIME/DATETIME/TIMESTAMP from column a at row 1
+Warning	1292	Incorrect datetime value: '0000-00-00 00:00:00' for column 'b' at row 1
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+DROP TABLE t;
+#
+# Bug #31463511: NATURAL JOIN RETURNS WRONG RESULT WHEN EXPRESSION INDEX IS USED
+#
+CREATE TABLE t1 (a INTEGER);
+CREATE TABLE t2 (a INTEGER);
+CREATE INDEX idx ON t1 ((a+1));
+CREATE INDEX idx ON t2 ((a+2));
+INSERT INTO t1 VALUES (1);
+INSERT INTO t2 VALUES (1);
+SELECT * FROM t1 NATURAL JOIN t2;
+a
+1
+DROP TABLE t1, t2;
+#
+# Bug#31982292: ITEM_JSON_FUNC.CC:1406: BOOL SQL_SCALAR_TO_JSON(ITEM*,
+# CONST CHAR*, STRING*, STR
+#
+CREATE TABLE t(x VARCHAR(10),
+y INT GENERATED ALWAYS AS (x),
+z JSON GENERATED ALWAYS AS (JSON_ARRAY(x, y)));
+INSERT INTO t (x) VALUES ('abc');
+ERROR HY000: Incorrect integer value: 'abc' for column 'y' at row 1
+DROP TABLE t;
+CREATE TABLE t(x VARCHAR(10));
+INSERT INTO t VALUES ('');
+ALTER TABLE t
+ADD COLUMN g1 JSON GENERATED ALWAYS AS (x),
+ADD COLUMN g2 JSON GENERATED ALWAYS AS (JSON_ARRAY(x));
+SELECT * FROM t;
+ERROR 22032: Invalid JSON text: "The document is empty." at position 0 in value for column 't.g1'.
+DROP TABLE t;
+#
+# Bug#32234773: UPDATE_GENERATED_READ_FIELDS:
+#               ASSERTION `!TABLE->IN_USE->IS_ERROR()' FAILED
+#
+CREATE TABLE t (
+id INT PRIMARY KEY AUTO_INCREMENT,
+i INT,
+gc INT GENERATED ALWAYS AS (1) STORED,
+KEY (i)
+);
+INSERT INTO t(i) VALUES (5853267), (32766);
+SELECT * FROM t WHERE i > 123 AND i * FROM_UNIXTIME(1536999224);
+ERROR 22003: BIGINT value is out of range in '(`test`.`t`.`i` * <cache>(from_unixtime(1536999224)))'
+DROP TABLE t;
+# Bug#32824978: Generated columns inconsistency
+CREATE TABLE t1 (
+id INTEGER NOT NULL,
+mac BIGINT UNSIGNED DEFAULT NULL,
+str CHAR(12) AS (LPAD(CONVERT(HEX(mac) USING utf8mb4), 12,_utf8mb4'0')) VIRTUAL,
+separated CHAR(17) AS (INSERT(INSERT(INSERT(INSERT(INSERT(str, 11, 0, _utf8mb4':'), 9, 0, _utf8mb4':'), 7, 0, _utf8mb4':'), 5, 0, _utf8mb4':'), 3, 0, _utf8mb4':')) VIRTUAL,
+PRIMARY KEY (id)
+);
+INSERT INTO t1 (id, mac) VALUES
+(1, 10), (2, 564685488), (3, NULL), (4, 684756486);
+SELECT * FROM t1;
+id	mac	str	separated
+1	10	00000000000A	00:00:00:00:00:0A
+2	564685488	000021A86AB0	00:00:21:A8:6A:B0
+3	NULL	NULL	NULL
+4	684756486	000028D08E06	00:00:28:D0:8E:06
+DROP TABLE t1;
+# Bug#32427727: Functional index ignored by SELECT query from
+#               within stored function
+CREATE TABLE t1
+(pk BIGINT AUTO_INCREMENT PRIMARY KEY,
+n1 varchar(30),
+n2 varchar(30),
+n3 varchar(30),
+index n12((concat(n1, n2)))
+);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+CREATE PROCEDURE p1 (str VARCHAR(60))
+BEGIN
+EXPLAIN
+SELECT n3, COUNT(*) as 'count'
+  FROM t1
+WHERE CONCAT(n1,n2) = str
+GROUP BY n3;
+SELECT n3, COUNT(*) as 'count'
+  FROM t1
+WHERE CONCAT(n1,n2) = str
+GROUP BY n3;
+END |
+CALL p1('str');
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	n12	n12	243	const	1	100.00	Using where; Using temporary
+n3	count
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+# VARBINARY as primary key
+
+CREATE TABLE t1 (
+doc JSON,
+id VARBINARY(32) GENERATED ALWAYS AS
+(JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id'))) STORED PRIMARY KEY);
+INSERT INTO t1 (doc) VALUES
+(JSON_OBJECT('id','1','name','foo')),(JSON_OBJECT('id','2','name','bar'));
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SET @a = '2';
+SET @num = 2;
+SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	34	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	34	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+SELECT * FROM t1 WHERE id = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE id = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	34	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+PREPARE s11 FROM "SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+# Not using index, resulting JSON comparison delivers empty result.
+# This deviates from the result when the GC is not indexed.
+EXECUTE s11 USING @a;
+doc	id
+PREPARE s12 FROM "explain SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+EXECUTE s12 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	PRIMARY	NULL	NULL	NULL	2	50.00	Using where
+Warnings:
+Warning	1739	Cannot use ref access on index 'PRIMARY' due to type or collation conversion on field 'id'
+Warning	1739	Cannot use range access on index 'PRIMARY' due to type or collation conversion on field 'id'
+Note	1003	/* select#1 */ select `test`.`t1`.`doc` AS `doc`,`test`.`t1`.`id` AS `id` from `test`.`t1` where (`test`.`t1`.`id` = '2')
+PREPARE s21 FROM "SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = ?";
+EXECUTE s21 USING @a;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s22 FROM "explain SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = ?";
+EXECUTE s22 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	34	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+PREPARE s31 FROM "SELECT * FROM t1 WHERE id = ?";
+EXECUTE s31 USING @a;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s32 FROM "explain SELECT * FROM t1 WHERE id = ?";
+EXECUTE s32 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	34	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+DROP TABLE t1;
+
+# VARCHAR as primary key
+
+CREATE TABLE t1 (
+doc JSON,
+id VARCHAR(32) COLLATE utf8mb4_bin GENERATED ALWAYS AS
+(JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id'))) STORED PRIMARY KEY);
+INSERT INTO t1 (doc) VALUES
+(JSON_OBJECT('id','1','name','foo')),(JSON_OBJECT('id','2','name','bar'));
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	130	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	130	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+SELECT * FROM t1 WHERE id = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE id = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	130	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+PREPARE s11 FROM "SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+# Not using index, resulting JSON comparison delivers expected row
+EXECUTE s11 USING @a;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s12 FROM "explain SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+EXECUTE s12 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	PRIMARY	NULL	NULL	NULL	2	50.00	Using where
+Warnings:
+Warning	1739	Cannot use ref access on index 'PRIMARY' due to type or collation conversion on field 'id'
+Warning	1739	Cannot use range access on index 'PRIMARY' due to type or collation conversion on field 'id'
+Note	1003	/* select#1 */ select `test`.`t1`.`doc` AS `doc`,`test`.`t1`.`id` AS `id` from `test`.`t1` where (`test`.`t1`.`id` = '2')
+PREPARE s21 FROM "SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = ?";
+EXECUTE s21 USING @a;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s22 FROM "explain SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = ?";
+EXECUTE s22 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	130	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+PREPARE s31 FROM "SELECT * FROM t1 WHERE id = ?";
+EXECUTE s31 USING @a;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s32 FROM "explain SELECT * FROM t1 WHERE id = ?";
+EXECUTE s32 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	130	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+DROP TABLE t1;
+
+# BIGINT as primary key
+
+CREATE TABLE t1 (
+doc JSON,
+id BIGINT GENERATED ALWAYS AS
+(JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id'))) STORED PRIMARY KEY);
+INSERT INTO t1 (doc) VALUES
+(JSON_OBJECT('id','1','name','foo')),(JSON_OBJECT('id','2','name','bar'));
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`doc` AS `doc`,`test`.`t1`.`id` AS `id` from `test`.`t1` where (json_extract(`test`.`t1`.`doc`,'$.id') = '2')
+SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`doc` AS `doc`,`test`.`t1`.`id` AS `id` from `test`.`t1` where (json_unquote(json_extract(`test`.`t1`.`doc`,'$.id')) = '2')
+SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = 2;
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+SELECT * FROM t1 WHERE id = '2';
+doc	id
+{"id": "2", "name": "bar"}	2
+explain SELECT * FROM t1 WHERE id = '2';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+PREPARE s11 FROM "SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+EXECUTE s11 USING @a;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s12 FROM "explain SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+EXECUTE s12 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`doc` AS `doc`,`test`.`t1`.`id` AS `id` from `test`.`t1` where (json_extract(`test`.`t1`.`doc`,'$.id') = '2')
+PREPARE s21 FROM "SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = ?";
+EXECUTE s21 USING @a;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s22 FROM "explain SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = ?";
+EXECUTE s22 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`doc` AS `doc`,`test`.`t1`.`id` AS `id` from `test`.`t1` where (json_unquote(json_extract(`test`.`t1`.`doc`,'$.id')) = '2')
+PREPARE s31 FROM "SELECT * FROM t1 WHERE id = ?";
+EXECUTE s31 USING @a;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s32 FROM "explain SELECT * FROM t1 WHERE id = ?";
+EXECUTE s32 USING @a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+PREPARE s11 FROM "SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+EXECUTE s11 USING @num;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s21 FROM "SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+EXECUTE s11 USING @num;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s12 FROM "explain SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";
+EXECUTE s12 USING @num;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+PREPARE s21 FROM "SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = ?";
+EXECUTE s21 USING @num;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s22 FROM "explain SELECT * FROM t1 WHERE JSON_UNQUOTE(JSON_EXTRACT(doc, '$.id')) = ?";
+EXECUTE s22 USING @num;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+PREPARE s31 FROM "SELECT * FROM t1 WHERE id = ?";
+EXECUTE s31 USING @num;
+doc	id
+{"id": "2", "name": "bar"}	2
+PREPARE s32 FROM "explain SELECT * FROM t1 WHERE id = ?";
+EXECUTE s32 USING @num;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
+DROP TABLE t1;
+# Bug#33142135: Assert for fields not marked as READ
+CREATE TABLE v1(v2 INT SERIAL DEFAULT VALUE, v3 INT AS (DEFAULT(v2)/1 IS NULL));
+ERROR HY000: Generated column 'v3' cannot refer to auto-increment column.
+CREATE TABLE v1(v2 INT DEFAULT 10, v3 INT AS (DEFAULT(v2)/1 IS NULL));
+SHOW CREATE TABLE v1;
+Table	Create Table
+v1	CREATE TABLE `v1` (
+  `v2` int DEFAULT '10',
+  `v3` int GENERATED ALWAYS AS (((default(`v2`) / 1) is null)) VIRTUAL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE v1;

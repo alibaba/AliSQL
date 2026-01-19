@@ -1,0 +1,1775 @@
+#
+# Bug#26475312 VALGRIND MEMORY LEAK ( CMP_FIELD_VALUE(FIELD*, LONG) (SQL_EXECUTOR.CC:3598)
+#
+CREATE TABLE H (
+col_varchar_10_utf8 varchar(10)  CHARACTER SET utf8,
+col_varchar_255_latin1_key varchar(255)  CHARACTER SET latin1,
+col_varchar_10_latin1_key varchar(10)  CHARACTER SET latin1,
+col_varchar_10_latin1 varchar(10)  CHARACTER SET latin1,
+col_varchar_10_utf8_key varchar(10)  CHARACTER SET utf8,
+col_varchar_255_utf8_key varchar(255)  CHARACTER SET utf8,
+col_int int,
+col_int_key int,
+col_varchar_255_utf8 varchar(255)  CHARACTER SET utf8,
+pk integer auto_increment,
+col_varchar_255_latin1 varchar(255)  CHARACTER SET latin1,
+/*Indices*/
+key (col_varchar_255_latin1_key ),
+key (col_varchar_10_latin1_key ),
+key (col_varchar_10_utf8_key ),
+key (col_varchar_255_utf8_key ),
+key (col_int_key ),
+primary key (pk)) ENGINE=innodb;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+INSERT IGNORE INTO H VALUES
+('about', 'z', 'they', 'm', 'x', 'could',
+3, 155189248,
+'xyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfkezxvfwojgolicczdqpqtwnugrwwcxumxofffljfhpkpddctnalygeuaugnnwxylfjdpzwvybdgtfyagjeqniouizgdzbhwahrylqwmnqzcjrhoivxidqmuikodwulsugcmwtxsadjdztkpdwbdxtvckayxskunxtompmmcbgiyedwfbjafnpcbvmxnrzvubwpnxfuzndvkxkfhjnzdvvkowuizfymqqexdtppmiznrhwfsngzbcvrynormfrjlflywpsmcsifmjuvwislbtaivizpbisvasqpyscnanwlttnqpzpdbiphzuujfksinzkcbbarimkigwdxjhscyrlmiqglyrdrwvhyoltdmpqlyzgknqzmfptjcmzeyokthfkdktzcsohicugzwgevhnsublfvasvftxhgk', NULL, 't');
+Warnings:
+Warning	1265	Data truncated for column 'col_varchar_255_utf8' at row 1
+CREATE TABLE DD (
+col_varchar_255_latin1_key varchar(255)  CHARACTER SET latin1,
+col_varchar_255_utf8_key varchar(255)  CHARACTER SET utf8,
+col_varchar_255_latin1 varchar(255)  CHARACTER SET latin1,
+col_varchar_10_latin1_key varchar(10)  CHARACTER SET latin1,
+col_int_key int,
+col_varchar_255_utf8 varchar(255)  CHARACTER SET utf8,
+pk integer auto_increment,
+col_varchar_10_utf8 varchar(10)  CHARACTER SET utf8,
+col_int int,
+col_varchar_10_latin1 varchar(10)  CHARACTER SET latin1,
+col_varchar_10_utf8_key varchar(10)  CHARACTER SET utf8,
+/*Indices*/
+key (col_varchar_255_latin1_key ),
+key (col_varchar_255_utf8_key ),
+key (col_varchar_10_latin1_key ),
+key (col_int_key ),
+primary key (pk),
+key (col_varchar_10_utf8_key )) ENGINE=innodb;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+INSERT IGNORE INTO DD VALUES  ('q',
+'brmucbzjaeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfkezxvfwojgolicczdqpqtwnugrwwcxumxofffljfhpkpddctnalygeuaugnnwxylfjdpzwvybdgtfyagjeqniouizgdzbhwahrylqwmnqzcjrhoivxidqmuikodwulsugcmwtxsadjdztkpdwbdxtvckayxskunxtompmmcbgiyedwfbjafnpcbvmxnrzvubwpnxfuzndvkxkf', 'now',
+'you\'re', 1811152896, 'or', NULL, 'this', 6, 'then', 'e') ,  ('did', 'j',
+'they',
+'rmucbzjaeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfkezxvfwojgolicczdqpqtwnugrwwcxumxofffljfhpkpddctnalygeuaugnnwxylfjdpzwvybdgtfyagjeqniouizgdzbhwahrylqwmnqzcjrhoivxidqmuikodwulsugcmwtxsadjdztkpdwbdxtvckayxskunxtompmmcbgiyedwfbjafnpcbvmxnrzvubwpnxfuzndvkxkfhjnzdvvkowu',
+2087649280,
+'mucbzjaeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbm',
+NULL, 'would', -64421888, 'I\'m', 'do') ,  ('l',
+'ucbzjaeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillur', 'yes', 'it', 8,
+'cbzjaeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgke', NULL,'bzjaeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylc', 5,
+'zjaeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbquk', 'i') ,
+('d', 'l', 'u',
+'jaeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfke', -772603904, 'yes', NULL, 'l', 1, 'p',
+'aeueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfkezxvfwojgolicczdqpqtwnugrwwcxumxofffljfhpkpddctnalygeuaugnnwxylfjdpzwvybdgtfyagjeqniouizgdzbhwahrylqwmnqzcjrhoivxidqmuikodwulsugcmwtxsadjdztkpdwbdxtvckayxskunxtompmmcbgiyedwfbjafnpcbvmxnrzvubwpnxfuz') ,  ('well',
+'eueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkje
+bunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwgg
+kspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuz
+jvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxy
+odli', 'of', 'on', 0,
+'ueffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjeb
+unithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggk
+spxpaoxldymllvikfrwhblzugcnlgmoz', NULL,'effwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkb',
+-479461376,
+'ffwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemcl','fwxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfkezxvfwojgolicczdqpqtwnugrwwcxumxofff') ,
+('wxeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcb', 'we', 'w', 'me', 0,
+'xeyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmr', NULL, 'with', 6, 'for', 'b') ,  ('say', 'l', 't', 'b', 9,
+'eyonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflm', NULL, 'she', 8, 'come',
+'yonrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmf')
+,  ('or', 'c', 'q', 'from', 559546368, 'as', NULL, 'q', -988545024, 'do',
+'onrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnb') ,
+('nrgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfkezxvfwojgolicczdqpqtwnugrwwcxumxofffljfhpkpddctnalygeuaugnnwxylfjdpzwvybdgtfyagjeqniouizgdzbhwahrylqwmnqzcjrhoivxi', 'one', 'n',
+'rgouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfkezxvfwojgolicczdq', -681639936,'gouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiunassfsitgtnbbqukaeoubigzikncxyodlihgflmcbkqxdcvjpiqmnoorrutfxankapsmbdiicuytbwekanfyklnbjliaaebckybutdqwptyalaxaeuihzhclgqsmahtzogdxwslioxailzxafyztqpcakqukruoggiuemclpylcufjtmzxbutyghfkezxvfwojgolicczdqpqtwnugrwwcxumxofffljfhpkpddctnalygeuaugnnwxylfjdpzwvybdgtfyagjeqniouizgdzbhwahrylqwmnqzcjrhoivxidqmuikodwulsugcmwtxsadjdztkpdwbdxtvckayxskunxtompmmcbgiyedwfbjafnpcbvmxnrzvubwpnxfuzndvkxkf', NULL, 'n', 5, 'p','ouqbsvekyzrfizdybnlisnzpgplythqeyugzvhzjmxhmzqnbmldcuskteeyxqeesumyuohkhmoxtlpsumxsuahxrnybqsdvkiiiiatzeihtiwqjgxrspppoytvmuufhhkcgbnpemioxkjebunithymftmsroaqsxdrxhcozhqdagsxfxndeimavrxfdocfgafdxzxqoehcikppndcieybkyxmumqsbcwcmmrweiprthlrnphvebnfgjfhrkrxxorzzbedateyoomxdzgkevuyyvmusoduugukillurhwggkspxpaoxldymllvikfrwhblzugcnlgmozwbhvpytvyogbythupkkfgjqpqjgprksqcndkbsrzgiuvqgkqtqvucjdnyfqhigpgfeclnxyrkcxviqrwelsktxpoecytteiloxyzksesbdqhrcrfdzuxboyppuzjvssddkrsgvagetbssudtdsxcmpqpemiqbztutrkxougxqcpwlacgbyktskefotymojkkjnbkvkmqjgzrvmfpzwkixtxioqbzfvomgkicobwpsjeyfcaxwqxegkkiun');
+Warnings:
+Warning	1265	Data truncated for column 'col_varchar_255_utf8_key' at row 1
+Warning	1265	Data truncated for column 'col_varchar_10_latin1_key' at row 2
+Warning	1265	Data truncated for column 'col_varchar_255_utf8_key' at row 3
+Warning	1265	Data truncated for column 'col_varchar_255_utf8' at row 3
+Warning	1265	Data truncated for column 'col_varchar_10_utf8' at row 3
+Warning	1265	Data truncated for column 'col_varchar_10_latin1' at row 3
+Warning	1265	Data truncated for column 'col_varchar_10_latin1_key' at row 4
+Warning	1265	Data truncated for column 'col_varchar_10_utf8_key' at row 4
+Warning	1265	Data truncated for column 'col_varchar_255_utf8_key' at row 5
+Warning	1265	Data truncated for column 'col_varchar_255_utf8' at row 5
+Warning	1265	Data truncated for column 'col_varchar_10_utf8' at row 5
+Warning	1265	Data truncated for column 'col_varchar_10_latin1' at row 5
+Warning	1265	Data truncated for column 'col_varchar_10_utf8_key' at row 5
+Warning	1265	Data truncated for column 'col_varchar_255_latin1_key' at row 6
+Warning	1265	Data truncated for column 'col_varchar_255_utf8' at row 7
+Warning	1265	Data truncated for column 'col_varchar_10_utf8_key' at row 7
+Warning	1265	Data truncated for column 'col_varchar_10_utf8_key' at row 8
+Warning	1265	Data truncated for column 'col_varchar_255_latin1_key' at row 9
+Warning	1265	Data truncated for column 'col_varchar_10_latin1_key' at row 9
+Warning	1265	Data truncated for column 'col_varchar_255_utf8' at row 9
+Warning	1265	Data truncated for column 'col_varchar_10_utf8_key' at row 9
+SELECT
+alias1 . col_int AS field1 ,
+CUME_DIST() OVER (   ORDER BY alias1 . pk) AS field2 ,
+alias1 . col_int_key AS field3 ,
+PERCENT_RANK() OVER ( ORDER BY  alias2 .col_varchar_255_utf8_key,
+alias1 . col_varchar_10_latin1_key,  alias1. col_varchar_255_utf8 )
+AS field4 ,
+alias1 . col_int_key AS field5 ,
+PERCENT_RANK() OVER (
+PARTITION BY  alias2 .col_varchar_10_utf8,  alias1 .col_int_key,
+alias2 .col_varchar_255_utf8
+ORDER BY alias1. col_varchar_10_latin1
+ROWS CURRENT ROW  ) AS field6 ,
+alias1 . col_int AS field7 ,
+RANK() OVER ( ORDER BY  alias1 . col_int ) AS field8 ,
+alias2 . pk AS field9 ,
+NTILE ( 1 ) OVER (
+PARTITION BY
+alias1 .col_varchar_255_latin1,alias2 . col_varchar_255_latin1,
+alias1. col_varchar_255_utf8_key,  alias1. col_varchar_10_latin1,
+alias2 . col_int_key
+ORDER BY alias1 . col_int,  alias1 . col_int_key)
+AS field10 ,
+alias1 . col_int AS field11 ,
+NTILE ( 5 ) OVER ( ORDER BY  alias1. col_int ) AS field12
+FROM DD AS alias1 LEFT  JOIN H AS alias2
+ON alias1 . pk =  alias2 . col_int
+WHERE alias1 . pk > 3
+GROUP BY
+field1, alias1.pk, field3,alias2.col_varchar_255_utf8_key,
+alias1.col_varchar_10_latin1_key,alias1.col_varchar_255_utf8, field5,
+alias2.col_varchar_10_utf8,alias1.col_int_key,
+alias2.col_varchar_255_utf8,alias1.col_varchar_10_latin1, field7,
+alias1.col_int, field9,alias1.col_varchar_255_latin1,
+alias2.col_varchar_255_latin1,alias1.col_varchar_255_utf8_key,
+alias1.col_varchar_10_latin1,alias2.col_int_key, alias1.col_int,
+alias1.col_int_key, field11,alias1.col_int
+HAVING field3 >= 7
+ORDER BY field10  , field6  , field4;
+field1	field2	field3	field4	field5	field6	field7	field8	field9	field10	field11	field12
+8	0.5	9	0	9	0	8	2	NULL	1	8	2
+-988545024	1	559546368	1	559546368	0	-988545024	1	NULL	1	-988545024	1
+DROP TABLE DD,H;
+#
+# Bug#27060420 WINDOW FUNC, VIEW, CRASH IN DO_COPY_MAYBE_NULL
+#
+CREATE TABLE t (a INT NOT NULL, b BLOB NOT NULL) ENGINE=INNODB;
+CREATE VIEW v AS SELECT * FROM t;
+INSERT INTO t VALUES (1, ''), (1, '');
+SELECT a, PERCENT_RANK() OVER w1 FROM t GROUP BY b,1 WITH ROLLUP WINDOW w1 AS();
+a	PERCENT_RANK() OVER w1
+1	0
+NULL	0
+NULL	0
+used to fail
+SELECT a, PERCENT_RANK() OVER w1 FROM v GROUP BY b,1 WITH ROLLUP WINDOW w1 AS();
+a	PERCENT_RANK() OVER w1
+1	0
+NULL	0
+NULL	0
+DROP VIEW v;
+DROP TABLE t;
+#
+# Bug#26848089 LEAD/LAG WINDOW FUNCTIONS ON QUOTED JSON STRINGS RETURNS SAME VALUE FOR ALL ROWS
+#
+CREATE TABLE t1 (doc JSON);
+INSERT INTO t1 VALUES
+('{"txt": "abcd"}'), ('{"txt": "bcde"}'),
+('{"txt": "cdef"}'), ('{"txt": "defg"}');
+SELECT doc->'$.txt', LAG(doc->'$.txt') OVER (ORDER BY doc->'$.txt') FROM t1;
+doc->'$.txt'	LAG(doc->'$.txt') OVER (ORDER BY doc->'$.txt')
+"abcd"	NULL
+"bcde"	"abcd"
+"cdef"	"bcde"
+"defg"	"cdef"
+DROP TABLE t1;
+#
+# Bug#27061487 WINDOW FUNC, CRASH IN DECIMAL2BIN
+#
+CREATE TABLE t(a INT);
+INSERT INTO t VALUES (1), (2), (3);
+SELECT FIRST_VALUE(-2605.952148) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM t WINDOW w1 AS (PARTITION BY a);
+FIRST_VALUE(-2605.952148) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+-2605.952148
+-2605.952148
+-2605.952148
+SELECT LAST_VALUE(-2605.952148) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM t WINDOW w1 AS (PARTITION BY a);
+LAST_VALUE(-2605.952148) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+-2605.952148
+-2605.952148
+-2605.952148
+These don't suffer from the error as their m_nullable==true,
+but including tests since we updated their code in case this
+changes: NTH(<non-null arg>, 1) is really the same as
+FIRST_VALUE, for example, and could have been made
+m_nullable==false.
+SELECT NTH_VALUE(-2605.952148, 1) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM t WINDOW w1 AS (PARTITION BY a);
+NTH_VALUE(-2605.952148, 1) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+-2605.952148
+-2605.952148
+-2605.952148
+SELECT LEAD(-2605.952148, 1) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM t WINDOW w1 AS (PARTITION BY a);
+LEAD(-2605.952148, 1) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+NULL
+NULL
+NULL
+SELECT MAX(-2605.952148) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM t WINDOW w1 AS (PARTITION BY a);
+MAX(-2605.952148) OVER
+(PARTITION BY a ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+-2605.952148
+-2605.952148
+-2605.952148
+DROP TABLE t;
+#
+# Bug #27135084: WINDOW FUNC: CRASH IN ITEM_FUNC_INT_DIV::VAL_INT
+#
+SELECT ((PERIOD_DIFF('7766-05-30','2955-06-11'))DIV(LAST_VALUE(';')OVER()));
+ERROR HY000: Incorrect arguments to period_diff
+SELECT ((BIT_OR(COT('f?e')))DIV(LAG(' ',133,0xbb054701d650)OVER()));
+ERROR 22003: DOUBLE value is out of range in 'cot('f?e')'
+SELECT ((EXP(2778419536874221989))DIV(LAST_VALUE('{ }')OVER()));
+ERROR 22003: DOUBLE value is out of range in 'exp(2778419536874221989)'
+SELECT ((PERIOD_ADD(-6001,16973))DIV(LAST_VALUE('')OVER()));
+ERROR HY000: Incorrect arguments to period_add
+SELECT((LAST_VALUE(PERIOD_ADD(32733,1518714932))OVER())DIV(NULL));
+ERROR HY000: Incorrect arguments to period_add
+SELECT ((EXP(0x6108))DIV(LAG(NULL,21,' 4F')OVER()));
+ERROR 22003: DOUBLE value is out of range in 'exp(0x6108)'
+SELECT ((FIRST_VALUE(EXP(0x41a129))OVER())DIV(-969));
+ERROR 22003: DOUBLE value is out of range in 'exp(0x41a129)'
+#
+# Bug #27136492: WINDOW FUNC: MAKETIME: CRASH IN MY_DECIMAL2LLDIV_T
+#
+SELECT MAKETIME('1',(!(999*1.421474e+308)),LAST_VALUE(-25038)RESPECT NULLS
+OVER());
+ERROR 22003: DOUBLE value is out of range in '(999 * 1.421474e+308)'
+# End of test for Bug#27135084, Bug#27136492
+#
+# Bug#27149369: ASSERTION FAILURE IN BOOL
+#               READ_FRAME_BUFFER_ROW(INT64, WINDOW*, BOOL)
+#
+CREATE TABLE t1 ( i INTEGER);
+INSERT INTO t1 VALUES (392),(392),(1027),(1027),(1027),(1034),(1039);
+SELECT i, LAST_VALUE(i) OVER w FROM t1
+WINDOW w AS (ORDER BY i RANGE BETWEEN 7 PRECEDING AND 1 PRECEDING);
+i	LAST_VALUE(i) OVER w
+392	NULL
+392	NULL
+1027	NULL
+1027	NULL
+1027	NULL
+1034	1027
+1039	1034
+DROP TABLE t1;
+#
+# Bug #27062031: WINDOW FUNC: CRASH IN COUNT_FIELD_TYPES() /
+#                ASSERTION FAILED: N < M_SIZE
+#
+CREATE TABLE t(a INT);
+INSERT INTO t values (1),(2),(3),(6),(0);
+Discard w
+SELECT 1 FROM t WINDOW w AS(PARTITION BY NULL,NULL ORDER BY NULL ASC);
+1
+1
+1
+1
+1
+1
+EXPLAIN FORMAT=JSON SELECT 1 FROM t WINDOW w AS(PARTITION BY NULL,NULL ORDER BY NULL ASC);
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "#"
+    },
+    "table": {
+      "table_name": "t",
+      "access_type": "ALL",
+      "rows_examined_per_scan": "#",
+      "rows_produced_per_join": "#",
+      "filtered": "100.00",
+      "cost_info": {
+        "read_cost": "#",
+        "eval_cost": "#",
+        "prefix_cost": "#",
+        "data_read_per_join": "#"
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t`
+Discard w
+SELECT 1 FROM t WINDOW w AS(PARTITION BY 1+2,3+4,5+6 ORDER BY 1+2,3+4);
+1
+1
+1
+1
+1
+1
+EXPLAIN FORMAT=JSON SELECT 1 FROM t WINDOW w AS(PARTITION BY 1+2,3+4,5+6 ORDER BY 1+2,3+4);
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "#"
+    },
+    "table": {
+      "table_name": "t",
+      "access_type": "ALL",
+      "rows_examined_per_scan": "#",
+      "rows_produced_per_join": "#",
+      "filtered": "100.00",
+      "cost_info": {
+        "read_cost": "#",
+        "eval_cost": "#",
+        "prefix_cost": "#",
+        "data_read_per_join": "#"
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t`
+Discard w2
+SELECT RANK() OVER w1 FROM t WINDOW w1 AS (ORDER BY a), w2 AS (w1);
+RANK() OVER w1
+1
+2
+3
+4
+5
+EXPLAIN FORMAT=JSON SELECT RANK() OVER w1 FROM t WINDOW w1 AS (ORDER BY a), w2 AS (w1);
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "#"
+    },
+    "windowing": {
+      "windows": [
+        {
+          "name": "w1",
+          "using_filesort": true,
+          "filesort_key": [
+            "`a`"
+          ],
+          "functions": [
+            "rank"
+          ]
+        }
+      ],
+      "cost_info": {
+        "sort_cost": "#"
+      },
+      "table": {
+        "table_name": "t",
+        "access_type": "ALL",
+        "rows_examined_per_scan": "#",
+        "rows_produced_per_join": "#",
+        "filtered": "100.00",
+        "cost_info": {
+          "read_cost": "#",
+          "eval_cost": "#",
+          "prefix_cost": "#",
+          "data_read_per_join": "#"
+        },
+        "used_columns": [
+          "a"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select rank() OVER `w1` AS `RANK() OVER w1` from `test`.`t` window `w1` AS (ORDER BY `test`.`t`.`a` ) 
+Don't discard either w1 or w2. Non-optimal: could replace with
+one window since w1 isn't used and even if it were used, the
+semantics are the same.
+SELECT RANK() OVER w2 FROM t WINDOW w1 AS (ORDER BY a), w2 AS (w1);
+RANK() OVER w2
+1
+2
+3
+4
+5
+EXPLAIN FORMAT=JSON SELECT RANK() OVER w2 FROM t WINDOW w1 AS (ORDER BY a), w2 AS (w1);
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "#"
+    },
+    "windowing": {
+      "windows": [
+        {
+          "name": "w1",
+          "definition_position": 1,
+          "using_temporary_table": true,
+          "using_filesort": true,
+          "filesort_key": [
+            "`a`"
+          ],
+          "functions": [
+          ]
+        },
+        {
+          "name": "w2",
+          "definition_position": 2,
+          "last_executed_window": true,
+          "functions": [
+            "rank"
+          ]
+        }
+      ],
+      "cost_info": {
+        "sort_cost": "#"
+      },
+      "table": {
+        "table_name": "t",
+        "access_type": "ALL",
+        "rows_examined_per_scan": "#",
+        "rows_produced_per_join": "#",
+        "filtered": "100.00",
+        "cost_info": {
+          "read_cost": "#",
+          "eval_cost": "#",
+          "prefix_cost": "#",
+          "data_read_per_join": "#"
+        },
+        "used_columns": [
+          "a"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select rank() OVER `w2` AS `RANK() OVER w2` from `test`.`t` window `w1` AS (ORDER BY `test`.`t`.`a` ) , `w2` AS (`w1` ) 
+Discard w3. Non-optimal: see previous case.
+SELECT RANK() OVER w2 FROM t WINDOW w1 AS (ORDER BY a), w2 AS (w1), w3 AS (w1);
+RANK() OVER w2
+1
+2
+3
+4
+5
+EXPLAIN FORMAT=JSON SELECT RANK() OVER w2 FROM t WINDOW w1 AS (ORDER BY a), w2 AS (w1), w3 AS (w1);
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "#"
+    },
+    "windowing": {
+      "windows": [
+        {
+          "name": "w1",
+          "definition_position": 1,
+          "using_temporary_table": true,
+          "using_filesort": true,
+          "filesort_key": [
+            "`a`"
+          ],
+          "functions": [
+          ]
+        },
+        {
+          "name": "w2",
+          "definition_position": 2,
+          "last_executed_window": true,
+          "functions": [
+            "rank"
+          ]
+        }
+      ],
+      "cost_info": {
+        "sort_cost": "#"
+      },
+      "table": {
+        "table_name": "t",
+        "access_type": "ALL",
+        "rows_examined_per_scan": "#",
+        "rows_produced_per_join": "#",
+        "filtered": "100.00",
+        "cost_info": {
+          "read_cost": "#",
+          "eval_cost": "#",
+          "prefix_cost": "#",
+          "data_read_per_join": "#"
+        },
+        "used_columns": [
+          "a"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select rank() OVER `w2` AS `RANK() OVER w2` from `test`.`t` window `w1` AS (ORDER BY `test`.`t`.`a` ) , `w2` AS (`w1` ) 
+Discard w1. Non-optimal: see previous case.
+SELECT RANK() OVER w3 FROM t WINDOW w1 AS (w2), w3 AS (w2), w2 AS ();
+RANK() OVER w3
+1
+1
+1
+1
+1
+EXPLAIN FORMAT=JSON SELECT RANK() OVER w3 FROM t WINDOW w1 AS (w2), w3 AS (w2), w2 AS ();
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "#"
+    },
+    "windowing": {
+      "windows": [
+        {
+          "name": "w3",
+          "definition_position": 2,
+          "using_temporary_table": true,
+          "functions": [
+            "rank"
+          ]
+        },
+        {
+          "name": "w2",
+          "definition_position": 3,
+          "last_executed_window": true,
+          "functions": [
+          ]
+        }
+      ],
+      "table": {
+        "table_name": "t",
+        "access_type": "ALL",
+        "rows_examined_per_scan": "#",
+        "rows_produced_per_join": "#",
+        "filtered": "100.00",
+        "cost_info": {
+          "read_cost": "#",
+          "eval_cost": "#",
+          "prefix_cost": "#",
+          "data_read_per_join": "#"
+        }
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select rank() OVER `w3` AS `RANK() OVER w3` from `test`.`t` window `w3` AS (`w2` ) , `w2` AS () 
+Discard w2.
+SELECT RANK() OVER w1 FROM t WINDOW w2 AS (w1), w1 AS (ORDER BY a);
+RANK() OVER w1
+1
+2
+3
+4
+5
+EXPLAIN FORMAT=JSON SELECT RANK() OVER w1 FROM t WINDOW w2 AS (w1), w1 AS (ORDER BY a);
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "#"
+    },
+    "windowing": {
+      "windows": [
+        {
+          "name": "w1",
+          "using_filesort": true,
+          "filesort_key": [
+            "`a`"
+          ],
+          "functions": [
+            "rank"
+          ]
+        }
+      ],
+      "cost_info": {
+        "sort_cost": "#"
+      },
+      "table": {
+        "table_name": "t",
+        "access_type": "ALL",
+        "rows_examined_per_scan": "#",
+        "rows_produced_per_join": "#",
+        "filtered": "100.00",
+        "cost_info": {
+          "read_cost": "#",
+          "eval_cost": "#",
+          "prefix_cost": "#",
+          "data_read_per_join": "#"
+        },
+        "used_columns": [
+          "a"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select rank() OVER `w1` AS `RANK() OVER w1` from `test`.`t` window `w1` AS (ORDER BY `test`.`t`.`a` ) 
+Discard none.
+SELECT RANK() OVER w1 FROM t WINDOW w1 AS (ROWS UNBOUNDED PRECEDING);
+RANK() OVER w1
+1
+1
+1
+1
+1
+EXPLAIN FORMAT=JSON SELECT RANK() OVER w1 FROM t WINDOW w1 AS (ROWS UNBOUNDED PRECEDING);
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "#"
+    },
+    "windowing": {
+      "windows": [
+        {
+          "name": "w1",
+          "functions": [
+            "rank"
+          ]
+        }
+      ],
+      "table": {
+        "table_name": "t",
+        "access_type": "ALL",
+        "rows_examined_per_scan": "#",
+        "rows_produced_per_join": "#",
+        "filtered": "100.00",
+        "cost_info": {
+          "read_cost": "#",
+          "eval_cost": "#",
+          "prefix_cost": "#",
+          "data_read_per_join": "#"
+        }
+      }
+    }
+  }
+}
+Warnings:
+Note	3599	Window function 'rank' ignores the frame clause of window 'w1' and aggregates over the whole partition
+Note	1003	/* select#1 */ select rank() OVER `w1` AS `RANK() OVER w1` from `test`.`t` window `w1` AS (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+DROP TABLE t;
+# End of test for Bug#27062031
+#
+# Bug #27348276: Wrong result for FIRST_VALUE, LAST_VALUE
+#
+CREATE TABLE t(c LONGTEXT NOT NULL);
+INSERT INTO t VALUES ('1'), ('1'), ('1'), ('1');
+SELECT FIRST_VALUE(c) OVER w fv, LAST_VALUE(c) OVER w lv
+FROM t WINDOW w AS (ORDER BY c
+ROWS BETWEEN 3 FOLLOWING AND 5 FOLLOWING);
+fv	lv
+1	1
+NULL	NULL
+NULL	NULL
+NULL	NULL
+DROP TABLE t;
+#
+# Bug#27230463 WINDOW FUNC: CRASH IN DO_COPY_MAYBE_NULL()
+#
+CREATE TABLE t(a BIT(52) NOT NULL, KEY(a));
+INSERT INTO t VALUES (1), (1), (1);
+SELECT EXISTS
+(SELECT a, LAST_VALUE(INET_ATON(1)) OVER() FROM t WHERE BIT_OR(1));
+EXISTS
+(SELECT a, LAST_VALUE(INET_ATON(1)) OVER() FROM t WHERE BIT_OR(1))
+1
+DROP TABLE t;
+#
+# Bug#27233287:  WINDOW FUNC: CRASH IN ITEM::SAVE_IN_FIELD_INNER
+#
+CREATE TABLE t (
+f1 LONGTEXT GENERATED ALWAYS AS (_utf8mb4'1') VIRTUAL NOT NULL
+);
+INSERT INTO t VALUES();
+SELECT LEAD(f1,1,1) OVER (ORDER BY f1) FROM t GROUP BY f1 WITH ROLLUP;
+LEAD(f1,1,1) OVER (ORDER BY f1)
+1
+1
+SELECT LAG(f1,1,1) OVER (ORDER BY f1) FROM t GROUP BY f1 WITH ROLLUP;
+LAG(f1,1,1) OVER (ORDER BY f1)
+1
+NULL
+SELECT LAG((f1+3/2-1+5),1,1) OVER (ORDER BY f1) FROM t GROUP BY f1 WITH ROLLUP;
+LAG((f1+3/2-1+5),1,1) OVER (ORDER BY f1)
+1
+NULL
+SELECT COALESCE(LAG(f1,1,1) OVER (ORDER BY f1)) FROM t GROUP BY f1 WITH ROLLUP;
+COALESCE(LAG(f1,1,1) OVER (ORDER BY f1))
+1
+NULL
+DROP TABLE t;
+#
+# Bug#27438725 WINDOW FUNCTION VARIANCE CAN GIVE WRONG RESULT
+#              WITH OPTIMIZED EVALUATION
+#
+CREATE TABLE t1(b INT);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (3);
+SELECT VARIANCE(b) over w `var`,
+AVG(b) OVER w `avg`,
+SUM(b) OVER w `sum`,
+b,
+COUNT(b) OVER w count FROM t1
+WINDOW w as (ORDER BY b ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING);
+var	avg	sum	b	count
+0.25	2.5000	5	2	2
+0.25	2.5000	5	3	2
+SET SESSION windowing_use_high_precision= FALSE;
+SELECT VARIANCE(b) over w `var`,
+AVG(b) OVER w `avg`,
+SUM(b) OVER w `sum`,
+b,
+count(b) OVER w count FROM t1
+WINDOW w as (ORDER BY b ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING);
+var	avg	sum	b	count
+0.25	2.5000	5	2	2
+0.25	2.5000	5	3	2
+SELECT VARIANCE(b) over w `var`,
+AVG(b) OVER w `avg`,
+SUM(b) OVER w `sum`,
+b,
+count(b) OVER w count,
+LAST_VALUE(b) OVER w lastval FROM t1
+WINDOW w as (ORDER BY b ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING);
+var	avg	sum	b	count	lastval
+0.25	2.5000	5	2	2	3
+0.25	2.5000	5	3	2	3
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (3);
+SET SESSION windowing_use_high_precision= TRUE;
+SELECT VARIANCE(b) over w `var`,
+FIRST_VALUE(b) over w fv,
+AVG(b) OVER w `avg`,
+SUM(b) OVER w `sum`,
+b,
+count(b) OVER w count FROM t1
+WINDOW w as (ORDER BY b ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+var	fv	avg	sum	b	count
+0.25	2	2.5000	5	2	2
+0	3	3.0000	6	2	2
+0	3	3.0000	3	3	1
+NULL	NULL	NULL	NULL	3	0
+SET SESSION windowing_use_high_precision= FALSE;
+SELECT VARIANCE(b) over w `var`,
+FIRST_VALUE(b) over w fv,
+AVG(b) OVER w `avg`,
+SUM(b) OVER w `sum`,
+b,
+count(b) OVER w count FROM t1
+WINDOW w as (ORDER BY b ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+var	fv	avg	sum	b	count
+0.25	2	2.5000	5	2	2
+0	3	3.0000	6	2	2
+0	3	3.0000	3	3	1
+NULL	NULL	NULL	NULL	3	0
+SET SESSION windowing_use_high_precision= TRUE;
+DROP TABLE t1;
+#
+# Bug#27452115: ASSERTION FAILED: (UCHAR*) TABLE->DEF_READ_SET.BITMAP +
+#               TABLE->S->COLUMN_BITMAP_
+#
+CREATE TABLE t (a BIGINT,b INT);
+INSERT INTO t VALUES (9223372036854775807,1);
+INSERT INTO t VALUES (1,2);
+SELECT b, CUME_DIST() OVER (
+PARTITION BY b ORDER BY a RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING
+) FROM t;
+ERROR 22003: BIGINT value is out of range in '(<cache>(`test`.`t`.`a`) + 1)'
+DROP TABLE t;
+#
+# Bug#27452179: WINDOW: ASSERTION FAILED: SCALE >= 0 && PRECISION > 0
+#               && SCALE <= PRECISION
+#
+CREATE TABLE t(f1 INTEGER);
+INSERT INTO t VALUES(0),(1),(2),(3);
+SELECT * FROM (SELECT IF(1, WEEKDAY('1'), ROW_NUMBER() OVER (PARTITION BY f1))
+FROM t) AS a;
+IF(1, WEEKDAY('1'), ROW_NUMBER() OVER (PARTITION BY f1))
+NULL
+NULL
+NULL
+NULL
+Warnings:
+Warning	1292	Incorrect datetime value: '1'
+Warning	1292	Incorrect datetime value: '1'
+Warning	1292	Incorrect datetime value: '1'
+Warning	1292	Incorrect datetime value: '1'
+DROP TABLE t;
+#
+# Bug#27453155 W->FRAME_BUFFER()->S->DB_TYPE()->DB_TYPE ==
+#              DB_TYPE_INNODB || CNT <= 1 || (W->LA
+#
+CREATE TABLE t(a SMALLINT);
+INSERT INTO t(a) VALUES (-32768), (-1), (32767), (32767), (1);
+SELECT a, COUNT(a) OVER w, LAG(1,13) RESPECT NULLS OVER w
+FROM t
+WINDOW w AS (ORDER BY a RANGE BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING);
+a	COUNT(a) OVER w	LAG(1,13) RESPECT NULLS OVER w
+-32768	4	NULL
+-1	3	NULL
+1	2	NULL
+32767	0	NULL
+32767	0	NULL
+DROP TABLE t;
+#
+# Bug#28105241: WINDOWS FUNC + AGGREGATES: ASSERTION FAILED:
+#               HYBRID_TYPE == DECIMAL_RESULT
+#
+DO ST_CROSSES(@g,SUM(SHA(@g))OVER());
+DO UNHEX(SUM(@g)OVER());
+DO BIT_LENGTH(AVG(@f)OVER());
+DO COMPRESS(SUM(' >')OVER());
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: ' >'
+DO LTRIM(AVG(LOG2(@c))OVER());
+DO (~(SUM(@f)OVER()));
+DO IS_UUID(SUM(@e)OVER());
+DO TO_BASE64(AVG(@d)OVER());
+#
+# Bug#28080199 UBSAN: DECIMAL_ADD, LOAD OF VALUE 53,
+#              WHICH IS NOT A VALID VALUE FOR TYPE
+#
+SELECT bit_count(sum(cos(-66365726))over());
+bit_count(sum(cos(-66365726))over())
+64
+SELECT bit_count(avg(cos(-66365726))over());
+bit_count(avg(cos(-66365726))over())
+64
+#
+# Bug#28431783 ASSERTION FALSE IN ITEM::TYPE_FOR_VARIABLE()
+# Regression after introduction of window functions
+#
+CREATE TABLE t(a DATETIME(6) NOT NULL)ENGINE=INNODB;
+INSERT INTO t(a) VALUES('2008-01-01 00:22:33');
+SELECT( SELECT a FROM  ( SELECT 1 FROM t ) e ORDER BY (@f:=a) )
+FROM t GROUP BY a;
+( SELECT a FROM  ( SELECT 1 FROM t ) e ORDER BY (@f:=a) )
+2008-01-01 00:22:33.000000
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+DROP TABLE t;
+#
+# Bug #27452365: UBSAN: SIGNED INTEGER OVERFLOW IN
+#                PROCESS_BUFFERED_WINDOWING_RECORD
+#
+CREATE TABLE t(a INTEGER);
+INSERT INTO t VALUES (1),(2),(3),(4);
+SELECT NTILE(74) OVER(ORDER BY a ROWS BETWEEN CURRENT ROW AND
+9223372036854775807 FOLLOWING) FROM t;
+NTILE(74) OVER(ORDER BY a ROWS BETWEEN CURRENT ROW AND
+9223372036854775807 FOLLOWING)
+1
+2
+3
+4
+SELECT SUM(a) OVER(ORDER BY a ROWS BETWEEN 9223372036854775807 FOLLOWING AND
+9223372036854775807 FOLLOWING) as `sum` FROM t;
+sum
+NULL
+NULL
+NULL
+NULL
+SELECT SUM(a) OVER(ORDER BY a ROWS BETWEEN 9223372036854775806 FOLLOWING AND
+9223372036854775807 FOLLOWING) as `sum` FROM t;
+sum
+NULL
+NULL
+NULL
+NULL
+SELECT SUM(a) OVER(ORDER BY a ROWS BETWEEN 9223372036854775805 FOLLOWING AND
+9223372036854775807 FOLLOWING) as `sum` FROM t;
+sum
+NULL
+NULL
+NULL
+NULL
+SELECT SUM(a) OVER(ORDER BY a ROWS BETWEEN 9223372036854775807 FOLLOWING AND
+9223372036854775805 FOLLOWING) as `sum` FROM t;
+sum
+NULL
+NULL
+NULL
+NULL
+SELECT SUM(a) OVER(ORDER BY a ROWS BETWEEN 9223372036854775807 PRECEDING AND
+9223372036854775805 PRECEDING) as `sum` FROM t;
+sum
+NULL
+NULL
+NULL
+NULL
+DROP TABLE t;
+#
+# Bug#27808099: "UNKNOWN FIELD IN WINDOW ORDER BY " ERROR EVEN
+#                WHEN FIELD IS FOUND IN TABLE
+#
+CREATE TABLE t1 (i INTEGER);
+WITH der AS (SELECT CASE WHEN i IN ('0') THEN i END AS a FROM t1),
+der1 AS (SELECT ROW_NUMBER() OVER (ORDER BY a), a FROM der)
+SELECT * FROM der1;
+ROW_NUMBER() OVER (ORDER BY a)	a
+WITH der AS (SELECT CASE WHEN i IN ('0') THEN i END AS a FROM t1),
+der1 AS (SELECT ROW_NUMBER() OVER (ORDER BY a) FROM der)
+SELECT * FROM der1;
+ROW_NUMBER() OVER (ORDER BY a)
+WITH der AS (SELECT i AS a FROM t1),
+der1 AS (SELECT ROW_NUMBER() OVER (ORDER BY a) FROM der)
+SELECT * FROM der1;
+ROW_NUMBER() OVER (ORDER BY a)
+SELECT i AS b, ROW_NUMBER() OVER (ORDER BY b) FROM t1;
+ERROR 42S22: Unknown column 'b' in 'window order by'
+SELECT i+1 AS b, ROW_NUMBER() OVER (ORDER BY b) FROM t1;
+ERROR 42S22: Unknown column 'b' in 'window order by'
+SELECT 3 AS i, ROW_NUMBER() OVER (ORDER BY i) FROM t1;
+i	ROW_NUMBER() OVER (ORDER BY i)
+DROP TABLE t1;
+#
+# Bug#27973860: ASSERTION FAILED: M_COUNT > 0 && M_COUNT >
+#               M_FRAME_NULL_COUNT
+#
+CREATE TABLE t ( a INT, b DATETIME(3));
+INSERT t VALUES(1986,'9344-11-05 13:39:24.686');
+INSERT t VALUES(1995,'7213-04-25 08:35:10.618');
+INSERT t VALUES(1971,'9352-01-31 07:55:58.233');
+SELECT SUM(a) OVER w FROM t
+WINDOW w AS(ORDER BY a,b RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING);
+SUM(a) OVER w
+5952
+3981
+1995
+DROP TABLE t;
+# Bug#27816506 WINDOW FUNC; ASSERTION FAILED:
+#              CURRENT_ROW > PREV_LAST_ROWNO_IN_FRAME && LOWER_L
+#
+SET @savmode=@@SESSION.SQL_MODE;
+SET SESSION SQL_MODE='';
+CREATE TABLE t(
+a TEXT CHARACTER SET CP1251
+GENERATED ALWAYS AS (LPAD(1,10621933,10)) VIRTUAL,
+b BLOB
+GENERATED ALWAYS AS (LPAD(1,10622,10)) VIRTUAL
+) ENGINE=INNODB;
+INSERT INTO t VALUES (), ();
+Warnings:
+Warning	1265	Data truncated for column 'a' at row 1
+Warning	1265	Data truncated for column 'a' at row 2
+SET @f =
+(
+SELECT NTILE(39) OVER w1 FROM t
+WINDOW w1 AS(ORDER BY a)
+);
+ERROR 21000: Subquery returns more than 1 row
+PREPARE stmt FROM 'SELECT NTILE(39) OVER w1 FROM t
+WINDOW w1 AS(ORDER BY a)';
+EXECUTE stmt;
+NTILE(39) OVER w1
+1
+2
+SET @f =
+(
+SELECT NTILE(39) OVER w1 FROM t
+WINDOW w1 AS(ORDER BY b)
+);
+ERROR 21000: Subquery returns more than 1 row
+PREPARE stmt FROM 'SELECT NTILE(39) OVER w1 FROM t
+WINDOW w1 AS(ORDER BY b)';
+EXECUTE stmt;
+NTILE(39) OVER w1
+1
+2
+DROP TABLE t;
+SET SESSION SQL_MODE=@savmode;
+#
+# Bug#28672483 WRONG RESULT FROM DISTINCT AND ARITHMETIC EXPRESSION
+#              USING WINDOW FUNCTION
+#
+Uses frame buffer
+WITH tab(t, company, quote) AS (
+SELECT 1 AS t,   'G' AS company, 40 AS quote
+UNION SELECT 2 , 'G',    60
+UNION SELECT 3 , 'S',    60
+UNION SELECT 4,  'S',    20
+)
+SELECT DISTINCT
+company,
+quote - LAG(quote) OVER (PARTITION BY company ORDER BY t)
+FROM tab;
+company	quote - LAG(quote) OVER (PARTITION BY company ORDER BY t)
+G	NULL
+G	20
+S	NULL
+S	-40
+Does not use frame buffer
+CREATE TABLE t(i INT);
+INSERT INTO t VALUES (0), (0), (0), (0), (1), (0), (0), (0);
+SELECT DISTINCT i, 1 + SUM(i) OVER (ORDER BY i ROWS UNBOUNDED PRECEDING) FROM t;
+i	1 + SUM(i) OVER (ORDER BY i ROWS UNBOUNDED PRECEDING)
+0	1
+1	2
+SELECT DISTINCT 1 + SUM(i) OVER (ORDER BY i ROWS UNBOUNDED PRECEDING) FROM t;
+1 + SUM(i) OVER (ORDER BY i ROWS UNBOUNDED PRECEDING)
+1
+2
+DROP TABLE t;
+#
+# Bug#29201831 WINDOW FUNCTION WITH RANGE FRAME: CRASH IN
+#              READ_FRAME_BUFFER_ROW
+#
+CREATE TABLE t(a INT, b INT);
+INSERT INTO t VALUES (1,1), (2,1), (3,2), (4,2), (5,3), (6,3);
+INSERT INTO t VALUES (1,1), (4,2), (NULL, 2), (NULL, NULL), (2, NULL);
+SELECT a,b, FIRST_VALUE(b) OVER w AS first, LAST_VALUE (a) OVER w AS last
+FROM t WINDOW w AS (ORDER BY a  desc RANGE 3 PRECEDING);
+a	b	first	last
+6	3	3	6
+5	3	3	5
+4	2	3	4
+4	2	3	4
+3	2	3	3
+2	1	3	2
+2	NULL	3	2
+1	1	2	1
+1	1	2	1
+NULL	2	2	NULL
+NULL	NULL	2	NULL
+DROP TABLE t;
+#
+# Bug#29328529 AGGREGATE FUNCTION RESULT IS DEPENDENT BY WINDOW IS
+#              DEFINED DIRECTLY OR AS NAMED
+#
+WITH RECURSIVE cte AS (
+SELECT 1 num
+UNION ALL
+SELECT num+1 FROM cte WHERE num < 5
+)
+SELECT num, COUNT(*) OVER (frame) cnt_named,
+COUNT(*) OVER (ORDER BY num DESC) cnt_direct
+FROM cte
+WINDOW frame AS (ORDER BY num DESC);
+num	cnt_named	cnt_direct
+5	1	1
+4	2	2
+3	3	3
+2	4	4
+1	5	5
+#
+# Bug#32028154: INCORRECT ERROR PROPAGATION FROM WINDOW FUNCTIONS
+#
+SELECT JSON_ARRAY(FIRST_VALUE(CAST('' AS JSON)) OVER (), '');
+ERROR 22032: Invalid JSON text in argument 1 to function cast_as_json: "The document is empty." at position 0.
+SELECT JSON_ARRAY(NTH_VALUE(CAST('' AS JSON), 1) OVER (), '');
+ERROR 22032: Invalid JSON text in argument 1 to function cast_as_json: "The document is empty." at position 0.
+SELECT JSON_ARRAY(LEAD(CAST('true' AS JSON), 2, CAST('' AS JSON)) OVER (), '');
+ERROR 22032: Invalid JSON text in argument 1 to function cast_as_json: "The document is empty." at position 0.
+SELECT JSON_ARRAY(JSON_ARRAYAGG(CAST('' AS JSON)) OVER (), '');
+ERROR 22032: Invalid JSON text in argument 1 to function cast_as_json: "The document is empty." at position 0.
+#
+# Bug #32802301: REGRESSION: TYPE_CONVERSION_STATUS FIELD_VARSTRING::STORE: ASSERTION `!TABLE || (!TABLE->WRITE_SET || BITMAP_IS_SET(TABLE->WRITE_SET, FIELD_INDEX()))' FAILED.
+#
+CREATE TABLE t1 (a TIMESTAMP NOT NULL);
+INSERT INTO t1 VALUES ('2000-01-01 00:00:00');
+SELECT a + INTERVAL(LAST_VALUE(1) OVER ()) SECOND FROM (SELECT a FROM t1) q;
+a + INTERVAL(LAST_VALUE(1) OVER ()) SECOND
+2000-01-01 00:00:01
+DROP TABLE t1;
+#
+# Bug#32820802: WRONG RESULT WITH WINDOW FUNCTION AS PART OF EXPRESSION
+#
+CREATE TABLE t1 (
+f1 INTEGER,
+t1_partkey INTEGER
+);
+CREATE TABLE t2 (
+t2_partkey INTEGER PRIMARY KEY
+);
+INSERT INTO t1 VALUES (34, 1), (10, 1), (4, 1), (6, 1),
+(9, 2), (64, 2), (31,2);
+INSERT INTO t2 VALUES (1), (2), (3), (4), (5), (6), (7);
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+SELECT 0.2 * AVG(f1) OVER w AS avg, f1
+FROM t1 JOIN t2 ON t1_partkey = t2_partkey
+WINDOW w AS (PARTITION BY t1_partkey);
+avg	f1
+2.70000	34
+2.70000	10
+2.70000	4
+2.70000	6
+6.93334	9
+6.93334	64
+6.93334	31
+DROP TABLE t1, t2;
+#
+# Bug#32328576: BOOL PROCESS_BUFFERED_WINDOWING_RECORD: ASSERTION `!ROW_ADDED
+#               && !FOUND_FIRST' FAILED.
+#
+CREATE TABLE t(f1 SET('a','b'), f2 INTEGER);
+INSERT INTO t VALUES ('b',1), ('a',2), ('a,b',3), ('b',0), ('a',1);
+SELECT FIRST_VALUE(f2) OVER(ORDER BY f1 RANGE CURRENT ROW) FROM t;
+FIRST_VALUE(f2) OVER(ORDER BY f1 RANGE CURRENT ROW)
+2
+2
+1
+1
+3
+DROP TABLE t;
+#
+# Bug #33012642: WL#14419: ASSERTION `*TO_LEN >= 2 + FROM->SIGN' FAILED
+#
+CREATE TABLE t1 ( a INTEGER NOT NULL );
+INSERT INTO t1 VALUES (4);
+SELECT a, SUM(a) OVER () AS s
+FROM t1
+GROUP BY a
+ORDER BY a, s;
+a	s
+4	4
+DROP TABLE t1;
+#
+# Bug #33014346: WL#14419: ASSERTION `RECEIVER.HASSECONDARYENGINECOSTHOOK()' FAILED
+#
+CREATE TABLE t1 ( a INTEGER, b INTEGER );
+SELECT ROW_NUMBER() OVER (ORDER BY a), COUNT(*) AS m
+FROM t1
+GROUP BY a, b
+ORDER BY a, b, m;
+ROW_NUMBER() OVER (ORDER BY a)	m
+DROP TABLE t1;
+#
+# Bug #33041041: WL#14419: SIG 11 IN WINDOW::APPLY_TEMP_TABLE|SQL/WINDOW.CC
+#
+CREATE TABLE t1 ( a INTEGER );
+PREPARE stmt FROM "SELECT RANK() OVER (ORDER BY a) FROM t1 GROUP BY a";
+EXECUTE stmt;
+RANK() OVER (ORDER BY a)
+EXECUTE stmt;
+RANK() OVER (ORDER BY a)
+DROP TABLE t1;
+#
+# Bug #33067989: WL#14419: RESULT MISMATCH SEEN WITH WINDOW FUNCTION IN SUBQUERY
+#
+CREATE TABLE t1 ( a INTEGER );
+INSERT INTO t1 VALUES (0), (1);
+SELECT a
+FROM t1 AS outer_t1
+WHERE (a,a) IN (
+SELECT MAX(a) OVER (), a FROM t1
+);
+a
+1
+DROP TABLE t1;
+#
+# Bug #33072114: WL#14419: ASSERTION `STATIC_CAST<SIZE_T>(END_BIT_NUM) <= CAPACITY()' FAILED
+#
+CREATE TABLE t1 ( a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER, f INTEGER, g INTEGER, h INTEGER, i INTEGER, j INTEGER, k INTEGER );
+SELECT
+CUME_DIST() OVER (ORDER BY t1.a)
+FROM
+t1
+NATURAL JOIN t1 AS t2
+NATURAL JOIN t1 AS t3
+NATURAL JOIN t1 AS t4
+GROUP BY t1.a
+WITH ROLLUP;
+CUME_DIST() OVER (ORDER BY t1.a)
+DROP TABLE t1;
+#
+# Bug #33028408: WL#14419: ASSERTION `M_COUNT >= M_FRAME_NULL_COUNT && M_FRAME_NULL_COUNT > 0' FA
+#
+CREATE TABLE t1 ( pk INTEGER );
+INSERT INTO t1 VALUES (2);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SELECT SUM(pk) OVER (ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) FROM t1 GROUP BY pk WITH ROLLUP;
+SUM(pk) OVER (ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING)
+2
+NULL
+DROP TABLE t1;
+#
+# Bug #33036143: WL#14419: ASSERTION `M_INDEX_CURSOR.IS_POSITIONED()' FAILED.
+#
+CREATE TABLE t1 ( a LONGTEXT, b INTEGER );
+INSERT INTO t1 VALUES ('1', 0);
+SELECT
+a,
+SUM(1) OVER (ORDER BY b),
+SUM(1) OVER (ORDER BY b DESC)
+FROM t1;
+a	SUM(1) OVER (ORDER BY b)	SUM(1) OVER (ORDER BY b DESC)
+1	1	1
+DROP TABLE t1;
+#
+# Bug #33067260: WL#14419: SIG11 IN MY_FILL_8BIT|STRINGS/CTYPE-SIMPLE.CC
+#
+CREATE TABLE t1 (a INTEGER, b VARCHAR(255));
+INSERT INTO t1 VALUES (1,'x');
+INSERT INTO t1 VALUES (-3,'y');
+CREATE TABLE t2 ( a INTEGER );
+SET sql_mode='';
+SELECT MIN(a) AS field1 FROM t1 WHERE b IN ( SELECT a FROM t2 ) ORDER BY LEAD(a, 5, 7) OVER (ORDER BY b);
+field1
+NULL
+SELECT MIN(a), LEAD(a, 5, 7) OVER (ORDER BY b) AS field1 FROM t1 WHERE b IN ( SELECT a FROM t2 ) ORDER BY b;
+MIN(a)	field1
+NULL	7
+SET sql_mode=DEFAULT;
+DROP TABLE t1, t2;
+#
+# Bug #33075752: WL#14419: ASSERTION `N < SIZE()' FAILED|INCLUDE/PREALLOCED_ARRAY.H
+#
+CREATE TABLE t1 ( a INTEGER );
+SELECT DISTINCT
+0 AS field1,
+RANK() OVER (ORDER BY a) AS field2,
+LAST_VALUE(a) OVER (ORDER BY a + 1) AS field3
+FROM t1
+GROUP BY a, field1 WITH ROLLUP
+ORDER BY field1, field2, field3;
+field1	field2	field3
+DROP TABLE t1;
+#
+# Bug #33181670: Recent regression: Memory leak with window functions and user variables
+#
+CREATE TABLE t1 (a INTEGER);
+INSERT INTO t1 VALUES (1);
+SELECT LAST_VALUE(0) OVER (ORDER BY (@f:='x')) FROM t1;
+LAST_VALUE(0) OVER (ORDER BY (@f:='x'))
+0
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+DROP TABLE t1;
+#
+# Bug#33399696: Switch slice before reaching execution end
+#
+CREATE TABLE t(a INT, b DOUBLE);
+INSERT INTO t VALUES(1, 2.1);
+INSERT INTO t VALUES(2, 1.4);
+INSERT INTO t VALUES(1, 2.56);
+INSERT INTO t VALUES(2, 2.23);
+SELECT a, SUM(b)+1 AS cnt,
+ROW_NUMBER() OVER (ORDER BY SUM(b) DESC) AS rn
+FROM t GROUP BY a ORDER BY rn;
+a	cnt	rn
+1	5.66	1
+2	4.63	2
+SELECT a, ROUND(SUM(b), 2) AS cnt,
+ROW_NUMBER() OVER (ORDER BY SUM(b) DESC) AS rn
+FROM t GROUP BY a ORDER BY rn DESC;
+a	cnt	rn
+2	3.63	2
+1	4.66	1
+DROP TABLE t;
+#
+# Bug#33415082:Hypergraph: Query with window function crashes in do_add()
+#
+CREATE TABLE v0 (v1 INTEGER);
+INSERT INTO v0 VALUES (1);
+SELECT v1, (SELECT v1 FROM (SELECT AVG(0) OVER (), v1) AS v2) FROM v0;
+v1	(SELECT v1 FROM (SELECT AVG(0) OVER (), v1) AS v2)
+1	1
+SELECT v1, (SELECT v1 FROM (SELECT AVG(0) OVER (), v1) AS v2) FROM v0;
+v1	(SELECT v1 FROM (SELECT AVG(0) OVER (), v1) AS v2)
+1	1
+SELECT v1, (SELECT v1 FROM (SELECT AVG(0) OVER (), v1) AS v2) FROM v0;
+v1	(SELECT v1 FROM (SELECT AVG(0) OVER (), v1) AS v2)
+1	1
+DROP TABLE v0;
+#
+# Bug#33930766 hypergraph: Assert failure in ApplyWindowFunctions() in query with 64 windows
+#
+CREATE TABLE t(
+col1 INT, col2 INT,
+col3 INT, col4 INT, col5 INT,
+col6 INT, col7 INT, col8 INT, col9 INT, col10 INT,
+col11 INT, col12 INT, col13 INT, col14 INT, col15 INT,
+col16 INT, col17 INT, col18 INT, col19 INT, col20 INT,
+col21 INT, col22 INT, col23 INT, col24 INT, col25 INT,
+col26 INT, col27 INT, col28 INT, col29 INT, col30 INT,
+col31 INT, col32 INT, col33 INT, col34 INT, col35 INT,
+col36 INT, col37 INT, col38 INT, col39 INT, col40 INT,
+col41 INT, col42 INT, col43 INT, col44 INT, col45 INT,
+col46 INT, col47 INT, col48 INT, col49 INT, col50 INT,
+col51 INT, col52 INT, col53 INT, col54 INT, col55 INT,
+col56 INT, col57 INT, col58 INT, col59 INT, col60 INT,
+col61 INT, col62 INT, col63 INT, col64 INT, col65 INT,
+col66 INT, col67 INT, col68 INT, col69 INT, col70 INT);
+INSERT INTO t VALUES(
+0+1, 0+2, 0+3, 0+4, 0+5, 0+6, 0+7, 0+8, 0+9, 0+10,
+0+11, 0+12, 0+13, 0+14, 0+15, 0+16, 0+17, 0+18, 0+19, 0+20,
+0+21, 0+22, 0+23, 0+24, 0+25, 0+26, 0+27, 0+28, 0+29, 0+30,
+0+31, 0+32, 0+33, 0+34, 0+35, 0+36, 0+37, 0+38, 0+39, 0+40,
+0+41, 0+42, 0+43, 0+44, 0+45, 0+46, 0+47, 0+48, 0+49, 0+50,
+0+51, 0+52, 0+53, 0+54, 0+55, 0+56, 0+57, 0+58, 0+59, 0+60,
+0+61, 0+62, 0+63, 0+64, 0+65, 0+66, 0+67, 0+68, 0+69, 0+70);
+INSERT INTO t VALUES(
+1+1, 1+2, 1+3, 1+4, 1+5, 1+6, 1+7, 1+8, 1+9, 1+10,
+1+11, 1+12, 1+13, 1+14, 1+15, 1+16, 1+17, 1+18, 1+19, 1+20,
+1+21, 1+22, 1+23, 1+24, 1+25, 1+26, 1+27, 1+28, 1+29, 1+30,
+1+31, 1+32, 1+33, 1+34, 1+35, 1+36, 1+37, 1+38, 1+39, 1+40,
+1+41, 1+42, 1+43, 1+44, 1+45, 1+46, 1+47, 1+48, 1+49, 1+50,
+1+51, 1+52, 1+53, 1+54, 1+55, 1+56, 1+57, 1+58, 1+59, 1+60,
+1+61, 1+62, 1+63, 1+64, 1+65, 1+66, 1+67, 1+68, 1+69, 1+70);
+INSERT INTO t VALUES(
+2+1, 2+2, 2+3, 2+4, 2+5, 2+6, 2+7, 2+8, 2+9, 2+10,
+2+11, 2+12, 2+13, 2+14, 2+15, 2+16, 2+17, 2+18, 2+19, 2+20,
+2+21, 2+22, 2+23, 2+24, 2+25, 2+26, 2+27, 2+28, 2+29, 2+30,
+2+31, 2+32, 2+33, 2+34, 2+35, 2+36, 2+37, 2+38, 2+39, 2+40,
+2+41, 2+42, 2+43, 2+44, 2+45, 2+46, 2+47, 2+48, 2+49, 2+50,
+2+51, 2+52, 2+53, 2+54, 2+55, 2+56, 2+57, 2+58, 2+59, 2+60,
+2+61, 2+62, 2+63, 2+64, 2+65, 2+66, 2+67, 2+68, 2+69, 2+70);
+INSERT INTO t VALUES(
+3+1, 3+2, 3+3, 3+4, 3+5, 3+6, 3+7, 3+8, 3+9, 3+10,
+3+11, 3+12, 3+13, 3+14, 3+15, 3+16, 3+17, 3+18, 3+19, 3+20,
+3+21, 3+22, 3+23, 3+24, 3+25, 3+26, 3+27, 3+28, 3+29, 3+30,
+3+31, 3+32, 3+33, 3+34, 3+35, 3+36, 3+37, 3+38, 3+39, 3+40,
+3+41, 3+42, 3+43, 3+44, 3+45, 3+46, 3+47, 3+48, 3+49, 3+50,
+3+51, 3+52, 3+53, 3+54, 3+55, 3+56, 3+57, 3+58, 3+59, 3+60,
+3+61, 3+62, 3+63, 3+64, 3+65, 3+66, 3+67, 3+68, 3+69, 3+70);
+INSERT INTO t VALUES(
+4+1, 4+2, 4+3, 4+4, 4+5, 4+6, 4+7, 4+8, 4+9, 4+10,
+4+11, 4+12, 4+13, 4+14, 4+15, 4+16, 4+17, 4+18, 4+19, 4+20,
+4+21, 4+22, 4+23, 4+24, 4+25, 4+26, 4+27, 4+28, 4+29, 4+30,
+4+31, 4+32, 4+33, 4+34, 4+35, 4+36, 4+37, 4+38, 4+39, 4+40,
+4+41, 4+42, 4+43, 4+44, 4+45, 4+46, 4+47, 4+48, 4+49, 4+50,
+4+51, 4+52, 4+53, 4+54, 4+55, 4+56, 4+57, 4+58, 4+59, 4+60,
+4+61, 4+62, 4+63, 4+64, 4+65, 4+66, 4+67, 4+68, 4+69, 4+70);
+INSERT INTO t VALUES(
+5+1, 5+2, 5+3, 5+4, 5+5, 5+6, 5+7, 5+8, 5+9, 5+10,
+5+11, 5+12, 5+13, 5+14, 5+15, 5+16, 5+17, 5+18, 5+19, 5+20,
+5+21, 5+22, 5+23, 5+24, 5+25, 5+26, 5+27, 5+28, 5+29, 5+30,
+5+31, 5+32, 5+33, 5+34, 5+35, 5+36, 5+37, 5+38, 5+39, 5+40,
+5+41, 5+42, 5+43, 5+44, 5+45, 5+46, 5+47, 5+48, 5+49, 5+50,
+5+51, 5+52, 5+53, 5+54, 5+55, 5+56, 5+57, 5+58, 5+59, 5+60,
+5+61, 5+62, 5+63, 5+64, 5+65, 5+66, 5+67, 5+68, 5+69, 5+70);
+INSERT INTO t VALUES(
+6+1, 6+2, 6+3, 6+4, 6+5, 6+6, 6+7, 6+8, 6+9, 6+10,
+6+11, 6+12, 6+13, 6+14, 6+15, 6+16, 6+17, 6+18, 6+19, 6+20,
+6+21, 6+22, 6+23, 6+24, 6+25, 6+26, 6+27, 6+28, 6+29, 6+30,
+6+31, 6+32, 6+33, 6+34, 6+35, 6+36, 6+37, 6+38, 6+39, 6+40,
+6+41, 6+42, 6+43, 6+44, 6+45, 6+46, 6+47, 6+48, 6+49, 6+50,
+6+51, 6+52, 6+53, 6+54, 6+55, 6+56, 6+57, 6+58, 6+59, 6+60,
+6+61, 6+62, 6+63, 6+64, 6+65, 6+66, 6+67, 6+68, 6+69, 6+70);
+INSERT INTO t VALUES(
+7+1, 7+2, 7+3, 7+4, 7+5, 7+6, 7+7, 7+8, 7+9, 7+10,
+7+11, 7+12, 7+13, 7+14, 7+15, 7+16, 7+17, 7+18, 7+19, 7+20,
+7+21, 7+22, 7+23, 7+24, 7+25, 7+26, 7+27, 7+28, 7+29, 7+30,
+7+31, 7+32, 7+33, 7+34, 7+35, 7+36, 7+37, 7+38, 7+39, 7+40,
+7+41, 7+42, 7+43, 7+44, 7+45, 7+46, 7+47, 7+48, 7+49, 7+50,
+7+51, 7+52, 7+53, 7+54, 7+55, 7+56, 7+57, 7+58, 7+59, 7+60,
+7+61, 7+62, 7+63, 7+64, 7+65, 7+66, 7+67, 7+68, 7+69, 7+70);
+INSERT INTO t VALUES(
+8+1, 8+2, 8+3, 8+4, 8+5, 8+6, 8+7, 8+8, 8+9, 8+10,
+8+11, 8+12, 8+13, 8+14, 8+15, 8+16, 8+17, 8+18, 8+19, 8+20,
+8+21, 8+22, 8+23, 8+24, 8+25, 8+26, 8+27, 8+28, 8+29, 8+30,
+8+31, 8+32, 8+33, 8+34, 8+35, 8+36, 8+37, 8+38, 8+39, 8+40,
+8+41, 8+42, 8+43, 8+44, 8+45, 8+46, 8+47, 8+48, 8+49, 8+50,
+8+51, 8+52, 8+53, 8+54, 8+55, 8+56, 8+57, 8+58, 8+59, 8+60,
+8+61, 8+62, 8+63, 8+64, 8+65, 8+66, 8+67, 8+68, 8+69, 8+70);
+INSERT INTO t VALUES(
+9+1, 9+2, 9+3, 9+4, 9+5, 9+6, 9+7, 9+8, 9+9, 9+10,
+9+11, 9+12, 9+13, 9+14, 9+15, 9+16, 9+17, 9+18, 9+19, 9+20,
+9+21, 9+22, 9+23, 9+24, 9+25, 9+26, 9+27, 9+28, 9+29, 9+30,
+9+31, 9+32, 9+33, 9+34, 9+35, 9+36, 9+37, 9+38, 9+39, 9+40,
+9+41, 9+42, 9+43, 9+44, 9+45, 9+46, 9+47, 9+48, 9+49, 9+50,
+9+51, 9+52, 9+53, 9+54, 9+55, 9+56, 9+57, 9+58, 9+59, 9+60,
+9+61, 9+62, 9+63, 9+64, 9+65, 9+66, 9+67, 9+68, 9+69, 9+70);
+SELECT
+FIRST_VALUE(col1) OVER (ORDER BY col1) AS wf1,
+FIRST_VALUE(col1) OVER (ORDER BY col2) AS wf2,
+FIRST_VALUE(col1) OVER (ORDER BY col3) AS wf3,
+FIRST_VALUE(col1) OVER (ORDER BY col4) AS wf4,
+FIRST_VALUE(col1) OVER (ORDER BY col5) AS wf5,
+FIRST_VALUE(col1) OVER (ORDER BY col6) AS wf6,
+FIRST_VALUE(col1) OVER (ORDER BY col7) AS wf7,
+FIRST_VALUE(col1) OVER (ORDER BY col8) AS wf8,
+FIRST_VALUE(col1) OVER (ORDER BY col9) AS wf9,
+FIRST_VALUE(col1) OVER (ORDER BY col10) AS wf10,
+FIRST_VALUE(col1) OVER (ORDER BY col11) AS wf11,
+FIRST_VALUE(col1) OVER (ORDER BY col12) AS wf12,
+FIRST_VALUE(col1) OVER (ORDER BY col13) AS wf13,
+FIRST_VALUE(col1) OVER (ORDER BY col14) AS wf14,
+FIRST_VALUE(col1) OVER (ORDER BY col15) AS wf15,
+FIRST_VALUE(col1) OVER (ORDER BY col16) AS wf16,
+FIRST_VALUE(col1) OVER (ORDER BY col17) AS wf17,
+FIRST_VALUE(col1) OVER (ORDER BY col18) AS wf18,
+FIRST_VALUE(col1) OVER (ORDER BY col19) AS wf19,
+FIRST_VALUE(col1) OVER (ORDER BY col20) AS wf20,
+FIRST_VALUE(col1) OVER (ORDER BY col21) AS wf21,
+FIRST_VALUE(col1) OVER (ORDER BY col22) AS wf22,
+FIRST_VALUE(col1) OVER (ORDER BY col23) AS wf23,
+FIRST_VALUE(col1) OVER (ORDER BY col24) AS wf24,
+FIRST_VALUE(col1) OVER (ORDER BY col25) AS wf25,
+FIRST_VALUE(col1) OVER (ORDER BY col26) AS wf26,
+FIRST_VALUE(col1) OVER (ORDER BY col27) AS wf27,
+FIRST_VALUE(col1) OVER (ORDER BY col28) AS wf28,
+FIRST_VALUE(col1) OVER (ORDER BY col29) AS wf29,
+FIRST_VALUE(col1) OVER (ORDER BY col30) AS wf30,
+FIRST_VALUE(col1) OVER (ORDER BY col31) AS wf31,
+FIRST_VALUE(col1) OVER (ORDER BY col32) AS wf32,
+FIRST_VALUE(col1) OVER (ORDER BY col33) AS wf33,
+FIRST_VALUE(col1) OVER (ORDER BY col34) AS wf34,
+FIRST_VALUE(col1) OVER (ORDER BY col35) AS wf35,
+FIRST_VALUE(col1) OVER (ORDER BY col36) AS wf36,
+FIRST_VALUE(col1) OVER (ORDER BY col37) AS wf37,
+FIRST_VALUE(col1) OVER (ORDER BY col38) AS wf38,
+FIRST_VALUE(col1) OVER (ORDER BY col39) AS wf39,
+FIRST_VALUE(col1) OVER (ORDER BY col40) AS wf40,
+FIRST_VALUE(col1) OVER (ORDER BY col41) AS wf41,
+FIRST_VALUE(col1) OVER (ORDER BY col42) AS wf42,
+FIRST_VALUE(col1) OVER (ORDER BY col43) AS wf43,
+FIRST_VALUE(col1) OVER (ORDER BY col44) AS wf44,
+FIRST_VALUE(col1) OVER (ORDER BY col45) AS wf45,
+FIRST_VALUE(col1) OVER (ORDER BY col46) AS wf46,
+FIRST_VALUE(col1) OVER (ORDER BY col47) AS wf47,
+FIRST_VALUE(col1) OVER (ORDER BY col48) AS wf48,
+FIRST_VALUE(col1) OVER (ORDER BY col49) AS wf49,
+FIRST_VALUE(col1) OVER (ORDER BY col50) AS wf50,
+FIRST_VALUE(col1) OVER (ORDER BY col51) AS wf51,
+FIRST_VALUE(col1) OVER (ORDER BY col52) AS wf52,
+FIRST_VALUE(col1) OVER (ORDER BY col53) AS wf53,
+FIRST_VALUE(col1) OVER (ORDER BY col54) AS wf54,
+FIRST_VALUE(col1) OVER (ORDER BY col55) AS wf55,
+FIRST_VALUE(col1) OVER (ORDER BY col56) AS wf56,
+FIRST_VALUE(col1) OVER (ORDER BY col57) AS wf57,
+FIRST_VALUE(col1) OVER (ORDER BY col58) AS wf58,
+FIRST_VALUE(col1) OVER (ORDER BY col59) AS wf59,
+FIRST_VALUE(col1) OVER (ORDER BY col60) AS wf60,
+FIRST_VALUE(col1) OVER (ORDER BY col61) AS wf61,
+FIRST_VALUE(col1) OVER (ORDER BY col62) AS wf62,
+FIRST_VALUE(col1) OVER (ORDER BY col63) AS wf63,
+FIRST_VALUE(col1) OVER (ORDER BY col64) AS wf64,
+FIRST_VALUE(col1) OVER (ORDER BY col65) AS wf65,
+FIRST_VALUE(col1) OVER (ORDER BY col66) AS wf66,
+FIRST_VALUE(col1) OVER (ORDER BY col67) AS wf67,
+FIRST_VALUE(col1) OVER (ORDER BY col68) AS wf68,
+FIRST_VALUE(col1) OVER (ORDER BY col69) AS wf69,
+FIRST_VALUE(col1) OVER (ORDER BY col70) AS wf70
+FROM t;
+wf1	wf2	wf3	wf4	wf5	wf6	wf7	wf8	wf9	wf10	wf11	wf12	wf13	wf14	wf15	wf16	wf17	wf18	wf19	wf20	wf21	wf22	wf23	wf24	wf25	wf26	wf27	wf28	wf29	wf30	wf31	wf32	wf33	wf34	wf35	wf36	wf37	wf38	wf39	wf40	wf41	wf42	wf43	wf44	wf45	wf46	wf47	wf48	wf49	wf50	wf51	wf52	wf53	wf54	wf55	wf56	wf57	wf58	wf59	wf60	wf61	wf62	wf63	wf64	wf65	wf66	wf67	wf68	wf69	wf70
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+SELECT DISTINCT
+FIRST_VALUE(col1) OVER (ORDER BY col1) AS wf1,
+FIRST_VALUE(col1) OVER (ORDER BY col2) AS wf2,
+FIRST_VALUE(col1) OVER (ORDER BY col3) AS wf3,
+FIRST_VALUE(col1) OVER (ORDER BY col4) AS wf4,
+FIRST_VALUE(col1) OVER (ORDER BY col5) AS wf5,
+FIRST_VALUE(col1) OVER (ORDER BY col6) AS wf6,
+FIRST_VALUE(col1) OVER (ORDER BY col7) AS wf7,
+FIRST_VALUE(col1) OVER (ORDER BY col8) AS wf8,
+FIRST_VALUE(col1) OVER (ORDER BY col9) AS wf9,
+FIRST_VALUE(col1) OVER (ORDER BY col10) AS wf10,
+FIRST_VALUE(col1) OVER (ORDER BY col11) AS wf11,
+FIRST_VALUE(col1) OVER (ORDER BY col12) AS wf12,
+FIRST_VALUE(col1) OVER (ORDER BY col13) AS wf13,
+FIRST_VALUE(col1) OVER (ORDER BY col14) AS wf14,
+FIRST_VALUE(col1) OVER (ORDER BY col15) AS wf15,
+FIRST_VALUE(col1) OVER (ORDER BY col16) AS wf16,
+FIRST_VALUE(col1) OVER (ORDER BY col17) AS wf17,
+FIRST_VALUE(col1) OVER (ORDER BY col18) AS wf18,
+FIRST_VALUE(col1) OVER (ORDER BY col19) AS wf19,
+FIRST_VALUE(col1) OVER (ORDER BY col20) AS wf20,
+FIRST_VALUE(col1) OVER (ORDER BY col21) AS wf21,
+FIRST_VALUE(col1) OVER (ORDER BY col22) AS wf22,
+FIRST_VALUE(col1) OVER (ORDER BY col23) AS wf23,
+FIRST_VALUE(col1) OVER (ORDER BY col24) AS wf24,
+FIRST_VALUE(col1) OVER (ORDER BY col25) AS wf25,
+FIRST_VALUE(col1) OVER (ORDER BY col26) AS wf26,
+FIRST_VALUE(col1) OVER (ORDER BY col27) AS wf27,
+FIRST_VALUE(col1) OVER (ORDER BY col28) AS wf28,
+FIRST_VALUE(col1) OVER (ORDER BY col29) AS wf29,
+FIRST_VALUE(col1) OVER (ORDER BY col30) AS wf30,
+FIRST_VALUE(col1) OVER (ORDER BY col31) AS wf31,
+FIRST_VALUE(col1) OVER (ORDER BY col32) AS wf32,
+FIRST_VALUE(col1) OVER (ORDER BY col33) AS wf33,
+FIRST_VALUE(col1) OVER (ORDER BY col34) AS wf34,
+FIRST_VALUE(col1) OVER (ORDER BY col35) AS wf35,
+FIRST_VALUE(col1) OVER (ORDER BY col36) AS wf36,
+FIRST_VALUE(col1) OVER (ORDER BY col37) AS wf37,
+FIRST_VALUE(col1) OVER (ORDER BY col38) AS wf38,
+FIRST_VALUE(col1) OVER (ORDER BY col39) AS wf39,
+FIRST_VALUE(col1) OVER (ORDER BY col40) AS wf40,
+FIRST_VALUE(col1) OVER (ORDER BY col41) AS wf41,
+FIRST_VALUE(col1) OVER (ORDER BY col42) AS wf42,
+FIRST_VALUE(col1) OVER (ORDER BY col43) AS wf43,
+FIRST_VALUE(col1) OVER (ORDER BY col44) AS wf44,
+FIRST_VALUE(col1) OVER (ORDER BY col45) AS wf45,
+FIRST_VALUE(col1) OVER (ORDER BY col46) AS wf46,
+FIRST_VALUE(col1) OVER (ORDER BY col47) AS wf47,
+FIRST_VALUE(col1) OVER (ORDER BY col48) AS wf48,
+FIRST_VALUE(col1) OVER (ORDER BY col49) AS wf49,
+FIRST_VALUE(col1) OVER (ORDER BY col50) AS wf50,
+FIRST_VALUE(col1) OVER (ORDER BY col51) AS wf51,
+FIRST_VALUE(col1) OVER (ORDER BY col52) AS wf52,
+FIRST_VALUE(col1) OVER (ORDER BY col53) AS wf53,
+FIRST_VALUE(col1) OVER (ORDER BY col54) AS wf54,
+FIRST_VALUE(col1) OVER (ORDER BY col55) AS wf55,
+FIRST_VALUE(col1) OVER (ORDER BY col56) AS wf56,
+FIRST_VALUE(col1) OVER (ORDER BY col57) AS wf57,
+FIRST_VALUE(col1) OVER (ORDER BY col58) AS wf58,
+FIRST_VALUE(col1) OVER (ORDER BY col59) AS wf59,
+FIRST_VALUE(col1) OVER (ORDER BY col60) AS wf60,
+FIRST_VALUE(col1) OVER (ORDER BY col61) AS wf61,
+FIRST_VALUE(col1) OVER (ORDER BY col62) AS wf62,
+FIRST_VALUE(col1) OVER (ORDER BY col63) AS wf63,
+FIRST_VALUE(col1) OVER (ORDER BY col64) AS wf64,
+FIRST_VALUE(col1) OVER (ORDER BY col65) AS wf65,
+FIRST_VALUE(col1) OVER (ORDER BY col66) AS wf66,
+FIRST_VALUE(col1) OVER (ORDER BY col67) AS wf67,
+FIRST_VALUE(col1) OVER (ORDER BY col68) AS wf68,
+FIRST_VALUE(col1) OVER (ORDER BY col69) AS wf69,
+FIRST_VALUE(col1) OVER (ORDER BY col70) AS wf70
+FROM t;
+wf1	wf2	wf3	wf4	wf5	wf6	wf7	wf8	wf9	wf10	wf11	wf12	wf13	wf14	wf15	wf16	wf17	wf18	wf19	wf20	wf21	wf22	wf23	wf24	wf25	wf26	wf27	wf28	wf29	wf30	wf31	wf32	wf33	wf34	wf35	wf36	wf37	wf38	wf39	wf40	wf41	wf42	wf43	wf44	wf45	wf46	wf47	wf48	wf49	wf50	wf51	wf52	wf53	wf54	wf55	wf56	wf57	wf58	wf59	wf60	wf61	wf62	wf63	wf64	wf65	wf66	wf67	wf68	wf69	wf70
+1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1
+DROP TABLE t;
+#
+# Bug#34431996 MySQL window function first_value wrong
+#
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, f3 INTEGER);
+INSERT INTO t1 VALUES (1,1,1),
+(2,1,20),
+(3,1,300),
+(4,1,4000);
+SELECT f1,f2,f3,
+FIRST_VALUE(f3) OVER w  AS 'FIRST_VALUE',
+LAG(f3) OVER w          AS 'LAG',
+NTH_VALUE(f3, 4) OVER w AS 'NTH_VALUE'
+FROM t1 WINDOW w AS (PARTITION BY f2 ORDER BY f3
+ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING);
+f1	f2	f3	FIRST_VALUE	LAG	NTH_VALUE
+1	1	1	1	NULL	NULL
+2	1	20	1	1	4000
+3	1	300	20	20	NULL
+4	1	4000	300	300	NULL
+DROP TABLE t1;
+#
+# Bug#34099408: Result mismatch seen with DENSE_RANK window
+#               function
+#
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER);
+INSERT INTO t1 VALUES (1,1),(1,2),(2,1),(2,2);
+SELECT f1, f2, DENSE_RANK() OVER (ORDER BY f1), RANK() OVER (ORDER BY f1)
+FROM t1 GROUP BY f1,f2 WITH ROLLUP;
+f1	f2	DENSE_RANK() OVER (ORDER BY f1)	RANK() OVER (ORDER BY f1)
+NULL	NULL	1	1
+1	1	2	2
+1	2	2	2
+1	NULL	2	2
+2	1	3	5
+2	2	3	5
+2	NULL	3	5
+SELECT f1, f2, DENSE_RANK() OVER (ORDER BY f1), RANK() OVER (ORDER BY f1)
+FROM t1 GROUP BY f1,f2;
+f1	f2	DENSE_RANK() OVER (ORDER BY f1)	RANK() OVER (ORDER BY f1)
+1	1	1	1
+1	2	1	1
+2	1	2	3
+2	2	2	3
+DROP TABLE t1;
+#
+# Bug#35013880: Wrong result for AVG() OVER(ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING)
+#
+CREATE TABLE t (n INTEGER, r FLOAT);
+INSERT INTO t VALUES (1, 1.0), (2, 2.0), (3, 3.0), (4, 4.0);
+# No high precision for floating point, lest we don't use inversion.
+# With no inversion we do not see the error.
+SET SESSION windowing_use_high_precision=FALSE;
+SELECT n
+, SUM(n)   OVER w AS "sum(n)"
+     , COUNT(*) OVER w AS "count(n)"
+     , AVG(n)   OVER w AS "avg(n)"
+     , SUM(n)   OVER w / COUNT(*) OVER w AS "sum(n)/count(n)",
+r
+, SUM(r)   OVER w AS "sum(r)"
+     , COUNT(*) OVER w AS "count(r)"
+     , AVG(r)   OVER w AS "avg(r)"
+     , SUM(r)   OVER w / COUNT(*) OVER w AS "sum(r)/count(r)"
+FROM t WINDOW w AS (ORDER BY n ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING)
+ORDER BY n;
+n	sum(n)	count(n)	avg(n)	sum(n)/count(n)	r	sum(r)	count(r)	avg(r)	sum(r)/count(r)
+1	9	3	3.0000	3.0000	1	9	3	3	3
+2	7	2	3.5000	3.5000	2	7	2	3.5	3.5
+3	4	1	4.0000	4.0000	3	4	1	4	4
+4	NULL	0	NULL	NULL	4	NULL	0	NULL	NULL
+SET SESSION windowing_use_high_precision=default;
+# Was correct even before, because AVG(r) changes the code path even
+# for AVG(n): only with inversion did we see the error.
+SELECT n
+, SUM(n)   OVER w AS "sum(n)"
+     , COUNT(*) OVER w AS "count(n)"
+     , AVG(n)   OVER w AS "avg(n)"
+     , SUM(n)   OVER w / COUNT(*) OVER w AS "sum(n)/count(n)",
+r
+, SUM(r)   OVER w AS "sum(r)"
+     , COUNT(*) OVER w AS "count(r)"
+     , AVG(r)   OVER w AS "avg(r)"
+     , SUM(r)   OVER w / COUNT(*) OVER w AS "sum(r)/count(r)"
+FROM t WINDOW w AS (ORDER BY n ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING)
+ORDER BY n;
+n	sum(n)	count(n)	avg(n)	sum(n)/count(n)	r	sum(r)	count(r)	avg(r)	sum(r)/count(r)
+1	9	3	3.0000	3.0000	1	9	3	3	3
+2	7	2	3.5000	3.5000	2	7	2	3.5	3.5
+3	4	1	4.0000	4.0000	3	4	1	4	4
+4	NULL	0	NULL	NULL	4	NULL	0	NULL	NULL
+DROP TABLE t;
+#
+# Bug#33064174 PERCENT_RANK() RETURNS WRONG RESULT
+#
+CREATE TABLE t1 ( a TIME );
+INSERT INTO t1 VALUES ('02:00:00');
+INSERT INTO t1 VALUES (NULL);
+SELECT a, PERCENT_RANK() OVER (ORDER BY a) FROM t1;
+a	PERCENT_RANK() OVER (ORDER BY a)
+NULL	0
+02:00:00	1
+DROP TABLE t1;
+#
+# Bug#33069747 ASSERTION `M_COUNT >= M_FRAME_NULL_COUNT && M_FRAME_NULL_COUNT > 0' FAILED
+#
+CREATE TABLE t1 ( a INTEGER, b INTEGER );
+INSERT INTO t1 VALUES (0,NULL);
+INSERT INTO t1 VALUES (NULL,1);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SELECT 1 FROM t1
+ORDER BY BIT_OR(a) OVER (ORDER BY b ROWS CURRENT ROW);
+1
+1
+1
+SELECT SUM(a) OVER w
+FROM t1
+WINDOW w AS (ORDER BY b ROWS CURRENT ROW)
+ORDER BY SUM(b) OVER w;
+SUM(a) OVER w
+0
+NULL
+SELECT a, b, SUM(a) OVER w, SUM(b) OVER w
+FROM t1
+WINDOW w AS (ORDER BY b ROWS CURRENT ROW)
+ORDER BY SUM(b) OVER w;
+a	b	SUM(a) OVER w	SUM(b) OVER w
+0	NULL	0	NULL
+NULL	1	NULL	1
+DROP TABLE t1;
+#
+# Bug#35118579 hypergraph ASAN crash in do_sub
+#
+CREATE TABLE t1(pk INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+c1 VARCHAR(10) DEFAULT NULL,
+c2 VARCHAR(10) DEFAULT NULL,
+c3 INT, KEY(c1));
+INSERT INTO t1(c1, c2, c3) VALUES('am', 'it', 1);
+SET SQL_MODE='';
+SELECT DISTINCT BIT_XOR( c2 )
+FROM t1
+WINDOW w1 AS (ORDER BY c2),
+w2 AS (ORDER BY c3 ROWS UNBOUNDED PRECEDING)
+ORDER BY ( EXPORT_SET( c2,
+c1,
+SUM( pk ) OVER w1 ,
+FIRST_VALUE( pk ) OVER w2
+)
+);
+BIT_XOR( c2 )
+0
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: 'it'
+SET SQL_MODE=default;
+DROP TABLE t1;
+#
+# Bug#35340987 Prepared SELECT returns different results on
+#              consecutive executions.
+#
+CREATE TABLE t(i INT);
+INSERT INTO t(i) VALUES (100), (101);
+PREPARE stmt1 FROM "
+  SELECT a.i, (LAST_VALUE(a.i) OVER outer_window) = a.i AS result
+  FROM (SELECT LAG(i) OVER inner_window AS i_lag,
+               i AS i
+        FROM t
+        WINDOW inner_window AS (ORDER BY i) ) AS a
+  WINDOW outer_window AS (ORDER BY a.i)";
+EXECUTE stmt1;
+i	result
+100	1
+101	1
+EXECUTE stmt1;
+i	result
+100	1
+101	1
+DROP PREPARE stmt1;
+DROP TABLE t;
+#
+# Bug#35380604 issue with window functions in stored procedures
+#
+CREATE TABLE table1(id INT);
+INSERT INTO table1 VALUES(1),(2),(3),(4),(5),(6);
+CREATE PROCEDURE test2()
+BEGIN
+SELECT COUNT(*) OVER (ROWS BETWEEN 5 PRECEDING AND 5 FOLLOWING) AS a,
+COUNT(*) OVER (ROWS BETWEEN 5 PRECEDING AND 5 FOLLOWING) + 1 AS "a+1",
+COUNT(*) OVER (ROWS BETWEEN 5 PRECEDING AND 5 FOLLOWING) - 1 AS "a-1",
+COUNT(*) OVER () AS b,
+COUNT(*) OVER () + 1 AS "b+1",
+COUNT(*) OVER () - 1 AS "b-1" FROM table1 ;
+END $
+CALL test2();
+a	a+1	a-1	b	b+1	b-1
+6	7	5	6	7	5
+6	7	5	6	7	5
+6	7	5	6	7	5
+6	7	5	6	7	5
+6	7	5	6	7	5
+6	7	5	6	7	5
+CALL test2();
+a	a+1	a-1	b	b+1	b-1
+6	7	5	6	7	5
+6	7	5	6	7	5
+6	7	5	6	7	5
+6	7	5	6	7	5
+6	7	5	6	7	5
+6	7	5	6	7	5
+DROP PROCEDURE test2;
+DROP TABLE table1;

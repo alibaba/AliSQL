@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005-2007 MySQL AB, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,10 +28,12 @@
 
 #include "SignalData.hpp"
 
+#define JAM_FILE_ID 29
+
 /**
  * GetTabInfo - Get table info from DICT
  *
- * Successfull return = series of DICTTABINFO-signals
+ * Successful return = series of DICTTABINFO-signals
  */
 class GetTabInfoReq {
   /**
@@ -38,25 +47,23 @@ class GetTabInfoReq {
   // API
   friend class Table;
 
-  friend bool printGET_TABINFO_REQ(FILE *, const Uint32 *, Uint32, Uint16);  
-public:
-  STATIC_CONST( SignalLength = 5 );
-public:
+  friend bool printGET_TABINFO_REQ(FILE *, const Uint32 *, Uint32, Uint16);
+
+ public:
+  static constexpr Uint32 SignalLength = 5;
+
+ public:
   Uint32 senderData;
   Uint32 senderRef;
-  Uint32 requestType; // Bitmask of GetTabInfoReq::RequestType
+  Uint32 requestType;  // Bitmask of GetTabInfoReq::RequestType
   union {
     Uint32 tableId;
     Uint32 tableNameLen;
   };
-  Uint32 schemaTransId; // To see own schema trans
+  Uint32 schemaTransId;  // To see own schema trans
 
-  enum RequestType {
-    RequestById = 0,
-    RequestByName = 1,
-    LongSignalConf = 2
-  };
-  SECTION( TABLE_NAME = 0 );
+  enum RequestType { RequestById = 0, RequestByName = 1, LongSignalConf = 2 };
+  SECTION(TABLE_NAME = 0);
 };
 
 class GetTabInfoRef {
@@ -71,16 +78,18 @@ class GetTabInfoRef {
   // API
   friend class Table;
 
-  friend bool printGET_TABINFO_REF(FILE *, const Uint32 *, Uint32, Uint16);    
-public:
-  STATIC_CONST( SignalLength = 7 );
+  friend bool printGET_TABINFO_REF(FILE *, const Uint32 *, Uint32, Uint16);
+
+ public:
+  static constexpr Uint32 SignalLength = 7;
   /* 6.3 <-> 7.0 upgrade code */
-  STATIC_CONST( OriginalSignalLength = 5 );
-  STATIC_CONST( OriginalErrorOffset = 4 );
-public:
+  static constexpr Uint32 OriginalSignalLength = 5;
+  static constexpr Uint32 OriginalErrorOffset = 4;
+
+ public:
   Uint32 senderData;
   Uint32 senderRef;
-  Uint32 requestType; // Bitmask of GetTabInfoReq::RequestType
+  Uint32 requestType;  // Bitmask of GetTabInfoReq::RequestType
   union {
     Uint32 tableId;
     Uint32 tableNameLen;
@@ -111,25 +120,29 @@ class GetTabInfoConf {
   // API
   friend class Table;
 
-  friend bool printGET_TABINFO_CONF(FILE *, const Uint32 *, Uint32, Uint16);  
-public:
-  STATIC_CONST( SignalLength = 6 );
+  friend bool printGET_TABINFO_CONF(FILE *, const Uint32 *, Uint32, Uint16);
 
-  SECTION( DICT_TAB_INFO = 0 );
-public:
+ public:
+  static constexpr Uint32 SignalLength = 6;
+
+  SECTION(DICT_TAB_INFO = 0);
+
+ public:
   Uint32 senderData;
   Uint32 tableId;
   union {
-    Uint32 gci; // For table
-    Uint32 freeWordsHi; // for logfile group m_free_file_words
+    Uint32 gci;          // For table
+    Uint32 freeWordsHi;  // for logfile group m_free_file_words
   };
   union {
-    Uint32 totalLen; // In words
+    Uint32 totalLen;  // In words
     Uint32 freeExtents;
-    Uint32 freeWordsLo; // for logfile group m_free_file_words
+    Uint32 freeWordsLo;  // for logfile group m_free_file_words
   };
   Uint32 tableType;
   Uint32 senderRef;
 };
+
+#undef JAM_FILE_ID
 
 #endif

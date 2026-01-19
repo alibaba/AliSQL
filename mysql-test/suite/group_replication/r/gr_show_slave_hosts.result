@@ -1,0 +1,24 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server2]
+include/start_and_bootstrap_group_replication.inc
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY);
+include/assert.inc [Assert that show slave hosts is empty..]
+SET @@GLOBAL.DEBUG='+d,block_applier_updates';
+[connection server1]
+SET @restore_replica_net_timeout=@@global.replica_net_timeout;
+SET @@global.replica_net_timeout=20;
+include/start_group_replication.inc
+[connection server2]
+SET DEBUG_SYNC = "now WAIT_FOR applier_read_blocked";
+SET @@GLOBAL.DEBUG='-d,block_applier_updates';
+SET DEBUG_SYNC = "now SIGNAL resume_applier_read";
+[connection server2]
+SET DEBUG_SYNC= 'RESET';
+[connection server1]
+SET @@global.replica_net_timeout=@restore_replica_net_timeout;
+DROP TABLE t1;
+include/group_replication_end.inc

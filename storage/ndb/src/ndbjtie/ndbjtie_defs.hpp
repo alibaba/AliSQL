@@ -1,14 +1,22 @@
 /*
- Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is designed to work with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have either included with
+ the program or referenced in the documentation.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -41,43 +49,22 @@
 // ---------------------------------------------------------------------------
 
 // compatibility layer typedefs: mapping trait type aliases for NDB types
-JTIE_DEFINE_BASIC_TYPE_MAPPING_SET( jbyte, Int8, Int8 )
-JTIE_DEFINE_BASIC_TYPE_MAPPING_SET( jbyte, Uint8, Uint8 )
-JTIE_DEFINE_BASIC_TYPE_MAPPING_SET( jshort, Int16, Int16 )
-JTIE_DEFINE_BASIC_TYPE_MAPPING_SET( jshort, Uint16, Uint16 )
-JTIE_DEFINE_BASIC_TYPE_MAPPING_SET( jint, Int32, Int32 )
-JTIE_DEFINE_BASIC_TYPE_MAPPING_SET( jint, Uint32, Uint32 )
-JTIE_DEFINE_BASIC_TYPE_MAPPING_SET( jlong, Int64, Int64 )
-JTIE_DEFINE_BASIC_TYPE_MAPPING_SET( jlong, Uint64, Uint64 )
+JTIE_DEFINE_BASIC_TYPE_MAPPING_SET(jbyte, Int8, Int8)
+JTIE_DEFINE_BASIC_TYPE_MAPPING_SET(jbyte, Uint8, Uint8)
+JTIE_DEFINE_BASIC_TYPE_MAPPING_SET(jshort, Int16, Int16)
+JTIE_DEFINE_BASIC_TYPE_MAPPING_SET(jshort, Uint16, Uint16)
+JTIE_DEFINE_BASIC_TYPE_MAPPING_SET(jint, Int32, Int32)
+JTIE_DEFINE_BASIC_TYPE_MAPPING_SET(jint, Uint32, Uint32)
+JTIE_DEFINE_BASIC_TYPE_MAPPING_SET(jlong, Int64, Int64)
+JTIE_DEFINE_BASIC_TYPE_MAPPING_SET(jlong, Uint64, Uint64)
 
-// XXXXX temporary, for testing
-#if 1
-#  define NDBJTIE_USE_WRAPPED_VARIANT_FOR_CONST_OVERLOADED_FUNCTION 1
-#  define NDBJTIE_USE_WRAPPED_VARIANT_FOR_OVERLOADED_FUNCTION 1
-#  define NDBJTIE_USE_WRAPPED_VARIANT_FOR_FUNCTION 1
-#else
-
-// workaround for Sun Studio compilers (disambiguation of overloads)
-// (Studio 12.1 = 5.10):
-#if defined(__SUNPRO_CC)
-//#  if (__SUNPRO_CC == 0x510)
-#    define NDBJTIE_USE_WRAPPED_VARIANT_FOR_CONST_OVERLOADED_FUNCTION 1
-//#  endif
-#endif
-// workaround for MS Visual Studio compilers (disambiguation of overloads)
-// (VC7 = VS2003 = 1310, VC8 = VS2005 = 1400, VC9 = VS2008 = 1500, ...?):
-#if defined(_MSC_VER)
-//#  if (1300 <= _MSC_VER) && (_MSC_VER <= 1600)
-#    define NDBJTIE_USE_WRAPPED_VARIANT_FOR_OVERLOADED_FUNCTION 1
-#    define NDBJTIE_USE_WRAPPED_VARIANT_FOR_CONST_OVERLOADED_FUNCTION 1
-//#  endif
-#endif
-
-#endif
+// Don't make compilers choose between the const and non-const versions
+// of otherwise identical methods.
+#define NDBJTIE_USE_WRAPPED_VARIANT_FOR_CONST_OVERLOADED_FUNCTION 1
 
 // XXX: document why clearing cdelegate in wrapper object upon delete
 #define JTIE_OBJECT_CLEAR_ADDRESS_UPON_DELETE 1
 
 // ---------------------------------------------------------------------------
 
-#endif // ndbjtie_defs_hpp
+#endif  // ndbjtie_defs_hpp

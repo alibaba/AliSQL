@@ -1,0 +1,73 @@
+##############################################################################
+# ==== Purpose ====
+# The purpose of this test is to verify that when a CREATE ... SELECT
+# transaction is executed together with other DML statements, the logical
+# clock generation is populated as expected.
+#
+# ==== Requirement ====
+# The source must ensure that for a CREATE ... SELECT transaction executed
+# together with other DML statements, the logical clock generation is
+# populated correctly.
+#
+# ==== Implementation ====
+# 1. Create source-replica topology.
+# 2. On the source, create table t1 and insert a row.
+# 3. On the source, create another table from t1 using CREATE ... SELECT.
+# 4. Verify that the value of last_committed is correctly populated.
+# 5. Verify that the transactions are successfully applied on the replica.
+# 6. Clean up
+#
+# ==== References ====
+# Bug#38383106:Logical clock generation for CREATE ... SELECT seems incorrect
+###############################################################################
+
+--source include/have_binlog_format_row.inc
+--source include/have_transaction_write_set_extraction.inc
+
+--echo #
+--echo # 1. Create source-replica topology
+--let $rpl_skip_start_slave= 1
+--source include/master-slave.inc
+SET @save_binlog_transaction_dependency_tracking= @@GLOBAL.binlog_transaction_dependency_tracking;
+SET GLOBAL binlog_transaction_dependency_tracking= WRITESET;
+
+--source include/rpl_connection_slave.inc
+# The following logical timestamps check needs fresh slave server.
+RESET MASTER;
+--source include/start_slave.inc
+
+--echo #
+--echo # 2. On the source, create table t1 and insert a row.
+--source include/rpl_connection_master.inc
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY);
+INSERT INTO t1 VALUES (1);
+
+--echo #
+--echo # 3. On the source, create another table from t1 using
+--echo #    CREATE ... SELECT.
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY) SELECT c1 AS c1 FROM t1;
+INSERT INTO t2 VALUES (4);
+
+
+--echo #
+--echo # 4. Verify that the value of last_committed is correctly populated.
+--let $logical_timestamps=0 1;1 2;2 3;3 4
+--let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+--echo Processing binlog $binlog_file
+--let $source_file= $server_1_datadir/$binlog_file
+--source include/assert_logical_timestamps.inc
+
+--echo #
+--echo # 5. Verify that the transactions are successfully applied on
+--echo #    the replica.
+--source include/sync_slave_sql_with_master.inc
+--let $diff_tables= master:test.t1, slave:test.t1
+--source include/diff_tables.inc
+
+--echo #
+--echo # 6. Cleanup
+--source include/rpl_connection_master.inc
+SET @@GLOBAL.binlog_transaction_dependency_tracking= @save_binlog_transaction_dependency_tracking;
+DROP TABLE t1, t2;
+
+--source include/rpl_end.inc

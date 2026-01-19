@@ -1,36 +1,36 @@
 DROP DATABASE IF EXISTS test1;
 DROP DATABASE IF EXISTS test2;
-CREATE DATABASE test1;
-CREATE DATABASE test2;
+CREATE DATABASE test1 charset latin1;
+CREATE DATABASE test2 charset latin1;
 CREATE TABLE test1.t1  (f1 VARCHAR(20)) ENGINE = <engine_to_be_used>;
 CREATE TABLE test1.t2  (f1 VARCHAR(20)) ENGINE = <engine_to_be_used>;
 CREATE TABLE test2.t1 (f1 VARCHAR(20)) ENGINE = <engine_to_be_used>;
 SELECT *,
 LEFT( table_comment,
-IF(INSTR(table_comment,'InnoDB free') = 0
+IF(INSTR(table_comment,'TMP_TABLE_ENGINE free') = 0
 AND INSTR(table_comment,'number_of_replicas') = 0,
 LENGTH(table_comment),
-INSTR(table_comment,'InnoDB free')
+INSTR(table_comment,'TMP_TABLE_ENGINE free')
 + INSTR(table_comment,'number_of_replicas') - 1))
 AS "user_comment",
 '-----------------------------------------------------' AS "Separator"
 FROM information_schema.tables
 WHERE table_schema LIKE 'test%' AND table_type = 'BASE TABLE'
-ORDER BY table_schema,table_name;
+ORDER BY table_schema,table_name COLLATE utf8_general_ci;
 TABLE_CATALOG	def
 TABLE_SCHEMA	test1
 TABLE_NAME	t1
 TABLE_TYPE	BASE TABLE
-ENGINE	InnoDB
+ENGINE	TMP_TABLE_ENGINE
 VERSION	10
-ROW_FORMAT	Compact
+ROW_FORMAT	Dynamic
 TABLE_ROWS	#TBLR#
 AVG_ROW_LENGTH	#ARL#
 DATA_LENGTH	#DL#
 MAX_DATA_LENGTH	#MDL#
 INDEX_LENGTH	#IL#
 DATA_FREE	#DF#
-AUTO_INCREMENT	NULL
+AUTO_INCREMENT	#AI#
 CREATE_TIME	#CRT#
 UPDATE_TIME	#UT#
 CHECK_TIME	#CT#
@@ -44,16 +44,16 @@ TABLE_CATALOG	def
 TABLE_SCHEMA	test1
 TABLE_NAME	t2
 TABLE_TYPE	BASE TABLE
-ENGINE	InnoDB
+ENGINE	TMP_TABLE_ENGINE
 VERSION	10
-ROW_FORMAT	Compact
+ROW_FORMAT	Dynamic
 TABLE_ROWS	#TBLR#
 AVG_ROW_LENGTH	#ARL#
 DATA_LENGTH	#DL#
 MAX_DATA_LENGTH	#MDL#
 INDEX_LENGTH	#IL#
 DATA_FREE	#DF#
-AUTO_INCREMENT	NULL
+AUTO_INCREMENT	#AI#
 CREATE_TIME	#CRT#
 UPDATE_TIME	#UT#
 CHECK_TIME	#CT#
@@ -67,16 +67,16 @@ TABLE_CATALOG	def
 TABLE_SCHEMA	test2
 TABLE_NAME	t1
 TABLE_TYPE	BASE TABLE
-ENGINE	InnoDB
+ENGINE	TMP_TABLE_ENGINE
 VERSION	10
-ROW_FORMAT	Compact
+ROW_FORMAT	Dynamic
 TABLE_ROWS	#TBLR#
 AVG_ROW_LENGTH	#ARL#
 DATA_LENGTH	#DL#
 MAX_DATA_LENGTH	#MDL#
 INDEX_LENGTH	#IL#
 DATA_FREE	#DF#
-AUTO_INCREMENT	NULL
+AUTO_INCREMENT	#AI#
 CREATE_TIME	#CRT#
 UPDATE_TIME	#UT#
 CHECK_TIME	#CT#
@@ -99,30 +99,30 @@ GRANT SELECT ON test1.* TO testuser1@localhost;
 # Establish connection testuser1 (user=testuser1)
 SELECT *,
 LEFT( table_comment,
-IF(INSTR(table_comment,'InnoDB free') = 0
+IF(INSTR(table_comment,'TMP_TABLE_ENGINE free') = 0
 AND INSTR(table_comment,'number_of_replicas') = 0,
 LENGTH(table_comment),
-INSTR(table_comment,'InnoDB free')
+INSTR(table_comment,'TMP_TABLE_ENGINE free')
 + INSTR(table_comment,'number_of_replicas') - 1))
 AS "user_comment",
 '-----------------------------------------------------' AS "Separator"
 FROM information_schema.tables
 WHERE table_schema LIKE 'test%' AND table_type = 'BASE TABLE'
-ORDER BY table_schema,table_name;
+ORDER BY table_schema,table_name COLLATE utf8_general_ci;
 TABLE_CATALOG	def
 TABLE_SCHEMA	test1
 TABLE_NAME	t1
 TABLE_TYPE	BASE TABLE
-ENGINE	InnoDB
+ENGINE	TMP_TABLE_ENGINE
 VERSION	10
-ROW_FORMAT	Compact
+ROW_FORMAT	Dynamic
 TABLE_ROWS	#TBLR#
 AVG_ROW_LENGTH	#ARL#
 DATA_LENGTH	#DL#
 MAX_DATA_LENGTH	#MDL#
 INDEX_LENGTH	#IL#
 DATA_FREE	#DF#
-AUTO_INCREMENT	NULL
+AUTO_INCREMENT	#AI#
 CREATE_TIME	#CRT#
 UPDATE_TIME	#UT#
 CHECK_TIME	#CT#
@@ -136,16 +136,16 @@ TABLE_CATALOG	def
 TABLE_SCHEMA	test1
 TABLE_NAME	t2
 TABLE_TYPE	BASE TABLE
-ENGINE	InnoDB
+ENGINE	TMP_TABLE_ENGINE
 VERSION	10
-ROW_FORMAT	Compact
+ROW_FORMAT	Dynamic
 TABLE_ROWS	#TBLR#
 AVG_ROW_LENGTH	#ARL#
 DATA_LENGTH	#DL#
 MAX_DATA_LENGTH	#MDL#
 INDEX_LENGTH	#IL#
 DATA_FREE	#DF#
-AUTO_INCREMENT	NULL
+AUTO_INCREMENT	#AI#
 CREATE_TIME	#CRT#
 UPDATE_TIME	#UT#
 CHECK_TIME	#CT#

@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -23,38 +31,27 @@
 // PUBLIC
 //
 
-LogHandlerList::LogHandlerList() :
-  m_size(0),
-  m_pHeadNode(NULL),
-  m_pTailNode(NULL),
-  m_pCurrNode(NULL)
-{
-}
+LogHandlerList::LogHandlerList()
+    : m_size(0),
+      m_pHeadNode(nullptr),
+      m_pTailNode(nullptr),
+      m_pCurrNode(nullptr) {}
 
-LogHandlerList::~LogHandlerList()
-{
-  removeAll();
-}
+LogHandlerList::~LogHandlerList() { removeAll(); }
 
-bool
-LogHandlerList::add(LogHandler* pNewHandler)
-{
-  LogHandlerNode* pNode = new LogHandlerNode();
-  if (!pNode)
-    return false;
+bool LogHandlerList::add(LogHandler *pNewHandler) {
+  LogHandlerNode *pNode = new LogHandlerNode();
+  if (!pNode) return false;
 
-  if (m_pHeadNode == NULL) 
-  {
+  if (m_pHeadNode == nullptr) {
     m_pHeadNode = pNode;
-    pNode->pPrev = NULL;
-  }
-  else 
-  {
+    pNode->pPrev = nullptr;
+  } else {
     m_pTailNode->pNext = pNode;
     pNode->pPrev = m_pTailNode;
   }
   m_pTailNode = pNode;
-  pNode->pNext = NULL;  
+  pNode->pNext = nullptr;
   pNode->pHandler = pNewHandler;
 
   m_size++;
@@ -62,125 +59,92 @@ LogHandlerList::add(LogHandler* pNewHandler)
   return true;
 }
 
-bool
-LogHandlerList::remove(LogHandler* pRemoveHandler)
-{
-  LogHandlerNode* pNode = m_pHeadNode;
+bool LogHandlerList::remove(LogHandler *pRemoveHandler) {
+  LogHandlerNode *pNode = m_pHeadNode;
   bool removed = false;
-  do
-  {
-    if (pNode->pHandler == pRemoveHandler)
-    {
+  do {
+    if (pNode->pHandler == pRemoveHandler) {
       removeNode(pNode);
       removed = true;
       break;
     }
-  } while ( (pNode = next(pNode)) != NULL);
+  } while ((pNode = next(pNode)) != nullptr);
 
   return removed;
 }
 
-void 
-LogHandlerList::removeAll()
-{
-  while (m_pHeadNode != NULL)
-  {
+void LogHandlerList::removeAll() {
+  while (m_pHeadNode != nullptr) {
     removeNode(m_pHeadNode);
   }
 }
 
-LogHandler* 
-LogHandlerList::next()
-{
-  LogHandler* pHandler = NULL;
-  if (m_pCurrNode == NULL)
-  {
+LogHandler *LogHandlerList::next() {
+  LogHandler *pHandler = nullptr;
+  if (m_pCurrNode == nullptr) {
     m_pCurrNode = m_pHeadNode;
-    if (m_pCurrNode != NULL)
-    {
+    if (m_pCurrNode != nullptr) {
+      pHandler = m_pCurrNode->pHandler;
+    }
+  } else {
+    m_pCurrNode = next(m_pCurrNode);  // Next node
+    if (m_pCurrNode != nullptr) {
       pHandler = m_pCurrNode->pHandler;
     }
   }
-  else
-  {
-    m_pCurrNode = next(m_pCurrNode); // Next node    
-    if (m_pCurrNode != NULL)
-    {
-      pHandler = m_pCurrNode->pHandler;
-    }
-  }
- 
+
   return pHandler;
 }
 
-int 
-LogHandlerList::size() const
-{
-  return m_size;
-}
+int LogHandlerList::size() const { return m_size; }
 
 //
 // PRIVATE
 //
 
-LogHandlerList::LogHandlerNode* 
-LogHandlerList::next(LogHandlerNode* pNode)
-{
-  LogHandlerNode* pCurr = pNode;
-  if (pNode->pNext != NULL) 
-  {
+LogHandlerList::LogHandlerNode *LogHandlerList::next(LogHandlerNode *pNode) {
+  LogHandlerNode *pCurr = pNode;
+  if (pNode->pNext != nullptr) {
     pCurr = pNode->pNext;
-  }
-  else
-  {
+  } else {
     // Tail
-    pCurr = NULL;    
+    pCurr = nullptr;
   }
   return pCurr;
 }
 
-LogHandlerList::LogHandlerNode* 
-LogHandlerList::prev(LogHandlerNode* pNode)
-{
-  LogHandlerNode* pCurr = pNode;
-  if (pNode->pPrev != NULL) // head
+LogHandlerList::LogHandlerNode *LogHandlerList::prev(LogHandlerNode *pNode) {
+  LogHandlerNode *pCurr = pNode;
+  if (pNode->pPrev != nullptr)  // head
   {
     pCurr = pNode->pPrev;
-  }
-  else
-  {
+  } else {
     // Head
-    pCurr = NULL;
+    pCurr = nullptr;
   }
 
   return pCurr;
 }
 
-void
-LogHandlerList::removeNode(LogHandlerNode* pNode)
-{
-  if (pNode->pPrev == NULL) // If head
+void LogHandlerList::removeNode(LogHandlerNode *pNode) {
+  if (pNode->pPrev == nullptr)  // If head
   {
     m_pHeadNode = pNode->pNext;
-  }
-  else 
-  {
+  } else {
     pNode->pPrev->pNext = pNode->pNext;
   }
 
-  if (pNode->pNext == NULL) // if tail
+  if (pNode->pNext == nullptr)  // if tail
   {
     m_pTailNode = pNode->pPrev;
-  }
-  else
-  {
+  } else {
     pNode->pNext->pPrev = pNode->pPrev;
   }
 
-  pNode->pNext = NULL;
-  pNode->pPrev = NULL;
-  delete pNode->pHandler; // Delete log handler
-  delete pNode; 
+  pNode->pNext = nullptr;
+  pNode->pPrev = nullptr;
+  delete pNode->pHandler;  // Delete log handler
+  delete pNode;
 
   m_size--;
 }

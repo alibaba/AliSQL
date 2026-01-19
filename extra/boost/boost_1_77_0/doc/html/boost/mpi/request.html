@@ -1,0 +1,237 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Class request</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../../mpi/reference.html#header.boost.mpi.request_hpp" title="Header &lt;boost/mpi/request.hpp&gt;">
+<link rel="prev" href="python/regist_1_3_27_7_20_2_1_1_2.html" title="Function template register_skeleton_and_content">
+<link rel="next" href="request/handler.html" title="Class handler">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="python/regist_1_3_27_7_20_2_1_1_2.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../../mpi/reference.html#header.boost.mpi.request_hpp"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="request/handler.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="refentry">
+<a name="boost.mpi.request"></a><div class="titlepage"></div>
+<div class="refnamediv">
+<h2><span class="refentrytitle">Class request</span></h2>
+<p>boost::mpi::request — A request for a non-blocking send or receive. </p>
+</div>
+<h2 xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" class="refsynopsisdiv-title">Synopsis</h2>
+<div xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" class="refsynopsisdiv"><pre class="synopsis"><span class="comment">// In header: &lt;<a class="link" href="../../mpi/reference.html#header.boost.mpi.request_hpp" title="Header &lt;boost/mpi/request.hpp&gt;">boost/mpi/request.hpp</a>&gt;
+
+</span>
+<span class="keyword">class</span> <a class="link" href="request.html" title="Class request">request</a> <span class="special">{</span>
+<span class="keyword">public</span><span class="special">:</span>
+  <span class="comment">// member classes/structs/unions</span>
+
+  <span class="keyword">class</span> <a class="link" href="request/handler.html" title="Class handler">handler</a> <span class="special">{</span>
+  <span class="keyword">public</span><span class="special">:</span>
+    <span class="comment">// <a class="link" href="request/handler.html#boost.mpi.request.handlerconstruct-copy-destruct">construct/copy/destruct</a></span>
+    <a class="link" href="request/handler.html#id-1_3_27_7_21_2_1_1_3_2-bb"><span class="special">~</span><span class="identifier">handler</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+
+    <span class="comment">// <a class="link" href="request/handler.html#id-1_3_27_7_21_2_1_1_3_1-bb">public member functions</a></span>
+    <span class="keyword">virtual</span> <a class="link" href="status.html" title="Class status">status</a> <a class="link" href="request/handler.html#id-1_3_27_7_21_2_1_1_3_1_1-bb"><span class="identifier">wait</span></a><span class="special">(</span><span class="special">)</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+    <span class="keyword">virtual</span> <span class="identifier">optional</span><span class="special">&lt;</span> <a class="link" href="status.html" title="Class status">status</a> <span class="special">&gt;</span> <a class="link" href="request/handler.html#id-1_3_27_7_21_2_1_1_3_1_2-bb"><span class="identifier">test</span></a><span class="special">(</span><span class="special">)</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+    <span class="keyword">virtual</span> <span class="keyword">void</span> <a class="link" href="request/handler.html#id-1_3_27_7_21_2_1_1_3_1_3-bb"><span class="identifier">cancel</span></a><span class="special">(</span><span class="special">)</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+    <span class="keyword">virtual</span> <span class="keyword">bool</span> <a class="link" href="request/handler.html#id-1_3_27_7_21_2_1_1_3_1_4-bb"><span class="identifier">active</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+    <span class="keyword">virtual</span> <span class="identifier">optional</span><span class="special">&lt;</span> <span class="identifier">MPI_Request</span> <span class="special">&amp;</span> <span class="special">&gt;</span> <a class="link" href="request/handler.html#id-1_3_27_7_21_2_1_1_3_1_5-bb"><span class="identifier">trivial</span></a><span class="special">(</span><span class="special">)</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+  <span class="special">}</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">,</span> <span class="keyword">typename</span> A<span class="special">&gt;</span> 
+  <span class="keyword">class</span> <a class="link" href="request/legacy_1_3_27_7_21_2_1_1_4.html" title="Class template legacy_dynamic_primitive_array_handler">legacy_dynamic_primitive_array_handler</a> <span class="special">{</span>
+  <span class="special">}</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+  <span class="keyword">class</span> <a class="link" href="request/legacy_1_3_27_7_21_2_1_1_5.html" title="Class template legacy_serialized_array_handler">legacy_serialized_array_handler</a> <span class="special">{</span>
+  <span class="special">}</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+  <span class="keyword">class</span> <a class="link" href="request/legacy_serialized_handler.html" title="Class template legacy_serialized_handler">legacy_serialized_handler</a> <span class="special">{</span>
+  <span class="special">}</span><span class="special">;</span>
+  <span class="comment">// <a class="link" href="request.html#boost.mpi.requestconstruct-copy-destruct">construct/copy/destruct</a></span>
+  <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_8-bb"><span class="identifier">request</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+  <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_11-bb"><span class="identifier">request</span></a><span class="special">(</span><a class="link" href="request/handler.html" title="Class handler">handler</a> <span class="special">*</span><span class="special">)</span><span class="special">;</span>
+
+  <span class="comment">// <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_7-bb">public member functions</a></span>
+  <a class="link" href="status.html" title="Class status">status</a> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_7_1-bb"><span class="identifier">wait</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">optional</span><span class="special">&lt;</span> <a class="link" href="status.html" title="Class status">status</a> <span class="special">&gt;</span> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_7_2-bb"><span class="identifier">test</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_7_3-bb"><span class="identifier">cancel</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+  <span class="identifier">optional</span><span class="special">&lt;</span> <span class="identifier">MPI_Request</span> <span class="special">&amp;</span> <span class="special">&gt;</span> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_7_4-bb"><span class="identifier">trivial</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">bool</span> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_7_5-bb"><span class="identifier">active</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span><span class="special">;</span>
+  <span class="keyword">void</span> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_7_6-bb"><span class="identifier">preserve</span></a><span class="special">(</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">shared_ptr</span><span class="special">&lt;</span> <span class="keyword">void</span> <span class="special">&gt;</span><span class="special">)</span><span class="special">;</span>
+
+  <span class="comment">// <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9-bb">public static functions</a></span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+    <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+    <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_1-bb"><span class="identifier">make_trivial_send</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+    <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+    <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_2-bb"><span class="identifier">make_trivial_send</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">*</span><span class="special">,</span> <span class="keyword">int</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_3-bb"><span class="identifier">make_packed_send</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">void</span> <span class="keyword">const</span> <span class="special">*</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">size_t</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_4-bb"><span class="identifier">make_bottom_send</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="identifier">MPI_Datatype</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_5-bb"><span class="identifier">make_empty_send</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+    <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_6-bb"><span class="identifier">make_trivial_recv</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+    <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_7-bb"><span class="identifier">make_trivial_recv</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="identifier">T</span> <span class="special">*</span><span class="special">,</span> <span class="keyword">int</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_8-bb"><span class="identifier">make_bottom_recv</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="identifier">MPI_Datatype</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_9-bb"><span class="identifier">make_empty_recv</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_10-bb"><span class="identifier">make_dynamic</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+    <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_11-bb"><span class="identifier">make_serialized</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="identifier">T</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+    <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+    <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_12-bb"><span class="identifier">make_serialized_array</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="identifier">T</span> <span class="special">*</span><span class="special">,</span> <span class="keyword">int</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">,</span> <span class="keyword">typename</span> A<span class="special">&gt;</span> 
+    <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+    <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_13-bb"><span class="identifier">make_dynamic_primitive_array_recv</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> 
+                                      <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span> <span class="identifier">T</span><span class="special">,</span> <span class="identifier">A</span> <span class="special">&gt;</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+  <span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">,</span> <span class="keyword">typename</span> A<span class="special">&gt;</span> 
+    <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+    <a class="link" href="request.html#id-1_3_27_7_21_2_1_1_9_14-bb"><span class="identifier">make_dynamic_primitive_array_send</span></a><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">,</span> 
+                                      <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span> <span class="identifier">T</span><span class="special">,</span> <span class="identifier">A</span> <span class="special">&gt;</span> <span class="keyword">const</span> <span class="special">&amp;</span><span class="special">)</span><span class="special">;</span>
+<span class="special">}</span><span class="special">;</span></pre></div>
+<div class="refsect1">
+<a name="id-1.3.27.7.22.4.4"></a><h2>Description</h2>
+<p>This structure contains information about a non-blocking send or receive and will be returned from <code class="computeroutput">isend</code> or <code class="computeroutput">irecv</code>, respectively. </p>
+<div class="refsect2">
+<a name="id-1.3.27.7.22.4.4.3"></a><h3>
+<a name="boost.mpi.requestconstruct-copy-destruct"></a><code class="computeroutput">request</code> 
+        public
+       construct/copy/destruct</h3>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem">
+<pre class="literallayout"><a name="id-1_3_27_7_21_2_1_1_8-bb"></a><span class="identifier">request</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre>
+<p>Constructs a NULL request. </p>
+</li>
+<li class="listitem"><pre class="literallayout"><a name="id-1_3_27_7_21_2_1_1_11-bb"></a><span class="identifier">request</span><span class="special">(</span><a class="link" href="request/handler.html" title="Class handler">handler</a> <span class="special">*</span> h<span class="special">)</span><span class="special">;</span></pre></li>
+</ol></div>
+</div>
+<div class="refsect2">
+<a name="id-1.3.27.7.22.4.4.4"></a><h3>
+<a name="id-1_3_27_7_21_2_1_1_7-bb"></a><code class="computeroutput">request</code> public member functions</h3>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem">
+<pre class="literallayout"><a class="link" href="status.html" title="Class status">status</a> <a name="id-1_3_27_7_21_2_1_1_7_1-bb"></a><span class="identifier">wait</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre>
+<p>Wait until the communication associated with this request has completed, then return a <code class="computeroutput">status</code> object describing the communication. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">optional</span><span class="special">&lt;</span> <a class="link" href="status.html" title="Class status">status</a> <span class="special">&gt;</span> <a name="id-1_3_27_7_21_2_1_1_7_2-bb"></a><span class="identifier">test</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre>
+<p>Determine whether the communication associated with this request has completed successfully. If so, returns the <code class="computeroutput">status</code> object describing the communication. Otherwise, returns an empty <code class="computeroutput">optional&lt;&gt;</code> to indicate that the communication has not completed yet. Note that once <code class="computeroutput">test()</code> returns a <code class="computeroutput">status</code> object, the request has completed and <code class="computeroutput">wait()</code> should not be called. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">void</span> <a name="id-1_3_27_7_21_2_1_1_7_3-bb"></a><span class="identifier">cancel</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre>
+<p>Cancel a pending communication, assuming it has not already been completed. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="identifier">optional</span><span class="special">&lt;</span> <span class="identifier">MPI_Request</span> <span class="special">&amp;</span> <span class="special">&gt;</span> <a name="id-1_3_27_7_21_2_1_1_7_4-bb"></a><span class="identifier">trivial</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre>
+<p>The trivial MPI requet implenting this request, provided it's trivial. Probably irrelevant to most users. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">bool</span> <a name="id-1_3_27_7_21_2_1_1_7_5-bb"></a><span class="identifier">active</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span><span class="special">;</span></pre>
+<p>Is this request potentialy pending ? </p>
+</li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">void</span> <a name="id-1_3_27_7_21_2_1_1_7_6-bb"></a><span class="identifier">preserve</span><span class="special">(</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">shared_ptr</span><span class="special">&lt;</span> <span class="keyword">void</span> <span class="special">&gt;</span> d<span class="special">)</span><span class="special">;</span></pre></li>
+</ol></div>
+</div>
+<div class="refsect2">
+<a name="id-1.3.27.7.22.4.4.5"></a><h3>
+<a name="id-1_3_27_7_21_2_1_1_9-bb"></a><code class="computeroutput">request</code> public static functions</h3>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a name="id-1_3_27_7_21_2_1_1_9_1-bb"></a><span class="identifier">make_trivial_send</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> 
+                    <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">&amp;</span> value<span class="special">)</span><span class="special">;</span></pre>
+<p>Send a known number of primitive objects in one MPI request. </p>
+</li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a name="id-1_3_27_7_21_2_1_1_9_2-bb"></a><span class="identifier">make_trivial_send</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> 
+                    <span class="identifier">T</span> <span class="keyword">const</span> <span class="special">*</span> values<span class="special">,</span> <span class="keyword">int</span> n<span class="special">)</span><span class="special">;</span></pre></li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+<a name="id-1_3_27_7_21_2_1_1_9_3-bb"></a><span class="identifier">make_packed_send</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> 
+                 <span class="keyword">void</span> <span class="keyword">const</span> <span class="special">*</span> values<span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">size_t</span> n<span class="special">)</span><span class="special">;</span></pre></li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+<a name="id-1_3_27_7_21_2_1_1_9_4-bb"></a><span class="identifier">make_bottom_send</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> 
+                 <span class="identifier">MPI_Datatype</span> tp<span class="special">)</span><span class="special">;</span></pre></li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a name="id-1_3_27_7_21_2_1_1_9_5-bb"></a><span class="identifier">make_empty_send</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">)</span><span class="special">;</span></pre></li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a name="id-1_3_27_7_21_2_1_1_9_6-bb"></a><span class="identifier">make_trivial_recv</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> <span class="identifier">T</span> <span class="special">&amp;</span> value<span class="special">)</span><span class="special">;</span></pre>
+<p>Receive a known number of primitive objects in one MPI request. </p>
+</li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a name="id-1_3_27_7_21_2_1_1_9_7-bb"></a><span class="identifier">make_trivial_recv</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> <span class="identifier">T</span> <span class="special">*</span> values<span class="special">,</span> 
+                    <span class="keyword">int</span> n<span class="special">)</span><span class="special">;</span></pre></li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+<a name="id-1_3_27_7_21_2_1_1_9_8-bb"></a><span class="identifier">make_bottom_recv</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> 
+                 <span class="identifier">MPI_Datatype</span> tp<span class="special">)</span><span class="special">;</span></pre></li>
+<li class="listitem"><pre class="literallayout"><span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a name="id-1_3_27_7_21_2_1_1_9_9-bb"></a><span class="identifier">make_empty_recv</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> dest<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">)</span><span class="special">;</span></pre></li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> <a name="id-1_3_27_7_21_2_1_1_9_10-bb"></a><span class="identifier">make_dynamic</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre>
+<p>Construct request for simple data of unknown size. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a name="id-1_3_27_7_21_2_1_1_9_11-bb"></a><span class="identifier">make_serialized</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> source<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> <span class="identifier">T</span> <span class="special">&amp;</span> value<span class="special">)</span><span class="special">;</span></pre>
+<p>Constructs request for serialized data. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a name="id-1_3_27_7_21_2_1_1_9_12-bb"></a><span class="identifier">make_serialized_array</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> source<span class="special">,</span> <span class="keyword">int</span> tag<span class="special">,</span> 
+                        <span class="identifier">T</span> <span class="special">*</span> values<span class="special">,</span> <span class="keyword">int</span> n<span class="special">)</span><span class="special">;</span></pre>
+<p>Constructs request for array of complex data. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">,</span> <span class="keyword">typename</span> A<span class="special">&gt;</span> 
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a name="id-1_3_27_7_21_2_1_1_9_13-bb"></a><span class="identifier">make_dynamic_primitive_array_recv</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> source<span class="special">,</span> 
+                                    <span class="keyword">int</span> tag<span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span> <span class="identifier">T</span><span class="special">,</span> <span class="identifier">A</span> <span class="special">&gt;</span> <span class="special">&amp;</span> values<span class="special">)</span><span class="special">;</span></pre>
+<p>Request to recv array of primitive data. </p>
+</li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">,</span> <span class="keyword">typename</span> A<span class="special">&gt;</span> 
+  <span class="keyword">static</span> <a class="link" href="request.html" title="Class request">request</a> 
+  <a name="id-1_3_27_7_21_2_1_1_9_14-bb"></a><span class="identifier">make_dynamic_primitive_array_send</span><span class="special">(</span><a class="link" href="communicator.html" title="Class communicator">communicator</a> <span class="keyword">const</span> <span class="special">&amp;</span> comm<span class="special">,</span> <span class="keyword">int</span> source<span class="special">,</span> 
+                                    <span class="keyword">int</span> tag<span class="special">,</span> 
+                                    <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span> <span class="identifier">T</span><span class="special">,</span> <span class="identifier">A</span> <span class="special">&gt;</span> <span class="keyword">const</span> <span class="special">&amp;</span> values<span class="special">)</span><span class="special">;</span></pre>
+<p>Request to send array of primitive data. </p>
+</li>
+</ol></div>
+</div>
+</div>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2005-2007 Douglas Gregor,
+      Matthias Troyer, Trustees of Indiana University<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at &lt;ulink url="http://www.boost.org/LICENSE_1_0.txt"&gt;
+        http://www.boost.org/LICENSE_1_0.txt &lt;/ulink&gt;)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="python/regist_1_3_27_7_20_2_1_1_2.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../../mpi/reference.html#header.boost.mpi.request_hpp"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="request/handler.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

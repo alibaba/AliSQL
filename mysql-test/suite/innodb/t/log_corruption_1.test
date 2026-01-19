@@ -1,0 +1,120 @@
+# This test case tests if we handle the corrupted redo logs for dynamic metadata
+# of tables(corrupted index bit in this case) correctly.
+
+# Support for --debug=...
+--source include/have_debug.inc
+
+--source ../include/redo_log_error_patterns.inc
+
+let $tmp_dir = $MYSQLTEST_VARDIR/tmp;
+let MYSQLD_DATADIR = $tmp_dir/log_corruption_1;
+let MYSQLD_ERROR_LOG = $tmp_dir/my_restart.err;
+let SEARCH_FILE = $MYSQLD_ERROR_LOG;
+let $INNODB_PAGE_SIZE = `select @@innodb_page_size`;
+
+--echo # Initialize new data directory...
+--source include/initialize_datadir.inc
+let restart_parameters = restart: --datadir=$MYSQLD_DATADIR --log-error=$MYSQLD_ERROR_LOG;
+
+--echo # Restart on the new data directory...
+--replace_result $MYSQLD_ERROR_LOG my_restart.err $MYSQLD_DATADIR tmp/log_corruption_1
+--source include/restart_mysqld.inc
+
+--echo # Create table and row...
+CREATE TABLE t (a INT AUTO_INCREMENT PRIMARY KEY, b INT, INDEX b_idx(b))
+ENGINE = InnoDB STATS_PERSISTENT = 0;
+INSERT INTO t VALUES(1,1);
+
+CHECK TABLE t;
+
+--echo ############################################################################################
+--echo # Case 1: Crash after redo logging information about corrupted clustered index.
+--echo ############################################################################################
+
+--remove_file $SEARCH_FILE
+
+--echo # Ensure there is a lot of free space in the redo log.
+SET GLOBAL innodb_log_checkpoint_now = ON;
+
+--echo # Disable checkpointing.
+SET GLOBAL innodb_checkpoint_disabled = ON;
+
+--echo # Enable crash code...
+--source include/expect_crash.inc
+SET SESSION DEBUG = "+d,log_corruption_crash_1";
+SET SESSION DEBUG = "+d,dict_set_index_corrupted";
+
+--echo # Run CHECK TABLE (expecting a crash)...
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+CHECK TABLE t;
+
+--echo # Verify that InnoDB can recover.
+--replace_result $MYSQLD_ERROR_LOG my_restart.err $MYSQLD_DATADIR tmp/log_corruption_1
+--source include/start_mysqld.inc
+
+let SEARCH_PATTERN = $PATTERN_CORRUPT_LOG_RECORD;
+# Expected: not found
+--source include/search_pattern.inc
+
+CHECK TABLE t;
+ALTER TABLE t DROP INDEX b_idx;
+
+CHECK TABLE t;
+ALTER TABLE t ADD INDEX b_idx (b);
+
+--echo ############################################################################################
+--echo # Case 2: Crash after redo logging *corrupted* information about corrupted clustered index
+--echo #         (logging number of indexes corrupted = 100 > MAX_INDEXES).
+--echo ############################################################################################
+
+--remove_file $SEARCH_FILE
+
+--echo # Ensure there is a lot of free space in the redo log.
+SET GLOBAL innodb_log_checkpoint_now = ON;
+
+--echo # Disable checkpointing.
+SET GLOBAL innodb_checkpoint_disabled = ON;
+
+--echo # Enable crash code...
+--source include/expect_crash.inc
+SET SESSION DEBUG = "+d,log_corruption_crash_1";
+SET SESSION DEBUG = "+d,log_corruption_1"; # corrupt the redo records being logged
+SET SESSION DEBUG = "+d,dict_set_clust_index_corrupted";
+
+--echo # Run CHECK TABLE (expecting a crash)...
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+CHECK TABLE t;
+
+--echo # Verify that InnoDB cannot recover, because it encounters the corrupted redo record.
+--error 1,42
+--exec $MYSQLD_CMD $MYSQLD_ARGS --innodb_page_size=$INNODB_PAGE_SIZE --$UNKNOWN_PARAM
+
+--echo # Matching the server logs for corrupted redo logs...
+let SEARCH_PATTERN = $PATTERN_CORRUPT_LOG_RECORD;
+# Expected: found
+--source include/search_pattern.inc
+
+let SEARCH_PATTERN = Hex dump starting .* bytes before and ending .* bytes after the corrupted record;
+# Expected: found
+--source include/search_pattern.inc
+
+let SEARCH_PATTERN = $PATTERN_UNKNOWN_PARAM;
+# Expected: not found
+--source include/search_pattern.inc
+
+--echo ############################################################################################
+
+--echo # Cleanup...
+
+--remove_file $SEARCH_FILE
+--force-rmdir $MYSQLD_DATADIR
+
+let MYSQLD_ARGS=;
+let MYSQLD_DATADIR=;
+let MYSQLD_ERROR_LOG=;
+let SEARCH_FILE=;
+let SEARCH_PATTERN=;
+
+let restart_parameters = restart:;
+
+--source include/start_mysqld.inc

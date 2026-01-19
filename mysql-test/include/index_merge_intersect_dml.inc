@@ -64,7 +64,7 @@ ANALYZE TABLE t1;
 
 --let $query = WHERE b=6 AND c=6 
 --replace_result "idx_c,idx_b" "idx_b,idx_c"
---replace_column 9 #
+--replace_column 10 #
 --eval EXPLAIN UPDATE t1 SET a=2 $query
 --eval SELECT COUNT(*), SUM(a) FROM t1 $query 
 --eval UPDATE t1 SET a=2 $query
@@ -72,7 +72,7 @@ ANALYZE TABLE t1;
 
 --let $query = WHERE b=6 AND c=6 AND d=6
 --replace_result idx_b idx_x idx_c idx_x idx_d idx_x
---replace_column 9 #
+--replace_column 10 #
 --eval EXPLAIN UPDATE t1 SET a=2 $query
 --eval SELECT COUNT(*), SUM(a) FROM t1 $query
 --eval UPDATE t1 SET a=2 $query
@@ -80,30 +80,30 @@ ANALYZE TABLE t1;
 
 --let $query = WHERE d=6 AND a IS NOT NULL AND b=6
 --replace_result "idx_d,idx_b" "idx_b,idx_d"
---replace_column 9 #
+--replace_column 10 #
 --eval EXPLAIN UPDATE t1 SET c=6 $query
 --eval SELECT COUNT(*), SUM(c) FROM t1 $query
 --eval UPDATE t1 SET c=6 $query
 --eval SELECT COUNT(*), SUM(c) FROM t1 $query
 
 --let $query = WHERE d=6 AND a=6  AND c <> 6
---replace_column 9 #
+--replace_result "idx_d,idx_a" "idx_a,idx_d"
+--replace_column 10 #
 --eval EXPLAIN UPDATE t1 SET b=0 $query
 --eval SELECT COUNT(*), SUM(b) FROM t1 $query
 --eval UPDATE t1 SET b=0 $query
 --eval SELECT COUNT(*), SUM(b) FROM t1 $query
 
 --let $query = WHERE d=6 AND a=6 AND c IN (1,2,3,4,5)
---replace_column 9 #
+--replace_result "idx_d,idx_a" "idx_a,idx_d"
+--replace_column 10 #
 --eval EXPLAIN UPDATE t1 SET a=100 $query
 --eval SELECT COUNT(*), SUM(a) FROM t1 $query
 --eval UPDATE t1 SET a=100 $query
 --eval SELECT COUNT(*), SUM(a) FROM t1 $query
 
-# uses range scan instead of index_merge
-
 --let $query = WHERE a=5 AND b=4 AND d<3
---replace_column 9 #
+--replace_column 10 #
 --eval EXPLAIN UPDATE t1 SET a=2 $query
 --eval UPDATE t1 SET a=2 $query
 
@@ -125,8 +125,8 @@ create table t2 (
 INSERT INTO t2 SELECT * FROM t1;
 ANALYZE TABLE t2;
 
---let $query = WHERE pk<2492 AND d=1
---replace_column 9 #
+--let $query = WHERE pk<2492 AND d<=1
+--replace_column 10 #
 --eval EXPLAIN UPDATE t2 SET a=2 $query
 --eval UPDATE t2 SET a=2 $query
 
@@ -145,14 +145,14 @@ INSERT INTO t3(a,b,c,d,e) VALUES (4000,4000,4000,4000,4000);
 
 --let $query = INTO t3 SELECT * FROM t1 WHERE b=6 AND c=6
 --replace_result "idx_c,idx_b" "idx_b,idx_c"
---replace_column 9 #
+--replace_column 10 #
 --eval EXPLAIN REPLACE $query
 --eval SELECT COUNT(*) FROM t3
 --eval REPLACE $query
 --eval SELECT COUNT(*) FROM t3
 
 --let $query = INTO t3 SELECT * FROM t1 WHERE d=6 AND a IS NOT NULL AND b=6
---replace_column 9 #
+--replace_column 10 #
 --replace_result "idx_d,idx_b" "idx_b,idx_d"
 --eval EXPLAIN INSERT $query
 --eval SELECT COUNT(*) FROM t3
@@ -181,7 +181,7 @@ ANALYZE TABLE t4;
 
 --let $query = WHERE b=6 AND c=6 AND d=6
 --replace_result idx_b idx_x idx_c idx_x idx_d idx_x
---replace_column 9 #
+--replace_column 10 #
 --eval EXPLAIN UPDATE t4 SET a=2 $query
 --eval SELECT COUNT(*), SUM(a) FROM t4 $query
 --eval UPDATE t4 SET a=2 $query
@@ -189,9 +189,41 @@ ANALYZE TABLE t4;
 
 DROP TABLE t1,t2,t3,t4;
 
+--echo #
+--echo # Bug#23855449 WL7093:INNODB: ASSERTION FAILURE:
+--echo #              PREBUILT->MYSQL_PREFIX_LEN <= RECORD_BUFFER->R
+--echo #
+# The primary key column must come after the other columns used in the
+# query in order to reproduce the bug.
+CREATE TABLE t(x INT, y INT, pk INT PRIMARY KEY, KEY(x), KEY(y));
+INSERT INTO t VALUES (1,1,1), (3,3,2), (3,3,3), (4,4,4), (3,3,5), (4,4,6),
+                     (3,3,7), (8,8,8), (1,1,9), (3,3,10), (3,3,11), (4,4,12),
+                     (3,3,13), (4,4,14), (3,3,15), (8,8,16);
+ANALYZE TABLE t;
+# An intersect index_merge reproduces the bug.
+--let $query= SELECT COUNT(*) FROM t WHERE x = 3 AND y = 4;
+--eval EXPLAIN $query
+--eval $query
+DROP TABLE t;
+
 #
 # end of test cases for intersect index_merge optimization technique
 #
 
+--echo #
+--echo # Bug#24829050 INDEX_MERGE_INTERSECTION OPTIMIZATION CAUSES
+--echo #              WRONG QUERY RESULTS
+--echo #
+CREATE TABLE t1 (ID int, PRIMARY KEY (ID));
+CREATE TABLE t2 (ID int, c1 int DEFAULT NULL, c2 int, PRIMARY KEY (ID),
+                 KEY c1_INDEX (c1), KEY c2_INDEX (c2));
 
+insert into t1 values (1);
+insert into t2 values (1,1,20),(2,1,20),(3,1,30),(4,2,30);
+
+SELECT * FROM t1 WHERE t1.ID=1 AND EXISTS (
+                 SELECT 1 FROM t2 WHERE t2.c2=30 AND t2.c1=t1.ID);
+
+DROP TABLE t1;
+DROP TABLE t2;
 

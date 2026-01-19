@@ -1,0 +1,18 @@
+--source setup.inc
+
+
+# Test ALTER TABLE with copying rename
+# - mysqld will create new temporary table, copy data and then rename
+#   temporary table to the new name
+#
+let $query =
+ALTER TABLE tx
+  algorithm=copy,
+  RENAME TO ty;
+--source alter_rename.inc
+
+# Check that there are no tables with temp name
+# leftover in NDB due to failure and rollback
+--source count_temp_tables.inc
+
+--source cleanup.inc

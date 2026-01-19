@@ -8,7 +8,7 @@ create procedure p_verify_reprepare_count(expected int)
 begin
 declare old_reprepare_count int default @reprepare_count;
 select variable_value from
-information_schema.session_status where
+performance_schema.session_status where
 variable_name='com_stmt_reprepare'
   into @reprepare_count;
 if old_reprepare_count + expected <> @reprepare_count then
@@ -732,8 +732,8 @@ drop temporary table t1;
 deallocate prepare stmt;
 #
 # Test 3: View referencing an Information schema table
-#
-create view t1 as select table_name from information_schema.views;
+# Not referencing P_S table until Bug#21789221 is fixed.
+create view t1 as select table_name from information_schema.views where table_schema != 'sys';
 prepare stmt from "select * from t1";
 execute stmt;
 table_name
@@ -750,7 +750,7 @@ SUCCESS
 
 drop view t1;
 execute stmt;
-table_name
+ERROR 42S02: Table 'test.t1' doesn't exist
 call p_verify_reprepare_count(0);
 SUCCESS
 
@@ -1246,26 +1246,32 @@ deallocate prepare stmt;
 Part 21: Special tables (system tables)
 =====================================================================
 prepare stmt from
-"select type, db, name from mysql.proc where name='p1'";
-create procedure p1() select "hi there";
+"select database_name, table_name, n_rows, sum_of_other_index_sizes from mysql.innodb_table_stats where table_name='t1'";
+create table test.t1(f1 int);
+insert into test.t1 values (10);
 execute stmt;
-type	db	name
-PROCEDURE	test	p1
+database_name	table_name	n_rows	sum_of_other_index_sizes
+test	t1	0	0
 execute stmt;
-type	db	name
-PROCEDURE	test	p1
-drop procedure p1;
-create procedure p1() select "hi there, again";
+database_name	table_name	n_rows	sum_of_other_index_sizes
+test	t1	0	0
+drop table test.t1;
+create table test.t1(f1 int primary key, f2 int, key(f2));
+insert into test.t1 values (20, 20);
+insert into test.t1 values (30, 20);
+analyze table test.t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 execute stmt;
-type	db	name
-PROCEDURE	test	p1
+database_name	table_name	n_rows	sum_of_other_index_sizes
+test	t1	2	1
 execute stmt;
-type	db	name
-PROCEDURE	test	p1
+database_name	table_name	n_rows	sum_of_other_index_sizes
+test	t1	2	1
 call p_verify_reprepare_count(0);
 SUCCESS
 
-drop procedure p1;
+drop table test.t1;
 deallocate prepare stmt;
 =====================================================================
 Part 22: Special tables (views temp tables)
@@ -1276,7 +1282,7 @@ create algorithm=temptable view v1 as select a*a as a2 from t1;
 # statement code, and should not raise ER_PS_INVALIDATED errors
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=TEMPTABLE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select (`t1`.`a` * `t1`.`a`) AS `a2` from `t1`	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=TEMPTABLE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select (`t1`.`a` * `t1`.`a`) AS `a2` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
 prepare stmt from "select * from v1";
 insert into t1 values (1), (2), (3);
 execute stmt;
@@ -1326,85 +1332,7 @@ alter table t1 drop column b;
 execute stmt;
 alter table t1 drop column b;
 execute stmt;
-call p_verify_reprepare_count(0);
-SUCCESS
-
-drop table t1;
-# SQLCOM_REPAIR:
-create table t1 (a int);
-insert into t1 values (1), (2), (3);
-prepare stmt from "repair table t1";
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	repair	status	OK
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	repair	status	OK
-drop table t1;
-create table t1 (a1 int, a2 int);
-insert into t1 values (1, 10), (2, 20), (3, 30);
-# t1 has changed, and it's does not lead to reprepare
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	repair	status	OK
-alter table t1 add column b varchar(50) default NULL;
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	repair	status	OK
-call p_verify_reprepare_count(0);
-SUCCESS
-
-alter table t1 drop column b;
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	repair	status	OK
-call p_verify_reprepare_count(0);
-SUCCESS
-
-# SQLCOM_ANALYZE:
-prepare stmt from "analyze table t1";
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	analyze	status	OK
-drop table t1;
-create table t1 (a1 int, a2 int);
-insert into t1 values (1, 10), (2, 20), (3, 30);
-# t1 has changed, and it's not a problem
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	analyze	status	OK
-alter table t1 add column b varchar(50) default NULL;
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	analyze	status	OK
-alter table t1 drop column b;
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	analyze	status	OK
-call p_verify_reprepare_count(0);
-SUCCESS
-
-# SQLCOM_OPTIMIZE:
-prepare stmt from "optimize table t1";
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	optimize	status	Table is already up to date
-drop table t1;
-create table t1 (a1 int, a2 int);
-insert into t1 values (1, 10), (2, 20), (3, 30);
-# t1 has changed, and it's not a problem
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	optimize	status	OK
-alter table t1 add column b varchar(50) default NULL;
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	optimize	status	OK
-alter table t1 drop column b;
-execute stmt;
-Table	Op	Msg_type	Msg_text
-test.t1	optimize	status	OK
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(3);
 SUCCESS
 
 drop table t1;
@@ -1698,14 +1626,14 @@ prepare stmt from "select * from v_27690_1, v_27690_2";
 execute stmt;
 a	b	a	b
 1	1	1	1
-2	2	1	1
 1	1	2	2
+2	2	1	1
 2	2	2	2
 execute stmt;
 a	b	a	b
 1	1	1	1
-2	2	1	1
 1	1	2	2
+2	2	1	1
 2	2	2	2
 drop table v_27690_1;
 execute stmt;
@@ -1719,12 +1647,12 @@ create view v_27690_1 as select A.a, A.b from t_27690_1 A, t_27690_1 B;
 execute stmt;
 a	b	a	b
 1	1	1	1
-2	2	1	1
 1	1	1	1
+1	1	2	2
+1	1	2	2
 2	2	1	1
-1	1	2	2
+2	2	1	1
 2	2	2	2
-1	1	2	2
 2	2	2	2
 call p_verify_reprepare_count(1);
 SUCCESS
@@ -1732,12 +1660,12 @@ SUCCESS
 execute stmt;
 a	b	a	b
 1	1	1	1
-2	2	1	1
 1	1	1	1
+1	1	2	2
+1	1	2	2
 2	2	1	1
-1	1	2	2
+2	2	1	1
 2	2	2	2
-1	1	2	2
 2	2	2	2
 call p_verify_reprepare_count(0);
 SUCCESS
@@ -1867,7 +1795,6 @@ SQL statement where it is needed.
 #
 # SQLCOM_SELECT
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "select 1 as res from dual where (1) in (select * from t1)";
 drop table t1;
@@ -1891,7 +1818,7 @@ drop table t2;
 execute stmt;
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(2);
 SUCCESS
 
 execute stmt;
@@ -1901,13 +1828,13 @@ SUCCESS
 
 execute stmt;
 ERROR 42S01: Table 't2' already exists
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t2;
 create temporary table t2 (a int);
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 execute stmt;
@@ -1918,12 +1845,12 @@ SUCCESS
 drop temporary table t2;
 execute stmt;
 ERROR 42S01: Table 't2' already exists
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t2;
@@ -1935,7 +1862,7 @@ SUCCESS
 
 execute stmt;
 Got one of the listed errors
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop view t2;
@@ -1949,7 +1876,7 @@ select * from t2;
 x
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t2;
@@ -1962,7 +1889,7 @@ select * from t2;
 x	y
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t1;
@@ -1973,7 +1900,7 @@ prepare stmt from "create temporary table if not exists t2 as select * from t1";
 execute stmt;
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 execute stmt;
@@ -1988,7 +1915,7 @@ a
 execute stmt;
 Warnings:
 Note	1050	Table 't2' already exists
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 select * from t2;
@@ -2015,7 +1942,7 @@ SUCCESS
 execute stmt;
 Warnings:
 Note	1050	Table 't2' already exists
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t1;
@@ -2030,19 +1957,19 @@ SUCCESS
 
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t2;
 drop table t1;
 execute stmt;
 ERROR 42S02: Table 'test.t1' doesn't exist
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 execute stmt;
 ERROR 42S02: Table 'test.t1' doesn't exist
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 create table t1 (x char(17));
@@ -2052,7 +1979,7 @@ SUCCESS
 
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t2;
@@ -2065,7 +1992,7 @@ select * from t2;
 x	y
 drop table t2;
 execute stmt;
-call p_verify_reprepare_count(0);
+call p_verify_reprepare_count(1);
 SUCCESS
 
 drop table t1;
@@ -2074,7 +2001,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_UPDATE
 #
-drop table if exists t1, t2;
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "update t2 set a=a+1 where (1) in (select * from t1)";
@@ -2087,7 +2013,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_INSERT
 #
-drop table if exists t1, t2;
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "insert into t2 set a=((1) in (select * from t1))";
@@ -2100,7 +2025,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_INSERT_SELECT
 #
-drop table if exists t1, t2;
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "insert into t2 select * from t1";
@@ -2113,7 +2037,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_REPLACE
 #
-drop table if exists t1, t2;
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "replace t2 set a=((1) in (select * from t1))";
@@ -2126,7 +2049,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_REPLACE_SELECT
 #
-drop table if exists t1, t2;
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "replace t2 select * from t1";
@@ -2139,7 +2061,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_DELETE
 #
-drop table if exists t1, t2;
 create table t1 (a int);
 create table t2 (a int);
 prepare stmt from "delete from t2 where (1) in (select * from t1)";
@@ -2152,7 +2073,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_DELETE_MULTI
 #
-drop table if exists t1, t2, t3;
 create table t1 (a int);
 create table t2 (a int);
 create table t3 (a int);
@@ -2166,7 +2086,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_UPDATE_MULTI
 #
-drop table if exists t1, t2, t3;
 create table t1 (a int);
 create table t2 (a int);
 create table t3 (a int);
@@ -2183,7 +2102,6 @@ SUCCESS
 #
 # SQLCOM_LOAD
 #
-drop table if exists t1;
 create table t1 (a varchar(20));
 prepare stmt from "load data infile '../std_data_ln/words.dat' into table t1";
 ERROR HY000: This command is not supported in the prepared statement protocol yet
@@ -2191,7 +2109,6 @@ drop table t1;
 #
 # SQLCOM_SHOW_DATABASES
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show databases where (1) in (select * from t1)";
 execute stmt;
@@ -2205,7 +2122,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_TABLES
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show tables where (1) in (select * from t1)";
 execute stmt;
@@ -2219,7 +2135,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_FIELDS
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show fields from t1 where (1) in (select * from t1)";
 execute stmt;
@@ -2233,21 +2148,19 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_KEYS
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show keys from t1 where (1) in (select * from t1)";
 execute stmt;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
 drop table t1;
 create table t1 (x int);
 execute stmt;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
 drop table t1;
 deallocate prepare stmt;
 #
 # SQLCOM_SHOW_VARIABLES
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show variables where (1) in (select * from t1)";
 execute stmt;
@@ -2261,7 +2174,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_STATUS
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show status where (1) in (select * from t1)";
 execute stmt;
@@ -2278,7 +2190,6 @@ deallocate prepare stmt;
 #
 # Currently can not have a where clause, need to be covered
 # with tests
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show engine all status where (1) in (select * from t1)";
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'where (1) in (select * from t1)' at line 1
@@ -2292,7 +2203,6 @@ drop table t1;
 #
 # SQLCOM_SHOW_CHARSETS
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show charset where (1) in (select * from t1)";
 execute stmt;
@@ -2306,21 +2216,19 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_COLLATIONS
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show collation where (1) in (select * from t1)";
 execute stmt;
-Collation	Charset	Id	Default	Compiled	Sortlen
+Collation	Charset	Id	Default	Compiled	Sortlen	Pad_attribute
 drop table t1;
 create table t1 (x int);
 execute stmt;
-Collation	Charset	Id	Default	Compiled	Sortlen
+Collation	Charset	Id	Default	Compiled	Sortlen	Pad_attribute
 drop table t1;
 deallocate prepare stmt;
 #
 # SQLCOM_SHOW_TABLE_STATUS
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show table status where (1) in (select * from t1)";
 execute stmt;
@@ -2334,7 +2242,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_TRIGGERS
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show triggers where (1) in (select * from t1)";
 execute stmt;
@@ -2348,7 +2255,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_OPEN_TABLES
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show open tables where (1) in (select * from t1)";
 execute stmt;
@@ -2362,7 +2268,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_STATUS_PROC
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show procedure status where (1) in (select * from t1)";
 execute stmt;
@@ -2376,7 +2281,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_SHOW_STATUS_FUNC
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "show function status where (1) in (select * from t1)";
 execute stmt;
@@ -2391,12 +2295,22 @@ deallocate prepare stmt;
 # SQLCOM_SHOW_EVENTS
 #
 #
-# Please see this test in ps.test, it requires not_embedded.inc
+# Bug#27430 Crash in subquery code when in PS and table DDL changed
+# after PREPARE
 #
+create table t1 (a int);
+prepare stmt from "show events where (1) in (select * from t1)";
+execute stmt;
+Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+drop table t1;
+create table t1 (x int);
+execute stmt;
+Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+drop table t1;
+deallocate prepare stmt;
 #
 # SQLCOM_SET_OPTION
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "set @a=((1) in (select * from t1))";
 execute stmt;
@@ -2408,7 +2322,6 @@ deallocate prepare stmt;
 #
 # SQLCOM_DO
 #
-drop table if exists t1;
 create table t1 (a int);
 prepare stmt from "do ((1) in (select * from t1))";
 execute stmt;
@@ -2449,13 +2362,12 @@ drop table t1;
 deallocate prepare stmt;
 # Intermediate result: number of reprepares matches the number
 # of tests
-call p_verify_reprepare_count(17);
+call p_verify_reprepare_count(18);
 SUCCESS
 
 #
 # SQLCOM_ALTER_VIEW
 #
-drop view if exists v1;
 create view v1 as select 1;
 prepare stmt from "alter view v1 as select 2";
 ERROR HY000: This command is not supported in the prepared statement protocol yet
@@ -2476,7 +2388,6 @@ drop view if exists v1, v2;
 # Check that we don't try to pre-open temporary tables for the elements
 # from prelocking list, as this can lead to unwarranted ER_CANT_REOPEN
 # errors.
-DROP TABLE IF EXISTS t1, tm;
 CREATE TABLE t1 (a INT);
 CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW
 SET @a:= (SELECT COUNT(*) FROM t1);
@@ -2498,7 +2409,7 @@ DROP TABLE t1;
 # clause of CREATE TABLE and ALTER TABLE statements.
 #
 CREATE TEMPORARY TABLE t1 (i INT);
-PREPARE stmt2 FROM 'CREATE TEMPORARY TABLE tm (i INT) ENGINE=MERGE UNION=(t1)';
+PREPARE stmt2 FROM 'CREATE TEMPORARY TABLE tm (i INT) ENGINE=InnoDB UNION=(t1)';
 EXECUTE stmt2;
 DROP TEMPORARY TABLE tm;
 EXECUTE stmt2;

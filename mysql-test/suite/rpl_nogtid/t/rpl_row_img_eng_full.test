@@ -1,0 +1,30 @@
+--source include/big_test.inc
+#
+# This file contains tests for WL#5096 and bug fixes.
+#
+
+# sql_replica_skip_counter is not supported with compression
+--source include/not_binlog_transaction_compression_on.inc
+
+-- source include/have_binlog_format_row.inc
+-- source include/have_myisam.inc
+
+--let $rpl_topology= 1->2->3
+--source include/rpl_init.inc
+
+-- connection server_1
+-- connection server_2
+-- connection server_3
+-- connection server_1
+
+#
+# BUG#49100
+#
+
+-- echo ### Testing with InnoDB storage engine
+
+-- let $engine=InnoDB
+-- source extra/rpl_tests/rpl_row_empty_imgs.test
+
+
+--source include/rpl_end.inc

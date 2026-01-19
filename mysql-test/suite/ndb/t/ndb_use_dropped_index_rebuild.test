@@ -1,0 +1,108 @@
+--source include/have_ndb.inc
+-- source suite/ndb/include/backup_restore_setup.inc
+--result_format 2
+
+## The MySQL Server supports opening tables with missing indexes.
+## This means that MySQL knows about an index which does
+## not exist in NDB but it still allows opening the table with
+## the index unavailable.
+##
+## This test makes sure that a table with missing index which
+## has been opened in MySQL detects when the index becomes available
+## in NDB again.
+##
+
+# This test results in an error message in the server log:
+# [ERROR] [MY-010211] [Server] Got error 126 when reading table './test/t1'
+call mtr.add_suppression(".*Got error 126 when reading table '.*t1'");
+
+CREATE TABLE t1 (
+    pk INT PRIMARY KEY,
+    a INT,
+    b VARCHAR(255),
+    c DECIMAL(10,2),
+    INDEX idx_a (a)
+) ENGINE=NDBCLUSTER;
+
+INSERT INTO t1 VALUES
+    (1, 10, 'value1', 10.50),
+    (2, 20, 'value2', 20.25),
+    (3, 30, 'value3', 30.75);
+
+## Take backup in order to be able to restore the index
+--source include/ndb_backup.inc
+
+## Read from table when index idx_a is available
+## thus opening the table and cache it
+SELECT a FROM t1 WHERE a = 10;
+EXPLAIN SELECT a FROM t1 WHERE a = 10;
+## Other queries work
+SELECT pk FROM t1 ORDER BY pk LIMIT 1;
+SELECT pk FROM t1 WHERE pk = 1;
+
+## Check index exist in NDB
+if (`SELECT COUNT(*) != 1 FROM ndbinfo.index_columns WHERE index_name = 'idx_a'`)
+{
+  SELECT * FROM ndbinfo.index_columns;
+  die Index is not in NDB;
+}
+
+##########################################
+## Use ndb_drop_index to drop the index idx_a.
+--exec $NDB_DROP_INDEX -d test t1 idx_a
+
+## Check index does NOT exist in NDB
+if (`SELECT COUNT(*) != 0 FROM ndbinfo.index_columns WHERE index_name = 'idx_a'`)
+{
+  SELECT * FROM ndbinfo.index_columns;
+  die Index exist in NDB;
+}
+
+## Select from the table again, expect error since NDB
+## detects that table version has changed
+--error ER_TABLE_DEF_CHANGED
+SELECT a FROM t1 WHERE a = 10;
+
+## Query using the index fails
+--error ER_NOT_KEYFILE
+SELECT a FROM t1 WHERE a = 10;
+
+## Other queries work
+SELECT pk FROM t1 ORDER BY pk LIMIT 1;
+SELECT pk FROM t1 WHERE pk = 1;
+
+###################################
+## Restore index from backup
+let $cmd = $NDB_RESTORE;
+let $cmd = $cmd -b $the_backup_id;
+let $cmd = $cmd --nodeid 2;
+let $cmd = $cmd --parallelism=1;
+let $cmd = $cmd --rebuild-indexes;
+let $cmd = $cmd $NDB_BACKUPS-$the_backup_id;
+#echo cmd: $cmd;
+--exec $cmd  >> $NDB_TOOLS_OUTPUT
+####################################
+
+## Check that index 'idx_a' exist in NDB again
+if (`SELECT COUNT(*) != 1 FROM ndbinfo.index_columns WHERE index_name = 'idx_a'`)
+{
+  SELECT * FROM ndbinfo.index_columns;
+  die Index is not restored in NDB;
+}
+
+## Query using the index works again
+SELECT a FROM t1 WHERE a = 10;
+
+## Other queries work
+SELECT pk FROM t1 ORDER BY pk LIMIT 1;
+SELECT pk FROM t1 WHERE pk = 1;
+
+## Explain shows that MySQL still want to use idx_a
+EXPLAIN SELECT a FROM t1 WHERE a = 10;
+
+# Cleanup
+DROP TABLE t1;
+
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT
+

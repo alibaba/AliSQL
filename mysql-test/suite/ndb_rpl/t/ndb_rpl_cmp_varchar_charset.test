@@ -1,0 +1,131 @@
+#
+#
+# Bug#34312769 NdbSqlUtil.cpp:498: require((lb + m1 <= n1 && lb + m2 <= n2)) failed
+#
+# Test to verify that pk varchar column values of different lengths can be
+# compared successfully even with any of the charsets enabled.
+#
+
+--source include/have_ndb.inc
+--source include/have_binlog_format_mixed_or_row.inc
+--source suite/ndb_rpl/ndb_master-slave.inc
+
+--connection master
+
+#################
+#
+create table t1
+    (id varchar(50) NOT NULL,
+     str varchar(50) NOT NULL,
+     primary key (`id`,`str`))
+engine = ndb default charset=latin1;
+
+# Insert 'one    ' (with multiple trailing spaces)
+insert into t1(id, str) values ("1","one                   ");
+
+##########
+# Verify that 'one     ' compares equal to 'one'.
+# Both when used as part of a key, as well as in a condition.
+select "'one' IS EQUAL 'one  ...'" from dual where "one" = "one      ";
+select concat("<<<",str,">>>") from t1 where str = "one" and id="1";
+select concat("<<<",str,">>>") from t1 where str = "one";
+
+##########
+# Replica should see the same contents as well:
+--echo Check content on replica
+--sync_slave_with_master
+--connection slave
+select concat("<<<",str,">>>") from t1 where str = "one" and id="1";
+select concat("<<<",str,">>>") from t1 where str = "one";
+
+##########
+# Update the pk 'str'-column by removing the trailing space.
+# The key should still compare equal to the old value though,
+# even if the binary representation changed.
+#
+# Note that the failing ::checkUpdateOfPrimaryKey() was only called on the
+# slave: Operation is executed as a delete+insert on the primary.
+# The replication process however will merge that into
+# an update of the primary key - where it fails...
+--echo Update content on primary, remove trailing spaces
+--connection master
+update t1 set str="one" where id="1";
+select concat("<<<",str,">>>") from t1;
+
+#########
+--echo Verify the replica update, no trailing spaces anymore!
+--sync_slave_with_master
+--connection slave
+select concat("<<<",str,">>>") from t1;
+
+########
+--echo Double check: Primary update it back to original value
+--connection master
+update t1 set str="one                   " where id="1";
+select concat("<<<",str,">>>") from t1;
+
+#########
+--echo Verify the replica update, see trailing space again
+--sync_slave_with_master
+--connection slave
+select concat("<<<",str,">>>") from t1;
+
+--connection master
+drop table t1;
+
+
+--echo ##########################################
+--echo # bug#34388068 NDB:Update to char data type columns in
+--echo #              primay keys are lost on replica.
+
+###############################
+## Test all different combinations of ndb_log_update*
+## Change to primary key char columns should be correctly
+## replicated independent of these settings
+
+set global ndb_log_updated_only=0;
+set global ndb_log_update_as_write=0;
+set global ndb_log_update_minimal=0;
+--source ndb_rpl_cmp_varchar_charset.inc
+
+set global ndb_log_updated_only=1;
+set global ndb_log_update_as_write=0;
+set global ndb_log_update_minimal=0;
+--source ndb_rpl_cmp_varchar_charset.inc
+
+set global ndb_log_updated_only=0;
+set global ndb_log_update_as_write=1;
+set global ndb_log_update_minimal=0;
+--source ndb_rpl_cmp_varchar_charset.inc
+
+set global ndb_log_updated_only=1;
+set global ndb_log_update_as_write=1;
+set global ndb_log_update_minimal=0;
+--source ndb_rpl_cmp_varchar_charset.inc
+
+set global ndb_log_updated_only=0;
+set global ndb_log_update_as_write=1;
+set global ndb_log_update_minimal=1;
+--source ndb_rpl_cmp_varchar_charset.inc
+
+set global ndb_log_updated_only=1;
+set global ndb_log_update_as_write=1;
+set global ndb_log_update_minimal=1;
+--source ndb_rpl_cmp_varchar_charset.inc
+
+set global ndb_log_updated_only=0;
+set global ndb_log_update_as_write=0;
+set global ndb_log_update_minimal=1;
+--source ndb_rpl_cmp_varchar_charset.inc
+
+set global ndb_log_updated_only=1;
+set global ndb_log_update_as_write=0;
+set global ndb_log_update_minimal=1;
+--source ndb_rpl_cmp_varchar_charset.inc
+
+## Reset to default
+set global ndb_log_updated_only=default;
+set global ndb_log_update_as_write=default;
+set global ndb_log_update_minimal=default;
+
+--source include/rpl_end.inc

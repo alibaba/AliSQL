@@ -1,0 +1,321 @@
+--source include/have_ndb.inc
+--source include/have_ndb_debug.inc
+--source suite/ndb/include/backup_restore_setup.inc
+
+--echo ********************************************************
+--echo ndb_restore threads exit cleanly on tuple restore error
+--echo ********************************************************
+--echo Initial tests using ndb_restore error insert to trigger
+--echo error on all parts.
+
+create table t1(id int primary key, val int) engine=ndb;
+--disable_query_log
+let $i = 0;
+while($i < 1000)
+{
+  eval insert into t1 values ($i, $i);
+  inc $i;
+}
+--enable_query_log
+
+--echo Cause backup stall
+--exec $NDB_MGM -e "all error 10039" >> $NDB_TOOLS_OUTPUT
+
+--source suite/ndb/t/ndb_backup_nowait_start.inc
+
+update t1 set val=12345 where id between 125 and 850;
+
+--exec $NDB_MGM -e "all error 0" >> $NDB_TOOLS_OUTPUT
+--source suite/ndb/t/ndb_backup_nowait_wait.inc
+
+--disable_query_log
+--echo Test restore failure handling for log-replay failure
+--let dump_file = $MYSQLTEST_VARDIR/tmp/restore.out
+--error 1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 -r --error-insert=3 $NDB_BACKUPS-$the_backup_id >> $dump_file 2>&1
+
+# Load the file into a temporary table
+CREATE TEMPORARY TABLE ndb_restore_output (a varchar(512));
+
+eval LOAD DATA INFILE '$dump_file' INTO TABLE ndb_restore_output
+  FIELDS TERMINATED BY '\n';
+--remove_file $dump_file
+
+# Remove Windows line feeds
+UPDATE ndb_restore_output SET a = TRIM(TRAILING "\r" FROM a);
+--enable_query_log
+
+select count(*) into @msgcount from ndb_restore_output where a like "%Thread % failed, exiting" order by a;
+select @msgcount as 'Count of thread exit messages';
+select * from ndb_restore_output where @msgcount != 4;
+
+truncate table t1;
+
+--disable_query_log
+--echo Test restore failure handling for tuple-restore failure
+--error 1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 -r --error-insert=4 $NDB_BACKUPS-$the_backup_id >> $dump_file 2>&1
+
+# Load the file into a temporary table
+truncate table ndb_restore_output;
+
+eval LOAD DATA INFILE '$dump_file' INTO TABLE ndb_restore_output
+  FIELDS TERMINATED BY '\n';
+--remove_file $dump_file
+
+# Remove Windows line feeds
+UPDATE ndb_restore_output SET a = TRIM(TRAILING "\r" FROM a);
+
+--enable_query_log
+select count(*) into @msgcount from ndb_restore_output where a like "%Thread % failed, exiting" order by a;
+select @msgcount as 'Count of thread exit messages';
+select * from ndb_restore_output where @msgcount != 4;
+drop table t1;
+
+
+--echo Test single part restore failures, should cause all parts to stop promptly
+--echo Constraint violation on DATA restore
+# Testing single restore thread errors
+create table test.t1 (a int primary key, b int, c int) engine=ndb;
+--disable_query_log
+let $i = 0;
+while($i < 1000)
+{
+  eval insert into t1 values ($i, $i, $i);
+  inc $i;
+}
+--enable_query_log
+
+# Have rows 0,0,0 ... 999,999,999
+# Now insert :
+insert into test.t1 values (1000,1000,999);
+
+# Backup
+--source suite/ndb/t/ndb_backup_nowait_start.inc
+--source suite/ndb/t/ndb_backup_nowait_wait.inc
+
+truncate test.t1;
+alter table test.t1 add unique(c);
+
+# Restore backup - should fail on duplicate key
+# during data restore
+# Check process exit code show failure
+--disable_query_log
+--echo Test restore failure handling for data apply failure
+--let dump_file = $MYSQLTEST_VARDIR/tmp/restore.out
+let $error_result = 0;
+--error 0,1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 -r $NDB_BACKUPS-$the_backup_id >> $dump_file 2>&1
+if ($__error)
+{
+  let $error_result = 1;
+}
+--error 0,1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 -r $NDB_BACKUPS-$the_backup_id >> $dump_file 2>&1
+if ($__error)
+{
+  let $error_result = 1;
+}
+
+if (!$error_result)
+{
+  --die One ndb_restore invocation should have failed
+}
+
+
+# Load the file into a temporary table
+truncate table ndb_restore_output;
+
+eval LOAD DATA INFILE '$dump_file' INTO TABLE ndb_restore_output
+  FIELDS TERMINATED BY '\n';
+--remove_file $dump_file
+
+# Remove Windows line feeds
+UPDATE ndb_restore_output SET a = TRIM(TRAILING "\r" FROM a);
+--enable_query_log
+
+# Check output contains useful messages
+--echo Expect 1 error type message
+select count(*) into @msgcount from ndb_restore_output where a like "%Permanent% duplicate value in unique index%";
+select @msgcount as 'Count of error message 1';
+select * from ndb_restore_output where @msgcount != 1;
+--echo Expect 1 error location message
+select count(*) into @msgcount from ndb_restore_output where a like "%Failed restoring DATA to table%";
+select @msgcount as 'Count of error message 2';
+select * from ndb_restore_output where @msgcount != 1;
+--echo Expect 1 error detail message
+select count(*) into @msgcount from ndb_restore_output where a like "%Failing tuple :%";
+select @msgcount as 'Count of error message 3';
+select * from ndb_restore_output where @msgcount != 1;
+
+drop table test.t1;
+
+--echo Constraint violation on LOG restore
+# Schema uses composite primary key + partitioning to allow 2 rows fighting
+# over secondary key value to be placed in the same fragment + so restored
+# by the same ndb_restore process + thread, so that the restore proceeds
+# in DATA, LOG order, so that we get a deterministic order + testcase.
+
+create table test.t1 (a int, b int, c int, primary key (a,b)) engine=ndb partition by key(a);
+--disable_query_log
+let $i = 0;
+while($i < 1000)
+{
+  eval insert into t1 values ($i, $i, $i);
+  inc $i;
+}
+--enable_query_log
+
+--echo Cause backup stall while log open
+--exec $NDB_MGM -e "all error 10040" >> $NDB_TOOLS_OUTPUT
+
+# Backup
+--source suite/ndb/t/ndb_backup_nowait_start.inc
+
+# Give some time for data without extra row
+# to be captured
+--sleep 4
+
+# Insert extra row, should be placed in log only
+insert into t1 values(999,1000,999);
+
+--exec $NDB_MGM -e "all error 0" >> $NDB_TOOLS_OUTPUT
+--source suite/ndb/t/ndb_backup_nowait_wait.inc
+
+truncate test.t1;
+alter table test.t1 add unique(c);
+
+# Restore backup - should fail on duplicate key
+# during log restore
+# Check process exit code shows failure
+--disable_query_log
+--echo Test restore failure handling for log apply failure
+--let dump_file = $MYSQLTEST_VARDIR/tmp/restore.out
+let $error_result = 0;
+--error 0,1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 -r $NDB_BACKUPS-$the_backup_id --error-insert=5 >> $dump_file 2>&1
+if ($__error)
+{
+  let $error_result = 1;
+}
+--error 0,1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 -r $NDB_BACKUPS-$the_backup_id --error-insert=5 >> $dump_file 2>&1
+if ($__error)
+{
+  let $error_result = 1;
+}
+
+if (!$error_result)
+{
+  --die One ndb_restore invocation should have failed
+}
+
+# Load the file into a temporary table
+truncate table ndb_restore_output;
+
+eval LOAD DATA INFILE '$dump_file' INTO TABLE ndb_restore_output
+  FIELDS TERMINATED BY '\n';
+--remove_file $dump_file
+
+# Remove Windows line feeds
+UPDATE ndb_restore_output SET a = TRIM(TRAILING "\r" FROM a);
+--enable_query_log
+
+# Check output contains useful messages
+--echo Expect 1 error type message
+select count(*) into @msgcount from ndb_restore_output where a like "%Permanent% duplicate value in unique index%";
+select @msgcount as 'Count of error message 1';
+select * from ndb_restore_output where @msgcount != 1;
+--echo Expect 1 error location message
+select count(*) into @msgcount from ndb_restore_output where a like "%Failed restoring LOG entry type INSERT to table%";
+select @msgcount as 'Count of error message 2';
+select * from ndb_restore_output where @msgcount != 1;
+--echo Expect 1 error detail message
+select count(*) into @msgcount from ndb_restore_output where a like "%Failing log entry :%";
+select @msgcount as 'Count of error message 3';
+select * from ndb_restore_output where @msgcount != 1;
+
+#select * from ndb_restore_output;
+
+drop table test.t1;
+
+
+--echo Test that a temporary error applying
+--echo log eventually results in failure
+
+create table test.t1 (a int primary key, b int) engine=ndb;
+
+--echo Cause backup stall while log open
+--exec $NDB_MGM -e "all error 10040" >> $NDB_TOOLS_OUTPUT
+
+# Backup
+--source suite/ndb/t/ndb_backup_nowait_start.inc
+
+# Give some time for data without extra row
+# to be captured
+--sleep 4
+
+# Insert extra row, should be placed in log only
+insert into t1 values(1,1);
+
+--exec $NDB_MGM -e "all error 0" >> $NDB_TOOLS_OUTPUT
+--source suite/ndb/t/ndb_backup_nowait_wait.inc
+
+
+--echo Take a row lock to block restore
+begin;
+select * from test.t1 where a=1 for update;
+
+
+# Restore backup - should fail on temporary error
+# during log restore
+# Check process exit code shows failure
+--disable_query_log
+--echo Test restore failure handling for log apply failure
+--echo after retries
+--let dump_file = $MYSQLTEST_VARDIR/tmp/restore.out
+let $error_result = 0;
+--error 0,1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 -r $NDB_BACKUPS-$the_backup_id >> $dump_file 2>&1
+if ($__error)
+{
+  let $error_result = 1;
+}
+--error 0,1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 -r $NDB_BACKUPS-$the_backup_id >> $dump_file 2>&1
+if ($__error)
+{
+  let $error_result = 1;
+}
+
+if (!$error_result)
+{
+  --die One ndb_restore invocation should have failed
+}
+
+rollback;
+
+# Load the file into a temporary table
+truncate table ndb_restore_output;
+
+eval LOAD DATA INFILE '$dump_file' INTO TABLE ndb_restore_output
+  FIELDS TERMINATED BY '\n';
+--remove_file $dump_file
+
+# Remove Windows line feeds
+UPDATE ndb_restore_output SET a = TRIM(TRAILING "\r" FROM a);
+--enable_query_log
+
+# Check output contains useful messages
+--echo Expect error message
+select count(*) into @msgcount from ndb_restore_output where a like "%Error restoring the data log%";
+select @msgcount as 'Count of error message 1';
+select * from ndb_restore_output where @msgcount != 1;
+
+#select * from ndb_restore_output;
+
+drop table test.t1;
+
+
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT

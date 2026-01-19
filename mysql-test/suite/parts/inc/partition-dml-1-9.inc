@@ -1,6 +1,5 @@
 let $DATA_PATH=;
 let $INDEX_PATH=;
---source include/have_partition.inc
 
 --echo # Additional tests for WL#5217 by QA, testplan 1.1
 
@@ -13,7 +12,8 @@ let $TABLENAME= t2;
 
 --enable_connect_log
 
-GRANT ALL PRIVILEGES ON test.* TO test_user_1 IDENTIFIED BY 'testpw';
+CREATE USER test_user_1 IDENTIFIED BY 'testpw';
+GRANT ALL PRIVILEGES ON test.* TO test_user_1;
 
 connect (session1, localhost, test_user_1,'testpw',test);
 CREATE VIEW v1 AS

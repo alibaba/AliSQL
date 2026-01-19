@@ -1,5 +1,5 @@
 drop table if exists t1,t2,t3;
-CREATE TABLE t1 (a VARCHAR(200), b TEXT, FULLTEXT (a,b)) ENGINE = InnoDB;
+CREATE TABLE t1 (a VARCHAR(200), b TEXT, FULLTEXT (a,b)) ENGINE = InnoDB charset utf8mb4;
 INSERT INTO t1 VALUES('MySQL has now support', 'for full-text search'),
 ('Full-text indexes', 'are called collections'),
 ('Only MyISAM tables','support collections'),
@@ -7,16 +7,16 @@ INSERT INTO t1 VALUES('MySQL has now support', 'for full-text search'),
 ('Full-text search in MySQL', 'implements vector space model');
 ANALYZE TABLE t1;
 SHOW INDEX FROM t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	1	a	1	a	NULL	5	NULL	NULL	YES	FULLTEXT			YES
-t1	1	a	2	b	NULL	5	NULL	NULL	YES	FULLTEXT			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	1	a	1	a	NULL	5	NULL	NULL	YES	FULLTEXT			YES	NULL
+t1	1	a	2	b	NULL	5	NULL	NULL	YES	FULLTEXT			YES	NULL
 select * from t1 where MATCH(a,b) AGAINST ("collections");
 a	b
 Full-text indexes	are called collections
 Only MyISAM tables	support collections
-explain extended select * from t1 where MATCH(a,b) AGAINST ("collections");
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	100.00	Using where
+explain select * from t1 where MATCH(a,b) AGAINST ("collections");
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections'))
 select * from t1 where MATCH(a,b) AGAINST ("indexes");
@@ -31,80 +31,100 @@ a	b
 Only MyISAM tables	support collections
 select * from t1 where MATCH(a,b) AGAINST ("collections" WITH QUERY EXPANSION);
 a	b
-Only MyISAM tables	support collections
 Full-text indexes	are called collections
-MySQL has now support	for full-text search
 Full-text search in MySQL	implements vector space model
+MySQL has now support	for full-text search
+Only MyISAM tables	support collections
 select * from t1 where MATCH(a,b) AGAINST ("indexes" WITH QUERY EXPANSION);
 a	b
 Full-text indexes	are called collections
-Only MyISAM tables	support collections
-MySQL has now support	for full-text search
 Full-text search in MySQL	implements vector space model
+MySQL has now support	for full-text search
+Only MyISAM tables	support collections
 select * from t1 where MATCH(a,b) AGAINST ("indexes collections" WITH QUERY EXPANSION);
 a	b
-Only MyISAM tables	support collections
 Full-text indexes	are called collections
-MySQL has now support	for full-text search
 Full-text search in MySQL	implements vector space model
+MySQL has now support	for full-text search
+Only MyISAM tables	support collections
 select * from t1 where MATCH(a,b) AGAINST ("indexes" IN NATURAL LANGUAGE MODE);
 a	b
 Full-text indexes	are called collections
 select * from t1 where MATCH(a,b) AGAINST ("indexes" IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION);
 a	b
 Full-text indexes	are called collections
-Only MyISAM tables	support collections
-MySQL has now support	for full-text search
 Full-text search in MySQL	implements vector space model
+MySQL has now support	for full-text search
+Only MyISAM tables	support collections
 select * from t1 where MATCH(a,b) AGAINST ("indexes" IN BOOLEAN MODE WITH QUERY EXPANSION);
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'QUERY EXPANSION)' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH QUERY EXPANSION)' at line 1
 explain select * from t1 where MATCH(a,b) AGAINST ("collections");
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections'))
 explain select * from t1 where MATCH(a,b) AGAINST ("collections")>0;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted, rank > 0
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where ((match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')) > 0)
 explain select * from t1 where MATCH(a,b) AGAINST ("collections")>1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted, rank > 1
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where ((match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')) > 1)
 explain select * from t1 where MATCH(a,b) AGAINST ("collections")>=0;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	5	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	5	20.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where ((match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')) >= 0)
 explain select * from t1 where MATCH(a,b) AGAINST ("collections")>=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted, rank >= 1
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where ((match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')) >= 1)
 explain select * from t1 where 0<MATCH(a,b) AGAINST ("collections");
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted, rank > 0
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (0 < (match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')))
 explain select * from t1 where 1<MATCH(a,b) AGAINST ("collections");
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted, rank > 1
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (1 < (match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')))
 explain select * from t1 where 0<=MATCH(a,b) AGAINST ("collections");
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	5	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	5	20.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (0 <= (match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')))
 explain select * from t1 where 1<=MATCH(a,b) AGAINST ("collections");
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted, rank >= 1
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (1 <= (match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')))
 explain select * from t1 where MATCH(a,b) AGAINST ("collections")>0 and a like '%ll%';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: sorted, rank > 0
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (((match `test`.`t1`.`a`,`test`.`t1`.`b` against ('collections')) > 0) and (`test`.`t1`.`a` like '%ll%'))
 select * from t1 where MATCH(a,b) AGAINST("support -collections" IN BOOLEAN MODE);
 a	b
 MySQL has now support	for full-text search
-explain extended select * from t1 where MATCH(a,b) AGAINST("support -collections" IN BOOLEAN MODE);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	100.00	Using where
+explain select * from t1 where MATCH(a,b) AGAINST("support -collections" IN BOOLEAN MODE);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	100.00	Using where; Ft_hints: no_ranking
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (match `test`.`t1`.`a`,`test`.`t1`.`b` against ('support -collections' in boolean mode))
 select * from t1 where MATCH(a,b) AGAINST("support  collections" IN BOOLEAN MODE);
 a	b
-Only MyISAM tables	support collections
-MySQL has now support	for full-text search
 Full-text indexes	are called collections
+MySQL has now support	for full-text search
+Only MyISAM tables	support collections
 select * from t1 where MATCH(a,b) AGAINST("support +collections" IN BOOLEAN MODE);
 a	b
-Only MyISAM tables	support collections
 Full-text indexes	are called collections
+Only MyISAM tables	support collections
 select * from t1 where MATCH(a,b) AGAINST("sear*" IN BOOLEAN MODE);
 a	b
 MySQL has now support	for full-text search
@@ -214,14 +234,19 @@ id int(11),
 ticket int(11),
 KEY ti (id),
 KEY tit (ticket)
-) ENGINE = InnoDB;
+) charset utf8mb4 ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (2,3),(1,2);
 CREATE TABLE t2 (
 ticket int(11),
 inhalt text,
 KEY tig (ticket),
 fulltext index tix (inhalt)
-) ENGINE = InnoDB;
+) charset utf8mb4 ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES (1,'foo'),(2,'bar'),(3,'foobar');
 INSERT INTO t1 VALUES (3,3);
 ANALYZE TABLE t1;
@@ -232,18 +257,21 @@ WHERE ticket2.id = ticket2.ticket and
 match(ttxt.inhalt) against ('foobar');
 id
 3
+ANALYZE TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	analyze	status	OK
 show keys from t2;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t2	1	tig	1	ticket	A	3	NULL	NULL	YES	BTREE			YES
-t2	1	tix	1	inhalt	NULL	3	NULL	NULL	YES	FULLTEXT			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t2	1	tig	1	ticket	A	3	NULL	NULL	YES	BTREE			YES	NULL
+t2	1	tix	1	inhalt	NULL	3	NULL	NULL	YES	FULLTEXT			YES	NULL
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `ticket` int(11) DEFAULT NULL,
+  `ticket` int DEFAULT NULL,
   `inhalt` text,
   KEY `tig` (`ticket`),
   FULLTEXT KEY `tix` (`inhalt`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 select * from t2 where MATCH inhalt AGAINST (NULL);
 ticket	inhalt
 select * from t2 where  MATCH inhalt AGAINST ('foobar');
@@ -264,6 +292,8 @@ inhalt text,
 KEY tig (ticket),
 fulltext index tix (inhalt)
 ) ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 select * from t2 where MATCH inhalt AGAINST (t2.inhalt);
 ERROR HY000: Incorrect arguments to AGAINST
 select * from t2 where MATCH ticket AGAINST ('foobar');
@@ -277,6 +307,8 @@ title varchar(100)  default '',
 PRIMARY KEY  (id),
 KEY ind5 (title)
 ) ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 CREATE FULLTEXT INDEX ft1 ON t1(title);
 Warnings:
 Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
@@ -295,6 +327,8 @@ id	title
 update t1 set title=NULL where id=1;
 drop table t1;
 CREATE TABLE t1 (a int(11), b text, FULLTEXT KEY (b)) ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values (1,"I wonder why the fulltext index doesnt work?");
 SELECT * from t1 where MATCH (b) AGAINST ('apples');
 a	b
@@ -305,6 +339,8 @@ a	b
 2	fullaaa fullzzz
 drop table t1;
 CREATE TABLE t1 ( id int(11) NOT NULL auto_increment primary key, mytext text NOT NULL, FULLTEXT KEY mytext (mytext)) ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,'my small mouse'),(2,'la-la-la'),(3,'It is so funny'),(4,'MySQL Tutorial');
 select 8 from t1;
 8
@@ -330,9 +366,14 @@ ref_mag
 test
 drop table t1;
 create table t1 (t1_id int(11) primary key, name varchar(32)) ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values (1, 'data1');
 insert into t1 values (2, 'data2');
 create table t2 (t2_id int(11) primary key, t1_id int(11), name varchar(32)) ENGINE = InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t2 values (1, 1, 'xxfoo');
 insert into t2 values (2, 1, 'xxbar');
 insert into t2 values (3, 1, 'xxbuz');
@@ -345,16 +386,18 @@ create table t1 (a text, fulltext key (a)) ENGINE = InnoDB;
 insert into t1 select "xxxx yyyy zzzz";
 drop table t1;
 SET NAMES latin1;
-CREATE TABLE t1 (t text character set utf8 not null, fulltext(t)) ENGINE = InnoDB;
+CREATE TABLE t1 (t text character set utf8mb4 not null, fulltext(t)) ENGINE = InnoDB;
 INSERT t1 VALUES ('Mit freundlichem Gr¸ﬂ'), ('aus Osnabr¸ck');
 SET NAMES koi8r;
 INSERT t1 VALUES ("¸‘œ ÕŸ - œ–…ÃÀ…"),("Ô‘Ã≈⁄ÿ, «Œ…ƒ¡!"),
 ("Ó≈ ◊Ã≈⁄¡ , ’¬ÿ≈‘!"),("… ¬’ƒ≈‘ –“¡◊!");
 SELECT t, collation(t) FROM t1 WHERE MATCH t AGAINST ('ÔÈÏÎÈ');
 t	collation(t)
-¸‘œ ÕŸ - œ–…ÃÀ…	utf8_general_ci
+¸‘œ ÕŸ - œ–…ÃÀ…	utf8mb4_0900_ai_ci
 DROP TABLE t1;
 CREATE TABLE t1 (s varchar(255), FULLTEXT (s)) ENGINE = InnoDB DEFAULT CHARSET=utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 insert into t1 (s) values ('p‰ra para para'),('para para para');
 select * from t1 where match(s) against('para' in boolean mode);
 s
@@ -384,6 +427,9 @@ insert t2 values (10, "aaaa"), (2, "cccc");
 replace t1 select * from t2;
 drop table t1, t2;
 CREATE TABLE t1 (t VARCHAR(200) CHARACTER SET utf8 COLLATE utf8_unicode_ci, FULLTEXT (t)) ENGINE = InnoDB;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SET NAMES latin1;
 INSERT INTO t1 VALUES('Mit freundlichem Gr¸ﬂ aus Osnabr¸ck');
 SELECT COUNT(*) FROM t1 WHERE MATCH(t) AGAINST ('"osnabr¸ck"' IN BOOLEAN MODE);
@@ -404,13 +450,13 @@ SELECT a FROM t1 WHERE MATCH a AGAINST('test' IN BOOLEAN MODE);
 a
 test's
 DROP TABLE t1;
-CREATE TABLE t1 (a VARCHAR(10000), FULLTEXT(a)) ENGINE = InnoDB;
+CREATE TABLE t1 (a VARCHAR(10000), FULLTEXT(a)) charset utf8mb4 ENGINE = InnoDB;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` varchar(10000) DEFAULT NULL,
   FULLTEXT KEY `a` (`a`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1;
 CREATE TABLE t1 (a TEXT, FULLTEXT KEY(a)) ENGINE = InnoDB;
 INSERT INTO t1 VALUES('test'),('test1'),('test');
@@ -418,14 +464,14 @@ ANALYZE TABLE t1;
 PREPARE stmt from "SELECT a, FORMAT(MATCH(a) AGAINST('test1 test'),6) FROM t1 WHERE MATCH(a) AGAINST('test1 test')";
 EXECUTE stmt;
 a	FORMAT(MATCH(a) AGAINST('test1 test'),6)
+test	0.031008
+test	0.031008
 test1	0.227645
-test	0.031008
-test	0.031008
 EXECUTE stmt;
 a	FORMAT(MATCH(a) AGAINST('test1 test'),6)
+test	0.031008
+test	0.031008
 test1	0.227645
-test	0.031008
-test	0.031008
 DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
 CREATE TABLE t1 (a VARCHAR(255), FULLTEXT(a)) ENGINE = InnoDB;
@@ -467,16 +513,22 @@ INSERT INTO t1 VALUES('test', 1),('test', 1),('test', 1),('test', 1),
 ANALYZE TABLE t1;
 EXPLAIN SELECT * FROM t1
 WHERE MATCH(a) AGAINST('test' IN BOOLEAN MODE) AND b=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	b,a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	b,a	a	0	const	1	62.50	Using where; Ft_hints: no_ranking
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where ((`test`.`t1`.`b` = 1) and (match `test`.`t1`.`a` against ('test' in boolean mode)))
 EXPLAIN SELECT * FROM t1 USE INDEX(a)
 WHERE MATCH(a) AGAINST('test' IN BOOLEAN MODE) AND b=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	25.00	Using where; Ft_hints: no_ranking
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` USE INDEX (`a`) where ((`test`.`t1`.`b` = 1) and (match `test`.`t1`.`a` against ('test' in boolean mode)))
 EXPLAIN SELECT * FROM t1 FORCE INDEX(a)
 WHERE MATCH(a) AGAINST('test' IN BOOLEAN MODE) AND b=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	fulltext	a	a	0	NULL	1	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	fulltext	a	a	0	const	1	25.00	Using where; Ft_hints: no_ranking
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` FORCE INDEX (`a`) where ((`test`.`t1`.`b` = 1) and (match `test`.`t1`.`a` against ('test' in boolean mode)))
 EXPLAIN SELECT * FROM t1 IGNORE INDEX(a)
 WHERE MATCH(a) AGAINST('test' IN BOOLEAN MODE) AND b=1;
 ERROR HY000: Can't find FULLTEXT index matching the column list
@@ -544,24 +596,27 @@ INSERT INTO t3 VALUES (1,1), (2,1);
 EXPLAIN
 SELECT count(*) FROM t1 WHERE 
 not exists(
-SELECT 1 FROM t2, t3
+SELECT /*+ NO_SEMIJOIN() */ 1 FROM t2, t3
 WHERE t3.a=t1.a AND MATCH(b2) AGAINST('scargill' IN BOOLEAN MODE)
 );
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	Using where
-2	DEPENDENT SUBQUERY	t2	fulltext	b2	b2	0	NULL	1	Using where
-2	DEPENDENT SUBQUERY	t3	ALL	NULL	NULL	NULL	NULL	2	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+2	DEPENDENT SUBQUERY	t2	NULL	fulltext	b2	b2	0	const	1	100.00	Using where; Ft_hints: no_ranking
+2	DEPENDENT SUBQUERY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
+Warnings:
+Note	1276	Field or reference 'test.t1.a' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select /*+ NO_SEMIJOIN(@`select#2`) */ count(0) AS `count(*)` from `test`.`t1` where exists(/* select#2 */ select 1 from `test`.`t2` join `test`.`t3` where ((`test`.`t3`.`a` = `test`.`t1`.`a`) and (match `test`.`t2`.`b2` against ('scargill' in boolean mode)))) is false
 # should return 0
 SELECT count(*) FROM t1 WHERE 
 not exists(
-SELECT 1 FROM t2, t3
+SELECT /*+ NO_SEMIJOIN() */ 1 FROM t2, t3
 WHERE t3.a=t1.a AND MATCH(b2) AGAINST('scargill' IN BOOLEAN MODE)
 );
 count(*)
 1
 SELECT count(*) FROM t1 WHERE 
 not exists(
-SELECT 1 FROM t2 IGNORE INDEX (b2), t3
+SELECT /*+ NO_SEMIJOIN() */ 1 FROM t2 IGNORE INDEX (b2), t3
 WHERE t3.a=t1.a AND MATCH(b2) AGAINST('scargill' IN BOOLEAN MODE)
 );
 ERROR HY000: Can't find FULLTEXT index matching the column list
@@ -587,7 +642,7 @@ COUNT(*)
 0
 DROP TABLE t1;
 #
-# Bug #49445: Assertion failed: 0, file .\item_row.cc, line 55 with 
+# Bug #49445: Assertion failed: 0, file item_row.cc, line 55 with 
 #   fulltext search and row op
 #
 CREATE TABLE t1(a CHAR(1),FULLTEXT(a)) ENGINE = InnoDB;
@@ -637,3 +692,17 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
 End of 5.1 tests
+#
+# Bug#33041720: REDUNDANT CALL TO INIT_FTFUNCS() IN MULTI-TABLE DELETE
+#
+CREATE TABLE t1 (id INTEGER);
+CREATE TABLE t2 (id INTEGER, x VARCHAR(10), FULLTEXT(x));
+INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
+INSERT INTO t2 VALUES (1, 'abc'), (2, 'xyz'), (3, 'abc def'), (4, NULL);
+DELETE t1 FROM t1, t2 WHERE t1.id = t2.id AND MATCH (t2.x) AGAINST ('abc');
+SELECT * FROM t1;
+id
+2
+4
+5
+DROP TABLE t1, t2;

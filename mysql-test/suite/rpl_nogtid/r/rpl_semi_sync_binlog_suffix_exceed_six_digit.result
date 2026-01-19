@@ -1,0 +1,72 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+include/install_semisync.inc
+Warnings:
+Note	3084	Replication thread(s) for channel '' are already stopped.
+include/suppress_messages.inc
+# Connection 1 suppresses message <Timeout waiting for reply of binlog>.
+# Connection 1 suppresses message <Got an error reading communication packets>.
+# Connection 2 suppresses message <Timeout waiting for reply of binlog>.
+# Connection 2 suppresses message <Got an error reading communication packets>.
+[connection slave]
+include/stop_slave_io.inc
+#
+# 1. Initial setup
+#
+[connection master]
+include/save_sysvars.inc ["GLOBAL.rpl_semi_sync_source_timeout", "GLOBAL.max_binlog_size"]
+SET GLOBAL rpl_semi_sync_source_timeout = 5000;
+#
+# 2. Reset the binary log and set the suffix to 999999.
+#
+RESET MASTER TO 999999;
+#
+# 3. Start replicating from the binlog file with suffix 999999.
+#
+[connection slave]
+CHANGE REPLICATION SOURCE TO source_log_file = 'BINLOG_FILE';
+Warnings:
+Warning	3023	CHANGE REPLICATION SOURCE TO with a SOURCE_LOG_FILE clause but no SOURCE_LOG_POS clause may not be safe. The old position value may not be valid for the new binary log file.
+include/start_slave.inc
+[connection master]
+SET GLOBAL max_binlog_size = 4096;
+CREATE TABLE t2 (s VARCHAR(4096));
+#
+# 4. Insert 2 rows, this will cause binary log to rotate
+#    from six digit suffix to seven digit suffix
+#
+INSERT INTO t2 VALUES (REPEAT("a", 4096));
+INSERT INTO t2 VALUES (REPEAT("a", 4096));
+#
+# 5. Stop the replica
+#
+include/sync_slave_sql_with_master.inc
+include/stop_slave.inc
+#
+# 6. Execute an insert on source and verify that it doesn't commit even
+#    after a sleep of 1 second. The source will commit after the
+#    rpl_semi_sync_source_timeout.
+#
+[connection slave]
+INSERT INTO t2 VALUES ('a');
+[connection master1]
+include/assert.inc [Row count has not been updated]
+include/assert.inc [Status variable Rpl_semi_sync_yes_tx is unchanged]
+[connection slave]
+#
+# 7. Start the replica
+#
+[connection slave]
+include/start_slave.inc
+#
+# 8. Cleanup
+#
+[connection master]
+DROP TABLE t2;
+include/restore_sysvars.inc
+include/sync_slave_sql_with_master.inc
+include/uninstall_semisync.inc
+include/rpl_end.inc

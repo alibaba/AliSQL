@@ -15,6 +15,8 @@ DROP TABLE IF EXISTS `龡龡龡`;
 DROP TABLE IF EXISTS `龢龢龢`;
 SET NAMES ujis;
 SET character_set_database = ujis;
+Warnings:
+Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
 CREATE TABLE `ｱｱｱ`(`ｶｶｶ` char(1)) DEFAULT CHARSET = ujis engine=INNODB;
 CREATE TABLE `ｲｲｲ`(`ｷｷｷ` char(1)) DEFAULT CHARSET = ujis engine=INNODB;
 CREATE TABLE `あああ`(`かかか` char(1)) DEFAULT CHARSET = ujis engine=INNODB;
@@ -59,10 +61,10 @@ Field	Type	Null	Key	Default	Extra
 ｸｸｸ	char(1)	YES		NULL	
 DESC `ｴｴｴ`;
 Field	Type	Null	Key	Default	Extra
-ｹｹｹ	char(1)	YES		NULL	
+ｹｹｹ	char(1)	YES		NULL	NULL
 DESC `ｵｵｵ`;
 Field	Type	Null	Key	Default	Extra
-ｺｺｺ	char(1)	YES		NULL	
+ｺｺｺ	char(1)	YES		NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かかか	char(1)	YES		NULL	
@@ -74,10 +76,10 @@ Field	Type	Null	Key	Default	Extra
 くくく	char(1)	YES		NULL	
 DESC `えええ`;
 Field	Type	Null	Key	Default	Extra
-けけけ	char(1)	YES		NULL	
+けけけ	char(1)	YES		NULL	NULL
 DESC `おおお`;
 Field	Type	Null	Key	Default	Extra
-こここ	char(1)	YES		NULL	
+こここ	char(1)	YES		NULL	NULL
 DESC `龖龖龖`;
 Field	Type	Null	Key	Default	Extra
 丂丂丂	char(1)	YES		NULL	
@@ -89,10 +91,10 @@ Field	Type	Null	Key	Default	Extra
 丅丅丅	char(1)	YES		NULL	
 DESC `龡龡龡`;
 Field	Type	Null	Key	Default	Extra
-丌丌丌	char(1)	YES		NULL	
+丌丌丌	char(1)	YES		NULL	NULL
 DESC `龢龢龢`;
 Field	Type	Null	Key	Default	Extra
-丒丒丒	char(1)	YES		NULL	
+丒丒丒	char(1)	YES		NULL	NULL
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
@@ -227,10 +229,10 @@ Field	Type	Null	Key	Default	Extra
 ｸｸｸ	char(1)	YES		NULL	
 DESC `ｴｴｴ`;
 Field	Type	Null	Key	Default	Extra
-ｹｹｹ	char(1)	YES		NULL	
+ｹｹｹ	char(1)	YES		NULL	NULL
 DESC `ｵｵｵ`;
 Field	Type	Null	Key	Default	Extra
-ｺｺｺ	char(1)	YES		NULL	
+ｺｺｺ	char(1)	YES		NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かかか	char(1)	YES		NULL	
@@ -242,10 +244,10 @@ Field	Type	Null	Key	Default	Extra
 くくく	char(1)	YES		NULL	
 DESC `えええ`;
 Field	Type	Null	Key	Default	Extra
-けけけ	char(1)	YES		NULL	
+けけけ	char(1)	YES		NULL	NULL
 DESC `おおお`;
 Field	Type	Null	Key	Default	Extra
-こここ	char(1)	YES		NULL	
+こここ	char(1)	YES		NULL	NULL
 DESC `龖龖龖`;
 Field	Type	Null	Key	Default	Extra
 丂丂丂	char(1)	YES		NULL	
@@ -257,10 +259,10 @@ Field	Type	Null	Key	Default	Extra
 丅丅丅	char(1)	YES		NULL	
 DESC `龡龡龡`;
 Field	Type	Null	Key	Default	Extra
-丌丌丌	char(1)	YES		NULL	
+丌丌丌	char(1)	YES		NULL	NULL
 DESC `龢龢龢`;
 Field	Type	Null	Key	Default	Extra
-丒丒丒	char(1)	YES		NULL	
+丒丒丒	char(1)	YES		NULL	NULL
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (
@@ -395,10 +397,10 @@ Field	Type	Null	Key	Default	Extra
 ｸｸｸ	char(1)	YES		NULL	
 DESC `ｴｴｴ`;
 Field	Type	Null	Key	Default	Extra
-ｹｹｹ	char(1)	YES		NULL	
+ｹｹｹ	char(1)	YES		NULL	NULL
 DESC `ｵｵｵ`;
 Field	Type	Null	Key	Default	Extra
-ｺｺｺ	char(1)	YES		NULL	
+ｺｺｺ	char(1)	YES		NULL	NULL
 DESC `あああ`;
 Field	Type	Null	Key	Default	Extra
 かかか	char(1)	YES		NULL	
@@ -410,10 +412,10 @@ Field	Type	Null	Key	Default	Extra
 くくく	char(1)	YES		NULL	
 DESC `えええ`;
 Field	Type	Null	Key	Default	Extra
-けけけ	char(1)	YES		NULL	
+けけけ	char(1)	YES		NULL	NULL
 DESC `おおお`;
 Field	Type	Null	Key	Default	Extra
-こここ	char(1)	YES		NULL	
+こここ	char(1)	YES		NULL	NULL
 DESC `龖龖龖`;
 Field	Type	Null	Key	Default	Extra
 丂丂丂	char(1)	YES		NULL	
@@ -425,10 +427,10 @@ Field	Type	Null	Key	Default	Extra
 丅丅丅	char(1)	YES		NULL	
 DESC `龡龡龡`;
 Field	Type	Null	Key	Default	Extra
-丌丌丌	char(1)	YES		NULL	
+丌丌丌	char(1)	YES		NULL	NULL
 DESC `龢龢龢`;
 Field	Type	Null	Key	Default	Extra
-丒丒丒	char(1)	YES		NULL	
+丒丒丒	char(1)	YES		NULL	NULL
 SHOW CREATE TABLE `ｱｱｱ`;
 Table	Create Table
 ｱｱｱ	CREATE TABLE `ｱｱｱ` (

@@ -1,3 +1,10 @@
+# This is a delay_key_write option,specific to Myisam
+# So this feature is not supported by InnoDB
+# Hence MTR starts mysqld with MyISAM as default
+
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
+
 #
 # Test of count(distinct ..)
 #
@@ -16,7 +23,7 @@ while ($1)
 }
 enable_query_log;
 select count(distinct n) from t1;
-explain extended select count(distinct n) from t1;
+explain select count(distinct n) from t1;
 drop table t1;
 
 # End of 4.1 tests

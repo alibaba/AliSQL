@@ -1,17 +1,25 @@
-# Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2009, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA 
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA 
 
 # Make source distribution
 # If git is present, run git archive.
@@ -28,6 +36,7 @@ SET(TAR_EXECUTABLE "@TAR_EXECUTABLE@")
 SET(CMAKE_GENERATOR "@CMAKE_GENERATOR@")
 SET(CMAKE_MAKE_PROGRAM "@CMAKE_MAKE_PROGRAM@")
 SET(CMAKE_SYSTEM_NAME "@CMAKE_SYSTEM_NAME@")
+SET(BUILD_IS_SINGLE_CONFIG "@BUILD_IS_SINGLE_CONFIG@")
 
 SET(VERSION "@VERSION@")
 
@@ -68,6 +77,7 @@ IF(GIT_EXECUTABLE)
     SET(GIT_EXECUTABLE)
   ELSE()
     # Unpack tarball
+    MESSAGE(STATUS "Unpacking tarball")
     EXECUTE_PROCESS(
       COMMAND ${CMAKE_COMMAND} -E tar xf ${PACKAGE_DIR}.tar
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -77,6 +87,7 @@ IF(GIT_EXECUTABLE)
       SET(GIT_EXECUTABLE)
     ELSE()
       # Remove tarball after unpacking
+      MESSAGE(STATUS "Removing tarball")
       EXECUTE_PROCESS(
         COMMAND ${CMAKE_COMMAND} -E remove ${PACKAGE_DIR}.tar
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -89,37 +100,17 @@ IF(NOT GIT_EXECUTABLE)
   MESSAGE(STATUS "git not found or source dir is not a repo, use CPack")
   
   IF(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
-    # In-source build is the worst option, we have to cleanup source tree.
-
-    # Save bison output first.
-    CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql/sql_yacc.cc
-       ${CMAKE_BINARY_DIR}/sql_yacc.cc COPYONLY)
-    CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql/sql_yacc.h 
-       ${CMAKE_BINARY_DIR}/sql_yacc.h COPYONLY)
-
-    IF(CMAKE_GENERATOR MATCHES "Makefiles")
-    # make clean
-    EXECUTE_PROCESS(
-      COMMAND ${CMAKE_MAKE_PROGRAM} clean 
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    )
-    ENDIF()
-    
-    # Restore bison output
-    CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql_yacc.cc
-       ${CMAKE_BINARY_DIR}/sql/sql_yacc.cc COPYONLY)
-    CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql_yacc.h 
-       ${CMAKE_BINARY_DIR}/sql/sql_yacc.h COPYONLY)
-    FILE(REMOVE ${CMAKE_BINARY_DIR}/sql_yacc.cc)
-    FILE(REMOVE ${CMAKE_BINARY_DIR}/sql_yacc.h)
+    MESSAGE(FATAL_ERRROR "make dist is not supported from in-source build")
   ENDIF()
 
+  MESSAGE(STATUS "Running cpack")
   EXECUTE_PROCESS(
     COMMAND ${CMAKE_CPACK_COMMAND} -G TGZ --config ./CPackSourceConfig.cmake 
     ${CMAKE_BINARY_DIR}/CPackSourceConfig.cmake
 
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
+  MESSAGE(STATUS "Running tar xcf")
   EXECUTE_PROCESS(
   COMMAND ${CMAKE_COMMAND} -E tar xzf 
     ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz 
@@ -128,20 +119,17 @@ IF(NOT GIT_EXECUTABLE)
   )
 ENDIF()
 
+MESSAGE(STATUS "Copying bison output")
 # Copy bison output
-CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql/sql_yacc.h 
+CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql/sql_yacc.h
    ${PACKAGE_DIR}/sql/sql_yacc.h COPYONLY)
 CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql/sql_yacc.cc
    ${PACKAGE_DIR}/sql/sql_yacc.cc COPYONLY)
-
-# Copy spec files
-SET(SPECFILENAME "mysql.${VERSION}.spec")
-IF("${VERSION}" MATCHES "-ndb-")
-  STRING(REGEX REPLACE "^.*-ndb-" "" NDBVERSION "${VERSION}")
-  SET(SPECFILENAME "mysql-cluster-${NDBVERSION}.spec")
-ENDIF()
-CONFIGURE_FILE(${CMAKE_BINARY_DIR}/support-files/${SPECFILENAME}
-   ${PACKAGE_DIR}/support-files/${SPECFILENAME} COPYONLY)
+#
+CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql/sql_hints.yy.h
+   ${PACKAGE_DIR}/sql/sql_hints.yy.h COPYONLY)
+CONFIGURE_FILE(${CMAKE_BINARY_DIR}/sql/sql_hints.yy.cc
+   ${PACKAGE_DIR}/sql/sql_hints.yy.cc COPYONLY)
 
 # Add documentation, if user has specified where to find them
 IF(MYSQL_DOCS_LOCATION)
@@ -184,9 +172,10 @@ SET($ENV{GZIP} "--best")
 
 IF(GNUTAR)
   SET(PACK_COMMAND 
-  ${GNUTAR} cfz 
+  ${GNUTAR} cfz
   ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz 
   ${CPACK_SOURCE_PACKAGE_FILE_NAME}
+  --owner=0 --group=0
   )
 ELSE()
   SET(PACK_COMMAND ${CMAKE_COMMAND} -E tar cfz
@@ -195,7 +184,8 @@ ELSE()
 )
 ENDIF()
 
-MESSAGE(STATUS "Creating source package")
+STRING(REPLACE ";" " " PACK_COMMAND_STRING "${PACK_COMMAND}")
+MESSAGE(STATUS "Creating source package with ${PACK_COMMAND_STRING}")
 
 EXECUTE_PROCESS( 
   COMMAND ${PACK_COMMAND}

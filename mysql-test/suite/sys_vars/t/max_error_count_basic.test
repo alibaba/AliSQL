@@ -4,7 +4,7 @@
 # Scope: GLOBAL | SESSION                                                     #
 # Access Type: Dynamic                                                        #
 # Data Type: numeric                                                          #
-# Default Value: 64                                                           #
+# Default Value: 1024                                                         #
 # Range: 0-65535                                                              #
 #                                                                             #
 #                                                                             #
@@ -60,10 +60,10 @@ SELECT @@session.max_error_count;
 ##################################################################
 
 SET @@global.max_error_count = DEFAULT;
-SELECT @@global.max_error_count = 64;
+SELECT @@global.max_error_count = 1024;
 
 SET @@session.max_error_count = DEFAULT;
-SELECT @@session.max_error_count = 64;
+SELECT @@session.max_error_count = 1024;
 
 
 --echo '#--------------------FN_DYNVARS_076_03-------------------------#'
@@ -115,6 +115,9 @@ SELECT @@global.max_error_count;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_error_count = test;
 SELECT @@global.max_error_count;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.max_error_count = ' ';
+SELECT @@global.max_error_count;
 
 SET @@session.max_error_count = -1;
 SELECT @@session.max_error_count;
@@ -122,6 +125,9 @@ SET @@session.max_error_count = 65536;
 SELECT @@session.max_error_count;
 SET @@session.max_error_count = -2;
 SELECT @@session.max_error_count;
+SET @@session.max_error_count = -1024;
+SELECT @@session.max_error_count;
+
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@session.max_error_count = 65530.34;
 SET @@session.max_error_count = 10737418241;
@@ -129,6 +135,9 @@ SELECT @@session.max_error_count;
 
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@session.max_error_count = test;
+SELECT @@session.max_error_count;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@session.max_error_count = ' ';
 SELECT @@session.max_error_count;
 
 
@@ -138,18 +147,22 @@ SELECT @@session.max_error_count;
 ####################################################################
 
 
+--disable_warnings
 SELECT @@global.max_error_count = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='max_error_count';
+--enable_warnings
 
 --echo '#------------------FN_DYNVARS_076_07-----------------------#'
 ####################################################################
 #  Check if the value in SESSION Table matches value in variable   #
 ####################################################################
 
+--disable_warnings
 SELECT @@session.max_error_count = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='max_error_count';
+--enable_warnings
 
 
 --echo '#------------------FN_DYNVARS_076_08-----------------------#'
@@ -195,6 +208,28 @@ SELECT local.max_error_count;
 SELECT session.max_error_count;
 --Error ER_BAD_FIELD_ERROR
 SELECT max_error_count = @@session.max_error_count;
+
+--echo '#---------------------FN_DYNVARS_001_12----------------------#'
+######################################################################################
+#   Check if changing session variable throws error without sufficient privileges    #
+######################################################################################
+CREATE USER foo, bar;
+GRANT SESSION_VARIABLES_ADMIN ON *.*  TO bar;
+--let $conn_name = foo_connection
+--connect($conn_name, localhost, foo,,,)
+SELECT @@session.max_error_count;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET @@session.max_error_count = 2048;
+--connection default
+disconnect $conn_name;
+--let $conn_name = bar_connection
+--connect($conn_name, localhost, bar,,,)
+SELECT @@session.max_error_count;
+SET @@session.max_error_count = 2048;
+SELECT @@session.max_error_count;
+--connection default
+disconnect $conn_name;
+DROP USER foo, bar;
 
 
 ####################################

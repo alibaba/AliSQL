@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,24 +27,26 @@
 #define Logger_H
 
 #include <ndb_global.h>
+#include <time.h>
 #include <BaseString.hpp>
 #include <NdbOut.hpp>
+#include "portlib/ndb_compiler.h"
 
 #define MAX_LOG_MESSAGE_SIZE 1024
 
 class LogHandler;
-class LogHandlerList;
-
+class InternalLogListHandler;
+class BufferedLogHandler;
 /**
- * Logger should be used whenver you need to log a message like
+ * Logger should be used whenever you need to log a message like
  * general information or debug messages. By creating/adding different
- * log handlers, a single log message can be sent to 
+ * log handlers, a single log message can be sent to
  * different outputs (stdout, file or syslog).
- * 
- * Each log entry is created with a log level (or severity) which is 
- * used to identity the type of the entry, e.g., if it is a debug 
+ *
+ * Each log entry is created with a log level (or severity) which is
+ * used to identity the type of the entry, e.g., if it is a debug
  * or an error message.
- * 
+ *
  * Example of a log entry:
  *
  *  09:17:39 2002-03-13 [myLogger] INFO -- Local checkpoint started.
@@ -47,7 +57,7 @@ class LogHandlerList;
  *
  *    Logger myLogger = new Logger();
  *
- * 2) Add the log handlers that you want, i.e., where the log entries 
+ * 2) Add the log handlers that you want, i.e., where the log entries
  *    should be written/shown.
  *
  *    myLogger->createConsoleHandler();  // Output to console/stdout
@@ -58,9 +68,9 @@ class LogHandlerList;
  *    myLogger->setCategory("myLogger");
  *
  * 4) Start log messages.
- *    
+ *
  *     myLogger->alert("T-9 to lift off");
- *     myLogger->info("Here comes the sun, la la"); 
+ *     myLogger->info("Here comes the sun, la la");
  *     myLogger->debug("Why does this not work!!!, We should not be here...")
  *
  * 5) Log only debug messages.
@@ -70,7 +80,7 @@ class LogHandlerList;
  * 6) Log only ALERTS and ERRORS.
  *
  *    myLogger->enable(Logger::LL_ERROR, Logger::LL_ALERT);
- * 
+ *
  * 7) Do not log any messages.
  *
  *    myLogger->disable(Logger::LL_ALL);
@@ -99,19 +109,50 @@ class LogHandlerList;
  *
  * @version #@ $Id: Logger.hpp,v 1.7 2003/09/01 10:15:53 innpeno Exp $
  */
-class Logger
-{
-public:
-  /** The log levels. NOTE: Could not use the name LogLevel since 
+class Logger {
+ public:
+  /*
+    Convert time to local timezone and print in timestamp format
+    to string buffer. The function always write some null terminated
+    string to buffer so it can safely be printed.
+
+      @epoch time to convert and print
+      @str pointer to buffer where to print the resulting string
+      @len max length of result buffer
+
+  */
+  static void format_timestamp(const time_t epoch, char *str, size_t len);
+
+  // Timestamp - handy class for getting a timestamp string
+  class Timestamp {
+   public:
+    Timestamp();
+    const char *c_str() const { return buff; }
+
+   private:
+    static constexpr Uint32 TsLen = 64;
+    char buff[TsLen];
+  };
+
+  /** The log levels. NOTE: Could not use the name LogLevel since
    * it caused conflicts with another class.
    */
-  enum LoggerLevel {LL_ON, LL_DEBUG, LL_INFO, LL_WARNING, LL_ERROR,
-		    LL_CRITICAL, LL_ALERT, LL_ALL};
-  
+  enum LoggerLevel {
+    LL_ON,
+    LL_DEBUG,
+    LL_INFO,
+    LL_WARNING,
+    LL_ERROR,
+    LL_CRITICAL,
+    LL_ALERT,
+    LL_ALL,
+    LL_UNDEFINED_LEVEL = 255
+  };
+
   /**
    * String representation of the the log levels.
    */
-  static const char* LoggerLevelNames[];
+  static const char *LoggerLevelNames[];
 
   /**
    * Default constructor.
@@ -122,20 +163,20 @@ public:
    * Destructor.
    */
   virtual ~Logger();
-  
+
   /**
    * Set a category/name that each log entry will have.
    *
    * @param pCategory the category.
    */
-  void setCategory(const char* pCategory);
+  void setCategory(const char *pCategory);
 
   /**
    * Create a default handler that logs to the console/stdout.
    *
    * @return true if successful.
    */
-  bool createConsoleHandler(NdbOut &out= ndbout);
+  bool createConsoleHandler(NdbOut &out = ndbout);
 
   /**
    * Remove the default console handler.
@@ -150,14 +191,16 @@ public:
    *
    * @return true if successful.
    */
-  bool createEventLogHandler(const char* source_name);
+#ifdef _WIN32
+  bool createEventLogHandler(const char *source_name);
+#endif
 
   /**
-   * Create a default handler that logs to a file called logger.log.
+   * Create a default handler which writes to the specified file name.
    *
    * @return true if successful.
    */
-  bool createFileHandler(char* filename= 0);
+  bool createFileHandler(char *filename);
 
   /**
    * Remove the default file handler.
@@ -169,7 +212,7 @@ public:
    *
    * @return true if successful.
    */
-  bool createSyslogHandler();	
+  bool createSyslogHandler();
 
   /**
    * Remove the default syslog handler.
@@ -177,22 +220,24 @@ public:
   void removeSyslogHandler();
 
   /**
+   * Invoke handlers asynchronously
+   *
+   * @param buffer_kb  kb of buffer to use
+   */
+  void startAsync(unsigned buffer_kb = 32);
+
+  /**
+   * Invoke handlers synchronously
+   */
+  void stopAsync();
+
+  /**
    * Add a new log handler.
    *
    * @param pHandler a log handler.
    * @return true if successful.
    */
-  bool addHandler(LogHandler* pHandler);
-
-  /**
-   * Add a new handler
-   *
-   * @param logstring string describing the handler to add
-   * @param err OS errno in event of error
-   * @param len max length of errStr buffer
-   * @param errStr logger error string in event of error
-   */
-  bool addHandler(const BaseString &logstring, int *err, int len, char* errStr);
+  bool addHandler(LogHandler *pHandler);
 
   /**
    * Remove a log handler.
@@ -200,7 +245,7 @@ public:
    * @param pHandler log handler to remove.
    * @return true if successful.
    */
-  bool removeHandler(LogHandler* pHandler);
+  bool removeHandler(LogHandler *pHandler);
 
   /**
    * Remove all log handlers.
@@ -212,7 +257,7 @@ public:
    *
    * @return true if enabled.
    */
-  bool isEnable(LoggerLevel logLevel) const; 
+  bool isEnable(LoggerLevel logLevel) const;
 
   /**
    * Enable the specified log level.
@@ -227,7 +272,7 @@ public:
    * @param fromLogLevel enable from log level.
    * @param toLogLevel enable to log level.
    */
-  void enable (LoggerLevel fromLogLevel, LoggerLevel toLogLevel);
+  void enable(LoggerLevel fromLogLevel, LoggerLevel toLogLevel);
 
   /**
    * Disable log level.
@@ -241,84 +286,120 @@ public:
    *
    * @param pMsg the message.
    */
-  virtual void alert(const char* pMsg, ...) const
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  virtual void alert(BaseString &pMsg) const { alert("%s", pMsg.c_str()); };
-  
+  virtual void alert(const char *pMsg, ...) const
+      ATTRIBUTE_FORMAT(printf, 2, 3);
+  virtual void alert(BaseString &pMsg) const { alert("%s", pMsg.c_str()); }
+
   /**
    * Log a critical message.
    *
    * @param pMsg the message.
    */
-  virtual void critical(const char* pMsg, ...) const
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  virtual void critical(BaseString &pMsg) const { critical("%s", pMsg.c_str()); };
+  virtual void critical(const char *pMsg, ...) const
+      ATTRIBUTE_FORMAT(printf, 2, 3);
+  virtual void critical(BaseString &pMsg) const {
+    critical("%s", pMsg.c_str());
+  }
 
   /**
    * Log an error message.
    *
    * @param pMsg the message.
    */
-  virtual void error(const char* pMsg, ...) const
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  virtual void error(BaseString &pMsg) const { error("%s", pMsg.c_str()); };
+  virtual void error(const char *pMsg, ...) const
+      ATTRIBUTE_FORMAT(printf, 2, 3);
+  virtual void error(BaseString &pMsg) const { error("%s", pMsg.c_str()); }
 
   /**
    * Log a warning message.
    *
    * @param pMsg the message.
    */
-  virtual void warning(const char* pMsg, ...) const
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  virtual void warning(BaseString &pMsg) const { warning("%s", pMsg.c_str()); };
+  virtual void warning(const char *pMsg, ...) const
+      ATTRIBUTE_FORMAT(printf, 2, 3);
+  virtual void warning(BaseString &pMsg) const { warning("%s", pMsg.c_str()); }
 
   /**
    * Log an info message.
    *
    * @param pMsg the message.
    */
-  virtual void info(const char* pMsg, ...) const
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  virtual void info(BaseString &pMsg) const { info("%s", pMsg.c_str()); };
+  virtual void info(const char *pMsg, ...) const ATTRIBUTE_FORMAT(printf, 2, 3);
+  virtual void info(BaseString &pMsg) const { info("%s", pMsg.c_str()); }
 
   /**
    * Log a debug message.
    *
    * @param pMsg the message.
    */
-  virtual void debug(const char* pMsg, ...) const
-    ATTRIBUTE_FORMAT(printf, 2, 3);
-  virtual void debug(BaseString &pMsg) const { debug("%s", pMsg.c_str()); };
+  virtual void debug(const char *pMsg, ...) const
+      ATTRIBUTE_FORMAT(printf, 2, 3);
+  virtual void debug(BaseString &pMsg) const { debug("%s", pMsg.c_str()); }
 
   /*
    * Set repeat frequency, 0 means disable special repeated message handling
    */
   virtual void setRepeatFrequency(unsigned val);
 
-protected:
+ protected:
+  /* Serialises the Logger front-end API calls */
+  NdbMutex *m_log_mutex;
 
-  NdbMutex *m_mutex;
+  void log(LoggerLevel logLevel, const char *msg, va_list ap) const
+      ATTRIBUTE_FORMAT(printf, 3, 0);
 
-  void log(LoggerLevel logLevel, const char* msg, va_list ap) const;
-
-private:
+ private:
   /** Prohibit */
-  Logger(const Logger&);
-  Logger operator = (const Logger&);
-  bool operator == (const Logger&);
+  Logger(const Logger &);
+  Logger operator=(const Logger &);
+  bool operator==(const Logger &);
 
-  STATIC_CONST( MAX_LOG_LEVELS = 8 );
+  static constexpr Uint32 MAX_LOG_LEVELS = 8;
 
   bool m_logLevels[MAX_LOG_LEVELS];
-  
-  LogHandlerList* m_pHandlerList;
-  const char* m_pCategory;
+
+  const char *m_pCategory;
 
   /* Default handlers */
-  NdbMutex *m_handler_mutex;
-  LogHandler* m_pConsoleHandler;
-  LogHandler* m_pFileHandler;
-  LogHandler* m_pSyslogHandler;
+  NdbMutex *m_handler_creation_mutex;
+  /* List of user defined handlers */
+  InternalLogListHandler *m_internalLogListHandler;
+  /* Buffered handler used in async mode */
+  BufferedLogHandler *m_internalBufferedHandler;
+  /* Pointer to List or Buffered handler */
+  LogHandler *m_logHandler;
+
+  LogHandler *m_pConsoleHandler;
+  LogHandler *m_pFileHandler;
+  LogHandler *m_pSyslogHandler;
+
+  /**
+   * for test only
+   */
+
+  // Pointer to default Log Handler pointer
+  LogHandler **m_test_handler;
+  // Pointer to original handler
+  LogHandler *m_test_handler_backup;
+  friend class LoggerTest;
+
+  /**
+   * Class to change, in run time, the default log handler used by the logger.
+   */
+ public:
+  class LoggerTest {
+   public:
+    static void setHandlerPointerAddress(Logger &logger, LogHandler **lh) {
+      logger.m_test_handler_backup = *lh;
+      logger.m_test_handler = lh;
+    }
+    static void setHandler(const Logger &logger, LogHandler *lh) {
+      *logger.m_test_handler = lh;
+    }
+    static void unset(const Logger &logger) {
+      *logger.m_test_handler = logger.m_test_handler_backup;
+    }
+  };
 };
 
 #endif

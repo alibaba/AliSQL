@@ -1,0 +1,35 @@
+
+WL#10128:  Add defaults column to optimizer cost tables
+
+ALTER TABLE mysql.server_cost DROP COLUMN default_value;
+ALTER TABLE mysql.engine_cost DROP COLUMN default_value;
+# restart:--upgrade=FORCE
+SELECT * FROM mysql.server_cost;
+cost_name	cost_value	last_update	comment	default_value
+disk_temptable_create_cost	NULL	#	NULL	20
+disk_temptable_row_cost	NULL	#	NULL	0.5
+key_compare_cost	NULL	#	NULL	0.05
+memory_temptable_create_cost	NULL	#	NULL	1
+memory_temptable_row_cost	NULL	#	NULL	0.1
+row_evaluate_cost	NULL	#	NULL	0.1
+SELECT * FROM mysql.engine_cost;
+engine_name	device_type	cost_name	cost_value	last_update	comment	default_value
+default	0	io_block_read_cost	NULL	#	NULL	1
+default	0	memory_block_read_cost	NULL	#	NULL	0.25
+# Default values after upgrade should be equal to fresh server
+include/assert.inc [Default values after upgrade should be equal to fresh server.]
+# restart:--upgrade=FORCE
+SELECT * FROM mysql.server_cost;
+cost_name	cost_value	last_update	comment	default_value
+disk_temptable_create_cost	NULL	#	NULL	20
+disk_temptable_row_cost	NULL	#	NULL	0.5
+key_compare_cost	NULL	#	NULL	0.05
+memory_temptable_create_cost	NULL	#	NULL	1
+memory_temptable_row_cost	NULL	#	NULL	0.1
+row_evaluate_cost	NULL	#	NULL	0.1
+SELECT * FROM mysql.engine_cost;
+engine_name	device_type	cost_name	cost_value	last_update	comment	default_value
+default	0	io_block_read_cost	NULL	#	NULL	1
+default	0	memory_block_read_cost	NULL	#	NULL	0.25
+# Default values after upgrade should be equal to fresh server
+include/assert.inc [Default values after upgrade should be equal to fresh server.]

@@ -1,0 +1,12 @@
+call mtr.add_suppression('Failed to initialize TLS for channel: mysql_main');
+call mtr.add_suppression("SSL error: Unable to get certificate from");
+call mtr.add_suppression("Failed to set up SSL because of the following SSL library error: Unable to get certificate");
+call mtr.add_suppression("Server SSL certificate doesn't verify");
+Variable_name	Value
+Mysqlx_ssl_server_not_after	
+Mysqlx_ssl_server_not_before	
+0 rows affected
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok

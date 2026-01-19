@@ -1,2 +1,0 @@
---source include/not_gtid_enabled.inc
---source extra/rpl_tests/rpl_stm_insert_delayed.inc

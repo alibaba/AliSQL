@@ -1,11 +1,8 @@
 --source include/have_optimizer_trace.inc
 --source include/have_64bit.inc
 
-if (`SELECT $PS_PROTOCOL + $SP_PROTOCOL + $CURSOR_PROTOCOL
-            + $VIEW_PROTOCOL > 0`)
-{
-   --skip Need normal protocol
-}
+# Test requires: sp-protocol/ps-protocol/view-protocol/cursor-protocol disabled
+--source include/no_protocol.inc
 
 SET optimizer_trace_max_mem_size=1048576; # 1MB
 SET end_markers_in_json=off;
@@ -17,7 +14,8 @@ SET optimizer_trace="enabled=on,one_line=off";
 --echo #
 
 
-CREATE TABLE t1(f0 int auto_increment primary key, f1 int, f2 varchar(200));
+CREATE TABLE t1(f0 int auto_increment primary key, f1 int, f2 varchar(200))
+charset latin1;
 INSERT INTO t1(f1, f2) VALUES 
 (0,"0"),(1,"1"),(2,"2"),(3,"3"),(4,"4"),(5,"5"),
 (6,"6"),(7,"7"),(8,"8"),(9,"9"),(10,"10"),
@@ -44,30 +42,41 @@ INSERT INTO t1(f1, f2) VALUES
 ## Test sort when source data fits in memory
 
 SELECT * FROM t1 ORDER BY f1 ASC, f0 LIMIT 100;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 ORDER BY f1 ASC, f0 LIMIT 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 ORDER BY f1 ASC, f0 LIMIT 0;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 ORDER BY f2 DESC, f0 LIMIT 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 ORDER BY f2 DESC, f0 LIMIT 0;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 WHERE f1>10 ORDER BY f2, f0 LIMIT 20;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 WHERE f1>10 ORDER BY f2, f0 LIMIT 0;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 WHERE f1>10 ORDER BY f2, f0 LIMIT 10 OFFSET 10;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 WHERE f1>10 ORDER BY f2, f0 LIMIT 0 OFFSET 10;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT CONCAT("hello ", f2) AS foo FROM t1 ORDER BY foo LIMIT 2;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 --disable_result_log
 SELECT * from t1 ORDER BY rand(2) LIMIT 2;
 --enable_result_log
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 ################
@@ -75,20 +84,28 @@ SELECT * FROM information_schema.OPTIMIZER_TRACE;
 set sort_buffer_size= 32768;
 
 SELECT * FROM t1 ORDER BY f1 ASC, f0 LIMIT 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 ORDER BY f1 ASC, f0 LIMIT 0;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 ORDER BY f2 DESC, f0 LIMIT 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 ORDER BY f2 DESC, f0 LIMIT 0;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 WHERE f1>10 ORDER BY f2, f0 LIMIT 20;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 WHERE f1>10 ORDER BY f2, f0 LIMIT 0;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 WHERE f1>10 ORDER BY f2, f0 LIMIT 10 OFFSET 10;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 SELECT * FROM t1 WHERE f1>10 ORDER BY f2, f0 LIMIT 0 OFFSET 10;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 ################
@@ -100,31 +117,37 @@ set optimizer_trace_offset=-2;
 SELECT SQL_CALC_FOUND_ROWS * FROM t1
 ORDER BY f1, f0 LIMIT 30;
 SELECT FOUND_ROWS();
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT SQL_CALC_FOUND_ROWS * FROM t1
 ORDER BY f1, f0 LIMIT 0;
 SELECT FOUND_ROWS();
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 WHERE f1>10
 ORDER BY f2, f0 LIMIT 20;
 SELECT FOUND_ROWS();
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 WHERE f1>10
 ORDER BY f2, f0 LIMIT 0;
 SELECT FOUND_ROWS();
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 WHERE f1>10
 ORDER BY f2, f0 LIMIT 10 OFFSET 10;
 SELECT FOUND_ROWS();
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 WHERE f1>10
 ORDER BY f2, f0 LIMIT 0 OFFSET 10;
 SELECT FOUND_ROWS();
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 ################
@@ -134,7 +157,7 @@ set sort_buffer_size= 327680;
 set optimizer_trace_limit=1;
 set optimizer_trace_offset=-1;
 
-CREATE TEMPORARY TABLE tmp (f1 int, f2 varchar(20));
+CREATE TEMPORARY TABLE tmp (f1 int, f2 varchar(20)) charset latin1;
 INSERT INTO tmp SELECT f1, f2 FROM t1;
 INSERT INTO t1(f1, f2) SELECT * FROM tmp;
 INSERT INTO tmp SELECT f1, f2 FROM t1;
@@ -142,10 +165,12 @@ INSERT INTO t1(f1, f2) SELECT * FROM tmp;
 
 SELECT * FROM t1 JOIN tmp on t1.f2=tmp.f2
 ORDER BY tmp.f1, f0 LIMIT 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT * FROM t1 JOIN tmp on t1.f2=tmp.f2
 ORDER BY tmp.f1, f0 LIMIT 30 OFFSET 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 set optimizer_trace_limit=2;
@@ -154,12 +179,14 @@ set optimizer_trace_offset=-2;
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 JOIN tmp on t1.f2=tmp.f2
 ORDER BY tmp.f1, f0 LIMIT 30 OFFSET 30;
 SELECT FOUND_ROWS();
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 JOIN tmp on t1.f2=tmp.f2
 WHERE t1.f2>20
 ORDER BY tmp.f1, f0 LIMIT 30 OFFSET 30;
 SELECT FOUND_ROWS();
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 DROP TABLE tmp;
@@ -171,26 +198,36 @@ set optimizer_trace_offset=-1;
 
 CREATE VIEW v1 as SELECT * FROM t1 ORDER BY f1, f0 LIMIT 30;
 SELECT * FROM v1;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 drop view v1;
 
 CREATE VIEW v1 as SELECT * FROM t1 ORDER BY f1, f0 LIMIT 100;
 SELECT * FROM v1 ORDER BY f2, f0 LIMIT 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
+
+# Tests printing of MaterializeIterator with multiple iterators
+# on top of the table iterator.
+--skip_if_hypergraph  # Does not support pushing LIMIT into the sorts yet.
+EXPLAIN FORMAT=tree SELECT * FROM v1 ORDER BY f2, f0 LIMIT 30;
 
 CREATE VIEW v2 as SELECT * FROM t1 ORDER BY f2, f0 LIMIT 100;
 SELECT * FROM v1 JOIN v2 on v1.f1=v2.f1 ORDER BY v1.f2,v1.f0,v2.f0
 LIMIT 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 ################
 ## Test group & having
 SELECT floor(f1/10) f3, count(f2) FROM t1
 GROUP BY 1 ORDER BY 2,1 LIMIT 5;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT floor(f1/10) f3, count(f2) FROM t1
 GROUP BY 1 ORDER BY 2,1 LIMIT 0;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 ################
@@ -209,6 +246,7 @@ SELECT FOUND_ROWS();
 SELECT * FROM v1 ORDER BY f2, f0 LIMIT 30;
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 END|
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 CALL wl1393_sp_test()|
 DROP PROCEDURE wl1393_sp_test|
 delimiter ;|
@@ -218,41 +256,57 @@ delimiter ;|
 SELECT d1.f1, d1.f2 FROM t1
 LEFT JOIN (SELECT * FROM t1 ORDER BY f1 LIMIT 30) d1 on t1.f1=d1.f1
 ORDER BY d1.f2 DESC LIMIT 30;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 SELECT * FROM t1 WHERE f1 = (SELECT f1 FROM t1 ORDER BY 1 LIMIT 1);
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 --error ER_SUBQUERY_NO_1_ROW
 SELECT * FROM t1 WHERE f1 = (SELECT f1 FROM t1 ORDER BY 1 LIMIT 2);
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
-################
-## Test stripping additional fields
-CREATE TEMPORARY TABLE tmp (f1 int, f2 varchar(20));
-INSERT INTO tmp SELECT f1,f2 FROM t1;
-INSERT INTO t1(f1,f2) SELECT * FROM tmp;
-INSERT INTO tmp SELECT f1,f2 FROM t1;
-INSERT INTO t1(f1,f2) SELECT * FROM tmp; 
-INSERT INTO t1(f1,f2) SELECT * FROM tmp;
-INSERT INTO tmp SELECT f1,f2 FROM t1;
-INSERT INTO t1(f1,f2) SELECT * FROM tmp; 
-INSERT INTO tmp SELECT f1,f2 FROM t1;
-INSERT INTO t1(f1,f2) SELECT * FROM tmp; 
-INSERT INTO tmp SELECT f1,f2 FROM t1;
-INSERT INTO t1(f1,f2) SELECT * FROM tmp; 
-INSERT INTO tmp SELECT f1,f2 FROM t1;
-INSERT INTO t1(f1,f2) SELECT * FROM tmp; 
-INSERT INTO tmp SELECT f1,f2 FROM t1;
-INSERT INTO t1(f1,f2) SELECT * FROM tmp; 
-
-# Test when only sortkeys fits to memory
-set sort_buffer_size= 32768; 
-SELECT * FROM t1 ORDER BY f2 LIMIT 100;
-SELECT * FROM information_schema.OPTIMIZER_TRACE;
-
-DROP TABLE t1, tmp;
+DROP TABLE t1;
 DROP VIEW v1, v2;
 
 --echo # end of WL#1393 - Optimizing filesort with small limit
 --echo # end of WL#5834 - Add optimizer traces for sorting
+
+--echo # WL#8741 Varlen keys for sorting JSON values
+--echo # Note that JSON keys can't use the priority queue optimization for LIMIT,
+--echo # since they can be of unbounded length.
+
+set sort_buffer_size= 32768;
+
+CREATE TABLE t(id INT PRIMARY KEY AUTO_INCREMENT, j JSON);
+
+INSERT INTO t(j) VALUES
+(NULL), ('true'), ('false'),
+('"abc"'), ('""'), ('"abcd"'), ('"bc"'),
+('"abc\\u0000\\u0000"'),
+('"abc\\u0000"'),
+('0.0'), ('-0.0'), ('9223372036854776000'),
+('1.0e-1'), ('1.0e-2')
+;
+
+SELECT j, JSON_TYPE(j) AS tp FROM t ORDER BY j, id;
+SELECT j, JSON_TYPE(j) AS tp FROM t ORDER BY j, id limit 2 offset 2;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
+SELECT * FROM information_schema.OPTIMIZER_TRACE;
+
+SELECT j, JSON_TYPE(j) AS tp FROM t ORDER BY j DESC, id;
+SELECT j, JSON_TYPE(j) AS tp FROM t ORDER BY j DESC, id limit 2 offset 2;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
+SELECT * FROM information_schema.OPTIMIZER_TRACE;
+
+SELECT JSON_EXTRACT(j, '$') AS je, JSON_TYPE(j) AS tp FROM t ORDER BY je, id;
+SELECT JSON_EXTRACT(j, '$') AS je, JSON_TYPE(j) AS tp FROM t ORDER BY je, id
+limit 2 offset 2;
+--replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
+SELECT * FROM information_schema.OPTIMIZER_TRACE;
+
+DROP TABLE t;
+
+--echo # --end of WL#8741 Varlen keys for sorting JSON values

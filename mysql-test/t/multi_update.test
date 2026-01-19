@@ -2,16 +2,17 @@
 # Test of update statement that uses many tables.
 #
 
-# Requires grants, so won't work with embedded server test
-source include/not_embedded.inc;
 source include/have_log_bin.inc;
 
 CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.");
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "granting/revoking privileges in databases.");
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "storing table level and column level grants "
-                         "in the privilege tables.");
+CALL mtr.add_suppression("REVOKE/GRANT failed while storing table level "
+                         "and column level grants in the privilege "
+                         "tables. An incident event has been written to "
+                         "the binary log which will stop the slaves.");
+CALL mtr.add_suppression("REVOKE/GRANT failed while granting/revoking "
+                         "privileges in databases. An incident event "
+                         "has been written to the binary log which "
+                         "will stop the slaves.");
 
 --disable_warnings
 drop table if exists t1,t2,t3;
@@ -103,19 +104,19 @@ CREATE TABLE t1 (
   id int(11) NOT NULL default '0',
   name varchar(10) default NULL,
   PRIMARY KEY  (id)
-) ENGINE=MyISAM;
+);
 INSERT INTO t1 VALUES (1,'aaa'),(2,'aaa'),(3,'aaa');
 CREATE TABLE t2 (
   id int(11) NOT NULL default '0',
   name varchar(10) default NULL,
   PRIMARY KEY  (id)
-) ENGINE=MyISAM;
+);
 INSERT INTO t2 VALUES (2,'bbb'),(3,'bbb'),(4,'bbb');
 CREATE TABLE t3 (
   id int(11) NOT NULL default '0',
   mydate datetime default NULL,
   PRIMARY KEY  (id)
-) ENGINE=MyISAM;
+);
 INSERT INTO t3 VALUES (1,'2002-02-04 00:00:00'),(3,'2002-05-12 00:00:00'),(5,'2002-05-12 00:00:00'),(6,'2002-06-22
 00:00:00'),(7,'2002-07-22 00:00:00');
 delete t1,t2,t3 from t1,t2,t3 where to_days(now())-to_days(t3.mydate)>=30 and t3.id=t1.id and t3.id=t2.id;
@@ -127,7 +128,7 @@ CREATE TABLE IF NOT EXISTS `t1` (
   `tst` text,
   `tst1` text,
   PRIMARY KEY  (`id`)
-) ENGINE=MyISAM;
+);
 
 CREATE TABLE IF NOT EXISTS `t2` (
   `ID` int(11) NOT NULL auto_increment,
@@ -137,7 +138,7 @@ CREATE TABLE IF NOT EXISTS `t2` (
   PRIMARY KEY  (`ID`),
   KEY `IX_ParId_t2` (`ParId`),
   FOREIGN KEY (`ParId`) REFERENCES `t1` (`id`)
-) ENGINE=MyISAM;
+);
 
 INSERT INTO t1(tst,tst1) VALUES("MySQL","MySQL AB"), ("MSSQL","Microsoft"), ("ORACLE","ORACLE");
 
@@ -145,11 +146,10 @@ INSERT INTO t2(ParId) VALUES(1), (2), (3);
 
 select * from t2;
 
---disable_warnings ONCE
 UPDATE t2, t1 SET t2.tst = t1.tst, t2.tst1 = t1.tst1 WHERE t2.ParId = t1.Id;
 
 select * from t2;
-drop table t1, t2 ;
+drop table t2, t1 ;
 
 create table t1 (n numeric(10));
 create table t2 (n numeric(10));
@@ -198,8 +198,8 @@ drop table t1,t2;
 set timestamp=1038401397;
 create table t1 (n int(10) not null primary key, d int(10), t timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 create table t2 (n int(10) not null primary key, d int(10), t timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
-insert into t1 values(1,1,NULL);
-insert into t2 values(1,10,NULL),(2,20,NULL);
+insert into t1(n,d) values(1,1);
+insert into t2(n,d) values(1,10),(2,20);
 set timestamp=1038000000;
 UPDATE t1,t2 SET t1.d=t2.d WHERE t1.n=t2.n;
 select n,d,unix_timestamp(t) from t1;
@@ -230,6 +230,10 @@ create table t2 (n int(10), d int(10));
 insert into t1 values(1,1),(3,2);
 insert into t2 values(1,10),(1,20);
 UPDATE t1,t2 SET t1.d=t2.d,t2.d=30 WHERE t1.n=t2.n;
+# It is unspecified which order the assignments are performed in, and
+# in which order the rows from t2 are read, so for n=1 the value of d
+# can end up as 10, 20 or 30, depending on the plan chosen.
+--replace_result 20 10 30 10
 select * from t1;
 select * from t2;
 UPDATE t1 a ,t2 b SET a.d=b.d,b.d=30 WHERE a.n=b.n;
@@ -240,11 +244,11 @@ select * from t1;
 select * from t2;
 drop table t1,t2;
 
-CREATE TABLE t1 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj)) ENGINE=MyISAM;
+CREATE TABLE t1 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj));
 INSERT INTO t1 VALUES (1,'jedan'),(2,'dva'),(3,'tri'),(4,'xxxxxxxxxx'),(5,'a'),(10,''),(11,''),(12,''),(13,'');
-CREATE TABLE t2 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj)) ENGINE=MyISAM;
+CREATE TABLE t2 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj));
 INSERT INTO t2 VALUES (1,'jedan'),(2,'dva'),(3,'tri'),(4,'xxxxxxxxxx'),(5,'a');
-CREATE TABLE t3 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj)) ENGINE=MyISAM;
+CREATE TABLE t3 ( broj int(4) unsigned NOT NULL default '0',  naziv char(25) NOT NULL default 'NEPOZNAT',  PRIMARY KEY  (broj));
 INSERT INTO t3 VALUES (1,'jedan'),(2,'dva');
 update t1,t2 set t1.naziv="aaaa" where t1.broj=t2.broj;
 update t1,t2,t3 set t1.naziv="bbbb", t2.naziv="aaaa" where t1.broj=t2.broj and t2.broj=t3.broj;
@@ -261,19 +265,30 @@ INSERT INTO t2 values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9);
 
 # Full join, without key
 update t1,t2 set t1.a=t1.a+100;
+--sorted_result
 select * from t1;
 
 # unique key
 update t1,t2 set t1.a=t1.a+100 where t1.a=101;
+--sorted_result
 select * from t1;
 
 # ref key
 update t1,t2 set t1.b=t1.b+10 where t1.b=2;
+--sorted_result
 select * from t1;
 
 # Range key (in t1)
 update t1,t2 set t1.b=t1.b+2,t2.b=t1.b+10 where t1.b between 3 and 5 and t2.a=t1.a-100;
+--sorted_result
 select * from t1;
+# It is unspecified whether the assignment of t2.b sees the
+# modification of t1.b on the same row. The hypergraph optimizer
+# chooses a different plan (not using range scan on t1.b, as that
+# prevents immediate update) and does the assignments in a different
+# order.
+--skip_if_hypergraph
+--sorted_result
 select * from t2;
 
 # test for non-updating table which is also used in sub-select
@@ -281,7 +296,7 @@ select * from t2;
 update t1,t2 set t1.b=t2.b, t1.a=t2.a where t1.a=t2.a and not exists (select * from t2 where t2.a > 10);
 
 drop table t1,t2;
-CREATE TABLE t3 (  KEY1 varchar(50) NOT NULL default '',  PARAM_CORR_DISTANCE_RUSH double default NULL,  PARAM_CORR_DISTANCE_GEM double default NULL,  PARAM_AVG_TARE double default NULL,  PARAM_AVG_NB_DAYS double default NULL,  PARAM_DEFAULT_PROP_GEM_SRVC varchar(50) default NULL,  PARAM_DEFAULT_PROP_GEM_NO_ETIK varchar(50) default NULL,  PARAM_SCENARIO_COSTS varchar(50) default NULL,  PARAM_DEFAULT_WAGON_COST double default NULL,  tmp int(11) default NULL,  PRIMARY KEY  (KEY1)) ENGINE=MyISAM;
+CREATE TABLE t3 (  KEY1 varchar(50) NOT NULL default '',  PARAM_CORR_DISTANCE_RUSH double default NULL,  PARAM_CORR_DISTANCE_GEM double default NULL,  PARAM_AVG_TARE double default NULL,  PARAM_AVG_NB_DAYS double default NULL,  PARAM_DEFAULT_PROP_GEM_SRVC varchar(50) default NULL,  PARAM_DEFAULT_PROP_GEM_NO_ETIK varchar(50) default NULL,  PARAM_SCENARIO_COSTS varchar(50) default NULL,  PARAM_DEFAULT_WAGON_COST double default NULL,  tmp int(11) default NULL,  PRIMARY KEY  (KEY1));
 INSERT INTO t3 VALUES ('A',1,1,22,3.2,'R','R','BASE2',0.24,NULL);
 create table t1 (A varchar(1));
 insert into t1 values  ("A") ,("B"),("C"),("D");
@@ -303,7 +318,6 @@ drop table t1,t2;
 
 create table t1 (a int not null auto_increment primary key, b int not null);
 insert into t1 (b) values (1),(2),(3),(4);
---disable_warnings ONCE
 update t1, t1 as t2 set t1.b=t2.b+1 where t1.a=t2.a;
 select * from t1;
 drop table t1;
@@ -357,11 +371,10 @@ DROP TABLE t1,t2;
 # Test update with const tables
 #
 create table `t1` (`p_id` int(10) unsigned NOT NULL auto_increment, `p_code` varchar(20) NOT NULL default '', `p_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`p_id`) );
-create table `t2` (`c2_id` int(10) unsigned NULL auto_increment, `c2_p_id` int(10) unsigned NOT NULL default '0', `c2_note` text NOT NULL, `c2_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`c2_id`), KEY `c2_p_id` (`c2_p_id`) );
+create table `t2` (`c2_id` int(10) unsigned NOT NULL auto_increment, `c2_p_id` int(10) unsigned NOT NULL default '0', `c2_note` text NOT NULL, `c2_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`c2_id`), KEY `c2_p_id` (`c2_p_id`) );
 insert into t1 values (0,'A01-Comp',1);
 insert into t1 values (0,'B01-Comp',1);
 insert into t2 values (0,1,'A Note',1);
---disable_warnings ONCE
 update t1 left join t2 on p_id = c2_p_id set c2_note = 'asdf-1' where p_id = 2;
 select * from t1;
 select * from t2;
@@ -379,6 +392,7 @@ create database mysqltest;
 create table mysqltest.t1 (a int, b int, primary key (a));
 create table mysqltest.t2 (a int, b int, primary key (a));
 create table mysqltest.t3 (a int, b int, primary key (a));
+create user mysqltest_1@localhost;
 grant select on mysqltest.* to mysqltest_1@localhost;
 grant update on mysqltest.t1 to mysqltest_1@localhost;
 connect (user1,localhost,mysqltest_1,,mysqltest,$MASTER_MYPORT,$MASTER_MYSOCK);
@@ -568,52 +582,6 @@ select * from t2 order by id;
 drop table t1, t2;
 
 #
-# Bug#27716 multi-update did partially and has not binlogged
-#
-
-CREATE TABLE `t1` (
-  `a` int(11) NOT NULL auto_increment,
-  `b` int(11) default NULL,
-  PRIMARY KEY  (`a`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 ;
-
-CREATE TABLE `t2` (
-  `a` int(11) NOT NULL auto_increment,
-  `b` int(11) default NULL,
-  PRIMARY KEY  (`a`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 ;
-
-# as the test is about to see erroed queries in binlog
-set @sav_binlog_format=  @@session.binlog_format;
-set @@session.binlog_format= mixed;
-
-
-# A. testing multi_update::send_error() effective update
-insert into t1 values (1,1),(2,2);
-insert into t2 values (1,1),(4,4);
-reset master;
---error ER_DUP_ENTRY
-UPDATE t2,t1 SET t2.a=t1.a+2;
-# check
-select * from t2 /* must be (3,1), (4,4) */;
-source include/show_binlog_events.inc;
-
-# B. testing multi_update::send_error() ineffective update
-# (as there is a policy described at mysql_update() still go to binlog)
-delete from t1;
-delete from t2;
-insert into t1 values (1,2),(3,4),(4,4);
-insert into t2 values (1,2),(3,4),(4,4);
-reset master;
---error ER_DUP_ENTRY
-UPDATE t2,t1  SET t2.a=t2.b where t2.a=t1.a;
-source include/show_binlog_events.inc;
-
-# cleanup
-drop table t1, t2;
-set @@session.binlog_format= @sav_binlog_format;
-
-#
 # Bug#29136 erred multi-delete on trans table does not rollback
 #
 
@@ -623,7 +591,7 @@ drop table if exists t1, t2, t3;
 --enable_warnings
 CREATE TABLE t1 (a int, PRIMARY KEY (a));
 CREATE TABLE t2 (a int, PRIMARY KEY (a));
-CREATE TABLE t3 (a int, PRIMARY KEY (a)) ENGINE=MyISAM;
+CREATE TABLE t3 (a int, PRIMARY KEY (a));
 create trigger trg_del_t3 before  delete on t3 for each row insert into t1 values (1);
 
 insert into t2 values (1),(2);
@@ -638,8 +606,8 @@ reset master;
 delete t3.* from t2,t3 where t2.a=t3.a;
 
 # check
-select count(*) from t1 /* must be 1 */;
-select count(*) from t3 /* must be 1 */;
+select count(*) from t1 /* must be 0 */;
+select count(*) from t3 /* must be 2 */;
 
 # cleanup
 drop table t1, t2, t3;
@@ -664,6 +632,8 @@ DROP TABLE t1;
 --echo # Bug#54543: update ignore with incorrect subquery leads to assertion
 --echo # failure: inited==INDEX
 --echo #
+set @optimizer_switch_saved=@@optimizer_switch;
+set optimizer_switch='derived_merge=off';
 SET SESSION sql_safe_updates = 0;
 CREATE TABLE t1 ( a INT );
 INSERT INTO t1 VALUES (1), (2);
@@ -675,87 +645,41 @@ CREATE TABLE t3 ( a INT );
 INSERT INTO t3 VALUES (1), (2);
 
 --echo # Should not crash
+# Different number of warnings with the hypergraph optimizer.
+--disable_warnings
 UPDATE IGNORE
   ( SELECT ( SELECT COUNT(*) FROM t1 GROUP BY a, @v ) a FROM t2 ) x, t3
 SET t3.a = 0;
+--enable_warnings
 
 DROP TABLE t1, t2, t3;
 SET SESSION sql_safe_updates = DEFAULT;
+set @@optimizer_switch=@optimizer_switch_saved;
 
 --echo #
 --echo # Bug#52157 various crashes and assertions with multi-table update, stored function
 --echo #
 
-CREATE FUNCTION f1 () RETURNS BLOB RETURN 1;
+set @optimizer_switch_saved=@@optimizer_switch;
+set optimizer_switch='derived_merge=off';
+
+# Updated the test case with another one provided in the bug report
+# as the previous case returns error now, due to invalid date
+
+CREATE FUNCTION f1 () RETURNS BLOB RETURN '2011-01-01';
 CREATE TABLE t1 (f1 DATE);
 INSERT INTO t1 VALUES('2001-01-01');
-UPDATE (SELECT 1 FROM t1 WHERE f1 = (SELECT f1() FROM t1)) x, t1 SET f1 = 1;
+UPDATE IGNORE (SELECT 1 FROM t1 WHERE f1 = (SELECT f1() FROM t1)) x, t1 SET f1 = '2011-01-01';
 DROP FUNCTION f1;
 DROP TABLE t1;
 
---echo #
---echo # BUG#57373: Multi update+InnoDB reports ER_KEY_NOT_FOUND if a
---echo #            table is updated twice
---echo #
-
-# Results differ between storage engines.
-# See multi_update_innodb.test for the InnoDB variant of this test
-CREATE TABLE t1(
-  pk INT,
-  a INT,
-  PRIMARY KEY (pk)
-) ENGINE=MyISAM;
-
-INSERT INTO t1 VALUES (0,0);
-UPDATE t1 AS A, t1 AS B SET A.pk = 1, B.a = 2;
---echo
---echo # Should be (1,2)
-SELECT * FROM t1;
+CREATE TABLE t1(a TEXT, FULLTEXT(a)) engine = blackhole;
+--disable_warnings
+UPDATE IGNORE (SELECT 1 FROM t1 WHERE(MATCH(a) AGAINST(''))) `x`,`t1` SET a = 1;
+--enable_warnings
 DROP TABLE t1;
 
---echo #
---echo # BUG#11882110: UPDATE REPORTS ER_KEY_NOT_FOUND IF TABLE IS 
---echo #               UPDATED TWICE
---echo #
-
-# Results differ between storage engines. This test is to verify that
-# the bugfix did NOT change behavior for MyISAM.
-# See multi_update_innodb.test for the InnoDB variant of this test
-CREATE TABLE t1 ( 
-  col_int_key int, 
-  pk int, 
-  col_int int, 
-  key(col_int_key), 
-  primary key (pk)
-) ENGINE=MyISAM;
-INSERT INTO t1 VALUES (1,2,3);
-
---echo
-CREATE TABLE t2 ( 
-  col_int_key int, 
-  pk_1 int, 
-  pk_2 int, 
-  col_int int, 
-  key(col_int_key), 
-  primary key (pk_1,pk_2)
-) ENGINE=MyISAM;
-INSERT INTO t2 VALUES (1,2,3,4);
-
---echo
-UPDATE t1 AS A NATURAL JOIN t1 B SET A.pk=5,B.pk=7;
-
---echo
-SELECT * FROM t1;
-
---echo
-UPDATE t2 AS A NATURAL JOIN t2 B SET A.pk_1=5,B.pk_1=7;
---echo
-UPDATE t2 AS A NATURAL JOIN t2 B SET A.pk_2=10,B.pk_2=11;
-
---echo
-SELECT * FROM t2;
-
-DROP TABLE t1,t2;
+set @@optimizer_switch=@optimizer_switch_saved;
 
 --echo # Bug#13256831 - ERROR 1032 (HY000): CAN'T FIND RECORD
 
@@ -796,19 +720,123 @@ SELECT * FROM t1;
 DROP TABLE t1;
 
 --echo #
---echo #Bug 11757486 - 49539: NON-DESCRIPTIVE ERR (ERROR 0 FROM STORAGE ENGINE)
---echo #                      WITH MULTI-TABLE UPDATE
+--echo # Bug #18352634 	"UPDATE ORDER BY" OF MULTI-TABLE VIEW DOES NOT WORK
 --echo #
 
-CREATE TABLE table_11757486 (field1 tinyint) ENGINE=MYISAM;
-INSERT INTO table_11757486 VALUES (0),(0);
-SET SESSION SQL_MODE='STRICT_ALL_TABLES';
-UPDATE IGNORE (SELECT 128 as col1) x, table_11757486 SET field1=x.col1;
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+CREATE VIEW v AS SELECT t1.a FROM t1,t1 q;
+# different errors in ps / non-ps mode:
+-- error ER_WRONG_USAGE, ER_VIEW_PREVENT_UPDATE
+UPDATE v SET a=1 ORDER BY a;
+-- error ER_WRONG_USAGE, ER_VIEW_PREVENT_UPDATE
+UPDATE v SET a=1 LIMIT 3;
+DROP TABLE t1;
+DROP VIEW v;
 
---error ER_WARN_DATA_OUT_OF_RANGE
-UPDATE (SELECT 128 as col1) x, table_11757486 SET field1=x.col1;
+--echo #
+--echo # WL#5275: Multi-table update, view with subquery in CHECK OPTION
+--echo #
 
-SET SESSION SQL_MODE='';
-UPDATE IGNORE (SELECT 128 as col1) x, table_11757486 SET field1=x.col1;
-DROP TABLE table_11757486;
+CREATE TABLE t1 (f1 INTEGER PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE t2 (f1 INTEGER PRIMARY KEY, f2 INTEGER) ENGINE=InnoDB;
+CREATE TABLE t3 (f1 INTEGER) ENGINE=INNODB;
 
+INSERT INTO t1 VALUES (1), (2);
+INSERT INTO t2 VALUES (1, 1), (2, 2);
+INSERT INTO t3 VALUES (1), (2);
+
+CREATE VIEW v2 AS 
+SELECT * FROM t2 WHERE f2 IN (SELECT f1 FROM t3)
+WITH CHECK OPTION; 
+
+SELECT * FROM t1 JOIN v2 ON t1.f1=v2.f1;
+
+UPDATE t1 JOIN v2 ON t1.f1=v2.f1
+SET f2 = f2 + 1
+WHERE t1.f1=1;
+
+--error ER_VIEW_CHECK_FAILED
+UPDATE t1 JOIN v2 ON t1.f1=v2.f1
+SET f2 = f2 + 1
+WHERE t1.f1=2;
+
+SELECT * FROM t1 JOIN v2 ON t1.f1=v2.f1;
+
+DROP VIEW v2;
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug 18449085: WRONG VALUE AFTER MULTI UPDATE
+--echo #
+
+CREATE TABLE t1 (c1 INTEGER, c2 INTEGER, KEY(c1));
+CREATE TABLE t2 (c1 INTEGER, c2 INTEGER);
+CREATE TABLE t3 (c1 INTEGER, c2 INTEGER);
+INSERT INTO t1 VALUES(1,1),(2,2),(3,3),(4,4),(5,5);
+INSERT INTO t2 VALUES(11,1),(12,1),(13,1),(14,2),(15,6);
+INSERT INTO t3 VALUES(21,11),(22,11),(23,13),(24,14),(25,15);
+ANALYZE TABLE t1, t2, t3;
+let $my_stmt= UPDATE t2 straight_join t3 straight_join t1 SET t1.c2 = 30, t2.c2 = 40, t3.c2=50
+              WHERE t1.c1=t2.c2 AND t2.c1=t3.c2;
+eval $my_stmt;
+eval EXPLAIN $my_stmt;
+SELECT * FROM t3 ORDER BY c1;
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug#98692 multi-table UPDATE has problem when updating a table in Performance Schema
+--echo #
+
+let $check_query=
+  SELECT enabled FROM performance_schema.setup_instruments
+    WHERE name = 'wait/lock/metadata/sql/mdl';
+eval $check_query;
+let $query=
+  UPDATE performance_schema.setup_instruments, (SELECT 1) AS dt
+    SET enabled = 'NO' WHERE name = 'wait/lock/metadata/sql/mdl';
+eval EXPLAIN $query;
+eval $query;
+# Not testing DELETE, as it's not possible on
+# performance_schema.setup_instruments.
+eval $check_query;
+let $query=
+  UPDATE (VALUES ROW(1),ROW(2)) AS dt(a)
+    LEFT JOIN performance_schema.setup_instruments ON dt.a=enabled
+    SET enabled = 'YES' WHERE name = 'wait/lock/metadata/sql/mdl';
+eval EXPLAIN $query;
+eval $query;
+eval $check_query;
+
+# Now update an InnoDB const table, and check that it does get updated.
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+INSERT INTO t1 VALUES(1,1);
+
+let $query=
+  UPDATE t1 STRAIGHT_JOIN performance_schema.setup_instruments
+    SET t1.b = 2 WHERE t1.a = 1 AND name = 'wait/lock/metadata/sql/mdl';
+eval EXPLAIN $query;
+eval $query;
+SELECT * FROM t1;
+
+let $query=
+  UPDATE performance_schema.setup_instruments STRAIGHT_JOIN t1
+    SET t1.b = 3 WHERE t1.a = 1 AND name = 'wait/lock/metadata/sql/mdl';
+eval EXPLAIN $query;
+eval $query;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo # Bug#31640267: Assertion `trans_safe || updated_rows == 0 || thd->get_transaction()
+
+CREATE TABLE t1(pk INTEGER PRIMARY KEY, a INTEGER);
+INSERT INTO t1 VALUES(1, 10), (2, 20);
+
+PREPARE s FROM 'UPDATE t1, (SELECT 1 FROM DUAL) AS dt SET a=a+1';
+EXECUTE s;
+SELECT ROW_COUNT();
+EXECUTE s;
+SELECT ROW_COUNT();
+DEALLOCATE PREPARE s;
+
+DROP TABLE t1;

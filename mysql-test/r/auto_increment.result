@@ -68,6 +68,8 @@ e	1
 k	1
 drop table t1;
 create table t1 (ordid int(8) not null auto_increment, ord  varchar(50) not null, primary key (ordid), index(ord,ordid));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 (ordid,ord) values (NULL,'sdj'),(NULL,'sdj');
 select * from t1;
 ordid	ord
@@ -75,19 +77,25 @@ ordid	ord
 2	sdj
 drop table t1;
 create table t1 (ordid int(8) not null auto_increment, ord  varchar(50) not null, primary key (ord,ordid));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 values (NULL,'sdj'),(NULL,'sdj'),(NULL,"abc"),(NULL,'abc'),(NULL,'zzz'),(NULL,'sdj'),(NULL,'abc');
 select * from t1;
 ordid	ord
 1	abc
-2	abc
-3	abc
 1	sdj
-2	sdj
-3	sdj
 1	zzz
+2	abc
+2	sdj
+3	abc
+3	sdj
 drop table t1;
 create table t1 (sid char(5), id int(2) NOT NULL auto_increment, key(sid,  id));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 create table t2 (sid char(20), id int(2));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t2 values ('skr',NULL),('skr',NULL),('test',NULL);
 insert into t1 select * from t2;
 select * from t1;
@@ -129,28 +137,29 @@ last_insert_id()
 insert into t1 values (NULL);
 select * from t1;
 a
-1
 -1
+1
 2
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (i tinyint unsigned not null auto_increment primary key);
 insert into t1 set i = 254;
 insert into t1 set i = null;
 select last_insert_id();
 last_insert_id()
 255
-explain extended select last_insert_id();
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+explain select last_insert_id();
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
 Note	1003	/* select#1 */ select last_insert_id() AS `last_insert_id()`
 insert into t1 set i = 254;
-ERROR 23000: Duplicate entry '254' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '254' for key 't1.PRIMARY'
 select last_insert_id();
 last_insert_id()
 255
 insert into t1 set i = null;
-ERROR 23000: Duplicate entry '255' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '255' for key 't1.PRIMARY'
 select last_insert_id();
 last_insert_id()
 255
@@ -178,11 +187,12 @@ select last_insert_id();
 last_insert_id()
 2
 insert into t1 values (NULL, 10);
-ERROR 23000: Duplicate entry '10' for key 'b'
+ERROR 23000: Duplicate entry '10' for key 't1.b'
 select last_insert_id();
 last_insert_id()
 2
 drop table t1;
+SET sql_mode = default;
 create table t1(a int auto_increment,b int null,primary key(a));
 SET SQL_MODE=NO_AUTO_VALUE_ON_ZERO;
 insert into t1(a,b)values(NULL,1);
@@ -360,7 +370,9 @@ t1_name VARCHAR(255) DEFAULT NULL,
 t1_id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
 KEY (t1_name),
 PRIMARY KEY (t1_id)
-) AUTO_INCREMENT = 1000;
+) charset latin1 AUTO_INCREMENT = 1000;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 (t1_name) VALUES('MySQL');
 INSERT INTO t1 (t1_name) VALUES('MySQL');
 INSERT INTO t1 (t1_name) VALUES('MySQL');
@@ -373,7 +385,7 @@ SHOW CREATE TABLE `t1`;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `t1_name` varchar(255) DEFAULT NULL,
-  `t1_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `t1_id` int unsigned NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`t1_id`),
   KEY `t1_name` (`t1_name`)
 ) ENGINE=MyISAM AUTO_INCREMENT=1003 DEFAULT CHARSET=latin1
@@ -402,6 +414,9 @@ a	t1a
 drop table t1, t2;
 End of 4.1 tests
 CREATE TABLE t1 ( `a` int(11) NOT NULL auto_increment, `b` int(11) default NULL,PRIMARY KEY  (`a`),UNIQUE KEY `b` (`b`));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 (b) values (1);
 replace into t1 (b) values (2), (1), (3);
 select * from t1;
@@ -425,7 +440,7 @@ key (rowid), unique(val));
 replace into t1 (val) values ('1'),('2');
 replace into t1 (val) values ('1'),('2');
 insert into t1 (val) values ('1'),('2');
-ERROR 23000: Duplicate entry '1' for key 'val'
+ERROR 23000: Duplicate entry '1' for key 't1.val'
 select * from t1;
 rowid	val
 3	1
@@ -441,10 +456,13 @@ a	val
 3	1
 drop table t1;
 CREATE TABLE t1 (t1 INT(10) PRIMARY KEY, t2 INT(10));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES(0, 0);
 INSERT INTO t1 VALUES(1, 1);
 ALTER TABLE t1 CHANGE t1 t1 INT(10) auto_increment;
-ERROR 23000: ALTER TABLE causes auto_increment resequencing, resulting in duplicate entry '1' for key 'PRIMARY'
+ERROR 23000: ALTER TABLE causes auto_increment resequencing, resulting in duplicate entry '1' for key 't1.PRIMARY'
 DROP TABLE t1;
 create table t1 (a int primary key auto_increment, b int, c int, d timestamp default current_timestamp, unique(b),unique(c));
 insert into t1 values(null,1,1,now());
@@ -470,7 +488,7 @@ CREATE TABLE t1 ( a INT );
 INSERT INTO t1 VALUES (1), (1);
 CREATE TABLE t2 ( a INT AUTO_INCREMENT KEY );
 INSERT INTO t2 SELECT a FROM t1;
-ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '1' for key 't2.PRIMARY'
 UPDATE t2 SET a = 2;
 SELECT a FROM t2;
 a
@@ -516,3 +534,62 @@ pk
 1
 18446744073709551614
 DROP TABLE t1;
+#
+# Bug #27041393: ASSERTION `HAS_ERROR == THD->GET_STMT_DA()->IS_ERROR()'
+# FAILED.
+#
+USE test;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t1 (c1 DOUBLE NOT NULL AUTO_INCREMENT, c2 INT, PRIMARY KEY (c1))
+ENGINE=InnoDB;
+Warnings:
+Warning	3856	AUTO_INCREMENT support for FLOAT/DOUBLE columns is deprecated and will be removed in a future release. Consider removing AUTO_INCREMENT from column 'c1'.
+# Single row insert:
+INSERT INTO t1 VALUES (0x7FFFFFFFFFFFFFFD, 2);
+ERROR 22007: Truncated incorrect INTEGER value: '9.223372036854776e18'
+SELECT * FROM t1;
+c1	c2
+INSERT INTO t1 (c2) VALUES (3);
+SELECT * FROM t1;
+c1	c2
+1	3
+DELETE FROM t1;
+# Multi row insert:
+INSERT INTO t1 VALUES (0x7FFFFFFFFFFFFFFD, 2), (NULL, 3);
+ERROR 22007: Truncated incorrect INTEGER value: '9.223372036854776e18'
+SELECT * FROM t1;
+c1	c2
+DROP TABLE t1;
+SET sql_mode = '';
+CREATE TABLE t1 (c1 DOUBLE NOT NULL AUTO_INCREMENT, c2 INT, PRIMARY KEY (c1))
+ENGINE=InnoDB;
+Warnings:
+Warning	3856	AUTO_INCREMENT support for FLOAT/DOUBLE columns is deprecated and will be removed in a future release. Consider removing AUTO_INCREMENT from column 'c1'.
+# Single row insert:
+INSERT INTO t1 VALUES (0x7FFFFFFFFFFFFFFD, 2);
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.223372036854776e18'
+Warning	1292	Truncated incorrect INTEGER value: '9.223372036854776e18'
+Warning	1292	Truncated incorrect INTEGER value: '9.223372036854776e18'
+SELECT * FROM t1;
+c1	c2
+9.223372036854776e18	2
+INSERT INTO t1 (c2) VALUES (3);
+SELECT * FROM t1;
+c1	c2
+1	3
+9.223372036854776e18	2
+DELETE FROM t1;
+# Multi row insert:
+INSERT INTO t1 VALUES (0x7FFFFFFFFFFFFFFD, 2), (NULL, 3);
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.223372036854776e18'
+Warning	1292	Truncated incorrect INTEGER value: '9.223372036854776e18'
+SELECT * FROM t1;
+c1	c2
+2	3
+9.223372036854776e18	2
+DROP TABLE t1;
+SET sql_mode = DEFAULT;

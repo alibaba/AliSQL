@@ -1,50 +1,319 @@
+set @@global.ndb_schema_dist_lock_wait_timeout = 1;
 create table t1 ( a int ) engine = ndb;
 begin;
 insert into t1 values(1);
 alter table t1 rename t2;
+Warnings:
+Warning	1296	Node <nodeid> 'Distribution of RENAME TABLE 't1' failed'
 commit;
 drop table t2;
-set global ndb_check_shares=1;
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
+set global ndb_dbg_check_shares=1;
 create table t1 ( a int primary key) engine = ndb;
 begin;
 insert into t1 values(1);
-alter online table t1 add column b int column_format dynamic;
+alter table t1 algorithm=inplace, add column b int column_format dynamic;
+Warnings:
+Warning	1296	Node <nodeid> 'Distribution of ALTER TABLE 't1' failed'
 commit;
 drop table t1;
-set global ndb_check_shares=1;
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
+set global ndb_dbg_check_shares=1;
 create table t1 ( a int primary key) engine = ndb;
 begin;
 insert into t1 values(1);
-alter offline table t1 add column b int column_format dynamic;
+alter table t1 algorithm=copy, add column b int column_format dynamic;
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 commit;
 drop table t1;
-set global ndb_check_shares=1;
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
+set global ndb_dbg_check_shares=1;
 create table t1 ( a int primary key, b int) engine = ndb;
 begin;
 insert into t1 values(1, 1);
-create online index ind_b on t1(b);
+create index ind_b on t1(b) algorithm=inplace;
+Warnings:
+Warning	1296	Node <nodeid> 'Distribution of ALTER TABLE 't1' failed'
 commit;
 drop table t1;
-set global ndb_check_shares=1;
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
+set global ndb_dbg_check_shares=1;
 create table t1 ( a int primary key, b int, index ind_b (b)) engine = ndb;
 begin;
 insert into t1 values(1, 1);
 drop index ind_b on t1;
+Warnings:
+Warning	1296	Node <nodeid> 'Distribution of ALTER TABLE 't1' failed'
 commit;
 drop table t1;
-set global ndb_check_shares=1;
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
+set global ndb_dbg_check_shares=1;
 create database testdb;
 create table testdb.t1 (a int) engine = ndb;
 begin;
 insert into testdb.t1 values(1);
 alter database testdb charset = latin1;
+Warnings:
+Warning	1296	Node <nodeid> 'Distribution of ALTER DATABASE 'testdb' failed'
 commit;
 drop database testdb;
-set global ndb_check_shares=1;
-set global ndb_check_shares=1;
+set global ndb_dbg_check_shares=1;
+set global ndb_dbg_check_shares=1;
+Remote MDL lock claim failure
+Server1 Create table
+create table t1 (a int primary key, b int) engine=ndb;
+insert into t1 values (1,1);
+Add column c on server1
+
+Server2 Get + hold MDL on table t1, no row locks
+begin;
+select * from t1;
+a	b
+1	1
+
+Server1 Send Alter add column, will stall due to remote MDL lock
+alter table t1 add column c int; # Online alter;
+Server2 Issue normal queries on table, causing table access, rollback etc
+
+Server1 Allow ALTER to complete successfully
+
+Server 1 Show table schema at origin
+select * from t1;
+a	b	c
+1	1	NULL
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	int	YES		NULL	
+c	int	YES		NULL	
+select column_name from information_schema.columns where table_name='t1';
+COLUMN_NAME
+a
+b
+c
+
+Server2 Show schema at participant
+select * from t1;
+a	b	c
+1	1	NULL
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	int	YES		NULL	
+c	int	YES		NULL	
+select column_name from information_schema.columns where table_name='t1';
+COLUMN_NAME
+a
+b
+c
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+Add index c on server 1
+Server2 Take + hold MDL lock again
+begin;
+select * from test.t1;
+a	b	c
+1	1	NULL
+Server1 Issue another online DDL, will stall due to remote MDL lock
+alter table t1 add index(c);;
+Server2 Issue normal queries on table, causing table access, rollback etc
+
+Server1 Allow ALTER to complete successfully
+
+Server 1 Show table schema at origin
+select * from t1;
+a	b	c
+1	1	NULL
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `c` (`c`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	int	YES		NULL	
+c	int	YES	MUL	NULL	
+select column_name from information_schema.columns where table_name='t1';
+COLUMN_NAME
+a
+b
+c
+
+Server2 Show schema at participant
+select * from t1;
+a	b	c
+1	1	NULL
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	int	YES		NULL	
+c	int	YES	MUL	NULL	
+select column_name from information_schema.columns where table_name='t1';
+COLUMN_NAME
+a
+b
+c
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `c` (`c`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+Now further changes in the opposite direction
+Server2 -> Server1
+Server1 Take and hold MDL lock
+begin;
+select * from test.t1;
+a	b	c
+1	1	NULL
+Server2 Send Alter table add column, will stall due to remote MDL lock
+alter table t1 add column d int;;
+Server1 Issue normal queries on table, causing table access, rollback etc
+
+Server2 Allow ALTER to complete successfully
+Warnings:
+Warning	1478	Converted FIXED field 'd' to DYNAMIC to enable online ADD COLUMN
+
+Server 2 Show table schema at origin
+select * from t1;
+a	b	c	d
+1	1	NULL	NULL
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `c` (`c`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	int	YES		NULL	
+c	int	YES	MUL	NULL	
+d	int	YES		NULL	
+select column_name from information_schema.columns where table_name='t1';
+COLUMN_NAME
+a
+b
+c
+d
+
+Server1 Show schema at participant
+select * from t1;
+a	b	c	d
+1	1	NULL	NULL
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	int	YES		NULL	
+c	int	YES	MUL	NULL	
+d	int	YES		NULL	
+select column_name from information_schema.columns where table_name='t1';
+COLUMN_NAME
+a
+b
+c
+d
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `c` (`c`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+Add index d on server 2
+Server1 Take and hold MDL lock again
+begin;
+select * from test.t1;
+a	b	c	d
+1	1	NULL	NULL
+Server2 Issue another online DDL, will stall due to remote MDL lock
+alter table t1 add index(d);;
+Server1 Issue normal queries on table, causing table access, rollback etc
+
+Server2 Allow ALTER to complete successfully
+
+Server 2 Show table schema
+select * from t1;
+a	b	c	d
+1	1	NULL	NULL
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `c` (`c`),
+  KEY `d` (`d`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	int	YES		NULL	
+c	int	YES	MUL	NULL	
+d	int	YES	MUL	NULL	
+select column_name from information_schema.columns where table_name='t1';
+COLUMN_NAME
+a
+b
+c
+d
+
+Server1 Show schema at participant
+select * from t1;
+a	b	c	d
+1	1	NULL	NULL
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	int	YES		NULL	
+c	int	YES	MUL	NULL	
+d	int	YES	MUL	NULL	
+select column_name from information_schema.columns where table_name='t1';
+COLUMN_NAME
+a
+b
+c
+d
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `c` (`c`),
+  KEY `d` (`d`)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table t1;

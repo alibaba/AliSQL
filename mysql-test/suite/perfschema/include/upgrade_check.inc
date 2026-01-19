@@ -2,8 +2,9 @@
 # $out_file and $err_file must be set within pfs_upgrade.test.
 #
 
+--source include/mysql_upgrade_preparation.inc
+
 --source include/count_sessions.inc
---error 1
 --exec $MYSQL_UPGRADE --skip-verbose --force > $out_file 2> $err_file
 --source include/wait_until_count_sessions.inc
 
@@ -14,3 +15,4 @@
 --error 0,1
 --remove_file $err_file
 
+--source include/mysql_upgrade_cleanup.inc

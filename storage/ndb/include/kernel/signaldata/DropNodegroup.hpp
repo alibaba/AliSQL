@@ -1,23 +1,32 @@
-/* Copyright (C) 2008 MySQL AB
-   Use is subject to license terms
+/* Copyright (c) 2008, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #ifndef DROP_NODEGROUP_HPP
 #define DROP_NODEGROUP_HPP
 
 #include "SignalData.hpp"
+
+#define JAM_FILE_ID 74
 
 struct DropNodegroupReq {
   /**
@@ -29,9 +38,9 @@ struct DropNodegroupReq {
   /**
    * For printing
    */
-  friend bool printDROP_NODEGROUP_REQ(FILE*, const Uint32*, Uint32, Uint16);
+  friend bool printDROP_NODEGROUP_REQ(FILE *, const Uint32 *, Uint32, Uint16);
 
-  STATIC_CONST( SignalLength = 6 );
+  static constexpr Uint32 SignalLength = 6;
 
   union {
     Uint32 senderData;
@@ -61,9 +70,9 @@ struct DropNodegroupRef {
   /**
    * For printing
    */
-  friend bool printDROP_NODEGROUP_REF(FILE*, const Uint32*, Uint32, Uint16);
+  friend bool printDROP_NODEGROUP_REF(FILE *, const Uint32 *, Uint32, Uint16);
 
-  STATIC_CONST( SignalLength = 7 );
+  static constexpr Uint32 SignalLength = 7;
 
   enum ErrorCode {
     NoError = 0,
@@ -97,13 +106,15 @@ struct DropNodegroupConf {
   /**
    * For printing
    */
-  friend bool printDROP_NODEGROUP_CONF(FILE*, const Uint32*, Uint32, Uint16);
+  friend bool printDROP_NODEGROUP_CONF(FILE *, const Uint32 *, Uint32, Uint16);
 
-  STATIC_CONST( SignalLength = 3 );
+  static constexpr Uint32 SignalLength = 3;
 
   Uint32 senderData;
   Uint32 senderRef;
   Uint32 transId;
 };
+
+#undef JAM_FILE_ID
 
 #endif

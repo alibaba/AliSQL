@@ -1,289 +1,318 @@
-/* Copyright (c) 2006, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
   @file
   File containing constants that can be used throughout the server.
 
-  @note This file shall not contain any includes of any kinds.
+  @note This file shall not contain any includes of sql/xxx.h files.
 */
 
 #ifndef SQL_CONST_INCLUDED
 #define SQL_CONST_INCLUDED
 
-#define LIBLEN FN_REFLEN-FN_LEN			/* Max l{ngd p} dev */
-/* extra 4+4 bytes for slave tmp tables */
-#define MAX_DBKEY_LENGTH (NAME_LEN*2+1+1+4+4)
-#define MAX_ALIAS_NAME 256
-#define MAX_FIELD_NAME 34			/* Max colum name length +2 */
-#define MAX_SYS_VAR_LENGTH 32
-#define MAX_KEY MAX_INDEXES                     /* Max used keys */
-#define MAX_REF_PARTS 16U			/* Max parts used as ref */
-#define MAX_KEY_LENGTH 3072U			/* max possible key */
-#if SIZEOF_OFF_T > 4
-#define MAX_REFLENGTH 8				/* Max length for record ref */
-#else
-#define MAX_REFLENGTH 4				/* Max length for record ref */
-#endif
-#define MAX_HOSTNAME  61			/* len+1 in mysql.user */
+#include <float.h>
+#include <stddef.h>
+#include <stdint.h>
 
-#define MAX_MBWIDTH		3		/* Max multibyte sequence */
-#define MAX_FIELD_CHARLENGTH	255
-#define MAX_FIELD_VARCHARLENGTH	65535
-#define MAX_FIELD_BLOBLENGTH UINT_MAX32     /* cf field_blob::get_length() */
+#include <limits>
+
+#include "my_config.h"     // MAX_INDEXES
+#include "my_table_map.h"  // table_map
+
+constexpr const int MAX_ALIAS_NAME{256};
+
+constexpr const unsigned int MAX_KEY{MAX_INDEXES}; /* Max used keys */
+constexpr const unsigned int MAX_REF_PARTS{16};    /* Max parts used as ref */
+constexpr const unsigned int MAX_KEY_LENGTH{3072}; /* max possible key */
+
+constexpr const int MAX_FIELD_CHARLENGTH{255};
+constexpr const int MAX_FIELD_VARCHARLENGTH{65535};
+
+/* cf Field_blob::get_length() */
+constexpr const unsigned int MAX_FIELD_BLOBLENGTH{
+    std::numeric_limits<uint32_t>::max()};
+
 /**
   CHAR and VARCHAR fields longer than this number of characters are converted
   to BLOB.
   Non-character fields longer than this number of bytes are converted to BLOB.
   Comparisons should be '>' or '<='.
 */
-#define CONVERT_IF_BIGGER_TO_BLOB 512		/* Used for CREATE ... SELECT */
+constexpr const int CONVERT_IF_BIGGER_TO_BLOB{512};
 
-/* Max column width +1 */
-#define MAX_FIELD_WIDTH		(MAX_FIELD_CHARLENGTH*MAX_MBWIDTH+1)
+/** Max column width + 1. 3 is mbmaxlen for utf8mb3 */
+constexpr const int MAX_FIELD_WIDTH{MAX_FIELD_CHARLENGTH * 3 + 1};
 
-#define MAX_BIT_FIELD_LENGTH    64      /* Max length in bits for bit fields */
+/** YYYY-MM-DD */
+constexpr const int MAX_DATE_WIDTH{10};
+/** -838:59:59 */
+constexpr const int MAX_TIME_WIDTH{10};
+/** -DDDDDD HH:MM:SS.###### */
+constexpr const int MAX_TIME_FULL_WIDTH{23};
+/** YYYY-MM-DD HH:MM:SS.###### AM */
+constexpr const int MAX_DATETIME_FULL_WIDTH{29};
+/** YYYY-MM-DD HH:MM:SS */
+constexpr const int MAX_DATETIME_WIDTH{19};
 
-#define MAX_DATE_WIDTH		10	/* YYYY-MM-DD */
-#define MAX_TIME_WIDTH          10      /* -838:59:59 */
-#define MAX_TIME_FULL_WIDTH     23      /* -DDDDDD HH:MM:SS.###### */
-#define MAX_DATETIME_FULL_WIDTH 29	/* YYYY-MM-DD HH:MM:SS.###### AM */
-#define MAX_DATETIME_WIDTH	19	/* YYYY-MM-DD HH:MM:SS */
-#define MAX_DATETIME_COMPRESSED_WIDTH 14  /* YYYYMMDDHHMMSS */
-
-#define DATE_INT_DIGITS       8         /* YYYYMMDD       */
-#define TIME_INT_DIGITS       7         /* hhhmmss        */
-#define DATETIME_INT_DIGITS  14         /* YYYYMMDDhhmmss */
-
-#define MAX_TABLES	(sizeof(table_map)*8-3)	/* Max tables in join */
-#define PARAM_TABLE_BIT	(((table_map) 1) << (sizeof(table_map)*8-3))
-#define OUTER_REF_TABLE_BIT	(((table_map) 1) << (sizeof(table_map)*8-2))
-#define RAND_TABLE_BIT	(((table_map) 1) << (sizeof(table_map)*8-1))
-#define PSEUDO_TABLE_BITS (PARAM_TABLE_BIT | OUTER_REF_TABLE_BIT | \
-                           RAND_TABLE_BIT)
-#define MAX_FIELDS	4096			/* Limit in the .frm file */
-#define MAX_PARTITIONS  8192
-
-#define MAX_SELECT_NESTING (sizeof(nesting_map)*8-1)
-
-#define DEFAULT_SORT_MEMORY (256UL* 1024UL)
-#define MIN_SORT_MEMORY     (32UL * 1024UL)
-
-/* Some portable defines */
-
-#define STRING_BUFFER_USUAL_SIZE 80
-
-/* Memory allocated when parsing a statement / saving a statement */
-#define MEM_ROOT_BLOCK_SIZE       8192
-#define MEM_ROOT_PREALLOC         8192
-#define TRANS_MEM_ROOT_BLOCK_SIZE 4096
-#define TRANS_MEM_ROOT_PREALLOC   4096
-
-#define DEFAULT_ERROR_COUNT	64
-#define EXTRA_RECORDS	10			/* Extra records in sort */
-#define SCROLL_EXTRA	5			/* Extra scroll-rows. */
-#define FIELD_NAME_USED ((uint) 32768)		/* Bit set if fieldname used */
-#define FORM_NAME_USED	((uint) 16384)		/* Bit set if formname used */
-#define FIELD_NR_MASK	16383			/* To get fieldnumber */
-#define FERR		-1			/* Error from my_functions */
-#define CREATE_MODE	0			/* Default mode on new files */
-#define NAMES_SEP_CHAR	'\377'			/* Char to sep. names */
-
-#define READ_RECORD_BUFFER	(uint) (IO_SIZE*8) /* Pointer_buffer_size */
-#define DISK_BUFFER_SIZE	(uint) (IO_SIZE*16) /* Size of diskbuffer */
-
-#define FRM_VER_TRUE_VARCHAR (FRM_VER+4) /* 10 */
-
-/***************************************************************************
-  Configuration parameters
-****************************************************************************/
-
-#define ACL_CACHE_SIZE		256
-#define MAX_PASSWORD_LENGTH	32
-#define HOST_CACHE_SIZE		128
-#define MAX_ACCEPT_RETRY	10	// Test accept this many times
-#define MAX_FIELDS_BEFORE_HASH	32
-#define USER_VARS_HASH_SIZE     16
-#define SEQUENCES_HASH_SIZE     16
-#define TABLE_OPEN_CACHE_MIN    400
-#define TABLE_OPEN_CACHE_DEFAULT 2000
-#define TABLE_DEF_CACHE_DEFAULT 400
 /**
-  Maximum number of connections default value.
-  151 is larger than Apache's default max children,
-  to avoid "too many connections" error in a common setup.
+  MAX_TABLES and xxx_TABLE_BIT are used in optimization of table factors and
+  expressions, and in join plan generation.
+  MAX_TABLES counts the maximum number of tables that can be handled in a
+  join operation. It is the number of bits in the table_map, minus the
+  number of pseudo table bits (bits that do not represent actual tables, but
+  still need to be handled by our algorithms). The pseudo table bits are:
+  INNER_TABLE_BIT is set for all expressions that contain a parameter,
+  a subquery that accesses tables, or a function that accesses tables.
+  An expression that has only INNER_TABLE_BIT is constant for the duration
+  of a query expression, but must be evaluated at least once during execution.
+  OUTER_REF_TABLE_BIT is set for expressions that contain a column that
+  is resolved as an outer reference. Also notice that all subquery items
+  between the column reference and the query block where the column is
+  resolved, have this bit set. Expressions that are represented by this bit
+  are constant for the duration of the subquery they are defined in.
+  RAND_TABLE_BIT is set for expressions containing a non-deterministic
+  element, such as a random function or a non-deterministic function.
+  Expressions containing this bit cannot be evaluated once and then cached,
+  they must be evaluated at latest possible point.
+  RAND_TABLE_BIT is also piggy-backed to avoid moving Item_func_reject_if
+  from its join condition. This usage is similar to its use by
+  Item_is_not_null_test.
+  MAX_TABLES_FOR_SIZE adds the pseudo bits and is used for sizing purposes only.
 */
-#define MAX_CONNECTIONS_DEFAULT 151
-/**
-  We must have room for at least 400 table definitions in the table
-  cache, since otherwise there is no chance prepared
-  statements that use these many tables can work.
-  Prepared statements use table definition cache ids (table_map_id)
-  as table version identifiers. If the table definition
-  cache size is less than the number of tables used in a statement,
-  the contents of the table definition cache is guaranteed to rotate
-  between a prepare and execute. This leads to stable validation
-  errors. In future we shall use more stable version identifiers,
-  for now the only solution is to ensure that the table definition
-  cache can contain at least all tables of a given statement.
-*/
-#define TABLE_DEF_CACHE_MIN     400
+/** Use for sizing ONLY */
+constexpr const size_t MAX_TABLES_FOR_SIZE{sizeof(table_map) * 8};
 
-/*
+/** Max tables in join */
+constexpr const size_t MAX_TABLES{MAX_TABLES_FOR_SIZE - 3};
+
+constexpr const table_map INNER_TABLE_BIT{1ULL << (MAX_TABLES + 0)};
+constexpr const table_map OUTER_REF_TABLE_BIT{1ULL << (MAX_TABLES + 1)};
+constexpr const table_map RAND_TABLE_BIT{1ULL << (MAX_TABLES + 2)};
+constexpr const table_map PSEUDO_TABLE_BITS{
+    INNER_TABLE_BIT | OUTER_REF_TABLE_BIT | RAND_TABLE_BIT};
+
+/** Maximum number of columns */
+constexpr const int MAX_FIELDS{4096};
+constexpr const int MAX_PARTITIONS{8192};
+
+/** Max length of enum/set values */
+constexpr const int MAX_INTERVAL_VALUE_LENGTH{255};
+
+constexpr const size_t MIN_SORT_MEMORY{32 * 1024};
+
+constexpr const size_t STRING_BUFFER_USUAL_SIZE{80};
+
+/** Memory allocated when parsing a statement */
+constexpr const size_t MEM_ROOT_BLOCK_SIZE{8192};
+
+/** Default mode on new files */
+constexpr const int CREATE_MODE{0};
+
+constexpr const size_t MAX_PASSWORD_LENGTH{32};
+
+/**
   Stack reservation.
   Feel free to raise this by the smallest amount you can to get the
   "execution_constants" test to pass.
 */
-#define STACK_MIN_SIZE          16000   // Abort if less stack during eval.
-
-#define STACK_MIN_SIZE_FOR_OPEN 1024*80
-#define STACK_BUFF_ALLOC        352     ///< For stack overrun checks
-#ifndef MYSQLD_NET_RETRY_COUNT
-#define MYSQLD_NET_RETRY_COUNT  10	///< Abort read after this many int.
+#if defined HAVE_UBSAN && SIZEOF_CHARP == 4
+constexpr const long STACK_MIN_SIZE{30000};  // Abort if less stack during eval.
+#else
+constexpr const long STACK_MIN_SIZE{20000};  // Abort if less stack during eval.
 #endif
 
-#define QUERY_ALLOC_BLOCK_SIZE		8192
-#define QUERY_ALLOC_PREALLOC_SIZE   	8192
-#define TRANS_ALLOC_BLOCK_SIZE		4096
-#define TRANS_ALLOC_PREALLOC_SIZE	4096
-#define RANGE_ALLOC_BLOCK_SIZE		4096
-#define ACL_ALLOC_BLOCK_SIZE		1024
-#define UDF_ALLOC_BLOCK_SIZE		1024
-#define TABLE_ALLOC_BLOCK_SIZE		1024
-#define WARN_ALLOC_BLOCK_SIZE		2048
-#define WARN_ALLOC_PREALLOC_SIZE	1024
+constexpr const int STACK_BUFF_ALLOC{352};  ///< For stack overrun checks
+
+constexpr const size_t ACL_ALLOC_BLOCK_SIZE{1024};
+constexpr const size_t TABLE_ALLOC_BLOCK_SIZE{1024};
+
+constexpr const int PRECISION_FOR_DOUBLE{53};
+constexpr const int PRECISION_FOR_FLOAT{24};
+
+/** -[digits].E+## */
+constexpr const int MAX_FLOAT_STR_LENGTH{FLT_DIG + 6};
+/** -[digits].E+### */
+constexpr const int MAX_DOUBLE_STR_LENGTH{DBL_DIG + 7};
+
+constexpr const unsigned long LONG_TIMEOUT{3600 * 24 * 365};
 
 /*
-  The following parameters is to decide when to use an extra cache to
-  optimise seeks when reading a big table in sorted order
+  Flags below are set when we perform
+  context analysis of the statement and make
+  subqueries non-const. It prevents subquery
+  evaluation at context analysis stage.
 */
-#define MIN_FILE_LENGTH_TO_USE_ROW_CACHE (10L*1024*1024)
-#define MIN_ROWS_TO_USE_TABLE_CACHE	 100
-#define MIN_ROWS_TO_USE_BULK_INSERT	 100
 
 /**
-  The following is used to decide if MySQL should use table scanning
-  instead of reading with keys.  The number says how costly evaluation of the
-  filter condition for a row is compared to reading one extra row from a table.
+  Don't evaluate this subquery during statement prepare even if
+  it's a constant one. The flag is switched off in the end of
+  mysqld_stmt_prepare.
 */
-#define ROW_EVALUATE_COST  0.20
+constexpr const uint8_t CONTEXT_ANALYSIS_ONLY_PREPARE{1};
+/**
+  Special Query_block::prepare mode: changing of query is prohibited.
+  When creating a view, we need to just check its syntax omitting
+  any optimizations: afterwards definition of the view will be
+  reconstructed by means of ::print() methods and written to
+  to an .frm file. We need this definition to stay untouched.
+*/
+constexpr const uint8_t CONTEXT_ANALYSIS_ONLY_VIEW{2};
+/**
+  Don't evaluate this subquery during derived table prepare even if
+  it's a constant one.
+*/
+constexpr const uint8_t CONTEXT_ANALYSIS_ONLY_DERIVED{4};
 
 /**
-  Cost of comparing a rowid compared to reading one row from a table.
+   @@optimizer_switch flags.
+   These must be in sync with optimizer_switch_typelib
+ */
+constexpr const uint64_t OPTIMIZER_SWITCH_INDEX_MERGE{1ULL << 0};
+constexpr const uint64_t OPTIMIZER_SWITCH_INDEX_MERGE_UNION{1ULL << 1};
+constexpr const uint64_t OPTIMIZER_SWITCH_INDEX_MERGE_SORT_UNION{1ULL << 2};
+constexpr const uint64_t OPTIMIZER_SWITCH_INDEX_MERGE_INTERSECT{1ULL << 3};
+constexpr const uint64_t OPTIMIZER_SWITCH_ENGINE_CONDITION_PUSHDOWN{1ULL << 4};
+constexpr const uint64_t OPTIMIZER_SWITCH_INDEX_CONDITION_PUSHDOWN{1ULL << 5};
+/** If this is off, MRR is never used. */
+constexpr const uint64_t OPTIMIZER_SWITCH_MRR{1ULL << 6};
+/**
+   If OPTIMIZER_SWITCH_MRR is on and this is on, MRR is used depending on a
+   cost-based choice ("automatic"). If OPTIMIZER_SWITCH_MRR is on and this is
+   off, MRR is "forced" (i.e. used as long as the storage engine is capable of
+   doing it).
 */
-#define ROWID_COMPARE_COST 0.10  // Half the cost of a general row comparison
+constexpr const uint64_t OPTIMIZER_SWITCH_MRR_COST_BASED{1ULL << 7};
+constexpr const uint64_t OPTIMIZER_SWITCH_BNL{1ULL << 8};
+constexpr const uint64_t OPTIMIZER_SWITCH_BKA{1ULL << 9};
+constexpr const uint64_t OPTIMIZER_SWITCH_MATERIALIZATION{1ULL << 10};
+constexpr const uint64_t OPTIMIZER_SWITCH_SEMIJOIN{1ULL << 11};
+constexpr const uint64_t OPTIMIZER_SWITCH_LOOSE_SCAN{1ULL << 12};
+constexpr const uint64_t OPTIMIZER_SWITCH_FIRSTMATCH{1ULL << 13};
+constexpr const uint64_t OPTIMIZER_SWITCH_DUPSWEEDOUT{1ULL << 14};
+constexpr const uint64_t OPTIMIZER_SWITCH_SUBQ_MAT_COST_BASED{1ULL << 15};
+constexpr const uint64_t OPTIMIZER_SWITCH_USE_INDEX_EXTENSIONS{1ULL << 16};
+constexpr const uint64_t OPTIMIZER_SWITCH_COND_FANOUT_FILTER{1ULL << 17};
+constexpr const uint64_t OPTIMIZER_SWITCH_DERIVED_MERGE{1ULL << 18};
+constexpr const uint64_t OPTIMIZER_SWITCH_USE_INVISIBLE_INDEXES{1ULL << 19};
+constexpr const uint64_t OPTIMIZER_SKIP_SCAN{1ULL << 20};
+constexpr const uint64_t OPTIMIZER_SWITCH_HASH_JOIN{1ULL << 21};
+constexpr const uint64_t OPTIMIZER_SWITCH_SUBQUERY_TO_DERIVED{1ULL << 22};
+constexpr const uint64_t OPTIMIZER_SWITCH_PREFER_ORDERING_INDEX{1ULL << 23};
+constexpr const uint64_t OPTIMIZER_SWITCH_HYPERGRAPH_OPTIMIZER{1ULL << 24};
+constexpr const uint64_t OPTIMIZER_SWITCH_DERIVED_CONDITION_PUSHDOWN{1ULL
+                                                                     << 25};
+constexpr const uint64_t OPTIMIZER_SWITCH_LAST{1ULL << 26};
 
-/*
-  For sequential disk seeks the cost formula is:
-    DISK_SEEK_BASE_COST + DISK_SEEK_PROP_COST * #blocks_to_skip  
-  
-  The cost of average seek 
-    DISK_SEEK_BASE_COST + DISK_SEEK_PROP_COST*BLOCKS_IN_AVG_SEEK =1.0.
-*/
-#define DISK_SEEK_BASE_COST ((double)0.9)
+enum SHOW_COMP_OPTION { SHOW_OPTION_YES, SHOW_OPTION_NO, SHOW_OPTION_DISABLED };
 
-#define BLOCKS_IN_AVG_SEEK  128
-
-#define DISK_SEEK_PROP_COST ((double)0.1/BLOCKS_IN_AVG_SEEK)
-
+enum enum_mark_columns {
+  MARK_COLUMNS_NONE,
+  MARK_COLUMNS_READ,
+  MARK_COLUMNS_WRITE,
+  MARK_COLUMNS_TEMP
+};
 
 /**
-  Number of rows in a reference table when refereed through a not unique key.
-  This value is only used when we don't know anything about the key
-  distribution.
+  Exit code used by mysqld_exit, exit and _exit function
+  to indicate successful termination of mysqld.
 */
-#define MATCHING_ROWS_IN_OTHER_TABLE 10
-
-/*
-  Constants related to the use of temporary tables in query execution.
-  Lookup and write operations are currently assumed to be equally costly
-  (concerns HEAP_TEMPTABLE_ROW_COST and DISK_TEMPTABLE_ROW_COST).
+constexpr const int MYSQLD_SUCCESS_EXIT{0};
+/**
+  Exit code used by mysqld_exit, exit and _exit function to
+  signify unsuccessful termination of mysqld. The exit
+  code signifies the server should NOT BE RESTARTED AUTOMATICALLY
+  by init systems like systemd.
 */
-/*
-  Creating a Heap temporary table is by benchmark found to be as costly as
-  writing 10 rows into the table.
+constexpr const int MYSQLD_ABORT_EXIT{1};
+/**
+  Exit code used by mysqld_exit, exit and _exit function to
+  signify unsuccessful termination of mysqld. The exit code
+  signifies the server should be RESTARTED AUTOMATICALLY by
+  init systems like systemd.
 */
-#define HEAP_TEMPTABLE_CREATE_COST    2.0
-/*
-  Writing a row to or reading a row from a Heap temporary table is equivalent
-  to evaluating a row in the join engine.
+constexpr const int MYSQLD_FAILURE_EXIT{2};
+/**
+  Exit code used by mysqld_exit, my_thread_exit function which allows
+  for external programs like systemd, mysqld_safe to restart mysqld
+  server. The exit code 16 is chosen so it is safe as InnoDB code
+  exit directly with values like 3.
 */
-#define HEAP_TEMPTABLE_ROW_COST       0.2
-/*
-  Creating a MyISAM table is 20 times slower than creating a Heap table.
-*/
-#define DISK_TEMPTABLE_CREATE_COST   40.0
-/*
-  Generating MyIsam rows sequentially is 2 times slower than generating
-  Heap rows, when number of rows is greater than 1000. However, we do not have
-  benchmarks for very large tables, so setting this factor conservatively to
-  be 5 times slower (ie the cost is 1.0).
-*/
-#define DISK_TEMPTABLE_ROW_COST       1.0
+constexpr const int MYSQLD_RESTART_EXIT{16};
 
-#define MY_CHARSET_BIN_MB_MAXLEN 1
-
-/** Don't pack string keys shorter than this (if PACK_KEYS=1 isn't used). */
-#define KEY_DEFAULT_PACK_LENGTH 8
-
-/** Characters shown for the command in 'show processlist'. */
-#define PROCESS_LIST_WIDTH 100
-/* Characters shown for the command in 'information_schema.processlist' */
-#define PROCESS_LIST_INFO_WIDTH 65535
-
-/* The max key string length for sql filter */
-#define SQL_FILTER_STR_LEN 10240
-
-#define PRECISION_FOR_DOUBLE 53
-#define PRECISION_FOR_FLOAT  24
-
-/* -[digits].E+## */
-#define MAX_FLOAT_STR_LENGTH (FLT_DIG + 6)
-/* -[digits].E+### */
-#define MAX_DOUBLE_STR_LENGTH (DBL_DIG + 7)
-
-/*
-  Default time to wait before aborting a new client connection
-  that does not respond to "initial server greeting" timely
-*/
-#define CONNECT_TIMEOUT		10
-
-/* The following can also be changed from the command line */
-#define DEFAULT_CONCURRENCY	10
-#define DELAYED_LIMIT		100		/**< pause after xxx inserts */
-#define DELAYED_QUEUE_SIZE	1000
-#define DELAYED_WAIT_TIMEOUT	5*60		/**< Wait for delayed insert */
-
-#define LONG_TIMEOUT ((ulong) 3600L*24L*365L)
+constexpr const size_t UUID_LENGTH{8 + 1 + 4 + 1 + 4 + 1 + 4 + 1 + 12};
 
 /**
-  Maximum length of time zone name that we support (Time zone name is
-  char(64) in db). mysqlbinlog needs it.
+  This enumeration type is used only by the function find_item_in_list
+  to return the info on how an item has been resolved against a list
+  of possibly aliased items.
+  The item can be resolved:
+   - against an alias name of the list's element (RESOLVED_AGAINST_ALIAS)
+   - against non-aliased field name of the list  (RESOLVED_WITH_NO_ALIAS)
+   - against an aliased field name of the list   (RESOLVED_BEHIND_ALIAS)
+   - ignoring the alias name in cases when SQL requires to ignore aliases
+     (e.g. when the resolved field reference contains a table name or
+     when the resolved item is an expression)   (RESOLVED_IGNORING_ALIAS)
 */
-#define MAX_TIME_ZONE_NAME_LENGTH       (NAME_LEN + 1)
+enum enum_resolution_type {
+  NOT_RESOLVED = 0,
+  RESOLVED_BEHIND_ALIAS,
+  RESOLVED_AGAINST_ALIAS,
+  RESOLVED_WITH_NO_ALIAS,
+  RESOLVED_IGNORING_ALIAS
+};
 
-#if defined(__WIN__)
-#define INTERRUPT_PRIOR -2
-#define CONNECT_PRIOR	-1
-#define WAIT_PRIOR	0
-#define QUERY_PRIOR	2
-#else
-#define INTERRUPT_PRIOR 10
-#define CONNECT_PRIOR	9
-#define WAIT_PRIOR	8
-#define QUERY_PRIOR	6
-#endif /* __WIN92__ */
+/// Enumeration for {Item,Query_block[_UNIT],Table_function}::walk
+enum class enum_walk {
+  PREFIX = 0x01,
+  POSTFIX = 0x02,
+  SUBQUERY = 0x04,
+  SUBQUERY_PREFIX = 0x05,  // Combine prefix and subquery traversal
+  SUBQUERY_POSTFIX = 0x06  // Combine postfix and subquery traversal
+};
 
+inline enum_walk operator|(enum_walk lhs, enum_walk rhs) {
+  return enum_walk(int(lhs) | int(rhs));
+}
+
+inline bool operator&(enum_walk lhs, enum_walk rhs) {
+  return (int(lhs) & int(rhs)) != 0;
+}
+
+class Item;
+/// Processor type for {Item,Query_block[_UNIT],Table_function}::walk
+using Item_processor = bool (Item::*)(unsigned char *);
+
+/// Enumeration for Query_block::condition_context.
+/// If the expression being resolved belongs to a condition clause (WHERE, etc),
+/// it is connected to the clause's root through a chain of Items; tells if this
+/// chain matches ^(AND)*$ ("is top-level"), ^(AND|OR)*$, or neither.
+enum class enum_condition_context {
+  NEITHER,
+  ANDS,
+  ANDS_ORS,
+};
+
+/// Used to uniquely name expressions in derived tables
+#define SYNTHETIC_FIELD_NAME "Name_exp_"
 #endif /* SQL_CONST_INCLUDED */

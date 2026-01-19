@@ -1,0 +1,1 @@
+--skip-log-bin --gtid-executed-compression-period=5 --skip-replica-preserve-commit-order --log-replica-updates=false

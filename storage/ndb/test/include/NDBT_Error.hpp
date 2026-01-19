@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005-2007 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,17 +26,16 @@
 #ifndef NDBT_Error_HPP
 #define NDBT_Error_HPP
 
-#include <NdbOut.hpp>
 #include <NdbError.hpp>
+#include <NdbOut.hpp>
 
 /**
- * NDBT_Error.hpp 
- * This is the main include file about error handling in NDBT test programs 
+ * NDBT_Error.hpp
+ * This is the main include file about error handling in NDBT test programs
  *
  */
 class ErrorData {
-
-public:
+ public:
   ErrorData();
   ~ErrorData();
 
@@ -38,34 +44,34 @@ public:
    *
    * Return true if successeful
    */
-  bool parseCmdLineArg(const char ** argv, int & i);
-  
+  bool parseCmdLineArg(char **argv, int &i);
+
   /**
    * Print cmd line arguments
    */
-  void printCmdLineArgs(NdbOut & out = ndbout);
+  void printCmdLineArgs(NdbOut &out = ndbout);
 
   /**
    * Print settings
    */
-  void printSettings(NdbOut & out = ndbout);
-  
+  void printSettings(NdbOut &out = ndbout);
+
   /**
    * Print error count
    */
-  void printErrorCounters(NdbOut & out = ndbout) const;
-  
+  void printErrorCounters(NdbOut &out = ndbout) const;
+
   /**
    * Reset error counters
    */
   void resetErrorCounters();
-  
+
   /**
-   * 
+   *
    */
-  int handleErrorCommon(const NdbError & error);
-  
-private:
+  int handleErrorCommon(const NdbError &error);
+
+ private:
   bool key_error;
   bool temporary_resource_error;
   bool insufficient_space_error;
@@ -75,29 +81,29 @@ private:
   bool internal_error;
   bool user_error;
   bool application_error;
-  
-  Uint32 * errorCountArray;
+
+  Uint32 *errorCountArray;
 };
 
 //
 //  ERR prints an NdbError object together with a description of where the
-//  error occured
+//  error occurred
 //
-#define ERR_OUT(where, error) \
-  {  where << "ERROR: " << error.code << " " \
-           << error.message << endl \
-           << "           " << "Status: " << error.status \
-           << ", Classification: " << error.classification << endl\
-           << "           " << "File: " << __FILE__ \
-           << " (Line: " << __LINE__ << ")" << endl \
-	   ; \
+#define NDB_ERR_OUT(where, error)                                           \
+  {                                                                         \
+    where << "ERROR: " << error.code << " " << error.message << endl        \
+          << "           "                                                  \
+          << "Status: " << error.status                                     \
+          << ", Classification: " << error.classification << endl           \
+          << "           "                                                  \
+          << "File: " << __FILE__ << " (Line: " << __LINE__ << ")" << endl; \
   }
 
-#define ERR(error) \
-{ \
-  const NdbError &_error= (error); \
-  ERR_OUT(g_err, _error); \
-}
-#define ERR_INFO(error) ERR_OUT(g_info, error)
+#define NDB_ERR(error)                \
+  {                                   \
+    const NdbError &_error = (error); \
+    NDB_ERR_OUT(g_err, _error);       \
+  }
+#define NDB_ERR_INFO(error) NDB_ERR_OUT(g_info, error)
 
 #endif

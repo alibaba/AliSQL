@@ -1,5 +1,3 @@
-# Don't test with embedded server
--- source include/not_embedded.inc
 
 # Test of grants when lower_case_table_names is on
 use mysql;
@@ -8,6 +6,7 @@ use mysql;
 create database MYSQLtest;
 
 # check that database name gets forced to lowercase
+create user mysqltest_1@localhost;
 grant all on MySQLtest.* to mysqltest_1@localhost;
 show grants for mysqltest_1@localhost;
 

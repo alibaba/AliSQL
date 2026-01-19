@@ -275,16 +275,6 @@ create table t1 as select md5('a') as c1;
 show create table t1;
 drop table t1;
 
-select old_password('a'), hex(old_password('a'));
-create table t1 as select old_password('a') as c1;
-show create table t1;
-drop table t1;
-
-select password('a'), hex(password('a'));
-create table t1 as select password('a') as c1;
-show create table t1;
-drop table t1;
-
 select sha('a'), hex(sha('a'));
 create table t1 as select sha('a') as c1;
 show create table t1;
@@ -464,10 +454,15 @@ create table t1 as select concat(row_count()) as c1;
 show create table t1;
 drop table t1;
 
+# Make found_rows() below defined.
+create table t2 ( f1 integer );
+insert into t2 values (1),(2),(3),(4);
+select sql_calc_found_rows * from t2 limit 2;
+
 select hex(concat(found_rows()));
 create table t1 as select concat(found_rows()) as c1;
 show create table t1;
-drop table t1;
+drop table t1, t2;
 
 create table t1 as select concat(uuid_short()) as c1;
 show create table t1;
@@ -488,7 +483,7 @@ create table t1 as select concat(uuid(), cast('a' as char character set latin1))
 show create table t1;
 drop table t1;
 
-create table t1 as select concat(master_pos_wait('non-existent',0,2)) as c1;
+create table t1 as select concat(source_pos_wait('non-existent',0,2)) as c1;
 show create table t1;
 drop table t1;
 
@@ -651,77 +646,76 @@ drop table t1;
 # GIS functions
 #
 
-select hex(concat(Dimension(GeomFromText('LINESTRING(0 0,10 10)'))));
-create table t1 as select concat(Dimension(GeomFromText('LINSTRING(0 0,10 10)'))) as c1;
+select hex(concat(ST_Dimension(ST_GeomFromText('LINESTRING(0 0,10 10)'))));
+--error ER_GIS_INVALID_DATA
+create table t1 as select concat(ST_Dimension(ST_GeomFromText('LINSTRING(0 0,10 10)'))) as c1;
+
+select hex(concat(ST_NumGeometries(ST_MultiPointFromText('MULTIPOINT(0 0,10 10)'))));
+create table t1 as select concat(ST_NumGeometries(ST_MultiPointFromText('MULTIPOINT(0 0,10 10)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(NumGeometries(MultiPointFromText('MULTIPOINT(0 0,10 10)'))));
-create table t1 as select concat(NumGeometries(MultiPointFromText('MULTIPOINT(0 0,10 10)'))) as c1;
+select hex(concat(ST_NumPoints(ST_LineFromText('LINESTRING(0 0,10 10)'))));
+create table t1 as select concat(ST_NumPoints(ST_LineFromText('LINESTRING(0 0,10 10)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(NumPoints(MultiPointFromText('LINESTRING(0 0,10 10)'))));
-create table t1 as select concat(NumPoints(MultiPointFromText('LINESTRING(0 0,10 10)'))) as c1;
+select hex(concat(ST_SRID(ST_MultiPointFromText('MULTIPOINT(0 0,10 10)'))));
+create table t1 as select concat(ST_SRID(ST_MultiPointFromText('MULTIPOINT(0 0,10 10)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(SRID(MultiPointFromText('MULTIPOINT(0 0,10 10)'))));
-create table t1 as select concat(SRID(MultiPointFromText('MULTIPOINT(0 0,10 10)'))) as c1;
+select hex(concat(ST_NumInteriorRings(ST_PolygonFromText('POLYGON((0 0,50 0,50 50,0 50,0 0), (10 10,20 10,20 20,10 20,10 10))'))));
+create table t1 as select concat(ST_NumInteriorRings(ST_PolygonFromText('POLYGON((0 0,50 0,50 50,0 50,0 0), (10 10,20 10,20 20,10 20,10 10))'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(NumInteriorRings(PolygonFromText('POLYGON((0 0,50 0,50 50,0 50,0 0), (10 10,20 10,20 20,10 20,10 10))'))));
-create table t1 as select concat(NumInteriorRings(PolygonFromText('POLYGON((0 0,50 0,50 50,0 50,0 0), (10 10,20 10,20 20,10 20,10 10))'))) as c1;
+select hex(concat(ST_IsEmpty(ST_GeomFromText('POINT(1 1)'))));
+create table t1 as select concat(ST_IsEmpty(ST_GeomFromText('Point(1 1)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(IsEmpty(GeomFromText('POINT(1 1)'))));
-create table t1 as select concat(IsEmpty(GeomFromText('Point(1 1)'))) as c1;
+select hex(concat(ST_IsSimple(ST_GeomFromText('POINT(1 1)'))));
+create table t1 as select concat(ST_IsSimple(ST_GeomFromText('Point(1 1)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(IsSimple(GeomFromText('POINT(1 1)'))));
-create table t1 as select concat(IsSimple(GeomFromText('Point(1 1)'))) as c1;
+select hex(concat(ST_IsClosed(ST_GeomFromText('LineString(1 1,2 2)'))));
+create table t1 as select concat(ST_IsClosed(ST_GeomFromText('LineString(1 1,2 2)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(IsClosed(GeomFromText('LineString(1 1,2 2)'))));
-create table t1 as select concat(IsClosed(GeomFromText('LineString(1 1,2 2)'))) as c1;
+select hex(concat(MBREquals(ST_GeomFromText('Point(1 1)'),ST_GeomFromText('Point(1 1)'))));
+create table t1 as select concat(MBREquals(ST_GeomFromText('Point(1 1)'),ST_GeomFromText('Point(1 1)'))) as c1;
+drop table t1;
+
+select hex(concat(ST_X(ST_GeomFromText('Point(1 2)'))));
+create table t1 as select concat(ST_X(ST_GeomFromText('Point(1 2)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(Equals(GeomFromText('Point(1 1)'),GeomFromText('Point(1 1)'))));
-create table t1 as select concat(Equals(GeomFromText('Point(1 1)'),GeomFromText('Point(1 1)'))) as c1;
-drop table t1;
-
-select hex(concat(x(GeomFromText('Point(1 2)'))));
-create table t1 as select concat(x(GeomFromText('Point(1 2)'))) as c1;
+select hex(concat(ST_Y(ST_GeomFromText('Point(1 2)'))));
+create table t1 as select concat(ST_X(ST_GeomFromText('Point(1 2)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(y(GeomFromText('Point(1 2)'))));
-create table t1 as select concat(x(GeomFromText('Point(1 2)'))) as c1;
+select hex(concat(ST_Length(ST_GeomFromText('LineString(1 2,2 2)'))));
+create table t1 as select concat(ST_Length(ST_GeomFromText('LineString(1 2, 2 2)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(GLength(GeomFromText('LineString(1 2,2 2)'))));
-create table t1 as select concat(GLength(GeomFromText('LineString(1 2, 2 2)'))) as c1;
+select hex(concat(ST_Area(ST_GeomFromText('Polygon((0 0,1 0,1 1,0 1,0 0))'))));
+create table t1 as select concat(ST_Area(ST_GeomFromText('Polygon((0 0,1 0,1 1,0 1,0 0))'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(Area(GeomFromText('Polygon((0 0,1 0,1 1,0 1,0 0))'))));
-create table t1 as select concat(Area(GeomFromText('Polygon((0 0,1 0,1 1,0 1,0 0))'))) as c1;
+select hex(concat(ST_GeometryType(ST_GeomFromText('Point(1 2)'))));
+create table t1 as select concat(ST_GeometryType(ST_GeomFromText('Point(1 2)'))) as c1;
 show create table t1;
 drop table t1;
 
-select hex(concat(GeometryType(GeomFromText('Point(1 2)'))));
-create table t1 as select concat(GeometryType(GeomFromText('Point(1 2)'))) as c1;
-show create table t1;
-drop table t1;
-
-select hex(concat(AsText(GeomFromText('Point(1 2)'))));
-create table t1 as select concat(AsText(GeomFromText('Point(1 2)'))) as c1;
+select hex(concat(ST_AsText(ST_GeomFromText('Point(1 2)'))));
+create table t1 as select concat(ST_AsText(ST_GeomFromText('Point(1 2)'))) as c1;
 show create table t1;
 drop table t1;
 
@@ -735,12 +729,12 @@ select hex(concat(period_add(200902, 2)));
 create table t1 as select concat(period_add(200902, 2)) as c1;
 show create table t1;
 drop table t1;
-
+SET sql_mode = '';
 select hex(concat(period_diff(200902, 200802)));
 create table t1 as select concat(period_add(200902, 200802)) as c1;
 show create table t1;
 drop table t1;
-
+SET sql_mode = default;
 select hex(concat(to_days(20090224)));
 create table t1 as select concat(to_days(20090224)) as c1;
 show create table t1;
@@ -1142,13 +1136,6 @@ insert into t1 values (1.1), (10.1), (100.1), (1000.1), (10000.1);
 select hex(concat(a)), a from t1;
 drop table t1;
 
-create table t1 (a year(2));
-insert into t1 values (1);
-select hex(concat(a)) from t1;
-create table t2 as select concat(a) from t1;
-show create table t2;
-drop table t1, t2;
-
 create table t1 (a year);
 insert into t1 values (1);
 select hex(concat(a)) from t1;
@@ -1165,7 +1152,7 @@ show create table t2;
 drop table t1, t2;
 
 create table t1 (a timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
-insert into t1 values (0);
+insert ignore into t1 values (0);
 insert into t1 values (20010203040506);
 insert into t1 values (19800203040506);
 insert into t1 values ('2001-02-03 04:05:06');
@@ -1451,14 +1438,6 @@ select hex(a) from v1;
 drop table t1;
 drop view v1;
 
-create table t1 (a year(2));
-insert into t1 values (1);
-create view v1(a) as select concat(a) from t1;
-show columns from v1;
-select hex(a) from v1;
-drop table t1;
-drop view v1;
-
 create table t1 (a year);
 insert into t1 values (1);
 create view v1(a) as select concat(a) from t1;
@@ -1477,7 +1456,7 @@ drop table t1;
 drop view v1;
 
 create table t1 (a timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
-insert into t1 values (0);
+insert ignore into t1 values (0);
 insert into t1 values (20010203040506);
 insert into t1 values (19800203040506);
 insert into t1 values ('2001-02-03 04:05:06');
@@ -1609,117 +1588,16 @@ drop function f1;
 --echo #
 --echo # Bug#54668 User variable assignments get wrong type
 --echo #
-SET @x=md5('a');
-SELECT charset(@x), collation(@x);
-SET @x=old_password('a');
-SELECT charset(@x), collation(@x);
-SET @x=password('a');
-SELECT charset(@x), collation(@x);
-SET @x=sha('a');
-SELECT charset(@x), collation(@x);
-SET @x=sha1('a');
-SELECT charset(@x), collation(@x);
-SET @x=astext(point(1,2));
-SELECT charset(@x), collation(@x);
-SET @x=aswkt(point(1,2));
-SELECT charset(@x), collation(@x);
-
-
---echo #
---echo # Bug#54916 GROUP_CONCAT + IFNULL truncates output
---echo #
-SELECT @@collation_connection;
-# ENGINE=MYISAM is very important to make sure "SYSTEM" join type
-# is in use, which will create instances of Item_copy.
-CREATE TABLE t1 (a MEDIUMINT NULL) ENGINE=MYISAM;
-INSERT INTO t1 VALUES (1234567);
-SELECT GROUP_CONCAT(IFNULL(a,'')) FROM t1;
-SELECT GROUP_CONCAT(IF(a,a,'')) FROM t1;
-SELECT GROUP_CONCAT(CASE WHEN a THEN a ELSE '' END) FROM t1;
---enable_metadata
-SELECT COALESCE(a,'') FROM t1 GROUP BY 1;
---disable_metadata
---echo # All columns must be VARCHAR(9) with the same length:
---disable_warnings
-CREATE TABLE t2 AS
-SELECT
-  CONCAT(a),
-  IFNULL(a,''),
-  IF(a,a,''),
-  CASE WHEN a THEN a ELSE '' END,
-  COALESCE(a,'')
-FROM t1;
---enable_warnings
-# The above query is expected to send a warning
-# in case of ucs2 character set, until Bug#55744 is fixed.
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT CONCAT_WS(1,2,3) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT INSERT(1133,3,0,22) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT LCASE(a) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT UCASE(a) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT REPEAT(1,2) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT LEFT(123,2) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT RIGHT(123,2) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT LTRIM(123) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT RTRIM(123) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT ELT(1,111,222,333) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT REPLACE(111,2,3) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT SUBSTRING_INDEX(111,111,1) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT MAKE_SET(111,222,3) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT SOUNDEX(1) FROM t1;
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-CREATE TABLE t2 AS SELECT EXPORT_SET(1,'Y','N','',8);
-SHOW CREATE TABLE t2;
-DROP TABLE t2;
-
-DROP TABLE t1;
-
---echo #
---echo # End of Bug#54916
---echo #
+SET @ST_X=md5('a');
+SELECT charset(@ST_X), collation(@ST_X);
+SET @ST_X=sha('a');
+SELECT charset(@ST_X), collation(@ST_X);
+SET @ST_X=sha1('a');
+SELECT charset(@ST_X), collation(@ST_X);
+SET @ST_X=ST_astext(point(1,2));
+SELECT charset(@ST_X), collation(@ST_X);
+SET @ST_X=ST_AsWKT(point(1,2));
+SELECT charset(@ST_X), collation(@ST_X);
 
 --echo #
 --echo # WL#5510 Functions to_base64 and from_base64
@@ -1743,8 +1621,10 @@ CREATE TABLE t1 (
   date_column DATE DEFAULT NULL,
   KEY(date_column));
 INSERT INTO t1 VALUES (1,'2010-09-01'),(2,'2010-10-01');
+ANALYZE TABLE t1;
 EXPLAIN SELECT * FROM t1 WHERE date_column BETWEEN '2010-09-01' AND '2010-10-01';
 ALTER TABLE t1 MODIFY date_column DATETIME DEFAULT NULL;
+ANALYZE TABLE t1;
 EXPLAIN SELECT * FROM t1 WHERE date_column BETWEEN '2010-09-01' AND '2010-10-01';
 DROP TABLE t1;
 
@@ -1786,9 +1666,9 @@ CREATE PROCEDURE p1()
 BEGIN
   DECLARE v_LastPaymentDate DATETIME DEFAULT NULL;
   SELECT v_LastPaymentDate < NOW();
-  EXPLAIN EXTENDED SELECT v_LastPaymentDate < NOW();
+  EXPLAIN SELECT v_LastPaymentDate < NOW();
   SHOW WARNINGS;
-  EXPLAIN EXTENDED SELECT CONCAT(v_LastPaymentDate, NOW());
+  EXPLAIN SELECT CONCAT(v_LastPaymentDate, NOW());
 END//
 DELIMITER ;//
 CALL p1;

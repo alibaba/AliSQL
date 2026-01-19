@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005-2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,29 +28,38 @@
 
 #include "SafeCounter.hpp"
 
+#define JAM_FILE_ID 328
+
 class RequestTracker {
-public:
-  RequestTracker(){ init(); }
+ public:
+  RequestTracker() { init(); }
 
-  void init() { m_confs.clear(); m_nRefs = 0; }
+  void init() {
+    m_confs.clear();
+    m_nRefs = 0;
+  }
 
-  template<typename SignalClass>
-  bool init(SafeCounterManager& mgr,
-	    NodeReceiverGroup rg, Uint16 GSN, Uint32 senderData)
-  {
+  template <typename SignalClass>
+  bool init(SafeCounterManager &mgr, NodeReceiverGroup rg, Uint16 GSN,
+            Uint32 senderData) {
     init();
     SafeCounter tmp(mgr, m_sc);
     return tmp.init<SignalClass>(rg, GSN, senderData);
   }
 
-  bool ignoreRef(SafeCounterManager& mgr, Uint32 nodeId)
-  { return m_sc.clearWaitingFor(mgr, nodeId); }
+  bool ignoreRef(SafeCounterManager &mgr, Uint32 nodeId) {
+    return m_sc.clearWaitingFor(mgr, nodeId);
+  }
 
-  bool reportRef(SafeCounterManager& mgr, Uint32 nodeId)
-  { m_nRefs++; return m_sc.clearWaitingFor(mgr, nodeId); }
+  bool reportRef(SafeCounterManager &mgr, Uint32 nodeId) {
+    m_nRefs++;
+    return m_sc.clearWaitingFor(mgr, nodeId);
+  }
 
-  bool reportConf(SafeCounterManager& mgr, Uint32 nodeId)
-  { m_confs.set(nodeId); return m_sc.clearWaitingFor(mgr, nodeId); }
+  bool reportConf(SafeCounterManager &mgr, Uint32 nodeId) {
+    m_confs.set(nodeId);
+    return m_sc.clearWaitingFor(mgr, nodeId);
+  }
 
   bool hasRef() { return m_nRefs != 0; }
 
@@ -53,9 +69,11 @@ public:
 
   NdbNodeBitmask m_confs;
 
-private:
+ private:
   SafeCounterHandle m_sc;
   Uint8 m_nRefs;
 };
 
-#endif // __REQUEST_TRACKER_HPP
+#undef JAM_FILE_ID
+
+#endif  // __REQUEST_TRACKER_HPP

@@ -1,0 +1,19 @@
+## This is test file for connection authentication without ssl.
+##
+
+#--source include/have_mysql_no_login_plugin.inc
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+--write_file $MYSQL_TMP_DIR/mysqlx-connection_close.xpl
+-->import connection.macro
+-->callmacro Verify_its_xprotocol_connection
+Mysqlx.Connection.Close {
+}
+-->recvtype Mysqlx.Ok
+EOF
+
+--exec $MYSQLXTEST -u x_root --password='' --file=$MYSQL_TMP_DIR/mysqlx-connection_close.xpl -n 2>&1
+
+## Cleanup
+--source ../include/xplugin_cleanup.inc

@@ -1,0 +1,262 @@
+################################################################################
+# BUG#21142784 - CRASH ON 'START/STOP SLAVE FOR CHANNEL' AND 'START/STOP
+#                GROUP_REPLICATION'
+# BUG#21154282 - RSA..CHANNEL 'GROUP_REPLICATION_APPLIER' SHOULD NOT BE ALLOWED
+#                WITHOUT STOP GR
+#
+# This test checks to see that user should not be allowed to execute
+# set of commands for the group_replication_applier channel.
+#
+# a). When group_replication is ONLINE.
+# b). when group_replication is OFFLINE.
+#
+# Test:
+# 0. The test requires two servers: M1 and M2.
+#
+# 1. Start GR on member i.e. make M1 ONLINE. Now, check the execution of
+#    following commands on the GR channels.
+#  a) CHANGE MASTER command is blocked for other options than
+#     `PRIVILEGE_CHECKS_USER` for group replication applier channel.
+#  b) START SLAVE IO_THREAD is blocked on group_replication_applier
+#  c) START SLAVE IO_THREAD with UNTIL option is blocked on
+#     group_replication_applier
+#  d) STOP SLAVE IO_THREAD is blocked on group_replication_applier
+#  r) START SLAVE is blocked on group_replication_applier
+#  f) STOP SLAVE is blocked on group_replication_applier
+#  g) SHOW SLAVE STATUS is blocked on group_replication_applier
+#  h) START SLAVE SQL_THREAD is not allowed on group_replication_applier
+#  i) START SLAVE SQL_THREAD with UNTIL option is not allowed on
+#     group_replication_applier
+#  j) STOP SLAVE SQL_THREAD is not allowed on group_replication_applier
+#  k) SHOW RELAYLOG EVENTS is allowed on group_replication_applier
+#
+# 2. Stop GR on member i.e. make M1 OFFLINE. Now, check the execution of
+#    following commands on the GR channels.
+#  a) CHM is blocked on group_replication_applier
+#  b) START SLAVE IO_THREAD is blocked on group_replication_applier
+#  c) STOP SLAVE IO_THREAD is blocked on group_replication_applier
+#  d) START SLAVE is blocked on group_replication_applier
+#  e) STOP SLAVE is blocked on group_replication_applier
+#  f) SHOW SLAVE STATUS is blocked on group_replication_applier
+#  g) START SLAVE SQL_THREAD is allowed on group_replication_applier
+#  h) STOP SLAVE SQL_THREAD is allowed on group_replication_applier
+#  i) SHOW RELAYLOG EVENTS is allowed on group_replication_applier
+#
+# 3. Start GR on M1. Connect to M2 which is ONLINE.
+#  a) RESET SLAVE ALL is blocked on group_replication_applier
+#  b) RESET SLAVE is blocked on group_replication_applier
+#
+# 4. Stop GR on M2 (OFFLINE).
+#  a) RESET SLAVE is allowed on group_replication_applier
+#
+# 5. Start GR on M2 (ONLINE).
+#  a) RESET SLAVE is blocked on group_replication_applier
+#
+# 6. Stop GR on M2 (OFFLINE).
+#  a) RESET SLAVE ALL is allowed on group_replication_applier
+#
+# 7. Start GR on M2 (ONLINE). STOP SLAVE SQL_THREAD on the channel. Then,
+#  a) RESET SLAVE is blocked on group_replication_applier
+#  b) RESET SLAVE ALL is blocked on group_replication_applier
+#
+# 8. START SLAVE SQL_THREAD on the channel. Stop GR on M2 (OFFLINE). Then,
+#  a) RESET SLAVE ALL is allowed on group_replication_applier
+#  b) RESET SLAVE - check that channel doesn't exists
+################################################################################
+--source include/big_test.inc
+--source include/have_group_replication_plugin.inc
+--source include/group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+# Part 1 - Checking the execution of the command when group_replication is ON.
+
+--echo
+--echo # CHANGE MASTER command is blocked for other options than `PRIVILEGE_CHECKS_USER`.
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10 FOR CHANNEL "group_replication_applier";
+
+--echo
+--echo # CHANGE MASTER command is blocked for other options than `PRIVILEGE_CHECKS_USER`.
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+CHANGE REPLICATION SOURCE TO SOURCE_CONNECTION_AUTO_FAILOVER=1 FOR CHANNEL "group_replication_applier";
+
+--echo
+--echo # CHANGE MASTER command is blocked for option `PRIVILEGE_CHECKS_USER` when GR is running
+--error ER_GRP_OPERATION_NOT_ALLOWED_GR_MUST_STOP
+CHANGE REPLICATION SOURCE TO PRIVILEGE_CHECKS_USER='user' FOR CHANNEL "group_replication_applier";
+
+--echo
+--echo # error when executing START SLAVE IO_THREAD FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+START SLAVE IO_THREAD FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing STOP SLAVE IO_THREAD FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+STOP SLAVE IO_THREAD FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing START SLAVE IO_THREAD FOR CHANNEL with UNTIL option
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+START SLAVE IO_THREAD UNTIL SOURCE_LOG_FILE = 'server-binary-log.000001', SOURCE_LOG_POS = 781 FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing START SLAVE FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+START SLAVE FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing STOP SLAVE FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+STOP SLAVE FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing SHOW SLAVE STATUS FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+SHOW SLAVE STATUS FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # START SLAVE SQL_THREAD command will not work for group_replication_applier
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+START REPLICA SQL_THREAD FOR CHANNEL "group_replication_applier";
+
+--echo
+--echo # STOP SLAVE SQL_THREAD command will not work for group_replication_applier
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+STOP REPLICA SQL_THREAD FOR CHANNEL "group_replication_applier";
+
+--echo # START SLAVE SQL_THREAD with UNTIL option will not work for group_replication_applier
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+START SLAVE SQL_THREAD UNTIL SQL_BEFORE_GTIDS='11111111-1111-1111-1111-111111111111:1-23' FOR CHANNEL 'group_replication_applier';
+
+--echo # START SLAVE SQL_THREAD with UNTIL option will not work for group_replication_applier
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+START SLAVE SQL_THREAD UNTIL RELAY_LOG_FILE = 'server-relay-log-group_replication_applier.000002', RELAY_LOG_POS = 10000 FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # SHOW RELAYLOG EVENTS for channel will work for all channels
+--let $relay_log_name= query_get_value(SHOW RELAYLOG EVENTS FOR CHANNEL 'group_replication_applier', Log_name, 1)
+--let $assert_text= Relay log name should not be empty as the command successfully executed.
+--let $assert_cond= "$relay_log_name" <> ""
+--source include/assert.inc
+
+# Part 2 - Checking the execution of the command when group_replication is OFF
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--echo
+--echo # CHANGE MASTER command is blocked for other options than `PRIVILEGE_CHECKS_USER`.
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10 FOR CHANNEL "group_replication_applier";
+
+--echo
+--echo # CHANGE MASTER command is blocked for other options than `PRIVILEGE_CHECKS_USER`.
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+CHANGE REPLICATION SOURCE TO SOURCE_CONNECTION_AUTO_FAILOVER=1 FOR CHANNEL "group_replication_applier";
+
+--echo
+--echo # CHANGE MASTER command allows option `PRIVILEGE_CHECKS_USER` when GR is stopped
+SET SESSION sql_log_bin= 0;
+CREATE USER gr_applier_slave_user;
+SET SESSION sql_log_bin= 1;
+
+CHANGE REPLICATION SOURCE TO PRIVILEGE_CHECKS_USER='gr_applier_slave_user' FOR CHANNEL "group_replication_applier";
+CHANGE REPLICATION SOURCE TO PRIVILEGE_CHECKS_USER=NULL FOR CHANNEL "group_replication_applier";
+
+SET SESSION sql_log_bin= 0;
+DROP USER gr_applier_slave_user;
+SET SESSION sql_log_bin= 1;
+
+--echo
+--echo # error when executing START SLAVE IO_THREAD FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+START SLAVE IO_THREAD FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing STOP SLAVE IO_THREAD FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+STOP SLAVE IO_THREAD FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing START SLAVE FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+START SLAVE FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing STOP SLAVE FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+STOP SLAVE FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # error when executing SHOW SLAVE STATUS FOR CHANNEL
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+SHOW SLAVE STATUS FOR CHANNEL 'group_replication_applier';
+
+--echo
+--echo # START SLAVE SQL_THREAD command will work for group_replication_applier
+--source include/gr_start_applier_sql_thread.inc
+
+--echo
+--echo # STOP SLAVE SQL_THREAD command will work for group_replication_applier
+--source include/gr_stop_applier_sql_thread.inc
+
+--echo
+--echo # SHOW RELAYLOG EVENTS for channel will work for all channels
+--let $relay_log_name= query_get_value(SHOW RELAYLOG EVENTS FOR CHANNEL 'group_replication_applier', Log_name, 1)
+--let $assert_text= Relay log name should not be empty as the command successfully executed.
+--let $assert_cond= "$relay_log_name" <> ""
+--source include/assert.inc
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+
+--source include/start_group_replication.inc
+
+# Checking the RESET SLAVE [ALL] commands execution.
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+
+--echo
+--echo # RESET SLAVE [ALL] command is blocked only when channel is running.
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+RESET SLAVE ALL FOR CHANNEL "group_replication_applier";
+
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+RESET SLAVE FOR CHANNEL "group_replication_applier";
+
+--echo
+--echo # This is command should work without problem.
+--source include/stop_group_replication.inc
+RESET SLAVE FOR CHANNEL "group_replication_applier";
+--source include/start_group_replication.inc
+
+--echo
+--echo # This is command should work without problem.
+--source include/stop_group_replication.inc
+RESET SLAVE ALL FOR CHANNEL "group_replication_applier";
+
+# RESET SLAVE should not be allowed when Group_replication is running.
+--source include/start_group_replication.inc
+--echo # RESET SLAVE should not be allowed when GR is ONLINE.
+--echo # So this command will fail.
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+RESET SLAVE FOR CHANNEL "group_replication_applier";
+
+--echo # RESET SLAVE ALL should not be allowed when GR is ONLINE.
+--echo # So this command will fail.
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
+RESET SLAVE ALL FOR CHANNEL "group_replication_applier";
+
+--echo # stop the channel and try reset slave for channel again. It should work.
+--source include/stop_group_replication.inc
+
+RESET SLAVE ALL FOR CHANNEL "group_replication_applier";
+
+--error ER_REPLICA_CHANNEL_DOES_NOT_EXIST
+RESET SLAVE FOR CHANNEL "group_replication_applier";
+
+--source include/group_replication_end.inc

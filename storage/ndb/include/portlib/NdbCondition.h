@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,14 +27,14 @@
 #define NDB_CONDITION_H
 
 #include "NdbMutex.h"
+#include "thr_cond.h"
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-struct NdbCondition
-{
-  pthread_cond_t cond;
+struct NdbCondition {
+  native_cond_t cond;
 };
 
 /**
@@ -34,14 +42,14 @@ struct NdbCondition
  *
  * returnvalue: pointer to the condition structure
  */
-struct NdbCondition* NdbCondition_Create(void);
+struct NdbCondition *NdbCondition_Create(void);
 
 /**
  * Initialize a condition created with file-storage or on the stack
  *
  * returnvalue: 0 = success
  */
-int NdbCondition_Init(struct NdbCondition* p_cond);
+int NdbCondition_Init(struct NdbCondition *p_cond);
 
 /**
  * Wait for a condition, allows a thread to wait for
@@ -51,8 +59,7 @@ int NdbCondition_Init(struct NdbCondition* p_cond);
  * p_mutex: pointer to the mutex structure
  * returnvalue: 0 = succeeded, 1 = failed
  */
-int NdbCondition_Wait(struct NdbCondition* p_cond,
-		      NdbMutex* p_mutex);
+int NdbCondition_Wait(struct NdbCondition *p_cond, NdbMutex *p_mutex);
 
 /*
  * Wait for a condition with timeout, allows a thread to
@@ -64,26 +71,27 @@ int NdbCondition_Wait(struct NdbCondition* p_cond,
  * @return 0 = succeeded, 1 = failed
  * @
  */
-int
-NdbCondition_WaitTimeout(struct NdbCondition* p_cond,
-			 NdbMutex* p_mutex,
-			 int msec);
+int NdbCondition_WaitTimeout(struct NdbCondition *p_cond, NdbMutex *p_mutex,
+                             int msec);
 /*
  * same as NdbCondition_WaitTimeout only that
  * endtime is a absolute time computed using
  * NdbCondition_ComputeAbsTime
  */
-int
-NdbCondition_WaitTimeoutAbs(struct NdbCondition* p_cond,
-			 NdbMutex* p_mutex,
-			 const struct timespec * endtime);
+int NdbCondition_WaitTimeoutAbs(struct NdbCondition *p_cond, NdbMutex *p_mutex,
+                                const struct timespec *endtime);
 
 /**
  * compute an absolute time suitable for use with NdbCondition_WaitTimeoutAbs
  * and store it in <em>dst</em> <em>ms</em> specifies milliseconds from now
  */
-void
-NdbCondition_ComputeAbsTime(struct timespec * dst, unsigned ms);
+void NdbCondition_ComputeAbsTime(struct timespec *dst, unsigned ms);
+
+/**
+ * compute an absolute time suitable for use with NdbCondition_WaitTimeoutAbs
+ * and store it in <em>dst</em> <em>ms</em> specifies nanoseconds from now
+ */
+void NdbCondition_ComputeAbsTime_ns(struct timespec *dst, Uint64 ns);
 
 /**
  * Signal a condition
@@ -91,8 +99,7 @@ NdbCondition_ComputeAbsTime(struct timespec * dst, unsigned ms);
  * p_cond: pointer to the condition structure
  * returnvalue: 0 = succeeded, 1 = failed
  */
-int NdbCondition_Signal(struct NdbCondition* p_cond);
-
+int NdbCondition_Signal(struct NdbCondition *p_cond);
 
 /**
  * Broadcast a condition
@@ -100,7 +107,7 @@ int NdbCondition_Signal(struct NdbCondition* p_cond);
  * p_cond: pointer to the condition structure
  * returnvalue: 0 = succeeded, 1 = failed
  */
-int NdbCondition_Broadcast(struct NdbCondition* p_cond);
+int NdbCondition_Broadcast(struct NdbCondition *p_cond);
 
 /**
  * Destroy a condition
@@ -108,12 +115,10 @@ int NdbCondition_Broadcast(struct NdbCondition* p_cond);
  * p_cond: pointer to the condition structure
  * returnvalue: 0 = succeeded, 1 = failed
  */
-int NdbCondition_Destroy(struct NdbCondition* p_cond);
+int NdbCondition_Destroy(struct NdbCondition *p_cond);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
 #endif
-
-

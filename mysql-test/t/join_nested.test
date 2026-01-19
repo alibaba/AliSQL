@@ -1,4 +1,3 @@
-
 --disable_warnings
 DROP TABLE IF EXISTS t0,t1,t2,t3,t4,t5,t6,t7,t8,t9;
 --enable_warnings
@@ -25,6 +24,21 @@ INSERT INTO t7 VALUES (1,1,0), (2,2,0);
 INSERT INTO t8 VALUES (0,2,0), (1,2,0);
 INSERT INTO t9 VALUES (1,1,0), (1,2,0), (3,3,0);
 
+CREATE TABLE t34 (a3 int, b3 int, c3 int, a4 int, b4 int, c4 int);
+INSERT INTO t34
+SELECT t3.*, t4.*
+FROM t3 CROSS JOIN t4;
+
+CREATE TABLE t345 (a3 int, b3 int, c3 int, a4 int, b4 int, c4 int,
+                   a5 int, b5 int, c5 int);
+INSERT INTO t345
+SELECT t3.*, t4.*, t5.*
+FROM t3 CROSS JOIN t4 CROSS JOIN t5;
+
+CREATE TABLE t67 (a6 int, b6 int, c6 int, a7 int, b7 int, c7 int);
+INSERT INTO t67
+SELECT t6.*, t7.*
+FROM t6 CROSS JOIN t7;
 
 SELECT t2.a,t2.b
   FROM t2;
@@ -35,6 +49,7 @@ SELECT t3.a,t3.b
 SELECT t4.a,t4.b
   FROM t4;
 
+--sorted_result
 SELECT t3.a,t3.b,t4.a,t4.b
   FROM t3,t4;
 
@@ -45,6 +60,13 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
        (t3, t4)
        ON t2.b=t4.b;
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4
+  FROM t2
+       LEFT JOIN t34
+       ON t2.b=t34.b4;
+
 --sorted_result
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
   FROM t2
@@ -52,7 +74,14 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
        (t3, t4)
        ON t3.a=1 AND t2.b=t4.b;
 
-EXPLAIN EXTENDED
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4
+  FROM t2
+       LEFT JOIN t34
+       ON t34.a3=1 AND t2.b=t34.b4;
+ANALYZE TABLE t1, t2, t3, t4;
+EXPLAIN
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
   FROM t2
        LEFT JOIN              
@@ -67,6 +96,14 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
        (t3, t4)
        ON t2.b=t4.b
     WHERE t3.a=1 OR t3.c IS NULL;
+
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4
+  FROM t2
+       LEFT JOIN t34
+       ON t2.b=t34.b4
+    WHERE t34.a3=1 OR t34.c3 IS NULL;
 
 --sorted_result
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
@@ -76,9 +113,18 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
        ON t2.b=t4.b
     WHERE t3.a>1 OR t3.c IS NULL;
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4
+  FROM t2
+       LEFT JOIN t34
+       ON t2.b=t34.b4
+    WHERE t34.a3>1 OR t34.c3 IS NULL;
+
 SELECT t5.a,t5.b
   FROM t5;
 
+--sorted_result
 SELECT t3.a,t3.b,t4.a,t4.b,t5.a,t5.b
   FROM t3,t4,t5;
 
@@ -89,7 +135,14 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,t5.a,t5.b
        (t3, t4, t5)
        ON t2.b=t4.b;
 
-EXPLAIN EXTENDED
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t345.a3,t345.b3,t345.a4,t345.b4,t345.a5,t345.b5
+  FROM t2
+       LEFT JOIN t345
+       ON t2.b=t345.b4;
+ANALYZE TABLE t2, t3, t4, t5;
+EXPLAIN
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,t5.a,t5.b
   FROM t2
        LEFT JOIN              
@@ -105,7 +158,15 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,t5.a,t5.b
        ON t2.b=t4.b
     WHERE t3.a>1 OR t3.c IS NULL;
 
-EXPLAIN EXTENDED
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t345.a3,t345.b3,t345.a4,t345.b4,t345.a5,t345.b5
+  FROM t2
+       LEFT JOIN t345
+       ON t2.b=t345.b4
+    WHERE t345.a3>1 OR t345.c3 IS NULL;
+ANALYZE TABLE t2, t3, t4, t5;
+EXPLAIN
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,t5.a,t5.b
   FROM t2
        LEFT JOIN              
@@ -122,6 +183,15 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,t5.a,t5.b
        ON t2.b=t4.b
     WHERE (t3.a>1 OR t3.c IS NULL) AND 
           (t5.a<3 OR t5.c IS NULL);
+
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t345.a3,t345.b3,t345.a4,t345.b4,t345.a5,t345.b5
+  FROM t2
+       LEFT JOIN t345
+       ON t2.b=t345.b4
+    WHERE (t345.a3>1 OR t345.c3 IS NULL) AND 
+          (t345.a5<3 OR t345.c5 IS NULL);
 
 SELECT t6.a,t6.b
   FROM t6;
@@ -129,13 +199,14 @@ SELECT t6.a,t6.b
 SELECT t7.a,t7.b
   FROM t7;
 
+--sorted_result
 SELECT t6.a,t6.b,t7.a,t7.b
   FROM t6,t7;
 
 SELECT t8.a,t8.b
   FROM t8;
-
-EXPLAIN EXTENDED
+ANALYZE TABLE t6, t7, t8;
+EXPLAIN
 SELECT t6.a,t6.b,t7.a,t7.b,t8.a,t8.b
   FROM (t6, t7)
        LEFT JOIN 
@@ -148,6 +219,14 @@ SELECT t6.a,t6.b,t7.a,t7.b,t8.a,t8.b
        LEFT JOIN 
        t8
        ON t7.b=t8.b AND t6.b < 10;
+
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b
+  FROM t67
+       LEFT JOIN 
+       t8
+       ON t67.b7=t8.b AND t67.b6 < 10;
 
 SELECT t5.a,t5.b
   FROM t5;
@@ -164,6 +243,19 @@ SELECT t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b
        )
        ON t6.b >= 2 AND t5.b=t7.b;
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b
+  FROM t5 
+       LEFT JOIN 
+       ( 
+         t67
+         LEFT JOIN 
+         t8
+         ON t67.b7=t8.b AND t67.b6 < 10
+       )
+       ON t67.b6 >= 2 AND t5.b=t67.b7;
+
 --sorted_result
 SELECT t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b
   FROM t5 
@@ -177,12 +269,33 @@ SELECT t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b
        ON t6.b >= 2 AND t5.b=t7.b AND
           (t8.a < 1 OR t8.c IS NULL);
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b
+  FROM t5 
+       LEFT JOIN 
+       ( 
+         t67
+         LEFT JOIN 
+         t8
+         ON t67.b7=t8.b AND t67.b6 < 10
+       )
+       ON t67.b6 >= 2 AND t5.b=t67.b7 AND
+          (t8.a < 1 OR t8.c IS NULL);
+
 --sorted_result
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
   FROM t2
        LEFT JOIN              
        (t3, t4)
        ON t3.a=1 AND t2.b=t4.b;
+
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4
+  FROM t2
+       LEFT JOIN t34
+       ON t34.a3=1 AND t2.b=t34.b4;
 
 --sorted_result
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
@@ -200,6 +313,23 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
          ON t7.b=t8.b AND t6.b < 10
        )
        ON t6.b >= 2 AND t5.b=t7.b; 
+
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4,
+       t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b
+  FROM t2
+       LEFT JOIN t34
+       ON t34.a3=1 AND t2.b=t34.b4
+       CROSS JOIN t5 
+       LEFT JOIN 
+       ( 
+         t67
+         LEFT JOIN 
+         t8
+         ON t67.b7=t8.b AND t67.b6 < 10
+       )
+       ON t67.b6 >= 2 AND t5.b=t67.b7; 
 
 --sorted_result
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
@@ -219,6 +349,25 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        ON t6.b >= 2 AND t5.b=t7.b
     WHERE t2.a > 3 AND
           (t6.a < 6 OR t6.c IS NULL);
+
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4,
+       t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b
+  FROM t2
+       LEFT JOIN t34
+       ON t34.a3=1 AND t2.b=t34.b4
+       CROSS JOIN t5 
+       LEFT JOIN 
+       ( 
+         t67
+         LEFT JOIN 
+         t8
+         ON t67.b7=t8.b AND t67.b6 < 10
+       )
+       ON t67.b6 >= 2 AND t5.b=t67.b7
+    WHERE t2.a > 3 AND
+          (t67.a6 < 6 OR t67.c6 IS NULL);
 
 SELECT t1.a,t1.b
   FROM t1;
@@ -247,6 +396,30 @@ SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
           (t1.b=t5.b OR t3.c IS NULL OR t6.c IS NULL or t8.c IS NULL) AND
           (t1.a != 2);
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t1.a,t1.b,t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4,
+       t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b
+  FROM t1
+       LEFT JOIN                
+       ( 
+         t2
+         LEFT JOIN t34
+         ON t34.a3=1 AND t2.b=t34.b4
+         CROSS JOIN t5 
+         LEFT JOIN 
+         ( 
+           t67
+           LEFT JOIN 
+           t8
+           ON t67.b7=t8.b AND t67.b6 < 10
+         )
+         ON t67.b6 >= 2 AND t5.b=t67.b7 
+       )
+       ON (t34.b3=2 OR t34.c3 IS NULL) AND (t67.b6=2 OR t67.c6 IS NULL) AND
+          (t1.b=t5.b OR t34.c3 IS NULL OR t67.c6 IS NULL or t8.c IS NULL) AND
+          (t1.a <> 2);
+
 --sorted_result
 SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b
@@ -272,10 +445,35 @@ SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
           (t1.a != 2)
     WHERE (t2.a >= 4 OR t2.c IS NULL);
    
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t1.a,t1.b,t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4,
+       t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b
+  FROM t1
+       LEFT JOIN                
+       ( 
+         t2
+         LEFT JOIN t34
+         ON t34.a3=1 AND t2.b=t34.b4
+         CROSS JOIN t5 
+         LEFT JOIN 
+         ( 
+           t67
+           LEFT JOIN 
+           t8
+           ON t67.b7=t8.b AND t67.b6 < 10
+         )
+         ON t67.b6 >= 2 AND t5.b=t67.b7 
+       )
+       ON (t34.b3=2 OR t34.c3 IS NULL) AND (t67.b6=2 OR t67.c6 IS NULL) AND
+          (t1.b=t5.b OR t34.c3 IS NULL OR t67.c6 IS NULL or t8.c IS NULL) AND
+          (t1.a <> 2)
+    WHERE (t2.a >= 4 OR t2.c IS NULL);
+   
 SELECT t0.a,t0.b
   FROM t0;
-
-EXPLAIN EXTENDED
+ANALYZE TABLE t0, t1, t2, t3, t4, t5, t6, t7, t8;
+EXPLAIN
 SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b
   FROM t0,t1
@@ -329,7 +527,35 @@ SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
           t0.b=t1.b AND          
           (t2.a >= 4 OR t2.c IS NULL); 
 
-EXPLAIN EXTENDED
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4,
+       t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b
+  FROM t0
+       CROSS JOIN t1
+       LEFT JOIN                
+       ( 
+         t2
+         LEFT JOIN t34
+         ON t34.a3=1 AND t2.b=t34.b4
+         CROSS JOIN t5 
+         LEFT JOIN 
+         ( 
+           t67
+           LEFT JOIN 
+           t8
+           ON t67.b7=t8.b AND t67.b6 < 10
+         )
+         ON t67.b6 >= 2 AND t5.b=t67.b7 
+       )
+       ON (t34.b3=2 OR t34.c3 IS NULL) AND (t67.b6=2 OR t67.c6 IS NULL) AND
+          (t1.b=t5.b OR t34.c3 IS NULL OR t67.c6 IS NULL or t8.c IS NULL) AND
+          (t1.a <> 2)
+    WHERE t0.a=1 AND
+          t0.b=t1.b AND          
+          (t2.a >= 4 OR t2.c IS NULL); 
+ANALYZE TABLE t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
+EXPLAIN
 SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b,t9.a,t9.b
   FROM t0,t1
@@ -404,6 +630,43 @@ SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
            (t8.b=t9.b OR t8.c IS NULL) AND
            (t9.a=1); 
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4,
+       t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b,t9.a,t9.b
+  FROM t0
+       CROSS JOIN t1
+       LEFT JOIN                
+       ( 
+         t2
+         LEFT JOIN t34
+         ON t34.a3=1 AND t2.b=t34.b4
+         CROSS JOIN t5 
+         LEFT JOIN 
+         ( 
+           t67
+           LEFT JOIN 
+           t8
+           ON t67.b7=t8.b AND t67.b6 < 10
+         )
+         ON t67.b6 >= 2 AND t5.b=t67.b7 
+       )
+       ON (t34.b3=2 OR t34.c3 IS NULL) AND (t67.b6=2 OR t67.c6 IS NULL) AND
+          (t1.b=t5.b OR t34.c3 IS NULL OR t67.c6 IS NULL or t8.c IS NULL) AND
+          (t1.a <> 2),
+       t9
+     WHERE t0.a=1 AND
+           t0.b=t1.b AND          
+           (t2.a >= 4 OR t2.c IS NULL) AND
+           (t34.a3 < 5 OR t34.c3 IS NULL) AND
+           (t34.b3=t34.b4 OR t34.c3 IS NULL OR t34.c4 IS NULL) AND
+           (t5.a >=2 OR t5.c IS NULL) AND
+           (t67.a6 >=4 OR t67.c6 IS NULL) AND
+           (t67.a7 <= 2 OR t67.c7 IS NULL) AND
+           (t8.a < 1 OR t8.c IS NULL) AND
+           (t8.b=t9.b OR t8.c IS NULL) AND
+           (t9.a=1); 
+
 SELECT t1.a,t1.b
   FROM t1;
 
@@ -428,6 +691,16 @@ SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b
        ON t2.b=t3.b
     WHERE t1.a <= 2;
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b
+  FROM t1
+       CROSS JOIN t2
+       LEFT JOIN              
+       t3
+       ON t2.b=t3.b
+    WHERE t1.a <= 2;
+
 --sorted_result
 SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b
   FROM t1, t3 
@@ -436,6 +709,19 @@ SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b
        ON t2.b=t3.b
     WHERE t1.a <= 2;
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b
+  FROM t1 CROSS JOIN
+       (
+         t3
+         RIGHT JOIN              
+         t2
+         ON t2.b=t3.b
+       )
+    WHERE t1.a <= 2;
+
+--sorted_result
 SELECT t3.a,t3.b,t4.a,t4.b
   FROM t3,t4;
 
@@ -446,12 +732,35 @@ SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
        (t3, t4)
        ON t3.a=1 AND t2.b=t4.b;
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
+  FROM t2
+       LEFT JOIN              
+       (t3 CROSS JOIN t4)
+       ON t3.a=1 AND t2.b=t4.b;
+
 --sorted_result
 SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
-  FROM t1, t2 
-       LEFT JOIN              
-       (t3, t4)
-       ON t3.a=1 AND t2.b=t4.b
+  FROM t1 CROSS JOIN
+       (
+         t2 
+         LEFT JOIN              
+         (t3, t4)
+         ON t3.a=1 AND t2.b=t4.b
+       )
+    WHERE t1.a <= 2;
+
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
+  FROM t1 CROSS JOIN
+       (
+         t2
+         LEFT JOIN              
+         (t3 CROSS JOIN t4)
+         ON t3.a=1 AND t2.b=t4.b
+       )
     WHERE t1.a <= 2;
 
 --sorted_result
@@ -462,6 +771,18 @@ SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
        ON t3.a=1 AND t2.b=t4.b
     WHERE t1.a <= 2;
 
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
+  FROM t1 CROSS JOIN
+       (
+         (t3 CROSS JOIN t4)
+         RIGHT JOIN              
+         t2
+         ON t3.a=1 AND t2.b=t4.b
+       )
+    WHERE t1.a <= 2;
+
 --sorted_result
 SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
   FROM t1, (t3, t4)
@@ -470,7 +791,19 @@ SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
        ON t3.a=1 AND t2.b=t4.b
     WHERE t1.a <= 2;
 
-EXPLAIN EXTENDED
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
+  FROM t1 CROSS JOIN
+       (
+         (t3 CROSS JOIN t4)
+         RIGHT JOIN              
+         t2
+         ON t3.a=1 AND t2.b=t4.b
+       )
+    WHERE t1.a <= 2;
+
+EXPLAIN
 SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
   FROM t1, (t3, t4)
        RIGHT JOIN
@@ -480,20 +813,29 @@ SELECT t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
 
 CREATE INDEX idx_b ON t2(b);
 
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
   FROM (t3,t4)
        LEFT JOIN              
        (t1,t2)
        ON t3.a=1 AND t3.b=t2.b AND t2.b=t4.b;
 
+--sorted_result
 SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
   FROM (t3,t4)
        LEFT JOIN              
        (t1,t2)
        ON t3.a=1 AND t3.b=t2.b AND t2.b=t4.b;
 
-EXPLAIN EXTENDED
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t2.a,t2.b,t3.a,t3.b,t4.a,t4.b
+  FROM (t3 CROSS JOIN t4)
+       LEFT JOIN              
+       (t1 CROSS JOIN t2)
+       ON t3.a=1 AND t3.b=t2.b AND t2.b=t4.b;
+ANALYZE TABLE t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
+EXPLAIN
 SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b,t9.a,t9.b
   FROM t0,t1
@@ -531,8 +873,8 @@ SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
 
 CREATE INDEX idx_b ON t4(b);
 CREATE INDEX idx_b ON t5(b);
-
-EXPLAIN EXTENDED
+ANALYZE TABLE t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
+EXPLAIN
 SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b,t9.a,t9.b
   FROM t0,t1
@@ -569,8 +911,8 @@ SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
            (t9.a=1); 
 
 CREATE INDEX idx_b ON t8(b);
-
-EXPLAIN EXTENDED
+ANALYZE TABLE t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
+EXPLAIN
 SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b,t9.a,t9.b
   FROM t0,t1
@@ -608,8 +950,8 @@ SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
 
 CREATE INDEX idx_b ON t1(b);
 CREATE INDEX idx_a ON t0(a);
-
-EXPLAIN EXTENDED
+ANALYZE TABLE t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
+EXPLAIN
 SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b,t9.a,t9.b
   FROM t0,t1
@@ -645,6 +987,7 @@ SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
            (t8.b=t9.b OR t8.c IS NULL) AND
            (t9.a=1); 
 
+--sorted_result
 SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
        t5.a,t5.b,t6.a,t6.b,t7.a,t7.b,t8.a,t8.b,t9.a,t9.b
   FROM t0,t1
@@ -676,6 +1019,44 @@ SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t3.a,t3.b,t4.a,t4.b,
            (t5.a >=2 OR t5.c IS NULL) AND
            (t6.a >=4 OR t6.c IS NULL) AND
            (t7.a <= 2 OR t7.c IS NULL) AND
+           (t8.a < 1 OR t8.c IS NULL) AND
+           (t8.b=t9.b OR t8.c IS NULL) AND
+           (t9.a=1); 
+
+--echo "Standard compliant copy of above query"
+--sorted_result
+SELECT t0.a,t0.b,t1.a,t1.b,t2.a,t2.b,t34.a3,t34.b3,t34.a4,t34.b4,
+       t5.a,t5.b,t67.a6,t67.b6,t67.a7,t67.b7,t8.a,t8.b,t9.a,t9.b
+  FROM t0
+       CROSS JOIN t1
+       LEFT JOIN                
+       ( 
+         t2
+         LEFT JOIN              
+         t34
+         ON t34.a3=1 AND t2.b=t34.b4
+         CROSS JOIN t5 
+         LEFT JOIN 
+         ( 
+           t67
+           LEFT JOIN 
+           t8
+           ON t67.b7=t8.b AND t67.b6 < 10
+         )
+         ON t67.b6 >= 2 AND t5.b=t67.b7 
+       )
+       ON (t34.b3=2 OR t34.c3 IS NULL) AND (t67.b6=2 OR t67.c6 IS NULL) AND
+          (t1.b=t5.b OR t34.c3 IS NULL OR t67.c6 IS NULL or t8.c IS NULL) AND
+          (t1.a <> 2)
+       CROSS JOIN t9
+     WHERE t0.a=1 AND
+           t0.b=t1.b AND          
+           (t2.a >= 4 OR t2.c IS NULL) AND
+           (t34.a3 < 5 OR t34.c3 IS NULL) AND
+           (t34.b3=t34.b4 OR t34.c3 IS NULL OR t34.c4 IS NULL) AND
+           (t5.a >=2 OR t5.c IS NULL) AND
+           (t67.a6 >=4 OR t67.c6 IS NULL) AND
+           (t67.a7 <= 2 OR t67.c7 IS NULL) AND
            (t8.a < 1 OR t8.c IS NULL) AND
            (t8.b=t9.b OR t8.c IS NULL) AND
            (t9.a=1); 
@@ -686,10 +1067,12 @@ SELECT t2.a,t2.b
 SELECT t3.a,t3.b
   FROM t3;
 
+--sorted_result
 SELECT t2.a,t2.b,t3.a,t3.b
   FROM t2 LEFT JOIN t3 ON t2.b=t3.b
     WHERE t2.a = 4 OR (t2.a > 4 AND t3.a IS NULL);
 
+--sorted_result
 SELECT t2.a,t2.b,t3.a,t3.b
   FROM t2 LEFT JOIN (t3) ON t2.b=t3.b
     WHERE t2.a = 4 OR (t2.a > 4 AND t3.a IS NULL);
@@ -698,15 +1081,18 @@ ALTER TABLE t3
   CHANGE COLUMN a a1 int,
   CHANGE COLUMN c c1 int; 
 
+--sorted_result
 SELECT t2.a,t2.b,t3.a1,t3.b
   FROM t2 LEFT JOIN t3 ON t2.b=t3.b
     WHERE t2.a = 4 OR (t2.a > 4 AND t3.a1 IS NULL);
 
+--sorted_result
 SELECT t2.a,t2.b,t3.a1,t3.b
   FROM t2 NATURAL LEFT JOIN t3
     WHERE t2.a = 4 OR (t2.a > 4 AND t3.a1 IS NULL);
 
 DROP TABLE t0,t1,t2,t3,t4,t5,t6,t7,t8,t9;
+DROP TABLE t34, t345, t67;
 
 CREATE TABLE t1 (a int);
 CREATE TABLE t2 (a int);
@@ -751,13 +1137,17 @@ INSERT INTO t2 VALUES (NULL), (0), (1), (2), (3), (4), (5), (6), (7), (8), (9),
 (10), (11), (12), (13), (14), (15), (16), (17), (18), (19);
 
 INSERT INTO t3 VALUES (0), (1), (2), (3), (4), (5);
- 
+
+ANALYZE TABLE t1, t2, t3;
 EXPLAIN SELECT a, b, c FROM t1 LEFT JOIN (t2, t3) ON c < 3 and b = c;
 EXPLAIN SELECT a, b, c FROM t1 LEFT JOIN (t2, t3) ON b < 3 and b = c;
+--sorted_result
 SELECT a, b, c FROM t1 LEFT JOIN (t2, t3) ON b < 3 and b = c;
 
 DELETE FROM t3;
+ANALYZE TABLE t3;
 EXPLAIN SELECT a, b, c FROM t1 LEFT JOIN (t2, t3) ON b < 3 and b = c;
+--sorted_result
 SELECT a, b, c FROM t1 LEFT JOIN (t2, t3) ON b < 3 and b = c;
 
 DROP TABLE t1,t2,t3;
@@ -771,6 +1161,7 @@ CREATE TABLE t2 (c21 int);
 CREATE TABLE t3 (c31 int);
 
 INSERT INTO t1 VALUES (4), (5);
+ANALYZE TABLE t1, t2, t3;
 
 SELECT * FROM t1 LEFT JOIN t2 ON c11=c21;
 EXPLAIN SELECT * FROM t1 LEFT JOIN t2 ON c11=c21;
@@ -914,16 +1305,16 @@ insert into t6 select * from t5;
 create table t7 like t6;
 insert into t7 select * from t6;
 insert into t7 select * from t6;
-
---replace_column 9 X
+ANALYZE TABLE t1, t2, t3, t4, t5, t6, t7;
+--replace_column 10 X
 explain select * from t4 join 
   t2 left join (t3 join t5 on t5.a=t3.b) on t3.a=t2.b where t4.a<=>t3.b;
 
---replace_column 9 X
+--replace_column 10 X
 explain select * from (t4 join t6 on t6.a=t4.b) right join t3 on t4.a=t3.b
   join t2 left join (t5 join t7 on t7.a=t5.b) on t5.a=t2.b where t3.a<=>t2.b;
 
---replace_column 9 X
+--replace_column 10 X
 explain select * from t2 left join
   (t3 left join (t4 join t6 on t6.a=t4.b) on t4.a=t3.b 
    join t5 on t5.a=t3.b) on t3.a=t2.b;
@@ -937,7 +1328,7 @@ create table t2 (a int, filler char(100), key(a));
 insert into t2 select A.a + 10*B.a, '' from t1 A, t1 B;
 create table t3 like t2;
 insert into t3 select * from t2;
-
+ANALYZE TABLE t1, t2, t3;
 explain select * from t1 left join 
   (t2 left join t3 on (t2.a = t3.a)) 
   on (t1.a = t2.a);
@@ -1119,7 +1510,7 @@ DROP TABLE t1,t2,t3;
 CREATE TABLE t1 (
   carrier char(2) default NULL,
   id int NOT NULL auto_increment PRIMARY KEY
-);
+) CHARSET utf8mb4;
 INSERT INTO t1 VALUES
   ('CO',235371754),('CO',235376554),('CO',235376884),('CO',235377874),
   ('CO',231060394),('CO',231059224),('CO',231059314),('CO',231060484),
@@ -1187,7 +1578,7 @@ CREATE TABLE t4 (
   carrier char(2) NOT NULL default '' PRIMARY KEY,
   id int(11) default NULL,
   INDEX id(id)
-);
+) CHARSET utf8mb4;
 INSERT INTO t4 VALUES
   ('99',6),('SK',456),('UA',486),('AI',1081),('OS',1111),('VS',1510);
 
@@ -1204,7 +1595,7 @@ INSERT INTO t5 VALUES
   (6),(6),(6),(6),(6),(6),(6),(6),(6),(6),(6),(6),(6),(6),(456),(456),(456),
   (456),(456),(456),(456),(456),(456),(456),(456),(456),(456),(456),(456),
   (456),(486),(1081),(1111),(1111),(1111),(1111),(1510);
-
+ANALYZE TABLE t1, t2, t3, t4, t5;
 SELECT COUNT(*) 
   FROM((t2 JOIN t1 ON t2.package_id = t1.id) 
         JOIN t3 ON t3.package_id = t1.id);
@@ -1227,3 +1618,65 @@ DROP TABLE t1,t2,t3,t4,t5;
 
 --echo End of 5.0 tests
 
+--echo #
+--echo # Bug#24909223: EXCESSIVE MEMORY USAGE BY QUERY
+--echo #
+
+CREATE TABLE t (
+  a INT,
+  b CHAR(255),
+  c CHAR(255),
+  d INT,
+  e INT,
+  PRIMARY KEY (e),
+  KEY (d)
+) ENGINE=InnoDB;
+
+INSERT INTO t VALUES
+(1, '14effca2', 'cffa3819', 98927, 8767),
+(1, '2f7cbd33', '421aff88', 87613, 70956),
+(1, '5c44507d', '05fd27d3', 36002, 5146),
+(1, '6542ee43', 'c09ee30f', 3673, 91467),
+(1, '786737dd', '6ac95ccb', 46890, 62953),
+(1, '8929d195', '64102e63', 50531, 9712),
+(1, '8cc0c106', '17283316', 16399, 26119),
+(1, '8f3063de', 'ce5d0f35', 21769, 76667),
+(1, 'c32c9202', 'c9525fe8', 12704, 43998),
+(1, 'c5567e1c', 'bc2e97e6', 85805, 84174),
+(1, 'c7acb4d4', '6d67fea7', 58347, 51235),
+(1, 'dbd66341', '03b59a03', 46577, 52495),
+(1, 'f8e0354e', '41a6e523', 36055, 32646),
+(1, 'fb66b513', '10f3de43', 41297, 74334),
+(1, 'ffec6d1b', '2fca4073', 12896, 95807),
+(1, 'aa3fcff8', 'f4981ed8', 99211, 18778);
+
+ANALYZE TABLE t;
+
+let $query=
+SELECT a.c AS c FROM (
+  SELECT a.c AS c FROM (
+    SELECT a.a AS c FROM t AS a
+    INNER JOIN t AS b ON a.b > b.b
+  ) AS a
+  INNER JOIN t AS b ON a.c >= b.a
+) AS a
+INNER JOIN t AS b ON a.c >= b.d;
+--eval EXPLAIN $query
+TRUNCATE TABLE performance_schema.memory_summary_by_thread_by_event_name;
+--eval $query
+
+# Before the bug was fixed, the query allocated 17MB in the THD memory
+# root. After the fix it allocated 90KB. Verify that the memory leak
+# is plugged by checking that it doesn't allocate more than 1MB in the
+# memory root. The query against the performance schema table below
+# returns an empty result if the memory usage is OK, or one row if the
+# memory usage was too high.
+#
+let $res=
+SELECT * FROM performance_schema.memory_summary_by_thread_by_event_name
+WHERE event_name = 'memory/sql/thd::main_mem_root'
+AND thread_id = ps_thread_id(connection_id())
+AND sum_number_of_bytes_alloc > 1000000;
+--echo $res
+
+DROP TABLE t;

@@ -1,0 +1,46 @@
+RESET MASTER;
+SET @@GLOBAL.DEBUG= "+d,simulate_err_on_write_gtid_into_table";
+call mtr.add_suppression("Failed to save the set of Global Transaction "
+                         "Identifiers of the last binary log into the "
+                         "mysql.gtid_executed table while the server was "
+                         "shutting down. The next server restart will make "
+                         "another attempt to save Global Transaction "
+                         "Identifiers into the table.");
+SET @debug_save= @@GLOBAL.DEBUG;
+CREATE TABLE t1 (a INT) ENGINE=InnoDB;
+# restart
+#
+# Verify that we can get correct gtid sets after server restarts
+# even if we encounter an error on writing gtids into table on
+# server shutdown.
+#
+include/assert.inc [committed gtid set is MASTER_UUID:1-2]
+SELECT * FROM mysql.gtid_executed;
+source_uuid	interval_start	interval_end
+MASTER_UUID	1	2
+SET GLOBAL DEBUG= @debug_save;
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
+SET GLOBAL debug="+d,simulate_err_on_write_gtid_into_table";
+call mtr.add_suppression(".* Turning logging off for the whole duration of the "
+                         "MySQL server process. To turn it on again: fix the "
+                         "cause, shutdown the MySQL server and restart it.");
+call mtr.add_suppression("ERROR.*Unable to create a new binlog file: Table "
+                         "`mysql.gtid_executed` couldn't be opened. Current"
+                         " binlog file was flushed to disk and will be kept"
+                         " in use.");
+INSERT INTO t1 VALUES(1);
+SET GLOBAL debug="+d,wait_for_flush_gtid_persister";
+FLUSH LOGS;
+ERROR HY000: Got error -1 - 'Unknown error' from storage engine
+SET GLOBAL debug="-d,wait_for_flush_gtid_persister";
+SET GLOBAL debug="-d,simulate_err_on_write_gtid_into_table";
+#
+# Verify that GTIDs are not saved into gtid_executed table if we
+# encounter an error on writing gtids into table on binlog rotation.
+#
+SELECT * FROM mysql.gtid_executed;
+source_uuid	interval_start	interval_end
+MASTER_UUID	1	2
+include/assert.inc [committed gtid set is MASTER_UUID:1-5]
+SET GLOBAL binlog_error_action= ABORT_SERVER;
+DROP TABLE t1;

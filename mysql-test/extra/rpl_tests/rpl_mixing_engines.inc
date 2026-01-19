@@ -24,20 +24,27 @@
 #       database is created or dropped, respectively.
 #
 #     $verbose
-#       By default, show_binlog_events.inc is sourced after all
+#       By default, the query show binlog events is executed after all
 #       commands have been processed, showing the result of all
-#       commands.  If this flag is set, then show_binlog_events.inc is
-#       also sourced once after each command, showing only the result
+#       commands. If this flag is set, then the query show binlog events
+#       is also executed once after each command, showing only the result
 #       of that command.
-
 --echo rpl_mixing_engines.inc [commands=$commands]
 
 --let $rme_initial_commands= $commands
 
+--let $saved_$keep_transaction_payload_events = $keep_transaction_payload_events
+--let $saved_keep_gtid_events = $keep_gtid_events
+
+# this makes this test case agnostic w.r.t. compression
+--let $keep_transaction_payload_events = 0
+
+# this means that the test can run with or without gtids
+--let $keep_gtid_events = 0
+
 if ($commands == 'configure')
 {
   connection master;
-  
   --disable_query_log
   if ($database_name != 'test')
   {
@@ -607,10 +614,11 @@ while ($commands != '')
   --let $commands= `SELECT LTRIM(SUBSTRING('$commands', LENGTH('$command') + 1))`
   inc $stmt_id;
 
-  let $binlog_start= $pos_command;
+  --let $binlog_start = $pos_command
+  --let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
   if ($verbose)
   {
-    # Use other connection because include/show_binlog_events.inc
+    # Use other connection because query show binlog events
     # executes SELECT UUID(), which switches to row-logging when
     # binlog_format=mixed, if there are open temporary tables. This is
     # due to BUG#13692513.
@@ -635,3 +643,7 @@ while ($commands != '')
 }
 
 --let $commands= $rme_initial_commands
+--let $binlog_file =
+--let $binlog_start =
+--let $keep_transaction_payload_events = $saved_keep_transaction_payload_events
+--let $keep_gtid_events = $saved_keep_gtid_events

@@ -13,6 +13,7 @@
 
 # Includes
 -- source include/have_binlog_format_row.inc
+-- source include/set_privilege_checks_user_as_system_user.inc
 -- source include/master-slave.inc
 
 -- disable_query_log
@@ -52,7 +53,7 @@ while ($1)
 {
   call test.p1();
   let $wait_condition= SELECT COUNT(*) = @wait_count FROM test.t1;
-  -- source include/wait_condition.inc
+  -- source include/wait_condition_or_abort.inc
   -- disable_query_log
   SET @wait_count = @wait_count + 1;
   dec $1;
@@ -140,6 +141,8 @@ diff_files $MYSQLTEST_VARDIR/tmp/sp001_master.sql $MYSQLTEST_VARDIR/tmp/sp001_sl
 # If all is good, when can cleanup our dump files.
 --remove_file $MYSQLTEST_VARDIR/tmp/sp001_master.sql
 --remove_file $MYSQLTEST_VARDIR/tmp/sp001_slave.sql
+
+--enable_warnings
 
 # End of 5.0 test case
 --source include/rpl_end.inc

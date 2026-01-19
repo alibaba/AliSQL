@@ -23,7 +23,7 @@ let $message= #########      Testcase for definer:   ########;
 	eval create table t1 (f1 char(20)) engine= $engine_type;
 
 	create User test_yesprivs@localhost;
-	set password for test_yesprivs@localhost = password('PWD');
+	set password for test_yesprivs@localhost = 'PWD';
 
 	revoke ALL PRIVILEGES, GRANT OPTION FROM test_yesprivs@localhost;
 
@@ -71,6 +71,20 @@ let $message= #########      Testcase for definer:   ########;
         create definer=not_ex_user@localhost trigger trg1_0
                 before INSERT on t1 for each row
                 set new.f1 = 'trig 1_0-yes';
+  connection default;
+    create user definer_user@localhost identified by 'boo';
+    grant set_user_id,system_user, trigger on *.* to definer_user@localhost;
+  connect (con1,localhost,definer_user,boo,test,$MASTER_MYPORT,$MASTER_MYSOCK);
+    create table test.t1 (f1 varchar(20));
+    create definer=root@localhost trigger test.trg1_0
+      before INSERT on test.t1 for each row
+      set new.f1 = 'yes';
+  connection default;
+    drop trigger test.trg1_0;
+    drop user definer_user@localhost;
+    drop table test.t1;
+  connection yes_privs;
+
 # shall always succeed:
 	create definer=current_user trigger trg1_1
 		before INSERT on t1 for each row

@@ -1,0 +1,721 @@
+  ########### ../t/drop_index_crud.test           ######################
+##                                                                     #
+## This test runs aims index creation/drop using crud calls            #
+## Test covers                                                         #
+##  - indexes with virtual columns of the all supported datatypes      #
+##  - creating and dropping indexes on multiple virtual columns        #
+##  - creating and dropping indexes that share the same virtual column #
+##  - error scenarios when dropping the index                          #
+##  - error scenario with virtual column with not supported datatype   #
+########################################################################
+
+
+
+# drop_collection_index
+
+
+## Preamble
+--source include/not_valgrind.inc
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+call mtr.add_suppression("Error parsing message of type 12: args");
+call mtr.add_suppression("Error handling message: args");
+
+## Test starts here
+--write_file $MYSQL_TMP_DIR/mysqlx-in.xpl
+
+
+-->macro Create_collection_index %INDEX_NAME% %TYPE%
+-->stmtadmin create_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"%INDEX_NAME%", "unique":true, "fields":{"field":"$.col", "type":"%TYPE%","required":true}}
+-->recv
+-->endmacro
+
+-->macro Drop_collection_index %INDEX_NAME%
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"%INDEX_NAME%"}
+-->recv
+-->endmacro
+
+-->sql
+#-- "Creating database for testcase"
+CREATE DATABASE xplugintest;
+USE xplugintest;
+-->endsql
+
+-->stmtadmin create_collection	{"schema":"xplugintest" ,"name":"table1"}
+-->recvresult
+
+-->echo Create and drop indexes of different types on single fields
+
+-->callmacro Create_collection_index	ix	TINYINT
+
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	TINYINT UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	TINYINT(2) UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	SMALLINT
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	SMALLINT UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	SMALLINT(4) UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"12345","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	MEDIUMINT
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	MEDIUMINT UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	MEDIUMINT(7) UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"12345678","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	INTEGER
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	INTEGER UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	INTEGER(6) UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"1234567","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	BIGINT
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	BIGINT UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	BIGINT(13)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"123456789012345","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	BIGINT(22) UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	REAL
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	REAL UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	FLOAT
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	FLOAT UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DOUBLE
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DOUBLE UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DOUBLE(7,4) UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"123.1234","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DECIMAL
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DECIMAL(10) UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"123456.123","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DECIMAL(8,2) UNSIGNED
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"123456.123","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	NUMERIC
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	NUMERIC(10,2)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"12345.123456","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	NUMERIC(5)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"12345.123456","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DATE
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	TIME
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	TIME(2)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"12:13:44","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	TIMESTAMP
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	TIMESTAMP(6)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"2038-01-19 03:14:07.123456","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DATETIME
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	DATETIME(6)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	YEAR
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	VARCHAR(15)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"QUITE LOOOONG STRING","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	CHAR(25)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->expecterror ER_DATA_TOO_LONG
+-->sql
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"LONG LONG STRING, LONGER THAN INDEX SIZE","_id":1}');
+-->endsql
+-->sql
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	BIT
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	BLOB(50)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"BLOB BLOB BLOB BLOB BLOB VALUE LONG VALUE 0123456789 BLOB01234567890123456789","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->callmacro Create_collection_index	ix	TEXT(30)
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+INSERT INTO xplugintest.table1(doc) VALUES('{"col":"TEXT LONGER THAN INDEX SIZE WHICH EQUALS 30 1234567890","_id":1}');
+SELECT * FROM xplugintest.table1;
+DELETE FROM xplugintest.table1;
+-->endsql
+-->callmacro Drop_collection_index	ix
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+
+-->echo Create index on two fields
+-->stmtadmin create_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"two_field_index", "unique":true, "fields":[{"field":"$.col_text", "type":"TEXT(10)","required":true},{"field":"$.col_int", "type":"INT","required":true}]}
+-->recv
+
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+#-- Drop two-fields index
+
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"two_field_index"}
+-->recv
+
+
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+
+-->echo Create two indexes using the same field
+
+-->stmtadmin create_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"index1", "unique":true, "fields":[{"field":"$.col_1", "type":"INT","required":true},{"field":"$.col_2", "type":"INT","required":true}]}
+-->recv
+
+-->stmtadmin create_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"index2", "unique":true, "fields":{"field":"$.col_2", "type":"INT","required":true}}
+-->recv
+
+-->sql
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->echo Drop the first of the indexes, it should keep the shared column
+
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"index1"}
+-->recv
+
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+
+
+-->echo Drop the second of the indexes, the column should be gone
+
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"index2"}
+-->recv
+
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+
+-->echo Error scenarios when dropping the index
+
+#-- drop index for non-existing schema
+-->stmtadmin drop_collection_index	{"schema":"nonexisting", "collection":"table1", "name":"date_index"}
+-->recv
+#-- drop index for non-existing collection
+-->stmtadmin drop_collection_index	{"schema": "xplugintest", "collection":"nonexisting", "name":"date_index"}
+-->recv
+#-- drop index for non-existing index
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"nonexisting"}
+-->recv
+
+#-- ERROR scenario: create index of not supported type:
+-->stmtadmin create_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"tblob_index", "unique":true, "fields":{"field":"$.col_blob", "type":"TINYBLOB(10)","required":true}}
+-->recv
+
+-->sql
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+
+-->sql
+#Trying to add FULLTEXT INDEX leads to server crash BUG 21633035
+ALTER TABLE xplugintest.table1 ADD SUBJECT text GENERATED ALWAYS AS (json_extract( doc, '$.subject' )) STORED;
+ALTER TABLE xplugintest.table1 ADD book text ;
+ALTER TABLE xplugintest.table1 ADD INDEX `fulltext_idx_1` (subject(100));
+ALTER TABLE xplugintest.table1 ADD INDEX `fulltext_idx_2` (subject(100));
+ALTER TABLE xplugintest.table1 ADD INDEX `fulltext_idx_3` (book(100));
+
+ANALYZE TABLE xplugintest.table1;
+SHOW CREATE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+-->endsql
+
+-->echo drop primary index
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"PRIMARY"}
+-->recv
+-->sql
+SHOW CREATE TABLE xplugintest.table1;
+-->endsql
+
+
+#-- Drop fulltext index
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"fulltext_idx_1"}
+-->recv
+
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"fulltext_idx_3"}
+-->recv
+
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table1", "name":"fulltext_idx_2"}
+-->recv
+
+
+-->sql
+#-- drop column drop index as well
+SHOW CREATE TABLE xplugintest.table1;
+ALTER TABLE xplugintest.table1 DROP COLUMN subject;
+ANALYZE TABLE xplugintest.table1;
+SHOW INDEX FROM xplugintest.table1;
+CREATE TABLE xplugintest.table2 (
+ID          TINYINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+Name        VARCHAR(255) NOT NULL,
+LastName        VARCHAR(255) NOT NULL,
+UNIQUE `idx1` (Name),
+UNIQUE `idx2` (LastName)
+) ;
+-->endsql
+
+-->echo  drop index from data_model=TABLE
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table2", "name":"idx1"}
+-->recv
+
+-->echo Error can not drop primary index when column defined as auto_increment
+-->stmtadmin drop_collection_index	{"schema":"xplugintest", "collection":"table2", "name":"PRIMARY"}
+-->expecterror 1075
+-->recvresult
+
+-->sql
+SHOW CREATE TABLE xplugintest.table2;
+-->endsql
+
+-->echo drop index using namespace=sql
+Mysqlx.Sql.StmtExecute {
+  stmt: "ALTER TABLE xplugintest.table2 DROP INDEX `idx2`"
+  namespace: "sql"
+}
+-->recvresult
+
+-->sql
+ANALYZE TABLE xplugintest.table2;
+SHOW INDEX FROM xplugintest.table2;
+-->endsql
+
+
+## Cleanup
+-->sql
+DROP DATABASE IF EXISTS xplugintest;
+-->endsql
+EOF
+
+--exec $MYSQLXTEST -u x_root --password='' --file=$MYSQL_TMP_DIR/mysqlx-in.xpl 2>&1
+
+## Cleanup
+--source ../include/xplugin_cleanup.inc

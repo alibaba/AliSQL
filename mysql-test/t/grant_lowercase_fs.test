@@ -1,11 +1,11 @@
 -- source include/have_case_insensitive_file_system.inc
--- source include/not_embedded.inc
 
 
 #
 # Bug#41049 does syntax "grant" case insensitive?
 #
 create database db1;
+CREATE USER user_1@localhost, USER_1@localhost;
 GRANT CREATE ON db1.* to user_1@localhost;
 GRANT SELECT ON db1.* to USER_1@localhost;
 

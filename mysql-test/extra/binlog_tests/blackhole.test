@@ -2,7 +2,6 @@
 # Simple test for blackhole example
 # Taken from the select test
 #
--- source include/not_embedded.inc
 -- source include/have_blackhole.inc
 -- source include/have_log_bin.inc
 
@@ -94,12 +93,14 @@ INSERT INTO t1 VALUES('MySQL has now support', 'for full-text search'),
                           ('Only MyISAM tables','support collections'),
              ('Function MATCH ... AGAINST()','is used to do a search'),
         ('Full-text search in MySQL', 'implements vector space model');
+ANALYZE TABLE t1;
 SHOW INDEX FROM t1;
 
 # nl search
 
+--sorted_result
 select * from t1 where MATCH(a,b) AGAINST ("collections");
-explain extended select * from t1 where MATCH(a,b) AGAINST ("collections");
+explain select * from t1 where MATCH(a,b) AGAINST ("collections");
 select * from t1 where MATCH(a,b) AGAINST ("indexes");
 select * from t1 where MATCH(a,b) AGAINST ("indexes collections");
 select * from t1 where MATCH(a,b) AGAINST ("only");
@@ -130,15 +131,6 @@ select * from t3;
 --source include/show_binlog_events.inc
 
 drop table t1,t2,t3;
-
-#
-# BUG#27998 - mysqld crashed when executing INSERT DELAYED on a BLACKHOLE
-#             table
-#
-CREATE TABLE t1(a INT) ENGINE=BLACKHOLE;
-INSERT DELAYED INTO t1 VALUES(1);
-DROP TABLE t1;
-
 
 #
 #Bug#19717: DELETE Query Error on BLACKHOLE when using WHERE on column with UNIQUE INDEX
@@ -203,6 +195,5 @@ source include/show_binlog_events.inc;
 
 # cleanup
 drop table t1;
-
 
 # End of tests

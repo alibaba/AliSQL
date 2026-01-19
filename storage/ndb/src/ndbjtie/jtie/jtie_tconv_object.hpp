@@ -1,14 +1,22 @@
 /*
- Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is designed to work with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have either included with
+ the program or referenced in the documentation.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -31,71 +39,29 @@
 // ---------------------------------------------------------------------------
 
 /**
- * A root class representing Java peer classes in type mappings.
+ * Internal root class for representing Java classes in peer type mappings.
  *
  * Rationale: A dedicated type, distinct from JNI's _jobject, allows for
  * better control of template resolution (avoiding ambiguities) and
  * instantiation (reducing clutter).  To allow for pointer compatibility
  * by static type conversion, this type derives from _jobject.
  */
-struct _jtie_Object : _jobject {
-};
+struct _jtie_Object : _jobject {};
 
-// XXX, document: type specifying an Object mapping with a class name
-
-// trait type wrapping named-parametrized Object mappings for specialization
-// XXX make use of
-//   JTIE_DEFINE_METHOD_MEMBER_INFO( _jtie_ObjectMapper< T > )
-// to replace
-//   static const char * const class_name;
-//   static const char * const member_name;
-//   static const char * const member_descriptor;
-//   typedef _jmethodID * memberID_t;
-template< typename J >
+/**
+ * Internal, generic trait type mapping a Java class.
+ *
+ * Rationale: This generic class has outlived its purpose, but can be used
+ * as a container for additional, class-specific mapping information.
+ */
+template <typename J>
 struct _jtie_ObjectMapper : _jtie_Object {
-    // the name of the Java peer class in the JVM format (i.e., '/'-separated)
-    static const char * const class_name;
-
-    // the name, descriptor, and JNI type of the class's no-arg c'tor
-    static const char * const member_name;
-    static const char * const member_descriptor;
-    typedef _jmethodID * memberID_t;
+  /**
+   * Name and descriptor of this class's no-argument constructor.
+   */
+  // XXX cleanup: use a template decl instead of a macro
+  JTIE_DEFINE_METHOD_MEMBER_INFO(ctor)
 };
-
-// XXX static initialization <-> multiple compilation units <-> jtie_lib.hpp
-template< typename J >
-const char * const _jtie_ObjectMapper< J >::class_name
-    = J::class_name; // XXX static initialization order dependency?
-
-template< typename J >
-const char * const _jtie_ObjectMapper< J >::member_name
-    = "<init>";
-
-template< typename J >
-const char * const _jtie_ObjectMapper< J >::member_descriptor
-    = "()V";
-
-// Design note:
-//
-// As of pre-C++0x, string literals cannot be used as template arguments
-// which must be integral constants with external linkage.
-//
-// So, we cannot declare:
-//
-//    template< const char * >
-//    struct _jtie_ClassNamedObject : _jtie_Object {
-//        static const char * const java_internal_class_name;
-//    };
-//
-// As a feasible workaround, we require the application to provide a
-// trait type for each class, e.g.
-//
-//    struct _m_A : _jobject {
-//        static const char * const java_internal_class_name;
-//    };
-//    const char * const _m_A::java_internal_class_name = "myjapi/A";
-//
-// and we retrieve the class name from there.
 
 /**
  * Defines the trait type aliases for the mapping of a
@@ -126,28 +92,19 @@ const char * const _jtie_ObjectMapper< J >::member_descriptor
  * use of the defined type names, while each use of a type member needs
  * to be prepended with the C++ keyword "typename".
  */
-#define JTIE_DEFINE_PEER_CLASS_MAPPING( C, T )                          \
-    struct T {                                                          \
-        static const char * const class_name;                           \
-    };                                                                  \
-    typedef ttrait< jobject, C, _jtie_ObjectMapper< T > *               \
-                    > ttrait_##T##_t;                                   \
-    typedef ttrait< jobject, const C, _jtie_ObjectMapper< T > *         \
-                    > ttrait_##T##_ct;                                  \
-    typedef ttrait< jobject, C &, _jtie_ObjectMapper< T > *             \
-                    > ttrait_##T##_r;                                   \
-    typedef ttrait< jobject, const C &, _jtie_ObjectMapper< T > *       \
-                    > ttrait_##T##_cr;                                  \
-    typedef ttrait< jobject, C *, _jtie_ObjectMapper< T > *             \
-                    > ttrait_##T##_p;                                   \
-    typedef ttrait< jobject, const C *, _jtie_ObjectMapper< T > *       \
-                    > ttrait_##T##_cp;                                  \
-    typedef ttrait< jobject, C * const, _jtie_ObjectMapper< T > *       \
-                    > ttrait_##T##_pc;                                  \
-    typedef ttrait< jobject, const C * const, _jtie_ObjectMapper< T > * \
-                    > ttrait_##T##_cpc;
+#define JTIE_DEFINE_PEER_CLASS_MAPPING(C, T)                                   \
+  struct T {};                                                                 \
+  typedef ttrait<jobject, C, _jtie_ObjectMapper<T> *> ttrait_##T##_t;          \
+  typedef ttrait<jobject, const C, _jtie_ObjectMapper<T> *> ttrait_##T##_ct;   \
+  typedef ttrait<jobject, C &, _jtie_ObjectMapper<T> *> ttrait_##T##_r;        \
+  typedef ttrait<jobject, const C &, _jtie_ObjectMapper<T> *> ttrait_##T##_cr; \
+  typedef ttrait<jobject, C *, _jtie_ObjectMapper<T> *> ttrait_##T##_p;        \
+  typedef ttrait<jobject, const C *, _jtie_ObjectMapper<T> *> ttrait_##T##_cp; \
+  typedef ttrait<jobject, C *const, _jtie_ObjectMapper<T> *> ttrait_##T##_pc;  \
+  typedef ttrait<jobject, const C *const, _jtie_ObjectMapper<T> *>             \
+      ttrait_##T##_cpc;
 
-#if 0 // XXX cleanup this unsupported mapping
+#if 0  // XXX cleanup this unsupported mapping
 
  * Naming convention:
  *   type alias:                specifies a mapping:
@@ -172,15 +129,11 @@ const char * const _jtie_ObjectMapper< J >::member_descriptor
  *   ttrait_<T>_0pc_a           J <->       C * const (of unspecified length)
  *   ttrait_<T>_0cpc_a          J <-> const C * const (of unspecified length)
  */
-#define JTIE_DEFINE_ARRAY_PTR_TYPE_MAPPING( J, C, T )                   \
-    typedef ttrait< J *, C *                                            \
-                    > ttrait_##T##_0p_a;                                \
-    typedef ttrait< J *, const C *                                      \
-                    > ttrait_##T##_0cp_a;                               \
-    typedef ttrait< J *, C * const                                      \
-                    > ttrait_##T##_0pc_a;                               \
-    typedef ttrait< J *, const C * const                                \
-                    > ttrait_##T##_0cpc_a;
+#define JTIE_DEFINE_ARRAY_PTR_TYPE_MAPPING(J, C, T)  \
+  typedef ttrait<J *, C *> ttrait_##T##_0p_a;        \
+  typedef ttrait<J *, const C *> ttrait_##T##_0cp_a; \
+  typedef ttrait<J *, C *const> ttrait_##T##_0pc_a;  \
+  typedef ttrait<J *, const C *const> ttrait_##T##_0cpc_a;
 
 /**
  * Defines the trait type aliases for the mapping of a
@@ -198,15 +151,18 @@ const char * const _jtie_ObjectMapper< J >::member_descriptor
  *   ttrait_<T>_1pc_a           J <->       C * const (of array length 1)
  *   ttrait_<T>_1cpc_a          J <-> const C * const (of array length 1)
  */
-#define JTIE_DEFINE_ARRAY_PTR_LENGTH1_TYPE_MAPPING( J, C, T )           \
-    typedef ttrait< J *, C *, _jtie_j_ArrayMapper< _jtie_j_BoundedArray< J, 1 > > * \
-                    > ttrait_##T##_1p_a;                                \
-    typedef ttrait< J *, const C *, _jtie_j_ArrayMapper< _jtie_j_BoundedArray< J, 1 > > * \
-                    > ttrait_##T##_1cp_a;                               \
-    typedef ttrait< J *, C * const, _jtie_j_ArrayMapper< _jtie_j_BoundedArray< J, 1 > > * \
-                    > ttrait_##T##_1pc_a;                               \
-    typedef ttrait< J *, const C * const, _jtie_j_ArrayMapper< _jtie_j_BoundedArray< J, 1 > > * \
-                    > ttrait_##T##_1cpc_a;
+#define JTIE_DEFINE_ARRAY_PTR_LENGTH1_TYPE_MAPPING(J, C, T)                   \
+  typedef ttrait<J *, C *, _jtie_j_ArrayMapper<_jtie_j_BoundedArray<J, 1>> *> \
+      ttrait_##T##_1p_a;                                                      \
+  typedef ttrait<J *, const C *,                                              \
+                 _jtie_j_ArrayMapper<_jtie_j_BoundedArray<J, 1>> *>           \
+      ttrait_##T##_1cp_a;                                                     \
+  typedef ttrait<J *, C *const,                                               \
+                 _jtie_j_ArrayMapper<_jtie_j_BoundedArray<J, 1>> *>           \
+      ttrait_##T##_1pc_a;                                                     \
+  typedef ttrait<J *, const C *const,                                         \
+                 _jtie_j_ArrayMapper<_jtie_j_BoundedArray<J, 1>> *>           \
+      ttrait_##T##_1cpc_a;
 
 // XXX and this is how it's done
     typedef ttrait< jobjectArray, C *,                                  \
@@ -215,24 +171,17 @@ const char * const _jtie_ObjectMapper< J >::member_descriptor
                         _jtie_ObjectMapper< J >,                        \
                         1 >                                             \
                       > *                                               \
-                    > ttrait_##J##_1a;                                  \
+                    > ttrait_##J##_1a;
 
-#endif // XXX cleanup this unsupported mapping
+#endif  // XXX cleanup this unsupported mapping
 
 // XXX to document
-// XXX static initialization <-> multiple compilation units <-> jtie_lib.hpp
-// XXX replace
-//   template struct MemberId< _jtie_ObjectMapper< T > >;
-//   template struct MemberIdCache< _jtie_ObjectMapper< T > >;
-// with
-//   JTIE_INSTANTIATE_CLASS_MEMBER_INFO_X(_jtie_ObjectMapper< T >,
-//                                        JCN, "<init>", "()V")
-#define JTIE_INSTANTIATE_PEER_CLASS_MAPPING( T, JCN )           \
-    const char * const T::class_name = JCN;                     \
-    template struct _jtie_ObjectMapper< T >;                    \
-    template struct MemberId< _jtie_ObjectMapper< T > >;        \
-    template struct MemberIdCache< _jtie_ObjectMapper< T > >;
+// XXX cleanup: symmetry with JTIE_DEFINE_METHOD_MEMBER_INFO( ctor ) above
+#define JTIE_INSTANTIATE_PEER_CLASS_MAPPING(T, JCN)                      \
+  JTIE_INSTANTIATE_CLASS_MEMBER_INFO_1(_jtie_ObjectMapper<T>::ctor, JCN, \
+                                       "<init>", "()V")                  \
+  template struct _jtie_ObjectMapper<T>;
 
 // ---------------------------------------------------------------------------
 
-#endif // jtie_tconv_object_hpp
+#endif  // jtie_tconv_object_hpp

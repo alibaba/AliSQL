@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005, 2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,14 +26,13 @@
 #ifndef SETVARREQ_H
 #define SETVARREQ_H
 
-#include "SignalData.hpp"
 #include "ConfigParamId.hpp"
+#include "SignalData.hpp"
+
+#define JAM_FILE_ID 183
 
 class SetVarReq {
-
-public:
-
-
+ public:
   static UintR size();
 
   void mgmtSrvrBlockRef(UintR mgmtSrvrBlockRef);
@@ -38,20 +44,13 @@ public:
   void value(UintR value);
   UintR value(void) const;
 
-
-private:
-
+ private:
   UintR _mgmtSrvrBlockRef;
   UintR _variable;
   UintR _value;
 };
 
-
-
-inline UintR SetVarReq::size(void) {
-  return 3;
-}
-
+inline UintR SetVarReq::size(void) { return 3; }
 
 inline void SetVarReq::mgmtSrvrBlockRef(UintR mgmtSrvrBlockRef) {
   _mgmtSrvrBlockRef = mgmtSrvrBlockRef;
@@ -61,26 +60,18 @@ inline UintR SetVarReq::mgmtSrvrBlockRef(void) const {
   return _mgmtSrvrBlockRef;
 }
 
-
 inline void SetVarReq::variable(ConfigParamId variable) {
   _variable = variable;
 }
-
 
 inline ConfigParamId SetVarReq::variable(void) const {
   return static_cast<ConfigParamId>(_variable);
 }
 
+inline void SetVarReq::value(UintR value) { _value = value; }
 
-inline void SetVarReq::value(UintR value) {
-  _value = value;
-}
+inline UintR SetVarReq::value(void) const { return _value; }
 
-inline UintR SetVarReq::value(void) const {
-  return _value;
-}
+#undef JAM_FILE_ID
 
-
-
-#endif // SETVARREQ_H
-
+#endif  // SETVARREQ_H

@@ -1,0 +1,28 @@
+## Tests for checking xplugin behaviour when server is using expired ssl certificates.
+
+## Preamble
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+# OpenSSL >= 1.1.1 also fail early
+call mtr.add_suppression('Failed to initialize TLS for channel: mysql_main');
+call mtr.add_suppression("SSL error: Unable to get certificate from");
+call mtr.add_suppression("Failed to set up SSL because of the following SSL library error: Unable to get certificate");
+
+#echo Suppress expiration warning by the server check
+call mtr.add_suppression("Server SSL certificate doesn't verify");
+
+# Tests
+--write_file $MYSQL_TMP_DIR/expired_ssl_certs.xpl
+-->quiet
+
+-->stmtsql show global status like 'Mysqlx_ssl_server_not%';
+-->recvresult
+
+EOF
+
+--replace_regex /Mysqlx_ssl_server_not_after([[:space:]]*)[-a-zA-Z0-9: ]*/Mysqlx_ssl_server_not_after\1/ /Mysqlx_ssl_server_not_before([[:space:]]*)[a-zA-Z0-9: ]*/Mysqlx_ssl_server_not_before\1/
+--exec $MYSQLXTEST -ux_root --password='' --file=$MYSQL_TMP_DIR/expired_ssl_certs.xpl 2>&1
+
+## Cleanup
+--source ../include/xplugin_cleanup.inc

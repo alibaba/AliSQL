@@ -1,0 +1,37 @@
+# Create database and tables
+CREATE DATABASE testdb;
+USE testdb;
+CREATE TABLE t1 ( id int );
+INSERT INTO t1 VALUES (1);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+CREATE TABLE t2 ( id int );
+INSERT INTO t2 SELECT * FROM t1;
+CREATE TABLE t3 (
+id INT
+)
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (1000),
+PARTITION p1 VALUES LESS THAN (2000),
+PARTITION p2 VALUES LESS THAN (3000)
+);
+INSERT INTO t3 VALUES (800);
+INSERT INTO t3 VALUES (1500);
+INSERT INTO t3 VALUES (2300);
+BEGIN;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+32
+# Alter the partition table.
+ALTER TABLE testdb.t3 ADD COLUMN name varchar(10);
+# SELECT COUNT(*) must fail as the table definition is changed.
+SELECT COUNT(*) FROM testdb.t3;
+ERROR HY000: Table definition has changed, please retry transaction
+# SELECT * must fail as the table definition is changed.
+SELECT * FROM testdb.t3;
+ERROR HY000: Table definition has changed, please retry transaction
+# Clean up
+DROP DATABASE testdb;

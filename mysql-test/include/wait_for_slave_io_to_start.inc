@@ -7,12 +7,16 @@
 #
 # ==== Usage ====
 #
+# [--let $rpl_channel_name= 'NAME']
 # [--let $slave_timeout= NUMBER]
 # [--let $rpl_debug= 1]
 # [--let $rpl_allow_error= 1]
 # --source include/wait_for_slave_io_to_start.inc
 #
 # Parameters:
+#   $rpl_channel_name
+#     See include/wait_for_slave_param.inc
+#
 #   $slave_timeout
 #     See include/wait_for_slave_param.inc
 #
@@ -28,6 +32,10 @@
 
 
 --let $include_filename= wait_for_slave_io_to_start.inc
+if ($rpl_channel_name)
+{
+  --let $include_filename= $include_filename [FOR CHANNEL $rpl_channel_name]
+}
 --source include/begin_include_file.inc
 
 

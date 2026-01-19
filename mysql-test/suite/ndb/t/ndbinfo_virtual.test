@@ -1,0 +1,63 @@
+--result_format 2
+--source include/have_ndb.inc
+
+use test;
+
+--disable_query_log
+create table commacomma (
+  id int not null primary key,
+  `,` int,
+  ```` int,
+  `name.with.dots` int
+) engine=ndb;
+
+create table allprimitives (
+ id int not null primary key,
+
+ int_not_null_hash int not null,
+ int_not_null_btree int not null,
+ int_not_null_both int not null,
+ int_not_null_none int not null,
+ int_null_hash int,
+ int_null_btree int,
+ int_null_both int,
+ int_null_none int,
+
+ byte_not_null_hash tinyint not null,
+ byte_not_null_btree tinyint not null,
+ byte_not_null_both tinyint not null,
+ byte_not_null_none tinyint not null,
+ byte_null_hash tinyint,
+ byte_null_btree tinyint,
+ byte_null_both tinyint,
+ byte_null_none tinyint,
+
+ short_not_null_hash smallint not null,
+ short_not_null_btree smallint not null,
+ short_not_null_both smallint not null,
+ short_not_null_none smallint not null,
+ short_null_hash smallint,
+ short_null_btree smallint,
+ short_null_both smallint,
+ short_null_none smallint,
+
+ long_not_null_hash bigint not null,
+ long_not_null_btree bigint not null,
+ long_not_null_both bigint not null,
+ long_not_null_none bigint not null,
+ long_null_hash bigint,
+ long_null_btree bigint,
+ long_null_both bigint,
+ long_null_none bigint
+) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
+--enable_query_log
+
+-- echo See truncated column list
+select substring(columns, -20)
+ from ndbinfo.events where name = 'REPL$test/allprimitives';
+-- echo See quoted column names
+select columns from ndbinfo.events where name = 'REPL$test/commacomma';
+
+DROP table allprimitives;
+DROP table commacomma;
+

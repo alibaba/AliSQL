@@ -111,12 +111,12 @@ INSERT INTO t3 SELECT a + 4, a + 4, 3 FROM t3;
 
 # demonstrate a problem when a must-use-sort table flag
 # (sort_by_table=1) is being neglected.
-SELECT STRAIGHT_JOIN SQL_NO_CACHE t1.b, t1.a FROM t1, t3, t2 WHERE
+SELECT STRAIGHT_JOIN t1.b, t1.a FROM t1, t3, t2 WHERE
   t3.a = t2.a AND t2.b = t1.a AND t3.b = 1 AND t3.c IN (1, 2)
   ORDER BY t1.b LIMIT 2;
 
 # demonstrate the problem described in the bug report
-SELECT STRAIGHT_JOIN SQL_NO_CACHE t1.b, t1.a FROM t1, t3, t2 WHERE
+SELECT STRAIGHT_JOIN t1.b, t1.a FROM t1, t3, t2 WHERE
   t3.a = t2.a AND t2.b = t1.a AND t3.b = 1 AND t3.c IN (1, 2)
   ORDER BY t1.b LIMIT 5;
 DROP TABLE t1, t2, t3;
@@ -202,18 +202,18 @@ DROP TABLE t1;
 #
 # Bug #28272: EXPLAIN for SELECT from an empty InnoDB table
 #
-
 CREATE TABLE t1 (
   a1 decimal(10,0) DEFAULT NULL,
   a2 blob,
   a3 time DEFAULT NULL,
   a4 blob,
   a5 char(175) DEFAULT NULL,
-  a6 timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
+  a6 timestamp NOT NULL DEFAULT '2000-01-01 01:01:01',
   a7 tinyblob,
   INDEX idx (a6,a7(239),a5)
-) ENGINE=InnoDB;
+) charset latin1 ENGINE=InnoDB;
 
+ANALYZE TABLE t1;
 EXPLAIN SELECT a4 FROM t1 WHERE
 a6=NULL AND
 a4='UNcT5pIde4I6c2SheTo4gt92OV1jgJCVkXmzyf325R1DwLURkbYHwhydANIZMbKTgdcR5xS';
@@ -401,6 +401,7 @@ drop table t1;
 create table t1 (f1 int, f2 char(1), primary key(f1,f2)) stats_persistent=0;
 insert into t1 values ( 1,"e"),(2,"a"),( 3,"c"),(4,"d");
 alter table t1 drop primary key, add primary key (f2, f1);
+ANALYZE TABLE t1;
 explain select distinct f1 a, f1 b from t1;
 explain select distinct f1, f2 from t1;
 drop table t1;
@@ -456,47 +457,19 @@ INSERT INTO t1(id, dept, age, name) VALUES
   (4011, 'cs7', 10, 'rs4'), (4012, 'cs8', 20, 'rs4'), (4019, 'cs9', 10, 'rs5'),
   (4020, 'cs10', 20, 'rs5'),(4027, 'cs11', 10, 'rs6'),(4028, 'cs12', 20, 'rs6');
 
+ANALYZE TABLE t1;
+--echo # Masking (#) number in "rows" column of the following EXPLAIN output, as it may vary (bug#47746).
+--replace_column 10 #
 EXPLAIN SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
 SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
 DELETE FROM t1;
+ANALYZE TABLE t1;
 --echo # Masking (#) number in "rows" column of the following EXPLAIN output, as it may vary (bug#47746).
---replace_column 9 #
+--replace_column 10 #
 EXPLAIN SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
 SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
 
 DROP TABLE t1;
-
---source include/innodb_rollback_on_timeout.inc
-
-#
-# Bug #27210: INNODB ON DUPLICATE KEY UPDATE
-#
-
-set @save_qcache_size=@@global.query_cache_size;
-set @save_qcache_type=@@global.query_cache_type;
-set global query_cache_size=10*1024*1024;
-set global query_cache_type=1;
-connect (con1,localhost,root,,);
-connection con1;
-drop table if exists `test`;
-CREATE TABLE `test` (`test1` varchar(3) NOT NULL,
-  `test2` varchar(4) NOT NULL,PRIMARY KEY  (`test1`))
-  ENGINE=InnoDB DEFAULT CHARSET=latin1;
-INSERT INTO `test` (`test1`, `test2`) VALUES ('tes', '5678');
-disconnect con1;
-connect (con2,localhost,root,,);
-connection con2;
-select * from test;
-INSERT INTO `test` (`test1`, `test2`) VALUES ('tes', '1234')
-  ON DUPLICATE KEY UPDATE `test2` = '1234';
-select * from test;
-flush tables;
-select * from test;
-disconnect con2;
-connection default;
-drop table test;
-set global query_cache_type=@save_qcache_type;
-set global query_cache_size=@save_qcache_size;
 
 --source include/innodb_rollback_on_timeout.inc
 
@@ -549,6 +522,8 @@ drop table t1;
 #             for an InnoDB table
 #
 
+# Legacy queries below need to turn off ONLY_FULL_GROUP_BY and STRICT mode.
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1(
   id int AUTO_INCREMENT PRIMARY KEY,
   stat_id int NOT NULL,
@@ -607,7 +582,7 @@ ANALYZE TABLE t2;
 -- enable_query_log
 
 EXPLAIN SELECT COUNT(*) FROM t2 WHERE stat_id IN (1,3) AND acct_id=785;
-
+SET sql_mode=default;
 DROP TABLE t1,t2; 
 
 #
@@ -650,26 +625,6 @@ SELECT * FROM t3 WHERE a = 'uk';
 DROP TABLE t1,t2,t3;
 
 #
-# Test bug when trying to drop data file which no InnoDB directory entry
-#
-
-create table t1 (a int) engine=innodb;
-let $MYSQLD_DATADIR= `select @@datadir`;
-copy_file $MYSQLD_DATADIR/test/t1.frm $MYSQLD_DATADIR/test/bug29807.frm;
---error 1146
-select * from bug29807;
-drop table t1;
---error 1051
-drop table bug29807;
-create table bug29807 (a int);
-drop table bug29807;
---disable_query_log
-call mtr.add_suppression("InnoDB: Error: table .test...bug29807. does not exist in the InnoDB internal");
-call mtr.add_suppression("InnoDB: Cannot open table test/bug29807 from");
---enable_query_log
-
-
-#
 # Bug #29154: LOCK TABLES is not atomic when >1 InnoDB tables are locked
 #
 
@@ -687,9 +642,11 @@ INSERT INTO t2 VALUES (1);
 --echo switch to connection c2
 CONNECTION c2;
 SET AUTOCOMMIT=0;
+SET @old_lock_wait_timeout= @@lock_wait_timeout;
+SET lock_wait_timeout= 1;
 --error ER_LOCK_WAIT_TIMEOUT
 LOCK TABLES t1 READ, t2 READ;
-
+SET  @@lock_wait_timeout= @old_lock_wait_timeout;
 --echo switch to connection c1
 CONNECTION c1;
 COMMIT;
@@ -748,14 +705,14 @@ set @@sort_buffer_size=8192;
 
 SELECT COUNT(*) FROM t1;
 
---replace_column 9 #
+--replace_column 10 # 11 #
 EXPLAIN 
 SELECT COUNT(*) FROM t1 
   WHERE (c >= '2007-01-02' AND c <= '2007-01-03') OR b >= 1;
 SELECT COUNT(*) FROM t1 
   WHERE (c >= '2007-01-02' AND c <= '2007-01-03') OR b >= 1;
 
---replace_column 9 #
+--replace_column 10 # 11 #
 EXPLAIN 
 SELECT COUNT(*) FROM t1 FORCE INDEX(idx_b, idx_c) 
   WHERE (c >= '2007-01-02' AND c <= '2007-01-03') OR b >= 1;
@@ -809,15 +766,6 @@ TRUNCATE table t2;
 INSERT INTO t2 select * from t1;
 SELECT * from t2;
 drop table t1,t2;
-
-#
-# Bug#17530: Incorrect key truncation on table creation caused server crash.
-#
-create table t1(f1 varchar(800) binary not null, key(f1))
-  character set utf8 collate utf8_general_ci;
-insert into t1 values('aaa');
-drop table t1;
-
 
 #
 # Bug#22781: SQL_BIG_RESULT fails to influence sort plan
@@ -992,11 +940,17 @@ DROP TABLE t1;
 #
 # Bug #28125: ERROR 2013 when adding index.
 #
-create table t1(a text) engine=innodb default charset=utf8; 
+
+# Legacy queries below need to turn off ONLY_FULL_GROUP_BY and STRICT mode.
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
+create table t1(a text) engine=innodb row_format=dynamic default charset=utf8;
 insert into t1 values('aaa');
-alter table t1 add index(a(1024));
+--replace_result 768 3072 1536 3072
+alter table t1 add index(a(1025));
+--replace_result 256 1024 512 1024
 show create table t1;
 drop table t1;
+SET sql_mode=default;
 
 #
 # Bug #28570: handler::index_read() is called with different find_flag when 
@@ -1016,9 +970,10 @@ SELECT * FROM t1 WHERE b=20 FOR UPDATE;
 
 --connect (conn2, localhost, root,,test)
 
-# This statement gives a "failed: 1205: Lock wait timeout exceeded; try 
+# This statement gives a "failed: 1205: Lock wait timeout exceeded; try
 # restarting transaction" message when the bug is present.
 START TRANSACTION;
+--skip_if_hypergraph
 SELECT * FROM t1 WHERE b=10 ORDER BY A FOR UPDATE;
 ROLLBACK;
 
@@ -1154,7 +1109,10 @@ drop table t1;
 
 CREATE TABLE t1 (id int, type char(6), d int, INDEX idx(id,d)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES 
-  (191, 'member', 1), (NULL, 'member', 3), (NULL, 'member', 4), (201, 'member', 2); 
+  (191, 'member', 1), (NULL, 'member', 3), (NULL, 'member', 4),
+  (201, 'member', 2), (NULL, 'member', 5), (191, 'member', 6),
+  (191, 'member', 7), (191, 'member', 8), (191, 'member', 9),
+  (191, 'member', 10);
 
 -- disable_query_log
 -- disable_result_log
@@ -1189,6 +1147,7 @@ CREATE TABLE t1 (a int, b int, c int, PRIMARY KEY (a), KEY t1_b (b))
 
 INSERT INTO t1 (a,b,c) VALUES (1,1,1), (2,1,1), (3,1,1), (4,1,1);
 INSERT INTO t1 (a,b,c) SELECT a+4,b,c FROM t1;
+INSERT INTO t1 (a,b,c) SELECT a+8,b,c FROM t1;
 
 -- disable_query_log
 -- disable_result_log
@@ -1197,9 +1156,9 @@ ANALYZE TABLE t1;
 -- enable_query_log
 
 # should be range access
-EXPLAIN SELECT a, b, c FROM t1 WHERE b = 1 ORDER BY a DESC LIMIT 5;
+EXPLAIN SELECT a, b, c FROM t1 WHERE b = 1 ORDER BY b DESC, a DESC LIMIT 5;
 
-# should produce '8 7 6 5 4' for a
+# should produce '16 15 14 13 12' for a
 SELECT a, b, c FROM t1 WHERE b = 1 ORDER BY a DESC LIMIT 5;
 
 DROP TABLE t1;
@@ -1256,12 +1215,14 @@ DROP TABLE t1;
 --echo #
 --echo # Bug #36995: valgrind error in remove_const during subquery executions
 --echo #
-
 create table t1 (a bit(1) not null,b int) engine=myisam;
 create table t2 (c int) engine=innodb;
+# Legacy queries below need to turn off ONLY_FULL_GROUP_BY and STRICT mode.
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
 explain
 select b from t1 where a not in (select b from t1,t2 group by a) group by a;
 DROP TABLE t1,t2;
+SET sql_mode=default;
 
 --echo End of 5.0 tests
 
@@ -1548,7 +1509,7 @@ if ($test_foreign_keys)
                   FOREIGN KEY (c) REFERENCES t1 (a,k) ON UPDATE NO ACTION) engine=innodb;
   --error ER_WRONG_FK_DEF
   CREATE TABLE t2 (c INT NOT NULL, d INT NOT NULL, PRIMARY KEY (c,d),
-                  FOREIGN KEY f1 (c) REFERENCES t1 (a,k) ON UPDATE NO ACTION) engine=innodb;
+                  CONSTRAINT f1 FOREIGN KEY (c) REFERENCES t1 (a,k) ON UPDATE NO ACTION) engine=innodb;
   CREATE TABLE t2 (c INT NOT NULL, d INT NOT NULL, PRIMARY KEY (c,d),
                   CONSTRAINT c1 FOREIGN KEY f1 (c) REFERENCES t1 (a) ON DELETE NO ACTION,
                   CONSTRAINT c2 FOREIGN KEY (c) REFERENCES t1 (a) ON UPDATE NO ACTION,
@@ -1692,6 +1653,7 @@ analyze table t2;
 -- enable_query_log
 
 explain select * from t1, t2 where t2.a=t1.a and t2.b + 1;
+--sorted_result
 select * from t1, t2 where t2.a=t1.a and t2.b + 1;
 
 drop table t1,t2;

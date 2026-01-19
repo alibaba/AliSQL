@@ -1,15 +1,23 @@
 /*
- Copyright 2010 Sun Microsystems, Inc.
- All rights reserved. Use is subject to license terms.
+ Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+ Use is subject to license terms.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is designed to work with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have either included with
+ the program or referenced in the documentation.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -22,60 +30,59 @@
 #ifndef jtie_tconv_value_impl_hpp
 #define jtie_tconv_value_impl_hpp
 
-#include <assert.h> // not using namespaces yet
+#include <assert.h>  // not using namespaces yet
 #include <jni.h>
 
-#include "jtie_tconv_value.hpp"
-#include "jtie_tconv_impl.hpp"
 #include "helpers.hpp"
+#include "jtie_tconv_impl.hpp"
+#include "jtie_tconv_value.hpp"
 
 // ---------------------------------------------------------------------------
 // Java <-> C basic type conversions
 // ---------------------------------------------------------------------------
 
 // Implements primitive type parameter conversions.
-template< typename J, typename C >
+template <typename J, typename C>
 struct ParamBasicT {
-    static C
-    convert(cstatus & s, J j, JNIEnv * env) {
-        TRACE("C ParamBasicT.convert(cstatus &, J, JNIEnv *)");
-        (void)env;
-        s = 0;
-        // XXX assert(static_cast< J >(static_cast< C >(j)) == j);
-        return static_cast< C >(j); // may convert to unsigned type
-    }
+  static C convert(cstatus &s, J j, JNIEnv *env) {
+    TRACE("C ParamBasicT.convert(cstatus &, J, JNIEnv *)");
+    (void)env;
+    s = 0;
+    // XXX assert(static_cast< J >(static_cast< C >(j)) == j);
+    return static_cast<C>(j);  // may convert to unsigned type
+  }
 
-    static void
-    release(C c, J j, JNIEnv * env) {
-        TRACE("void ParamBasicT.release(C, J, JNIEnv *)");
-        (void)c; (void)j; (void)env;
-    }
+  static void release(C c, J j, JNIEnv *env) {
+    TRACE("void ParamBasicT.release(C, J, JNIEnv *)");
+    (void)c;
+    (void)j;
+    (void)env;
+  }
 
-private:
-    // prohibit instantiation
-    ParamBasicT() {
-        // prohibit unsupported template specializations
-        is_valid_primitive_type_mapping< J, C >();
-    }
+ private:
+  // prohibit instantiation
+  ParamBasicT() {
+    // prohibit unsupported template specializations
+    is_valid_primitive_type_mapping<J, C>();
+  }
 };
 
 // Implements primitive type result conversions.
-template< typename J, typename C >
+template <typename J, typename C>
 struct ResultBasicT {
-    static J
-    convert(C c, JNIEnv * env) {
-        TRACE("J ResultBasicT.convert(C, JNIEnv *)");
-        (void)env;
-        // XXX assert(static_cast< C >(static_cast< J >(c)) == c);
-        return static_cast< J >(c); // may convert to signed type
-    }
+  static J convert(C c, JNIEnv *env) {
+    TRACE("J ResultBasicT.convert(C, JNIEnv *)");
+    (void)env;
+    // XXX assert(static_cast< C >(static_cast< J >(c)) == c);
+    return static_cast<J>(c);  // may convert to signed type
+  }
 
-private:
-    // prohibit instantiation
-    ResultBasicT() {
-        // prohibit unsupported template specializations
-        is_valid_primitive_type_mapping< J, C >();
-    }
+ private:
+  // prohibit instantiation
+  ResultBasicT() {
+    // prohibit unsupported template specializations
+    is_valid_primitive_type_mapping<J, C>();
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -107,12 +114,12 @@ private:
 // pointer      64      64      64      32      32
 
 // extend set of valid primitive type mappings for const value specializations
-template < typename J, typename C >
-struct is_valid_primitive_type_mapping< const J, C > {};
-template < typename J, typename C >
-struct is_valid_primitive_type_mapping< J, const C > {};
-template < typename J, typename C >
-struct is_valid_primitive_type_mapping< const J, const C > {};
+template <typename J, typename C>
+struct is_valid_primitive_type_mapping<const J, C> {};
+template <typename J, typename C>
+struct is_valid_primitive_type_mapping<J, const C> {};
+template <typename J, typename C>
+struct is_valid_primitive_type_mapping<const J, const C> {};
 
 // also provides specializations for 'const'
 // template clutter can be reduced a bit: const value types do not need extra
@@ -120,47 +127,51 @@ struct is_valid_primitive_type_mapping< const J, const C > {};
 //   ... : ParamBasicT< J, C const > {};
 //   ... : ResultBasicT< J, C const > {};
 // but can be derived from their non-const specializations
-#define JTIE_SPECIALIZE_BASIC_TYPE_MAPPING( J, C )                      \
-    template<> struct is_valid_primitive_type_mapping< J, C > {};       \
-    template<> struct Param< J, C > : ParamBasicT< J, C > {};           \
-    template<> struct Result< J, C > : ResultBasicT< J, C > {};         \
-    template<> struct Param< J, C const > : ParamBasicT< J, C > {};     \
-    template<> struct Result< J, C const > : ResultBasicT< J, C > {};
+#define JTIE_SPECIALIZE_BASIC_TYPE_MAPPING(J, C)   \
+  template <>                                      \
+  struct is_valid_primitive_type_mapping<J, C> {}; \
+  template <>                                      \
+  struct Param<J, C> : ParamBasicT<J, C> {};       \
+  template <>                                      \
+  struct Result<J, C> : ResultBasicT<J, C> {};     \
+  template <>                                      \
+  struct Param<J, C const> : ParamBasicT<J, C> {}; \
+  template <>                                      \
+  struct Result<J, C const> : ResultBasicT<J, C> {};
 
 // ---------------------------------------------------------------------------
 // Specializations for boolean conversions
 // ---------------------------------------------------------------------------
 
 // Implements boolean type parameter conversions.
-template<>
-struct ParamBasicT< jboolean, bool > {
-    static bool
-    convert(cstatus & s, jboolean j, JNIEnv * env) {
-        TRACE("bool ParamBasicT.convert(cstatus &, jboolean, JNIEnv *)");
-        (void)env;
-        s = 0;
-        // Java v C: jboolean is unsigned 8-bit, so, beware of truncation
-        return (j == JNI_TRUE);
-    }
+template <>
+struct ParamBasicT<jboolean, bool> {
+  static bool convert(cstatus &s, jboolean j, JNIEnv *env) {
+    TRACE("bool ParamBasicT.convert(cstatus &, jboolean, JNIEnv *)");
+    (void)env;
+    s = 0;
+    // Java v C: jboolean is unsigned 8-bit, so, beware of truncation
+    return (j == JNI_TRUE);
+  }
 
-    static void
-    release(bool c, jboolean j, JNIEnv * env) {
-        TRACE("void ParamBasicT.release(bool, jboolean, JNIEnv *)");
-        (void)c; (void)j; (void)env;
-    }
+  static void release(bool c, jboolean j, JNIEnv *env) {
+    TRACE("void ParamBasicT.release(bool, jboolean, JNIEnv *)");
+    (void)c;
+    (void)j;
+    (void)env;
+  }
 };
 
 // Implements boolean type result conversions.
-template<>
-struct ResultBasicT< jboolean, bool > {
-    static jboolean
-    convert(bool c, JNIEnv * env) {
-        TRACE("jboolean ResultBasicT.convert(bool, JNIEnv *)");
-        (void)env;
-        // Java v C: jboolean is unsigned 8-bit, so, beware of truncation
-        // on some platforms, JNI_TRUE/FALSE seems top be defined as int
-        return static_cast< jboolean >(c ? JNI_TRUE : JNI_FALSE);
-    }
+template <>
+struct ResultBasicT<jboolean, bool> {
+  static jboolean convert(bool c, JNIEnv *env) {
+    TRACE("jboolean ResultBasicT.convert(bool, JNIEnv *)");
+    (void)env;
+    // Java v C: jboolean is unsigned 8-bit, so, beware of truncation
+    // on some platforms, JNI_TRUE/FALSE seems top be defined as int
+    return static_cast<jboolean>(c ? JNI_TRUE : JNI_FALSE);
+  }
 };
 
 JTIE_SPECIALIZE_BASIC_TYPE_MAPPING(jboolean, bool)
@@ -181,10 +192,10 @@ JTIE_SPECIALIZE_BASIC_TYPE_MAPPING(jdouble, double)
 // ---------------------------------------------------------------------------
 
 // Datatype      LP32   ILP32   LP64    ILP64   LLP64
-// char          8      8       8       8       8    
-// short         16     16      16      16      16   
-// int           16     32      32      64      32   
-// long          32     32      64      64      32   
+// char          8      8       8       8       8
+// short         16     16      16      16      16
+// int           16     32      32      64      32
+// long          32     32      64      64      32
 // long long                                    64
 // pointer       32     32      64      64      64
 
@@ -221,4 +232,4 @@ JTIE_SPECIALIZE_BASIC_TYPE_MAPPING(jdouble, long double)
 
 // ---------------------------------------------------------------------------
 
-#endif // jtie_tconv_value_impl_hpp
+#endif  // jtie_tconv_value_impl_hpp

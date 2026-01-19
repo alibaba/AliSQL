@@ -1,12 +1,16 @@
 set old_alter_table=0;
 create table bug53592(a int) engine=innodb row_format=compact;
 alter table bug53592 add column b text charset utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 alter table bug53592 add column c blob not null;
 create index bug53592_b on bug53592(b(81));
 create unique index bug53592_c on bug53592(c(1));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 replace into bug53592 values (),();
 Warnings:
 Warning	1364	Field 'c' doesn't have a default value
+SET sql_mode = default;
 check table bug53592;
 Table	Op	Msg_type	Msg_text
 test.bug53592	check	status	OK
@@ -14,12 +18,16 @@ drop table bug53592;
 set old_alter_table=1;
 create table bug53592(a int) engine=innodb row_format=compact;
 alter table bug53592 add column b text charset utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 alter table bug53592 add column c blob not null;
 create index bug53592_b on bug53592(b(81));
 create unique index bug53592_c on bug53592(c(1));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 replace into bug53592 values (),();
 Warnings:
 Warning	1364	Field 'c' doesn't have a default value
+SET sql_mode = default;
 check table bug53592;
 Table	Op	Msg_type	Msg_text
 test.bug53592	check	status	OK

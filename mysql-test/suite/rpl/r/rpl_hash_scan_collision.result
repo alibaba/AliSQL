@@ -1,0 +1,81 @@
+#
+# 1. Create source-replica topology
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+#
+# 2. Set slave_rows_search_algorithms as HASH_SCAN on the replica
+[connection slave]
+include/save_sysvars.inc [
+"GLOBAL.slave_rows_search_algorithms"
+]
+SET GLOBAL slave_rows_search_algorithms= 'HASH_SCAN';
+Warnings:
+Warning	1287	'@@slave_rows_search_algorithms' is deprecated and will be removed in a future release.
+#
+# 3. For each Scenario [Table with index, Table with out index]
+#
+# 3.1 On the source, create a table and insert two rows with
+#     the same hash value
+[connection master]
+CREATE TABLE t1 (
+a BIGINT UNSIGNED NOT NULL,
+b BIGINT UNSIGNED NOT NULL,
+c INT DEFAULT NULL,
+KEY idx (c)
+) ENGINE= InnoDB ;
+INSERT INTO t1 VALUES(0xa8e8ee744ced7ca8, 0x6850119e455ee4ed, null);
+INSERT INTO t1 VALUES(0x135cd25c170db910, 0x6916c5057592c796, null);
+include/sync_slave_sql_with_master.inc
+[connection master]
+#
+# 3.2 On the source, perform an update on the second row
+#     and verify that the update is successful
+UPDATE t1 SET b=1 WHERE a=0x135cd25c170db910;
+SELECT * FROM t1;
+a	b	c
+12171240176243014824	7516527149547709677	NULL
+1395221277543610640	1	NULL
+#
+# 3.3 Verify that the update is successful on the replica
+include/sync_slave_sql_with_master.inc
+include/diff_tables.inc [master:test.t1, slave:test.t1]
+[connection master]
+DROP TABLE t1;
+include/sync_slave_sql_with_master.inc
+#
+# 3.1 On the source, create a table and insert two rows with
+#     the same hash value
+[connection master]
+CREATE TABLE t1 (
+a BIGINT UNSIGNED NOT NULL,
+b BIGINT UNSIGNED NOT NULL,
+c INT DEFAULT NULL
+) ENGINE= InnoDB ;
+INSERT INTO t1 VALUES(0xa8e8ee744ced7ca8, 0x6850119e455ee4ed, null);
+INSERT INTO t1 VALUES(0x135cd25c170db910, 0x6916c5057592c796, null);
+include/sync_slave_sql_with_master.inc
+[connection master]
+#
+# 3.2 On the source, perform an update on the second row
+#     and verify that the update is successful
+UPDATE t1 SET b=1 WHERE a=0x135cd25c170db910;
+SELECT * FROM t1;
+a	b	c
+12171240176243014824	7516527149547709677	NULL
+1395221277543610640	1	NULL
+#
+# 3.3 Verify that the update is successful on the replica
+include/sync_slave_sql_with_master.inc
+include/diff_tables.inc [master:test.t1, slave:test.t1]
+[connection master]
+DROP TABLE t1;
+include/sync_slave_sql_with_master.inc
+#
+# 4. Cleanup
+include/restore_sysvars.inc
+Warnings:
+Warning	1287	'@@slave_rows_search_algorithms' is deprecated and will be removed in a future release.
+include/rpl_end.inc

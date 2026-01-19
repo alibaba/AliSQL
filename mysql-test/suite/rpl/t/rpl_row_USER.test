@@ -11,6 +11,8 @@
 
 # Includes
 -- source include/have_binlog_format_row.inc
+-- source include/set_privilege_checks_user_as_system_user.inc
+-- let $rpl_privilege_checks_user_grant_option = 1
 -- source include/master-slave.inc
 
 # Begin clean up test section
@@ -21,8 +23,8 @@ CREATE DATABASE mysqltest1;
 --enable_warnings
 
 # Section 1 test anonymous user
-CREATE USER tester IDENTIFIED BY 'test';
-GRANT ALL ON mysqltest1.* TO 'tester'@'%' IDENTIFIED BY 'test';
+CREATE USER tester IDENTIFIED BY 'test', ''@'localhost%';
+GRANT ALL ON mysqltest1.* TO 'tester'@'%';
 GRANT ALL ON mysqltest1.* TO ''@'localhost%';
 FLUSH PRIVILEGES;
 connect (m_1,localhost,tester,,mysqltest1);
@@ -67,7 +69,7 @@ CREATE DATABASE mysqltest1;
 
 # Section 2 test anonymous host
 CREATE USER 'tester1'@'' IDENTIFIED BY 'test';
-GRANT ALL ON mysqltest1.* TO 'tester1'@'' IDENTIFIED BY 'test';
+GRANT ALL ON mysqltest1.* TO 'tester1'@'';
 FLUSH PRIVILEGES;
 connect (m_2,localhost,tester1,test,mysqltest1);
 

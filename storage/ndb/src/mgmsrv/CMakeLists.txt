@@ -1,30 +1,42 @@
-# Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2008, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+FOREACH(warning
+    "unused-but-set-variable"
+    "unused-parameter"
+    )
+  MY_CHECK_CXX_COMPILER_WARNING("${warning}" HAS_WARN_FLAG)
+  IF(HAS_WARN_FLAG)
+    STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
+  ENDIF()
+ENDFOREACH()
 
 INCLUDE_DIRECTORIES(
-  ${NDB_SOURCE_DIR}/src/mgmapi
-  ${NDB_SOURCE_DIR}/src/ndbapi
-  ${NDB_SOURCE_DIR}/src/mgmclient)
-
-ADD_CONVENIENCE_LIBRARY(ndbconf
-               Config.cpp
-               ConfigInfo.cpp
-               InitConfigFileParser.cpp
-               ${NDB_SOURCE_DIR}/src/kernel/vm/mt_thr_config.cpp
-)
-TARGET_LINK_LIBRARIES(ndbconf ndbmgmapi)
+  ${CMAKE_SOURCE_DIR}/storage/ndb/src/mgmapi
+  ${CMAKE_SOURCE_DIR}/storage/ndb/src/ndbapi
+  ${CMAKE_SOURCE_DIR}/storage/ndb/src/mgmclient
+  ${CMAKE_SOURCE_DIR}/storage/ndb/src/common/mgmcommon
+  )
 
 IF(WITHOUT_SERVER)
   RETURN()
@@ -50,26 +62,26 @@ IF(WIN32)
   # Add the rseource files for logging to event log
   SET(NDB_MGMD_EXTRA_SRC
     ${CMAKE_SOURCE_DIR}/storage/ndb/src/common/logger/message.rc
-    ${CMAKE_SOURCE_DIR}/storage/ndb/src/common/logger/msg00001.bin)
+    ${CMAKE_SOURCE_DIR}/storage/ndb/src/common/logger/MSG00001.bin)
 ENDIF()
 
 MYSQL_ADD_EXECUTABLE(ndb_mgmd
-  MgmtSrvr.cpp main.cpp Services.cpp ConfigManager.cpp
   ${NDB_MGMD_EXTRA_SRC}
+  ConfigManager.cpp
+  MgmtSrvr.cpp
+  Services.cpp
+  main.cpp
+
   DESTINATION ${INSTALL_SBINDIR}
-  COMPONENT ClusterManagementServer)
-TARGET_LINK_LIBRARIES(ndb_mgmd ndbconf ndbclient ndbmgmclient)
-IF(UNIX)
-  TARGET_LINK_LIBRARIES(ndb_mgmd ${READLINE_LIBRARY})
-ENDIF(UNIX)
+  COMPONENT ClusterManagementServer
+  ENABLE_EXPORTS
+  LINK_LIBRARIES
+  ${EDITLINE_LIBRARY}
+  ndbclient_static
+  ndbmgmcommon
+  ndbmgmclient
+  )
 
-ADD_EXECUTABLE(MgmConfig-t
-               testConfig.cpp)
-TARGET_LINK_LIBRARIES(MgmConfig-t
-                      ndbmgmapi
-                      ndbtrace
-                      ndbconf
-                      ndblogger
-                      ndbgeneral
-                      ndbportlib)
-
+NDB_ADD_TEST(MgmConfig-t testConfig.cpp
+  LIBS ndbmgmapi ndbmgmcommon ndbtrace ndblogger ndbgeneral ndbportlib
+  )

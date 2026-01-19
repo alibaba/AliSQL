@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -34,6 +42,7 @@ import com.mysql.clusterj.core.spi.DomainFieldHandler;
 import com.mysql.clusterj.core.spi.DomainTypeHandler;
 import com.mysql.clusterj.core.spi.ValueHandler;
 import com.mysql.clusterj.core.store.Column;
+import com.mysql.clusterj.core.store.Db;
 import com.mysql.clusterj.core.store.Dictionary;
 import com.mysql.clusterj.core.store.IndexOperation;
 import com.mysql.clusterj.core.store.Operation;
@@ -63,6 +72,9 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
     /** The table for the class. */
     protected String tableName;
 
+    /** The table key for the class, which might include projection information. */
+    protected String tableKey;
+
     /** The NDB table for the class. */
     protected Table table;
 
@@ -74,6 +86,9 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
 
     /** The id field(s) for the class, mapped to primary key columns */
     protected DomainFieldHandler[] idFieldHandlers;
+
+    /** The field(s) for the class */
+    protected DomainFieldHandler[] fieldHandlers;
 
     /** The PrimaryKey column names. */
     protected String[] primaryKeyColumnNames;
@@ -115,6 +130,9 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
     /** Set of index names to check for duplicates. */
     protected Set<String> indexNames = new HashSet<String>();
 
+    /** Errors reported during construction; see getUnsupported(), setUnsupported(String) */
+    private StringBuilder reasons = null;
+
     /** Register a primary key column field. This is used to associate
      * primary key and partition key column names with field handlers.
      * This method is called by the DomainFieldHandlerImpl constructor
@@ -129,14 +147,16 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
             if (primaryKeyColumnNames[i].equals(columnName)) {
                 idFieldHandlers[i] = fmd;
                 idFieldNumbers[i] = fmd.getFieldNumber();
-                if (logger.isDetailEnabled()) logger.detail("registerPrimaryKeyColumn found primary key " + columnName);
+                if (logger.isDetailEnabled()) logger.detail("registerPrimaryKeyColumn registered primary key " +
+                        columnName);
             }
         }
         // find the partition key column that matches the primary key column
         for (int j = 0; j < partitionKeyColumnNames.length; ++j) {
             if (partitionKeyColumnNames[j].equals(columnName)) {
                 partitionKeyFieldHandlers[j] = fmd;
-                if (logger.isDetailEnabled()) logger.detail("registerPrimaryKeyColumn found partition key " + columnName);
+                if (logger.isDetailEnabled()) logger.detail("registerPrimaryKeyColumn registered partition key " +
+                        columnName);
             }
         }
         return;
@@ -233,6 +253,10 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
 
     public DomainFieldHandler[] getIdFieldHandlers() {
         return idFieldHandlers;
+    }
+
+    public DomainFieldHandler[] getFieldHandlers() {
+        return fieldHandlers;
     }
 
     public DomainFieldHandler getFieldHandler(String fieldName) {
@@ -374,11 +398,7 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
-    public ValueHandler createKeyValueHandler(Object keys) {
-        throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
-    }
-
-    public T getInstance(ValueHandler handler) {
+    public ValueHandler createKeyValueHandler(Object keys, Db db) {
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
@@ -386,7 +406,7 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
-    public Class<T> getProxyClass() {
+    public Class<?>[] getProxyInterfaces() {
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
@@ -398,7 +418,11 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
-    public T newInstance() {
+    public T newInstance(Db db) {
+        throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
+    }
+
+    public T newInstance(ResultData resultData, Db db) {
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
@@ -426,6 +450,21 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
 
     public String[] getFieldNames() {
         return fieldNames;
+    }
+
+    public void setUnsupported(String reason) {
+        if (reasons == null) {
+            reasons = new StringBuilder();
+        }
+        reasons.append(reason);
+    }
+
+    public String getUnsupported() {
+        return reasons == null?null:reasons.toString();
+    }
+
+    public T newInstance(ValueHandler valueHandler) {
+        throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
 }

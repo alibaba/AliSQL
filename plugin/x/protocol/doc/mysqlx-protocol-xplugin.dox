@@ -1,0 +1,151 @@
+/*
+ * Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License, version 2.0,
+ * as published by the Free Software Foundation.
+ *
+ * This program is designed to work with certain software (including
+ * but not limited to OpenSSL) that is licensed under separate terms,
+ * as designated in a particular file or component or in included license
+ * documentation.  The authors of MySQL hereby grant you an additional
+ * permission to link the program and your derivative works with the
+ * separately licensed software that they have either included with
+ * the program or referenced in the documentation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License, version 2.0, for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+
+/** @page mysqlx_protocol_xplugin Implementation of the X %Protocol by the X Plugin
+
+
+Topics in this section:
+
+- @ref xplugin_Mysqlx_Sql_StmtExecute
+
+
+The X Plugin implements the X %Protocol for the MySQL Server.
+
+Mysqlx::Sql::StmtExecute {#xplugin_Mysqlx_Sql_StmtExecute}
+=======================
+
+@ref Mysqlx::Sql::StmtExecute implements several
+namespaces:
+
+@par ``sql``
+    The SQL interface which expects:
+    -  ``.stmt`` to be a string that the MySQL SQL parser understands
+    -  ``.args`` replaces wild-cards in ``.stmt`` if any exist
+
+@par ``mysqlx``
+    The ``mysqlx`` namespace is dedicated for plugin internal commands
+    -  ``.stmt`` is the name of the internal command (@ref xplugin_Admin_cmd "admin commands")
+    -  ``.args`` have one @ref Mysqlx::Datatypes::Object which contains named
+       arguments for command
+
+
+Admin commands {#xplugin_Admin_cmd}
+==============
+  - ``create_collection`` - create a new collection.
+    @n Required arguments:
+    - ``name``: string - name of created collection
+    - ``schema``: string - name of collection's schema
+    - ``options``: object, optional - additional collection options
+      - ``reuse_existing``: bool, optional - semantically the same as create
+          table if not exists
+      - ``validation`` @anchor xplugin_Admin_cmd_create_collection_validation:
+        object, optional - validation schema options
+        - ``schema``: object|string, optional - json validation document
+        - ``level``: string, optional - level of validation {``STRICT``|``OFF``};
+          default: ``STRICT``
+
+  - ``create_collection_index`` - create new index on specifed collection.
+    @n Required arguments:
+    - ``name``: string - name of index
+    - ``collection``: string - name of indexed collection
+    - ``schema``: string - name of collection's schema
+    - ``unique``: bool - whether the index should be a unique index
+    - ``type``: string, optional - name of index's type
+      {``INDEX``|``SPATIAL``|``FULLTEXT``}; default: ``INDEX``
+    - ``with_parser``: string, optional - name of parser for fulltext index {
+    - ``fields``|``constraint``: object, list - detailed information
+       for the generated column
+      - ``field``|``member``: string - path to document member for which the
+        index will be created
+      - ``required``: bool, optional - whether the generated column will be
+        created as NOT NULL
+      - ``type``: string, optional - data type of the indexed values
+      - ``options``: int, optional - parameter for generation spatial column
+      - ``srid``: int, optional - parameter for generation spatial column
+      - ``array``: bool, optional - indexed field is an array of scalars
+
+  - ``disable_notices`` - disable sending notices.
+    @n Required arguments:
+    - ``notice``: string, list - name (or names) of enabled notice
+
+  - ``drop_collection`` - drop existing collection.
+    @n Required arguments:
+    - ``name``: string - name of dropped collection
+    - ``schema``: string - name of collection's schema
+
+  - ``drop_collection_index`` - drop existing index for collection.
+    @n Required arguments:
+    - ``name``: string - name of dropped index
+    - ``collection``: string - name of collection with dropped index
+    - ``schema``: string - name of collection's schema
+
+  - ``enable_notices`` - enable sending notices.
+    @n Required arguments:
+    - ``notice``: string, list - name(s) of enabled notice(s)
+
+  - ``ensure_collection`` - create a collection;
+    creation is skipped when a collection exists.
+    @n Required arguments:
+    - ``name``: string - name of created collection
+    - ``schema``: string, optional - name of collection's schema
+    - ``options``: object, optional - additional collection options
+      - ``validation``: see @ref xplugin_Admin_cmd_create_collection_validation
+        "validation" option for ``create_collection`` command
+
+  - ``get_collection_options`` - get options for a specified collection.
+    @n Required arguments:
+    - ``name``: string - name of collection
+    - ``schema``: string - name of collection's schema
+    - ``options``: string, list - collection options to fetch
+
+  - ``kill_client`` - drop specified client.
+    @n Required arguments:
+    - ``id``: bigint - the client identification number
+
+  - ``list_clients`` - list all connected clients.
+    @n No required arguments
+
+  - ``list_notices`` - list all available notices.
+    @n No required arguments
+
+  - ``list_objects`` - list objects (tables, collections or views)
+    for specified schema.
+    @n Required arguments:
+    - ``schema``: string, optional - name of listed object's schema
+    - ``pattern``: string, optional - a filter to use for matching object names
+      to be returned
+
+  - ``modify_collection_options`` - modify options for a specified collection.
+    @n Required arguments:
+    - ``name``: string - name of collection
+    - ``schema``: string - name of collection's schema
+    - ``options``: object, optional - additional collection options
+      - ``validation``: see @ref xplugin_Admin_cmd_create_collection_validation
+        "validation" option for ``create_collection`` command
+
+  - ``ping`` - checks whether the connection to the plugin is working.
+    @n No required arguments
+
+*/

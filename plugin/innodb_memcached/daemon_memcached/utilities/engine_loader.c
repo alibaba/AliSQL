@@ -143,6 +143,7 @@ void log_engine_details(ENGINE_HANDLE * engine,
                     {
                         return;
                     }
+
                     nw = snprintf(message + offset, sizeof(message) - offset,
                                   "%s%s", comma ? ", " : "",
                                   info->features[ii].description);

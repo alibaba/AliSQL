@@ -1,0 +1,48 @@
+/* Copyright (c) 2012, 2025, Oracle and/or its affiliates.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
+#ifndef RESULT_H
+#define RESULT_H
+
+#include "xcom/x_platform.h"
+
+/* Combined return value and error code */
+struct result {
+  int val;
+  int funerr;
+};
+typedef struct result result;
+
+enum err_limits { errno_max = 1000000, ssl_zero = 2000000 };
+
+static inline int to_errno(int err) { return err; }
+
+static inline int to_ssl_err(int err) { return err + ssl_zero; }
+
+static inline int from_errno(int err) { return err; }
+
+static inline int from_ssl_err(int err) { return err - ssl_zero; }
+
+static inline int is_ssl_err(int err) { return err > errno_max; }
+
+#endif

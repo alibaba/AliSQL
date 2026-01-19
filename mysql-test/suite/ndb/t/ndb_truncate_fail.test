@@ -1,0 +1,151 @@
+--source include/have_ndb.inc
+--source include/have_debug.inc
+
+connect(server1,127.0.0.1,root,,test,$MASTER_MYPORT,);
+connect(server2,127.0.0.1,root,,test,$MASTER_MYPORT1,);
+--echo # [connection default]
+--connection default
+
+--disable_query_log
+DELIMITER //;
+CREATE PROCEDURE create_tables (IN ntables INT)
+BEGIN
+  SET @idx = 1;
+  WHILE @idx <= ntables DO
+    SET @pstmt = CONCAT('CREATE TABLE t', @idx, ' (a INT PRIMARY KEY AUTO_INCREMENT, c CHAR(3)) ENGINE = NDB');
+    PREPARE stmt FROM @pstmt;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    SET @idx = @idx + 1;
+  END WHILE;
+END //
+
+CREATE PROCEDURE drop_tables (IN ntables INT)
+BEGIN
+  SET @idx = 1;
+  WHILE @idx <= ntables DO
+    SET @pstmt = CONCAT('DROP TABLE t', @idx);
+    PREPARE stmt FROM @pstmt;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    SET @idx = @idx + 1;
+  END WHILE;
+END //
+
+CREATE PROCEDURE insert_row (IN ntables INT)
+BEGIN
+  SET @idx = 1;
+  WHILE @idx <= ntables DO
+    SET @pstmt = CONCAT('INSERT INTO t', @idx, ' (c) VALUES (\'val\')');
+    PREPARE stmt FROM @pstmt;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    SET @idx = @idx + 1;
+  END WHILE;
+END //
+
+CREATE PROCEDURE truncate_list(IN first_tab_idx INT, IN last_tab_idx INT)
+BEGIN
+  SET @idx = first_tab_idx;
+  WHILE @idx <= last_tab_idx DO
+    SET @pstmt = CONCAT('TRUNCATE TABLE t', @idx);
+    PREPARE stmt FROM @pstmt;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    SET @idx = @idx + 1;
+  END WHILE;
+END //
+
+--connection server2
+CREATE PROCEDURE truncate_list(IN first_tab_idx INT, IN last_tab_idx INT)
+BEGIN
+  SET @idx = first_tab_idx;
+  WHILE @idx <= last_tab_idx DO
+    SET @pstmt = CONCAT('TRUNCATE TABLE t', @idx);
+    PREPARE stmt FROM @pstmt;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    SET @idx = @idx + 1;
+  END WHILE;
+END //
+
+--connection default
+DELIMITER ;//
+--enable_query_log
+
+CALL create_tables(20);
+CALL insert_row(20);
+
+# Data at t1
+SELECT COUNT(*) FROM t1;
+# Data at t20
+SELECT COUNT(*) FROM t20;
+SET GLOBAL ndb_metadata_sync = 'ON';
+
+--echo # Start truncating
+CALL truncate_list(1,10);
+
+--echo # Now fail all drops (1st phase of truncate)
+SET @saved_debug = @@GLOBAL.debug;
+SET @@GLOBAL.debug = '+d,ndb_fail_drop';
+--error 1296
+CALL truncate_list(11, 20);
+# repeat once again to stress out share locks
+--error 1296
+CALL truncate_list(11, 20);
+
+--echo # t1->t10 must have been truncated
+SELECT COUNT(*) FROM t1;
+SELECT COUNT(*) FROM t10;
+--echo # t11->t20 must have failed
+SELECT COUNT(*) FROM t11;
+SELECT COUNT(*) FROM t20;
+
+# Do the same with two connections. Server1 fails all but server2 queues and is successful
+--let $iter=2
+while($iter)
+{
+  --echo # [connection server1]
+  --connection server1
+  SET DEBUG_SYNC='truncate_stop_after_execute SIGNAL signal1 WAIT_FOR go_signal1';
+  --send CALL truncate_list(1,20)
+
+  --echo # [connection server2]
+  --connection server2
+  --send CALL truncate_list(1,20)
+
+  --echo # [connection default]
+  --connection default
+  SET DEBUG_SYNC='now SIGNAL go_signal1';
+
+  --echo # [connection server1]
+  --connection server1
+  --error 1296
+  --reap
+  --echo # [connection server2]
+  --connection server2
+  --reap
+
+  --dec $iter
+}
+
+--echo # [connection default]
+--connection default
+--echo # Re-insert data to assess that share locks were properly cleaned
+CALL insert_row(20);
+--echo # All tables should have data (t1->t20 1 row, by server2)
+SELECT COUNT(*) FROM t1;
+SELECT COUNT(*) FROM t20;
+
+--echo # Cleanup
+--connection server2
+DROP PROCEDURE truncate_list;
+--connection default
+SET GLOBAL debug = @saved_debug;
+CALL drop_tables(20);
+DROP PROCEDURE create_tables;
+DROP PROCEDURE drop_tables;
+DROP PROCEDURE insert_row;
+DROP PROCEDURE truncate_list;
+--disconnect server1
+--disconnect server2

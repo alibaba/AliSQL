@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,10 +25,13 @@
 
 #define DBTUP_C
 #define DBTUP_PAG_MAN_CPP
-#include "Dbtup.hpp"
-#include <RefConvert.hpp>
 #include <ndb_limits.h>
+#include <RefConvert.hpp>
+#include <dblqh/Dblqh.hpp>
 #include <pc.hpp>
+#include "Dbtup.hpp"
+
+#define JAM_FILE_ID 407
 
 /* ---------------------------------------------------------------- */
 // 4) Page Memory Manager (buddy algorithm)
@@ -33,7 +44,7 @@
 //
 // The cfreepageList is 16 free lists. Free list 0 contains chunks of
 // pages with 2^0 (=1) pages in each chunk. Free list 1 chunks of 2^1
-// (=2) pages in each chunk and so forth upto free list 15 which
+// (=2) pages in each chunk and so forth up to free list 15 which
 // contains chunks of 2^15 (=32768) pages in each chunk.
 // The cfreepageList array contains the pointer to the first chunk
 // in each of those lists. The lists are doubly linked where the
@@ -52,12 +63,13 @@
 // performed in chunks of pages and the algorithm tries to make the
 // chunks as large as possible.
 // This manager is invoked when fragments lack internal page space to
-// accomodate all the data they are requested to store. It is also
+// accommodate all the data they are requested to store. It is also
 // invoked when fragments deallocate page space back to the free area.
 //
 // The following routines are part of the external interface:
 // void
-// allocConsPages(Uint32  noOfPagesToAllocate, #In
+// allocConsPages(EmulatedJamBuffer *jamBuff   #In/out
+//                Uint32  noOfPagesToAllocate, #In
 //                Uint32& noOfPagesAllocated,  #Out
 //                Uint32& retPageRef)          #Out
 // void
@@ -69,7 +81,7 @@
 // i-value of the first page in the chunk delivered, if zero pages returned
 // this i-value is undefined. It also returns the size of the chunk actually
 // delivered.
-// 
+//
 // returnCommonArea is used when somebody is returning pages to the free area.
 // It is used both from internal routines and external routines.
 //
@@ -101,8 +113,7 @@
 /* ---------------------------------------------------------------- */
 /* CALCULATE THE 2-LOG + 1 OF TMP AND PUT RESULT INTO TBITS         */
 /* ---------------------------------------------------------------- */
-Uint32 Dbtup::nextHigherTwoLog(Uint32 input) 
-{
+Uint32 Dbtup::nextHigherTwoLog(Uint32 input) {
   input = input | (input >> 8);
   input = input | (input >> 4);
   input = input | (input >> 2);
@@ -112,40 +123,112 @@ Uint32 Dbtup::nextHigherTwoLog(Uint32 input)
   output = output + (output >> 4);
   output = (output & 0xf) + ((output >> 8) & 0xf);
   return output;
-}//nextHigherTwoLog()
+}  // nextHigherTwoLog()
 
-void Dbtup::initializePage() 
-{
-}//Dbtup::initializePage()
+void Dbtup::initializePage() {}  // Dbtup::initializePage()
 
-void Dbtup::allocConsPages(Uint32 noOfPagesToAllocate,
-                           Uint32& noOfPagesAllocated,
-                           Uint32& allocPageRef)
-{
-  if (noOfPagesToAllocate == 0){ 
-    jam();
+void Dbtup::allocConsPages(EmulatedJamBuffer *jamBuf,
+                           Uint32 noOfPagesToAllocate,
+                           Uint32 &noOfPagesAllocated, Uint32 &allocPageRef) {
+  if (noOfPagesToAllocate == 0) {
+    thrjam(jamBuf);
     noOfPagesAllocated = 0;
     return;
-  }//if
+  }  // if
 
-  m_ctx.m_mm.alloc_pages(RT_DBTUP_PAGE, &allocPageRef, 
-			 &noOfPagesToAllocate, 1);
-  noOfPagesAllocated = noOfPagesToAllocate;
+  if (noOfPagesToAllocate == 1) {
+    void *p = m_ctx.m_mm.alloc_page(RT_DBTUP_PAGE, &allocPageRef,
+                                    Ndbd_mem_manager::NDB_ZONE_LE_30);
+    if (p != NULL) {
+      noOfPagesAllocated = 1;
+    } else {
+      noOfPagesAllocated = 0;
+    }
+  } else {
+#ifndef VM_TRACE
+    ndbrequire(noOfPagesToAllocate == 1);
+#else
+    /* For DUMP_STATE_ORD 1211, 1212, and, 1213 */
+    noOfPagesAllocated = noOfPagesToAllocate;
+    m_ctx.m_mm.alloc_pages(RT_DBTUP_PAGE, &allocPageRef, &noOfPagesAllocated,
+                           1);
+#endif
+  }
+  if (noOfPagesAllocated == 0 && c_allow_alloc_spare_page) {
+    void *p = m_ctx.m_mm.alloc_spare_page(RT_DBTUP_PAGE, &allocPageRef,
+                                          Ndbd_mem_manager::NDB_ZONE_LE_30);
+    if (p != NULL) {
+      noOfPagesAllocated = 1;
+    }
+  }
 
   // Count number of allocated pages
-  m_pages_allocated += noOfPagesAllocated;
-  if (m_pages_allocated > m_pages_allocated_max)
-    m_pages_allocated_max = m_pages_allocated;
+  update_pages_allocated(noOfPagesAllocated);
 
   return;
-}//allocConsPages()
+}  // allocConsPages()
 
-void Dbtup::returnCommonArea(Uint32 retPageRef, Uint32 retNo) 
-{
+void Dbtup::returnCommonArea(Uint32 retPageRef, Uint32 retNo) {
   m_ctx.m_mm.release_pages(RT_DBTUP_PAGE, retPageRef, retNo);
 
   // Count number of allocated pages
-  m_pages_allocated -= retNo;
+  update_pages_allocated(-retNo);
+}  // Dbtup::returnCommonArea()
 
-}//Dbtup::returnCommonArea()
+bool Dbtup::returnCommonArea_for_reuse(Uint32 retPageRef, Uint32 retNo) {
+  if (!m_ctx.m_mm.give_up_pages(RT_DBTUP_PAGE, retNo)) {
+    return false;
+  }
 
+  // Count number of allocated pages
+  update_pages_allocated(-retNo);
+  return true;
+}
+
+void Dbtup::update_pages_allocated(int retNo) {
+  /**
+   * In normal operation mode we only update m_pages_allocated
+   * and m_pages_allocated_max from the LDM thread and this
+   * requires no protection.
+   * However during restore operations we can update this from
+   * both recover threads and LDM threads and thus we need to
+   * protect those changes with a mutex.
+   *
+   * Query threads should not be used here, only recover threads.
+   * When restore phase is done we no longer need to use a mutex.
+   */
+  bool lock_flag = false;
+  Dblqh *lqh_block;
+  Dbtup *tup_block;
+  if (m_is_query_block) {
+    Uint32 instanceNo = c_lqh->m_current_ldm_instance;
+    ndbrequire(instanceNo != 0);
+    tup_block = (Dbtup *)globalData.getBlock(DBTUP, instanceNo);
+    lqh_block = (Dblqh *)globalData.getBlock(DBLQH, instanceNo);
+    ndbrequire(!lqh_block->is_restore_phase_done());
+    ndbrequire(c_lqh->m_is_recover_block);
+    lock_flag = true;
+  } else {
+    lqh_block = c_lqh;
+    tup_block = this;
+    if (!c_lqh->is_restore_phase_done() &&
+        (globalData.ndbMtRecoverThreads + globalData.ndbMtQueryThreads) > 0) {
+      lock_flag = true;
+    }
+  }
+  if (lock_flag) {
+    NdbMutex_Lock(lqh_block->m_lock_tup_page_mutex);
+  }
+
+  tup_block->m_pages_allocated += retNo;
+  if (retNo > 0 &&
+      tup_block->m_pages_allocated > tup_block->m_pages_allocated_max) {
+    tup_block->m_pages_allocated_max = tup_block->m_pages_allocated;
+  }
+
+  if (lock_flag) {
+    NdbMutex_Unlock(lqh_block->m_lock_tup_page_mutex);
+  }
+}
+
+Uint32 Dbtup::get_pages_allocated() const { return m_pages_allocated; }

@@ -1,0 +1,85 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>cancellation_slot::assign</title>
+<link rel="stylesheet" href="../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../cancellation_slot.html" title="cancellation_slot">
+<link rel="prev" href="../cancellation_slot.html" title="cancellation_slot">
+<link rel="next" href="cancellation_slot.html" title="cancellation_slot::cancellation_slot">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../cancellation_slot.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../cancellation_slot.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="cancellation_slot.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h4 class="title">
+<a name="boost_asio.reference.cancellation_slot.assign"></a><a class="link" href="assign.html" title="cancellation_slot::assign">cancellation_slot::assign</a>
+</h4></div></div></div>
+<p>
+          <a class="indexterm" name="boost_asio.indexterm.cancellation_slot.assign"></a> 
+Installs
+          a handler into the slot.
+        </p>
+<pre class="programlisting">template&lt;
+    typename <a class="link" href="../CancellationHandler.html" title="Cancellation handler requirements">CancellationHandler</a>&gt;
+decay&lt; CancellationHandler &gt;::type &amp; assign(
+    CancellationHandler &amp;&amp; handler);
+</pre>
+<p>
+          Destroys any existing handler in the slot, then installs the new handler,
+          constructing it as a decay-copy of the supplied handler.
+        </p>
+<p>
+          The handler is a function object to be called when the signal is emitted.
+          The signature of the handler must be
+        </p>
+<pre class="programlisting">void handler(boost::asio::cancellation_type_t);
+</pre>
+<h6>
+<a name="boost_asio.reference.cancellation_slot.assign.h0"></a>
+          <span class="phrase"><a name="boost_asio.reference.cancellation_slot.assign.parameters"></a></span><a class="link" href="assign.html#boost_asio.reference.cancellation_slot.assign.parameters">Parameters</a>
+        </h6>
+<div class="variablelist">
+<p class="title"><b></b></p>
+<dl class="variablelist">
+<dt><span class="term">handler</span></dt>
+<dd><p>
+                The handler to be installed.
+              </p></dd>
+</dl>
+</div>
+<h6>
+<a name="boost_asio.reference.cancellation_slot.assign.h1"></a>
+          <span class="phrase"><a name="boost_asio.reference.cancellation_slot.assign.return_value"></a></span><a class="link" href="assign.html#boost_asio.reference.cancellation_slot.assign.return_value">Return
+          Value</a>
+        </h6>
+<p>
+          A reference to the newly installed handler.
+        </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../cancellation_slot.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../cancellation_slot.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="cancellation_slot.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

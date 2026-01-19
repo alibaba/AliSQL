@@ -1,0 +1,55 @@
+#
+# Bug#24447771 ACL_INIT() RETURNS TRUE ON 5.7 DATA DIRECTORY
+#
+CALL mtr.add_suppression("ACL table mysql.role_edges missing. Some operations may fail.");
+CALL mtr.add_suppression("ACL table mysql.default_roles missing. Some operations may fail.");
+DROP TABLE mysql.role_edges;
+DROP TABLE mysql.default_roles;
+# restart:--log-error=MYSQLTEST_VARDIR/log/roles-upgrade.err
+# let's check for the presense of the warning
+Pattern "ACL table mysql.role_edges missing. Some operations may fail." found
+Pattern "ACL table mysql.default_roles missing. Some operations may fail." found
+# ACL DDLs should not work
+CREATE USER u1;
+ERROR 42S02: Table 'mysql.role_edges' doesn't exist
+CREATE ROLE r1;
+ERROR 42S02: Table 'mysql.role_edges' doesn't exist
+GRANT SELECT ON *.* TO u1;
+ERROR 42S02: Table 'mysql.role_edges' doesn't exist
+# Run mysql_upgrade
+# restart:--upgrade=FORCE --log-error=MYSQLTEST_VARDIR/log/roles-upgrade.err
+SHOW CREATE TABLE mysql.role_edges;
+Table	Create Table
+role_edges	CREATE TABLE `role_edges` (
+  `FROM_HOST` char(255) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '',
+  `FROM_USER` char(32) COLLATE utf8mb3_bin NOT NULL DEFAULT '',
+  `TO_HOST` char(255) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '',
+  `TO_USER` char(32) COLLATE utf8mb3_bin NOT NULL DEFAULT '',
+  `WITH_ADMIN_OPTION` enum('N','Y') CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL DEFAULT 'N',
+  PRIMARY KEY (`FROM_HOST`,`FROM_USER`,`TO_HOST`,`TO_USER`)
+) /*!50100 TABLESPACE `mysql` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_bin STATS_PERSISTENT=0 ROW_FORMAT=DYNAMIC COMMENT='Role hierarchy and role grants'
+SHOW CREATE TABLE mysql.default_roles;
+Table	Create Table
+default_roles	CREATE TABLE `default_roles` (
+  `HOST` char(255) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '',
+  `USER` char(32) COLLATE utf8mb3_bin NOT NULL DEFAULT '',
+  `DEFAULT_ROLE_HOST` char(255) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '%',
+  `DEFAULT_ROLE_USER` char(32) COLLATE utf8mb3_bin NOT NULL DEFAULT '',
+  PRIMARY KEY (`HOST`,`USER`,`DEFAULT_ROLE_HOST`,`DEFAULT_ROLE_USER`)
+) /*!50100 TABLESPACE `mysql` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_bin STATS_PERSISTENT=0 ROW_FORMAT=DYNAMIC COMMENT='Default roles'
+CREATE USER u1;
+CREATE ROLE r1;
+GRANT SELECT ON *.* TO r1;
+GRANT r1 to u1;
+CREATE TABLE test.t1(c1 int);
+INSERT INTO test.t1 VALUES(1);
+SET ROLE r1;
+SELECT * from t1;
+c1
+1
+DROP TABLE test.t1;
+DROP ROLE r1;
+DROP USER u1;
+
+End of tests
+# restart:

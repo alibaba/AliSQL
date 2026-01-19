@@ -1,0 +1,112 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>prefer</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="post/overload3.html" title="post (3 of 3 overloads)">
+<link rel="next" href="prefer_result.html" title="prefer_result">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="post/overload3.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="prefer_result.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.prefer"></a><a class="link" href="prefer.html" title="prefer">prefer</a>
+</h3></div></div></div>
+<p>
+        <a class="indexterm" name="boost_asio.indexterm.prefer"></a> 
+A customisation point that attempts to apply
+        a property to an object.
+      </p>
+<pre class="programlisting">constexpr unspecified prefer = unspecified;
+</pre>
+<p>
+        The name <code class="computeroutput">prefer</code> denotes a customisation point object. The expression
+        <code class="computeroutput">boost::asio::prefer(E, P0, Pn...)</code> for some subexpressions <code class="computeroutput">E</code>
+        and <code class="computeroutput">P0</code>, and where <code class="computeroutput">Pn...</code> represents <code class="computeroutput">N</code>
+        subexpressions (where <code class="computeroutput">N</code> is 0 or more, and with types <code class="computeroutput">T
+        = decay_t&lt;decltype(E)&gt;</code> and <code class="computeroutput">Prop0 = decay_t&lt;decltype(P0)&gt;</code>)
+        is expression-equivalent to:
+      </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+            If <code class="computeroutput">is_applicable_property_v&lt;T, Prop0&gt; &amp;&amp; Prop0::is_preferable</code>
+            is not a well-formed constant expression with value <code class="computeroutput">true</code>,
+            <code class="computeroutput">boost::asio::prefer(E, P0, Pn...)</code> is ill-formed.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">E</code> if <code class="computeroutput">N == 0</code> and the expression
+            <code class="computeroutput">Prop0::template static_query_v&lt;T&gt; == Prop0::value()</code>
+            is a well-formed constant expression with value <code class="computeroutput">true</code>.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">(E).require(P0)</code> if <code class="computeroutput">N == 0</code> and the
+            expression <code class="computeroutput">(E).require(P0)</code> is a valid expression.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">require(E, P0)</code> if <code class="computeroutput">N == 0</code> and the
+            expression <code class="computeroutput">require(E, P0)</code> is a valid expression with overload
+            resolution performed in a context that does not include the declaration
+            of the <code class="computeroutput">require</code> customization point object.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">(E).prefer(P0)</code> if <code class="computeroutput">N == 0</code> and the
+            expression <code class="computeroutput">(E).prefer(P0)</code> is a valid expression.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">prefer(E, P0)</code> if <code class="computeroutput">N == 0</code> and the
+            expression <code class="computeroutput">prefer(E, P0)</code> is a valid expression with overload
+            resolution performed in a context that does not include the declaration
+            of the <code class="computeroutput">prefer</code> customization point object.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">E</code> if <code class="computeroutput">N == 0</code>.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">boost::asio::prefer(boost::asio::prefer(E, P0), Pn...)</code>
+            if <code class="computeroutput">N &gt; 0</code> and the expression <code class="computeroutput">boost::asio::prefer(boost::asio::prefer(E,
+            P0), Pn...)</code> is a valid expression.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">boost::asio::prefer(E, P0, Pn...)</code> is ill-formed.
+          </li>
+</ul></div>
+<h5>
+<a name="boost_asio.reference.prefer.h0"></a>
+        <span class="phrase"><a name="boost_asio.reference.prefer.requirements"></a></span><a class="link" href="prefer.html#boost_asio.reference.prefer.requirements">Requirements</a>
+      </h5>
+<p>
+        <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/prefer.hpp</code>
+      </p>
+<p>
+        <span class="emphasis"><em>Convenience header: </em></span><code class="literal">boost/asio.hpp</code>
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="post/overload3.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="prefer_result.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

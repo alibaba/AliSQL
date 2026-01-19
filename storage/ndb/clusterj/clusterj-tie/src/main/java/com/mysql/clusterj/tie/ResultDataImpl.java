@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -83,6 +91,9 @@ class ResultDataImpl implements ResultData {
     /** The buffer manager */
     private BufferManager bufferManager;
 
+    /** The cluster connection */
+    private ClusterConnectionImpl clusterConnection;
+
     /** Construct the ResultDataImpl based on an NdbOperation, a list of columns
      * to include in the result, and the pre-computed buffer layout for the result.
      * @param ndbOperation the NdbOperation
@@ -128,12 +139,6 @@ class ResultDataImpl implements ResultData {
         }
     }
 
-    private NdbRecAttr getValue(NdbOperation ndbOperation2, int columnId,
-            ByteBuffer byteBuffer2) {
-        // TODO: to help profiling
-        return ndbOperation2.getValue(columnId, byteBuffer2);
-    }
-
     public boolean next() {
         // NdbOperation has exactly zero or one result. ScanResultDataImpl handles scans...
         NdbErrorConst error = ndbOperation.getNdbError();
@@ -157,7 +162,7 @@ class ResultDataImpl implements ResultData {
     public Blob getBlob(Column storeColumn) {
         NdbBlob ndbBlob = ndbOperation.getBlobHandle(storeColumn.getColumnId());
         handleError(ndbBlob, ndbOperation);
-        return new BlobImpl(ndbBlob);
+        return new BlobImpl(ndbBlob, clusterConnection.getByteBufferPool());
     }
 
     public boolean getBoolean(int column) {
@@ -215,7 +220,7 @@ class ResultDataImpl implements ResultData {
     public long getLong(Column storeColumn) {
         int index = storeColumn.getColumnId();
         NdbRecAttr ndbRecAttr = ndbRecAttrs[index];
-        return Utility.getLong(storeColumn, ndbRecAttr);
+        return Utility.getLong(storeColumn, ndbRecAttr.int64_value());
      }
 
     public float getFloat(int column) {
@@ -377,7 +382,7 @@ class ResultDataImpl implements ResultData {
     public Long getObjectLong(Column storeColumn) {
         int index = storeColumn.getColumnId();
         NdbRecAttr ndbRecAttr = ndbRecAttrs[index];
-        return (ndbRecAttr.isNULL() == 1)?null:Utility.getLong(storeColumn, ndbRecAttr);
+        return (ndbRecAttr.isNULL() == 1)?null:Utility.getLong(storeColumn, ndbRecAttr.int64_value());
     }
 
     public Float getObjectFloat(int column) {

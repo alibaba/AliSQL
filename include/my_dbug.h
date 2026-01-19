@@ -1,13 +1,21 @@
-/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved. 
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,121 +24,193 @@
 #ifndef MY_DBUG_INCLUDED
 #define MY_DBUG_INCLUDED
 
-#ifndef __WIN__
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#include <signal.h>
-#endif  /* not __WIN__ */
+/**
+  @file include/my_dbug.h
+*/
 
-#ifdef  __cplusplus
-extern "C" {
+#ifdef MY_MSCRT_DEBUG
+#include <crtdbg.h>
 #endif
-#if !defined(DBUG_OFF) && !defined(_lint)
+#include <stdlib.h>
+
+#include "my_compiler.h"
+
+#include <string.h>
+
+#if !defined(NDEBUG)
+#include <assert.h>  // IWYU pragma: keep
+#include <stdio.h>
+#endif
+
+/**
+  Calls our own implementation of abort, if specified, or std's abort().
+ */
+[[noreturn]] void my_abort();
+/**
+  Sets a new function to be called on my_abort().
+
+  @param new_my_abort_func pointer to a new my_abort function. It can't be
+  [[noreturn]] as pointers to methods can't have attributes.
+ */
+void set_my_abort(void (*new_my_abort_func)());
+
+#if !defined(NDEBUG)
 
 struct _db_stack_frame_ {
-  const char *func;      /* function name of the previous stack frame       */
-  const char *file;      /* filename of the function of previous frame      */
-  uint level;            /* this nesting level, highest bit enables tracing */
+  const char *func;   /* function name of the previous stack frame       */
+  int func_len;       /* how much to print from func */
+  const char *file;   /* filename of the function of previous frame      */
+  unsigned int level; /* this nesting level, highest bit enables tracing */
   struct _db_stack_frame_ *prev; /* pointer to the previous frame */
 };
 
-struct  _db_code_state_;
-extern  MYSQL_PLUGIN_IMPORT my_bool _dbug_on_;
-extern  my_bool _db_keyword_(struct _db_code_state_ *, const char *, int);
-extern  int _db_explain_(struct _db_code_state_ *cs, char *buf, size_t len);
-extern  int _db_explain_init_(char *buf, size_t len);
-extern	int _db_is_pushed_(void);
-extern  void _db_setjmp_(void);
-extern  void _db_longjmp_(void);
-extern  void _db_process_(const char *name);
-extern  void _db_push_(const char *control);
-extern  void _db_pop_(void);
-extern  void _db_set_(const char *control);
-extern  void _db_set_init_(const char *control);
-extern void _db_enter_(const char *_func_, const char *_file_, uint _line_,
-                       struct _db_stack_frame_ *_stack_frame_);
-extern  void _db_return_(uint _line_, struct _db_stack_frame_ *_stack_frame_);
-extern  void _db_pargs_(uint _line_,const char *keyword);
-extern  int _db_enabled_();
-extern  void _db_doprnt_(const char *format,...)
-  ATTRIBUTE_FORMAT(printf, 1, 2);
-extern  void _db_dump_(uint _line_,const char *keyword,
-                       const unsigned char *memory, size_t length);
-extern  void _db_end_(void);
-extern  void _db_lock_file_(void);
-extern  void _db_unlock_file_(void);
-extern  FILE *_db_fp_(void);
-extern  void _db_flush_();
-extern  const char* _db_get_func_(void);
+struct CODE_STATE;
 
-#define DBUG_ENTER(a) struct _db_stack_frame_ _db_stack_frame_; \
-        _db_enter_ (a,__FILE__,__LINE__,&_db_stack_frame_)
-#define DBUG_LEAVE _db_return_ (__LINE__, &_db_stack_frame_)
-#define DBUG_RETURN(a1) do {DBUG_LEAVE; return(a1);} while(0)
-#define DBUG_VOID_RETURN do {DBUG_LEAVE; return;} while(0)
-#define DBUG_EXECUTE(keyword,a1) \
-        do {if (_db_keyword_(0, (keyword), 0)) { a1 }} while(0)
-#define DBUG_EXECUTE_IF(keyword,a1) \
-        do {if (_db_keyword_(0, (keyword), 1)) { a1 }} while(0)
-#define DBUG_EVALUATE(keyword,a1,a2) \
-        (_db_keyword_(0,(keyword), 0) ? (a1) : (a2))
-#define DBUG_EVALUATE_IF(keyword,a1,a2) \
-        (_db_keyword_(0,(keyword), 1) ? (a1) : (a2))
-#define DBUG_PRINT(keyword,arglist) \
-        do \
-        {  \
-          if (_dbug_on_) \
-          { \
-            _db_pargs_(__LINE__,keyword); \
-            if (_db_enabled_()) \
-            {  \
-              _db_doprnt_ arglist; \
-            } \
-          } \
-        } while(0)
-#define DBUG_PUSH(a1) _db_push_ (a1)
-#define DBUG_POP() _db_pop_ ()
-#define DBUG_SET(a1) _db_set_ (a1)
-#define DBUG_SET_INITIAL(a1) _db_set_init_ (a1)
+extern int _db_keyword_(struct CODE_STATE *, const char *, int);
+extern int _db_explain_(struct CODE_STATE *cs, char *buf, size_t len);
+extern int _db_explain_init_(char *buf, size_t len);
+extern int _db_is_pushed_(void);
+extern void _db_process_(const char *name);
+extern void _db_push_(const char *control);
+extern void _db_pop_(void);
+extern void _db_set_(const char *control);
+extern void _db_set_init_(const char *control);
+extern void _db_enter_(const char *_func_, int func_len, const char *_file_,
+                       unsigned int _line_,
+                       struct _db_stack_frame_ *_stack_frame_);
+extern void _db_return_(unsigned int _line_,
+                        struct _db_stack_frame_ *_stack_frame_);
+extern void _db_pargs_(unsigned int _line_, const char *keyword);
+extern int _db_enabled_();
+extern void _db_doprnt_(const char *format, ...)
+    MY_ATTRIBUTE((format(printf, 1, 2)));
+extern void _db_dump_(unsigned int _line_, const char *keyword,
+                      const unsigned char *memory, size_t length);
+extern void _db_end_(void);
+extern void _db_lock_file_(void);
+extern void _db_unlock_file_(void);
+extern FILE *_db_fp_(void);
+extern void _db_flush_();
+
+#ifdef __cplusplus
+
+#if defined(__GNUC__)
+// GCC, Clang, and compatible compilers.
+#define DBUG_PRETTY_FUNCTION __PRETTY_FUNCTION__
+#elif defined(__FUNCSIG__)
+// For MSVC; skips the __cdecl. (__PRETTY_FUNCTION__ in GCC is not a
+// preprocessor constant, but __FUNCSIG__ in MSVC is.)
+#define DBUG_PRETTY_FUNCTION strchr(__FUNCSIG__, ' ') + 1
+#else
+// Standard C++; does not include the class name.
+#define DBUG_PRETTY_FUNCTION __func__
+#endif
+
+/**
+  A RAII helper to do DBUG_ENTER / DBUG_RETURN for you automatically. Use like
+  this:
+
+   int foo() {
+     DBUG_TRACE;
+     return 42;
+   }
+ */
+class AutoDebugTrace {
+ public:
+  AutoDebugTrace(const char *function, const char *filename, int line) {
+    // Remove the return type, if it's there.
+    const char *begin = strchr(function, ' ');
+    if (begin != nullptr) {
+      function = begin + 1;
+    }
+
+    // Cut it off at the first parenthesis; the argument list is
+    // often too long to be interesting.
+    const char *end = strchr(function, '(');
+
+    if (end == nullptr) {
+      _db_enter_(function, static_cast<int>(strlen(function)), filename, line,
+                 &m_stack_frame);
+    } else {
+      _db_enter_(function, static_cast<int>(end - function), filename, line,
+                 &m_stack_frame);
+    }
+  }
+
+  ~AutoDebugTrace() { _db_return_(0, &m_stack_frame); }
+
+ private:
+  _db_stack_frame_ m_stack_frame;
+};
+
+#define DBUG_TRACE \
+  const AutoDebugTrace _db_trace(DBUG_PRETTY_FUNCTION, __FILE__, __LINE__)
+
+#endif
+
+#define DBUG_ENTER(a)                       \
+  struct _db_stack_frame_ _db_stack_frame_; \
+  _db_enter_(a, ::strlen(a), __FILE__, __LINE__, &_db_stack_frame_)
+
+#define DBUG_RETURN(a1)                       \
+  do {                                        \
+    _db_return_(__LINE__, &_db_stack_frame_); \
+    return (a1);                              \
+  } while (0)
+#define DBUG_VOID_RETURN                      \
+  do {                                        \
+    _db_return_(__LINE__, &_db_stack_frame_); \
+    return;                                   \
+  } while (0)
+#define DBUG_EXECUTE(keyword, a1)        \
+  do {                                   \
+    if (_db_keyword_(0, (keyword), 0)) { \
+      a1                                 \
+    }                                    \
+  } while (0)
+#define DBUG_EXECUTE_IF(keyword, a1)     \
+  do {                                   \
+    if (_db_keyword_(0, (keyword), 1)) { \
+      a1                                 \
+    }                                    \
+  } while (0)
+#define DBUG_EVALUATE(keyword, a1, a2) \
+  (_db_keyword_(0, (keyword), 0) ? (a1) : (a2))
+#define DBUG_EVALUATE_IF(keyword, a1, a2) \
+  (_db_keyword_(0, (keyword), 1) ? (a1) : (a2))
+#define DBUG_PRINT(keyword, arglist) \
+  do {                               \
+    _db_pargs_(__LINE__, keyword);   \
+    if (_db_enabled_()) {            \
+      _db_doprnt_ arglist;           \
+    }                                \
+  } while (0)
+
+#define DBUG_PUSH(a1) _db_push_(a1)
+#define DBUG_POP() _db_pop_()
+#define DBUG_SET(a1) _db_set_(a1)
+#define DBUG_SET_INITIAL(a1) _db_set_init_(a1)
 #define DBUG_PROCESS(a1) _db_process_(a1)
 #define DBUG_FILE _db_fp_()
-#define DBUG_SETJMP(a1) (_db_setjmp_ (), setjmp (a1))
-#define DBUG_LONGJMP(a1,a2) (_db_longjmp_ (), longjmp (a1, a2))
-#define DBUG_DUMP(keyword,a1,a2) _db_dump_(__LINE__,keyword,a1,a2)
-#define DBUG_END()  _db_end_ ()
+#define DBUG_DUMP(keyword, a1, a2) _db_dump_(__LINE__, keyword, a1, a2)
+#define DBUG_END() _db_end_()
 #define DBUG_LOCK_FILE _db_lock_file_()
 #define DBUG_UNLOCK_FILE _db_unlock_file_()
-#define DBUG_ASSERT(A) assert(A)
-#define DBUG_EXPLAIN(buf,len) _db_explain_(0, (buf),(len))
-#define DBUG_EXPLAIN_INITIAL(buf,len) _db_explain_init_((buf),(len))
-#define DEBUGGER_OFF                    do { _dbug_on_= 0; } while(0)
-#define DEBUGGER_ON                     do { _dbug_on_= 1; } while(0)
-#ifndef __WIN__
-#define DBUG_ABORT()                    (_db_flush_(), abort())
+#define DBUG_EXPLAIN(buf, len) _db_explain_(0, (buf), (len))
+#define DBUG_EXPLAIN_INITIAL(buf, len) _db_explain_init_((buf), (len))
+#ifndef _WIN32
+#define DBUG_ABORT() (_db_flush_(), my_abort())
+#define DBUG_EXIT() (_db_flush_(), exit(2))
 #else
-/*
-  Avoid popup with abort/retry/ignore buttons. When BUG#31745 is fixed we can
-  call abort() instead of _exit(3) (now it would cause a "test signal" popup).
-*/
 #include <crtdbg.h>
-#define DBUG_ABORT() (_db_flush_(),\
-                     (void)_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE),\
-                     (void)_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR),\
-                     _exit(3))
+
+#define DBUG_ABORT()                                                     \
+  (_db_flush_(), (void)_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE), \
+   (void)_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR), my_abort())
+#define DBUG_EXIT()                                                      \
+  (_db_flush_(), (void)_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE), \
+   (void)_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR), _exit(2))
 #endif
-#define DBUG_CHECK_CRASH(func, op) \
-  do { char _dbuf_[255]; strxnmov(_dbuf_, sizeof(_dbuf_)-1, (func), (op)); \
-    DBUG_EXECUTE_IF(_dbuf_, DBUG_ABORT()); } while(0)
-#define DBUG_CRASH_ENTER(func) \
-  DBUG_ENTER(func); DBUG_CHECK_CRASH(func, "_crash_enter")
-#define DBUG_CRASH_RETURN(val) \
-  DBUG_CHECK_CRASH(_db_get_func_(), "_crash_return")
-#define DBUG_CRASH_VOID_RETURN \
-  DBUG_CHECK_CRASH (_db_get_func_(), "_crash_return")
 
 /*
   Make the program fail, without creating a core file.
@@ -140,67 +220,145 @@ extern  const char* _db_get_func_(void);
   An alternative would be to use _exit(EXIT_FAILURE),
   but then valgrind would report lots of memory leaks.
  */
-#ifdef __WIN__
-#define DBUG_SUICIDE() DBUG_ABORT()
+#ifdef _WIN32
+#define DBUG_SUICIDE() DBUG_EXIT()
 #else
-extern void _db_suicide_();
+[[noreturn]] extern void _db_suicide_();
 extern void _db_flush_gcov_();
 #define DBUG_SUICIDE() (_db_flush_(), _db_suicide_())
 #endif
 
-#else                                           /* No debugger */
+#else /* No debugger */
 
+#ifdef __cplusplus
+#define DBUG_TRACE \
+  do {             \
+  } while (false)
+#endif
 #define DBUG_ENTER(a1)
-#define DBUG_LEAVE
-#define DBUG_RETURN(a1)                 do { return(a1); } while(0)
-#define DBUG_VOID_RETURN                do { return; } while(0)
-#define DBUG_EXECUTE(keyword,a1)        do { } while(0)
-#define DBUG_EXECUTE_IF(keyword,a1)     do { } while(0)
-#define DBUG_EVALUATE(keyword,a1,a2) (a2)
-#define DBUG_EVALUATE_IF(keyword,a1,a2) (a2)
-#define DBUG_PRINT(keyword,arglist)     do { } while(0)
-#define DBUG_PUSH(a1)                   do { } while(0)
-#define DBUG_SET(a1)                    do { } while(0)
-#define DBUG_SET_INITIAL(a1)            do { } while(0)
-#define DBUG_POP()                      do { } while(0)
-#define DBUG_PROCESS(a1)                do { } while(0)
-#define DBUG_SETJMP(a1) setjmp(a1)
-#define DBUG_LONGJMP(a1) longjmp(a1)
-#define DBUG_DUMP(keyword,a1,a2)        do { } while(0)
-#define DBUG_END()                      do { } while(0)
-#define DBUG_ASSERT(A)                  do { } while(0)
-#define DBUG_LOCK_FILE                  do { } while(0)
+#define DBUG_RETURN(a1) \
+  do {                  \
+    return (a1);        \
+  } while (0)
+#define DBUG_VOID_RETURN \
+  do {                   \
+    return;              \
+  } while (0)
+#define DBUG_EXECUTE(keyword, a1) \
+  do {                            \
+  } while (0)
+#define DBUG_EXECUTE_IF(keyword, a1) \
+  do {                               \
+  } while (0)
+#define DBUG_EVALUATE(keyword, a1, a2) (a2)
+#define DBUG_EVALUATE_IF(keyword, a1, a2) (a2)
+#define DBUG_PRINT(keyword, arglist) \
+  do {                               \
+  } while (0)
+#define DBUG_PUSH(a1) \
+  do {                \
+  } while (0)
+#define DBUG_SET(a1) \
+  do {               \
+  } while (0)
+#define DBUG_SET_INITIAL(a1) \
+  do {                       \
+  } while (0)
+#define DBUG_POP() \
+  do {             \
+  } while (0)
+#define DBUG_PROCESS(a1) \
+  do {                   \
+  } while (0)
+#define DBUG_DUMP(keyword, a1, a2) \
+  do {                             \
+  } while (0)
+#define DBUG_END() \
+  do {             \
+  } while (0)
+#define DBUG_LOCK_FILE \
+  do {                 \
+  } while (0)
 #define DBUG_FILE (stderr)
-#define DBUG_UNLOCK_FILE                do { } while(0)
-#define DBUG_EXPLAIN(buf,len)
-#define DBUG_EXPLAIN_INITIAL(buf,len)
-#define DEBUGGER_OFF                    do { } while(0)
-#define DEBUGGER_ON                     do { } while(0)
-#define DBUG_ABORT()                    do { } while(0)
-#define DBUG_CRASH_ENTER(func)
-#define DBUG_CRASH_RETURN(val)          do { return(val); } while(0)
-#define DBUG_CRASH_VOID_RETURN          do { return; } while(0)
-#define DBUG_SUICIDE()                  do { } while(0)
+#define DBUG_UNLOCK_FILE \
+  do {                   \
+  } while (0)
+#define DBUG_EXPLAIN(buf, len)
+#define DBUG_EXPLAIN_INITIAL(buf, len)
+#define DBUG_ABORT() \
+  do {               \
+  } while (0)
+#define DBUG_SUICIDE() \
+  do {                 \
+  } while (0)
 
 #endif
 
-#ifdef EXTRA_DEBUG
-/**
-  Sync points allow us to force the server to reach a certain line of code
-  and block there until the client tells the server it is ok to go on.
-  The client tells the server to block with SELECT GET_LOCK()
-  and unblocks it with SELECT RELEASE_LOCK(). Used for debugging difficult
-  concurrency problems
+#ifdef __cplusplus
+#if !defined(NDEBUG)
+#include <sstream>
+#include <string>
+
+/*
+  A C++ interface to the DBUG_PRINT macro.  The DBUG_LOG macro takes two
+  arguments.  The first argument is the keyword, as that of the
+  DBUG_PRINT.  The 2nd argument 'v' will be passed to a C++ output stream.
+  This enables the use of C++ style output stream operator.  In the code, it
+  will be used as follows:
+
+  DBUG_LOG("blob", "space: " << space_id);
+
+  Note: DBUG_PRINT() has a limitation of 1024 bytes for a single
+  print out.  So, this limitation is there for DBUG_LOG macro also.
 */
-#define DBUG_SYNC_POINT(lock_name,lock_timeout) \
- debug_sync_point(lock_name,lock_timeout)
-void debug_sync_point(const char* lock_name, uint lock_timeout);
-#else
-#define DBUG_SYNC_POINT(lock_name,lock_timeout)
-#endif /* EXTRA_DEBUG */
 
-#ifdef	__cplusplus
+#define DBUG_LOG(keyword, v)                           \
+  do {                                                 \
+    _db_pargs_(__LINE__, keyword);                     \
+    if (_db_enabled_()) {                              \
+      std::ostringstream sout;                         \
+      sout << v;                                       \
+      DBUG_PRINT(keyword, ("%s", sout.str().c_str())); \
+    }                                                  \
+  } while (0)
+
+/**
+  Shortcut for printing a variable name and its value in DBUG_LOG output.
+
+  Use like:
+
+  DBUG_LOG("info", DBUG_VAR(i) << " " << DBUG_VAR(thd->query));
+
+  Example output for the above might be:
+
+  i=[4711] thd->query=[INSERT INTO t VALUES (1)]
+*/
+#define DBUG_VAR(v) #v << "=[" << (v) << "]"
+
+#else /* NDEBUG */
+#define DBUG_LOG(keyword, v) \
+  do {                       \
+  } while (0)
+#define DBUG_VAR(v) ""
+#endif /* NDEBUG */
+
+/**
+   A type-safe interface to DBUG_EXECUTE_IF, where the debug action to
+   activate when the keyword is provided is given as a callable object
+   (typically a lambda).
+
+   @note The body of the callable will be checked by the compiler even
+         in optimized mode.
+
+   @param keyword String literal which will enable this debug action.
+   @param clos    Callable object taking no arguments which will be
+                  called in debug mode if the keyword is enabled.
+ */
+template <class DBGCLOS>
+inline void dbug(const char *keyword [[maybe_unused]],
+                 DBGCLOS &&clos [[maybe_unused]]) {
+  DBUG_EXECUTE_IF(keyword, clos(););
 }
-#endif
 
+#endif /* __cplusplus */
 #endif /* MY_DBUG_INCLUDED */

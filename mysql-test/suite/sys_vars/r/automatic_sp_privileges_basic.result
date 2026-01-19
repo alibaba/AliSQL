@@ -54,7 +54,7 @@ SELECT @@session.automatic_sp_privileges;
 ERROR HY000: Variable 'automatic_sp_privileges' is a GLOBAL variable
 '#----------------------FN_DYNVARS_004_06------------------------#'
 SELECT IF(@@global.automatic_sp_privileges, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='automatic_sp_privileges';
 IF(@@global.automatic_sp_privileges, "ON", "OFF") = VARIABLE_VALUE
 1
@@ -85,15 +85,17 @@ SELECT @@automatic_sp_privileges = @@global.automatic_sp_privileges;
 SET automatic_sp_privileges = 1;
 ERROR HY000: Variable 'automatic_sp_privileges' is a GLOBAL variable and should be set with SET GLOBAL
 SET local.automatic_sp_privileges = 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'automatic_sp_privileges = 1' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'local.automatic_sp_privileges = 1' at line 1
 SELECT local.automatic_sp_privileges;
 ERROR 42S02: Unknown table 'local' in field list
 SET global.automatic_sp_privileges = 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'automatic_sp_privileges = 1' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'global.automatic_sp_privileges = 1' at line 1
 SELECT global.automatic_sp_privileges;
 ERROR 42S02: Unknown table 'global' in field list
-SELECT automatic_sp_privileges = @@session.automatic_sp_privileges;
+SELECT automatic_sp_privileges;
 ERROR 42S22: Unknown column 'automatic_sp_privileges' in 'field list'
+SELECT @@session.automatic_sp_privileges;
+ERROR HY000: Variable 'automatic_sp_privileges' is a GLOBAL variable
 SET @@global.automatic_sp_privileges = @start_value;
 SELECT @@global.automatic_sp_privileges;
 @@global.automatic_sp_privileges

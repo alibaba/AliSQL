@@ -1,0 +1,8 @@
+!include suite/ndb/my.cnf
+
+[cluster.config]
+ThreadConfig=main,rep,recv,ldm={count=4}
+
+[cluster_config.1]
+ndbd=,,,,,
+NoOfReplicas=2

@@ -4,6 +4,9 @@ gesuchnr int(11) DEFAULT '0' NOT NULL,
 benutzer_id int(11) DEFAULT '0' NOT NULL,
 PRIMARY KEY (gesuchnr,benutzer_id)
 ) engine=ndbcluster;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 replace into t1 (gesuchnr,benutzer_id) values (2,1);
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
@@ -11,7 +14,7 @@ insert into t1 (gesuchnr, benutzer_id) value (3,2);
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
 insert into t1 (gesuchnr,benutzer_id) values (1,1);
-ERROR 23000: Duplicate entry '1-1' for key 'PRIMARY'
+ERROR 23000: Duplicate entry '1-1' for key 't1.PRIMARY'
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
 select * from t1 order by gesuchnr;
 gesuchnr	benutzer_id
@@ -43,6 +46,12 @@ i INT(11) DEFAULT NULL,
 PRIMARY KEY (id),
 UNIQUE KEY a (a,b,c)
 ) ENGINE=ndbcluster;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 REPLACE INTO t2 (a,b,c,x,y,z,i) VALUES (1,1,1,'a','a','a',1),(1,1,1,'b','b','b',2), (1,1,1,'c','c','c',3);
 SELECT * FROM t2 ORDER BY id;
 a	b	c	x	y	z	id	i
@@ -97,6 +106,8 @@ pk	apk	data
 4	1	NULL
 drop table t1;
 End of 5.0 tests.
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 CREATE TABLE t1(c1 INT NOT NULL PRIMARY KEY,
 c2 INT NOT NULL DEFAULT 3,
 c3 INT NULL DEFAULT 7,

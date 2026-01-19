@@ -107,6 +107,9 @@ SELECT @@global.max_binlog_cache_size;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_binlog_cache_size = 'test';
 SELECT @@global.max_binlog_cache_size;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.max_binlog_cache_size = ' ';
+SELECT @@global.max_binlog_cache_size;
 
 
 --echo '#-------------------FN_DYNVARS_072_05----------------------------#'
@@ -125,13 +128,15 @@ SELECT @@session.max_binlog_cache_size;
 # Check if the value in GLOBAL & SESSION Tables matches values in variable   #
 ##############################################################################
 
+--disable_warnings
 SELECT @@global.max_binlog_cache_size = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='max_binlog_cache_size';
 
 SELECT @@max_binlog_cache_size = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='max_binlog_cache_size';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_072_07----------------------#'
@@ -171,7 +176,9 @@ SET global.max_binlog_cache_size = 8000;
 --Error ER_UNKNOWN_TABLE
 SELECT global.max_binlog_cache_size;
 --Error ER_BAD_FIELD_ERROR
-SELECT max_binlog_cache_size = @@session.max_binlog_cache_size;
+SELECT max_binlog_cache_size;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.max_binlog_cache_size;
 
 
 ##############################  

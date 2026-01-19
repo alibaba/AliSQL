@@ -1,0 +1,71 @@
+# [connection default]
+CALL create_tables(20);
+CALL insert_row(20);
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t20;
+COUNT(*)
+1
+SET GLOBAL ndb_metadata_sync = 'ON';
+# Start truncating
+CALL truncate_list(1,10);
+# Now fail all drops (1st phase of truncate)
+SET @saved_debug = @@GLOBAL.debug;
+SET @@GLOBAL.debug = '+d,ndb_fail_drop';
+CALL truncate_list(11, 20);
+ERROR HY000: Got error 761 'Unable to drop table as backup is in progress' from NDBCLUSTER
+CALL truncate_list(11, 20);
+ERROR HY000: Got error 761 'Unable to drop table as backup is in progress' from NDBCLUSTER
+# t1->t10 must have been truncated
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t10;
+COUNT(*)
+0
+# t11->t20 must have failed
+SELECT COUNT(*) FROM t11;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t20;
+COUNT(*)
+1
+# [connection server1]
+SET DEBUG_SYNC='truncate_stop_after_execute SIGNAL signal1 WAIT_FOR go_signal1';
+CALL truncate_list(1,20);
+# [connection server2]
+CALL truncate_list(1,20);
+# [connection default]
+SET DEBUG_SYNC='now SIGNAL go_signal1';
+# [connection server1]
+ERROR HY000: Got error 761 'Unable to drop table as backup is in progress' from NDBCLUSTER
+# [connection server2]
+# [connection server1]
+SET DEBUG_SYNC='truncate_stop_after_execute SIGNAL signal1 WAIT_FOR go_signal1';
+CALL truncate_list(1,20);
+# [connection server2]
+CALL truncate_list(1,20);
+# [connection default]
+SET DEBUG_SYNC='now SIGNAL go_signal1';
+# [connection server1]
+ERROR HY000: Got error 761 'Unable to drop table as backup is in progress' from NDBCLUSTER
+# [connection server2]
+# [connection default]
+# Re-insert data to assess that share locks were properly cleaned
+CALL insert_row(20);
+# All tables should have data (t1->t20 1 row, by server2)
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t20;
+COUNT(*)
+1
+# Cleanup
+DROP PROCEDURE truncate_list;
+SET GLOBAL debug = @saved_debug;
+CALL drop_tables(20);
+DROP PROCEDURE create_tables;
+DROP PROCEDURE drop_tables;
+DROP PROCEDURE insert_row;
+DROP PROCEDURE truncate_list;

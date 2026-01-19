@@ -1,5 +1,25 @@
-perl mysql-test-run.pl --timer --debug-server --force --parallel=auto --comment=n_mix-debug --vardir=var-n_mix --mysqld=--binlog-format=mixed --experimental=collections/default.experimental --skip-test-list=collections/disabled-per-push.list --unit-tests-report
-perl mysql-test-run.pl --timer --debug-server --force --parallel=auto --comment=rpl_binlog_ps_row-debug --vardir=var-rpl_binlog-ps_row --suite=rpl,binlog --ps-protocol --mysqld=--binlog-format=row --experimental=collections/default.experimental --skip-test-list=collections/disabled-per-push.list
-perl mysql-test-run.pl --timer --force --parallel=auto --comment=main_embedded-debug --vardir=var-main_embedded  --suite=main --embedded --experimental=collections/default.experimental --skip-test-list=collections/disabled-per-push.list
-perl mysql-test-run.pl --timer --debug-server --force --parallel=auto --comment=innodb_4k_size-debug --vardir=var-innodb-4k --experimental=collections/default.experimental --suite=innodb --mysqld=--innodb-page-size=4k --skip-test-list=collections/disabled-per-push.list
-perl mysql-test-run.pl --timer --debug-server --force --parallel=auto --comment=rpl_binlog_n_mix_MTS-debug --vardir=var-mts-rpl-binlog-n_mix --mysqld=--binlog-format=mixed --experimental=collections/default.experimental --mysqld=--slave-parallel-workers=4 --mysqld=--slave-transaction-retries=0 --suite=rpl --skip-test-list=collections/disabled-per-push.list
+# Collection that runs per push.
+# Goal is to keep duration of this run under 1 hour.
+# A run of all default suites is sufficient per push.
+# Other suites and more extensive runs should be covered in daily and weekly.
+# GR suite is an exception and runs per push even though it is not
+# one of the default suites.
+#
+# Non-Windows platforms
+#
+perl mysql-test-run.pl --timer --testcase-timeout=30 --suite-timeout=300 --debug-server --force  --comment=all-default-debug --vardir=var-all-default --skip-combinations --unit-tests-report --no-skip --exclude-platform=windows --skip-ndb
+#
+# Windows - run RPL separately with 8 threads
+#
+perl mysql-test-run.pl --timer --testcase-timeout=30 --suite-timeout=300 --debug-server --force  --comment=all-default-debug --vardir=var-all-default --skip-combinations --skip-rpl --unit-tests-report --no-skip --platform=windows --skip-ndb
+perl mysql-test-run.pl --timer --testcase-timeout=30 --suite-timeout=300 --debug-server --force --parallel=8 --comment=rpl-suites --vardir=var-rpl-suites --skip-combinations --suite=rpl,rpl_gtid,rpl_nogtid --platform=windows
+
+#
+# Run all Ndb tests separately.
+# For builds without Ndb support no tests will be attempted.
+#
+perl mysql-test-run.pl --timer --testcase-timeout=30 --suite-timeout=300 --debug-server --force --comment=ndb --vardir=var-ndb --skip-combinations --no-skip --with-ndb-only
+
+#
+# Group Replication
+perl mysql-test-run.pl --timer --force --parallel=6 --comment=group_replication --vardir=var-group_replication --suite=group_replication

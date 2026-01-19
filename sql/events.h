@@ -1,15 +1,23 @@
 #ifndef _EVENT_H_
 #define _EVENT_H_
-/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,10 +28,36 @@
   @ingroup Runtime_Environment
   @{
 
-  @file events.h
+  @file sql/events.h
 
   A public interface of Events_Scheduler module.
 */
+
+#include <stddef.h>
+#include <sys/types.h>
+
+#include "lex_string.h"
+#include "my_inttypes.h"
+#include "my_psi_config.h"
+#include "my_time.h" /* interval_type */
+#include "mysql/components/services/bits/psi_cond_bits.h"
+#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "mysql/components/services/bits/psi_stage_bits.h"
+#include "mysql/components/services/bits/psi_thread_bits.h"
+#include "sql/psi_memory_key.h"
+
+class Event_db_repository;
+class Event_parse_data;
+class Event_queue;
+class Event_scheduler;
+class String;
+class THD;
+
+namespace dd {
+class Schema;
+}
+
+struct CHARSET_INFO;
 
 #ifdef HAVE_PSI_INTERFACE
 extern PSI_mutex_key key_event_scheduler_LOCK_scheduler_state;
@@ -36,19 +70,7 @@ extern PSI_stage_info stage_waiting_on_empty_queue;
 extern PSI_stage_info stage_waiting_for_next_activation;
 extern PSI_stage_info stage_waiting_for_scheduler_to_stop;
 
-#include "sql_string.h"                         /* LEX_STRING */
-#include "my_time.h"                            /* interval_type */
-
-class Event_db_repository;
-class Event_parse_data;
-class Event_queue;
-class Event_scheduler;
-struct TABLE_LIST;
-class THD;
-typedef struct charset_info_st CHARSET_INFO;
-
-int
-sortcmp_lex_string(LEX_STRING s, LEX_STRING t, CHARSET_INFO *cs);
+int sortcmp_lex_string(LEX_CSTRING s, LEX_CSTRING t, const CHARSET_INFO *cs);
 
 /**
   @brief A facade to the functionality of the Event Scheduler.
@@ -71,9 +93,8 @@ sortcmp_lex_string(LEX_STRING s, LEX_STRING t, CHARSET_INFO *cs);
   subsystems (ACL, time zone tables, etc).
 */
 
-class Events
-{
-public:
+class Events {
+ public:
   /*
     the following block is to support --event-scheduler command line option
     and the @@global.event_scheduler SQL variable.
@@ -82,70 +103,44 @@ public:
   enum enum_opt_event_scheduler { EVENTS_OFF, EVENTS_ON, EVENTS_DISABLED };
   /* Protected using LOCK_global_system_variables only. */
   static ulong opt_event_scheduler;
-  static bool check_if_system_tables_error();
   static bool start(int *err_no);
   static bool stop();
 
-public:
-  /* A hack needed for Event_queue_element */
-  static Event_db_repository *
-  get_db_repository() { return db_repository; }
+  static bool init(bool opt_noacl);
 
-  static bool
-  init(my_bool opt_noacl);
+  static void deinit();
 
-  static void
-  deinit();
+  static void init_mutexes();
 
-  static void
-  init_mutexes();
+  static bool create_event(THD *thd, Event_parse_data *parse_data,
+                           bool if_exists);
 
-  static void
-  destroy_mutexes();
+  static bool update_event(THD *thd, Event_parse_data *parse_data,
+                           const LEX_CSTRING *new_dbname,
+                           const LEX_CSTRING *new_name);
 
-  static bool
-  create_event(THD *thd, Event_parse_data *parse_data, bool if_exists);
+  static bool drop_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name,
+                         bool if_exists);
 
-  static bool
-  update_event(THD *thd, Event_parse_data *parse_data,
-               LEX_STRING *new_dbname, LEX_STRING *new_name);
+  static bool lock_schema_events(THD *thd, const dd::Schema &schema);
 
-  static bool
-  drop_event(THD *thd, LEX_STRING dbname, LEX_STRING name, bool if_exists);
+  static bool drop_schema_events(THD *thd, const dd::Schema &schema);
 
-  static void
-  drop_schema_events(THD *thd, char *db);
-
-  static bool
-  show_create_event(THD *thd, LEX_STRING dbname, LEX_STRING name);
+  static bool show_create_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name);
 
   /* Needed for both SHOW CREATE EVENT and INFORMATION_SCHEMA */
-  static int
-  reconstruct_interval_expression(String *buf, interval_type interval,
-                                  longlong expression);
+  static int reconstruct_interval_expression(String *buf,
+                                             interval_type interval,
+                                             longlong expression);
 
-  static int
-  fill_schema_events(THD *thd, TABLE_LIST *tables, Item * /* cond */);
+  static void dump_internal_status();
 
-  static void
-  dump_internal_status();
+  Events(const Events &) = delete;
+  void operator=(Events &) = delete;
 
-private:
-
-  static bool
-  load_events_from_db(THD *thd);
-
-private:
-  static Event_queue         *event_queue;
-  static Event_scheduler     *scheduler;
-  static Event_db_repository *db_repository;
-  /* Set to TRUE if an error at start up */
-  static bool check_system_tables_error;
-
-private:
-  /* Prevent use of these */
-  Events(const Events &);
-  void operator=(Events &);
+ private:
+  static Event_queue *event_queue;
+  static Event_scheduler *scheduler;
 };
 
 /**

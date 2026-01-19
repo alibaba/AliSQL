@@ -1,6 +1,5 @@
 # 2010-01-27 - Added
 
---source include/have_innodb.inc
 
 # Exists as global only
 #
@@ -9,12 +8,15 @@ SELECT @@global.innodb_sync_array_size between 0 and 1024;
 SELECT @@global.innodb_sync_array_size;
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
 SELECT @@session.innodb_sync_array_size;
+
 SHOW GLOBAL variables LIKE 'innodb_sync_array_size';
 SHOW SESSION variables LIKE 'innodb_sync_array_size';
-SELECT * FROM information_schema.global_variables 
+--disable_warnings
+SELECT * FROM performance_schema.global_variables 
 WHERE variable_name='innodb_sync_array_size';
-SELECT * FROM information_schema.session_variables 
+SELECT * FROM performance_schema.session_variables 
 WHERE variable_name='innodb_sync_array_size';
+--enable_warnings
 
 #
 # Show that it's read-only

@@ -2,7 +2,6 @@
 # Test of group functions that depend on innodb
 #
 
---source include/have_innodb.inc
 
 --disable_warnings
 create table t1 (USR_ID integer not null, MAX_REQ integer not null, constraint PK_SEA_USER primary key (USR_ID)) engine=InnoDB;
@@ -18,9 +17,9 @@ drop table t1;
 #
 
 --disable_warnings
-create table t1m (a int) engine=myisam;
+create table t1m (a int) engine=innodb;
 create table t1i (a int) engine=innodb;
-create table t2m (a int) engine=myisam;
+create table t2m (a int) engine=innodb;
 create table t2i (a int) engine=innodb;
 --enable_warnings
 insert into t2m values (5);

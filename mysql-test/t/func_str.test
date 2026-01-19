@@ -1,3 +1,6 @@
+--source include/no_ps_protocol.inc
+--source include/count_sessions.inc
+
 # Description
 # -----------
 # Testing string functions
@@ -19,6 +22,34 @@ select hex(char(256));
 select locate('he','hello'),locate('he','hello',2),locate('lo','hello',2) ;
 select instr('hello','HE'), instr('hello',binary 'HE'), instr(binary 'hello','HE'); 
 select position(binary 'll' in 'hello'),position('a' in binary 'hello');
+
+# Check LOCATE with binary substring, which is converted to string's collation
+SELECT LOCATE('d', _utf8mb4'abcdef');
+SELECT LOCATE(x'44', _utf8mb4'abcdef');
+
+SELECT POSITION('d' IN _utf8mb4'abcdef');
+SELECT POSITION(x'44' IN _utf8mb4'abcdef');
+
+SELECT INSTR(_utf8mb4'abcdef', 'd');
+SELECT INSTR(_utf8mb4'abcdef', x'44');
+
+# Case sensitivity is determined by string's collation
+SELECT LOCATE(x'64', _utf8mb4'abcdef');
+
+SELECT POSITION(x'64' IN _utf8mb4'abcdef');
+
+SELECT INSTR(_utf8mb4'abcdef', x'64');
+
+# Conversion may be invalid:
+--error ER_CANNOT_CONVERT_STRING
+SELECT LOCATE(x'ff', _utf8mb4'abcdef');
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT POSITION(x'ff' IN _utf8mb4'abcdef');
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT INSTR(_utf8mb4'abcdef', x'ff');
+
 #
 # Bug#11728 string function LEFT,
 # strange undocumented behaviour, strict mode
@@ -116,9 +147,6 @@ select lpad('STRING', 20, CONCAT('p','a','d') );
 select LEAST(NULL,'HARRY','HARRIOT',NULL,'HAROLD'),GREATEST(NULL,'HARRY','HARRIOT',NULL,'HAROLD');
 select least(1,2,3) | greatest(16,32,8), least(5,4)*1,greatest(-1.0,1.0)*1,least(3,2,1)*1.0,greatest(1,1.1,1.0),least("10",9),greatest("A","B","0");
 
-select decode(encode(repeat("a",100000),"monty"),"monty")=repeat("a",100000);
-select decode(encode("abcdef","monty"),"monty")="abcdef";
-
 select quote('\'\"\\test');
 select quote(concat('abc\'', '\\cba'));
 select quote(1/0), quote('\0\Z');
@@ -160,60 +188,6 @@ insert into t1 VALUES ("hello.de" ), ("test.de" );
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@hello.de';
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@test.de';
 drop table t1;
-
-#
-# Test bug in concat_ws
-#
-
-CREATE TABLE t1 (
-  id int(10) unsigned NOT NULL,
-  title varchar(255) default NULL,
-  prio int(10) unsigned default NULL,
-  category int(10) unsigned default NULL,
-  program int(10) unsigned default NULL,
-  bugdesc text,
-  created datetime default NULL,
-  modified timestamp NOT NULL,
-  bugstatus int(10) unsigned default NULL,
-  submitter int(10) unsigned default NULL
-) ENGINE=MyISAM;
-
-INSERT INTO t1 VALUES (1,'Link',1,1,1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','2001-02-28 08:40:16',20010228084016,0,4);
-SELECT CONCAT('"',CONCAT_WS('";"',title,prio,category,program,bugdesc,created,modified+0,bugstatus,submitter), '"') FROM t1;
-SELECT CONCAT('"',CONCAT_WS('";"',title,prio,category,program,bugstatus,submitter), '"') FROM t1;
-SELECT CONCAT_WS('";"',title,prio,category,program,bugdesc,created,modified+0,bugstatus,submitter) FROM t1;
-SELECT bugdesc, REPLACE(bugdesc, 'xxxxxxxxxxxxxxxxxxxx', 'bbbbbbbbbbbbbbbbbbbb') from t1 group by bugdesc;
-drop table t1;
-
-#
-# Test bug in AES_DECRYPT() when called with wrong argument
-#
-
-CREATE TABLE t1 (id int(11) NOT NULL auto_increment, tmp text NOT NULL, KEY id (id)) ENGINE=MyISAM;
-INSERT INTO t1 VALUES (1, 'a545f661efdd1fb66fdee3aab79945bf');
-SELECT 1 FROM t1 WHERE tmp=AES_DECRYPT(tmp,"password");
-DROP TABLE t1;
-
-CREATE TABLE t1 (
-  wid int(10) unsigned NOT NULL auto_increment,
-  data_podp date default NULL,
-  status_wnio enum('nowy','podp','real','arch') NOT NULL default 'nowy',
-  PRIMARY KEY(wid)
-);
-
-INSERT INTO t1 VALUES (8,NULL,'real');
-INSERT INTO t1 VALUES (9,NULL,'nowy');
-SELECT elt(status_wnio,data_podp) FROM t1 GROUP BY wid;
-DROP TABLE t1;
-
-#
-# test for #739
-
-CREATE TABLE t1 (title text) ENGINE=MyISAM;
-INSERT INTO t1 VALUES ('Congress reconvenes in September to debate welfare and adult education');
-INSERT INTO t1 VALUES ('House passes the CAREERS bill');
-SELECT CONCAT("</a>",RPAD("",(55 - LENGTH(title)),".")) from t1;
-DROP TABLE t1;
 
 #
 # test for Bug #2290 "output truncated with ELT when using DISTINCT"
@@ -285,27 +259,26 @@ select FIELD('b','A','B');
 select FIELD('B','A','B');
 select FIELD('b' COLLATE latin1_bin,'A','B');
 select FIELD('b','A' COLLATE latin1_bin,'B');
---error 1270
 select FIELD(_latin2'b','A','B');
---error 1270
 select FIELD('b',_latin2'A','B');
 select FIELD('1',_latin2'3','2',1);
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT FIELD(_utf8mb4'abc', x'ff');
 
 select POSITION(_latin1'B' IN _latin1'abcd');
 select POSITION(_latin1'B' IN _latin1'abcd' COLLATE latin1_bin);
 select POSITION(_latin1'B' COLLATE latin1_bin IN _latin1'abcd');
---error 1267
 select POSITION(_latin1'B' COLLATE latin1_general_ci IN _latin1'abcd' COLLATE latin1_bin);
---error 1267
 select POSITION(_latin1'B' IN _latin2'abcd');
 
 select FIND_IN_SET(_latin1'B',_latin1'a,b,c,d');
 
 # fix this:
---disable_parsing
+--disable_testcase BUG#0000
 select FIND_IN_SET(_latin1'B',_latin1'a,b,c,d' COLLATE latin1_bin);
 select FIND_IN_SET(_latin1'B' COLLATE latin1_bin,_latin1'a,b,c,d');
---enable_parsing
+--enable_testcase
 
 --error 1267
 select FIND_IN_SET(_latin1'B' COLLATE latin1_general_ci,_latin1'a,b,c,d' COLLATE latin1_bin);
@@ -314,15 +287,13 @@ select FIND_IN_SET(_latin1'B',_latin2'a,b,c,d');
 
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin1'd',2);
 
-# fix this:
---disable_parsing
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd' COLLATE latin1_bin,_latin1'd',2);
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin1'd' COLLATE latin1_bin,2);
---enable_parsing
 
---error 1267
+# 'd' converts from _latin2 to _latin1, 0xa3 does not
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin2'd',2);
---error 1267
+--error ER_CANNOT_CONVERT_STRING
+select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin2 0xa3, 2);
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd' COLLATE latin1_general_ci,_latin1'd' COLLATE latin1_bin,2);
 
 select _latin1'B' between _latin1'a' and _latin1'c';
@@ -383,9 +354,8 @@ select collation(soundex(_latin2'ab')), coercibility(soundex(_latin2'ab'));
 select collation(substring(_latin2'ab',1)), coercibility(substring(_latin2'ab',1));
 select collation(insert(_latin2'abcd',2,3,_latin2'ef')), coercibility(insert(_latin2'abcd',2,3,_latin2'ef'));
 select collation(replace(_latin2'abcd',_latin2'b',_latin2'B')), coercibility(replace(_latin2'abcd',_latin2'b',_latin2'B'));
-select collation(encode('abcd','ab')), coercibility(encode('abcd','ab'));
 
-create table t1 
+create table t1 charset latin1
 select
   bin(130),
   oct(130),
@@ -416,8 +386,7 @@ select
   soundex(_latin2'ab'),
   substring(_latin2'ab',1),
   insert(_latin2'abcd',2,3,_latin2'ef'),
-  replace(_latin2'abcd',_latin2'b',_latin2'B'),
-  encode('abcd','ab')
+  replace(_latin2'abcd',_latin2'b',_latin2'B')
 ;
 show create table t1;
 drop table t1;
@@ -460,7 +429,7 @@ select SUBSTR('abcdefg',1,-1) FROM DUAL;
 # Test that fix_fields doesn't follow to upper level (to comparison)
 # when an error on a lower level (in concat) has accured:
 #
-create table t7 (s1 char);
+create table t7 (s1 char) charset latin1;
 --error 1267
 select * from t7
 where concat(s1 collate latin1_general_ci,s1 collate latin1_swedish_ci) = 'AA';
@@ -468,51 +437,50 @@ drop table t7;
 
 select substring_index("1abcd;2abcd;3abcd;4abcd", ';', 2),substring_index("1abcd;2abcd;3abcd;4abcd", ';', -2);
 
-explain extended select md5('hello');
-explain extended select sha('abc');
-explain extended select sha1('abc');
-explain extended select soundex('');
-explain extended select 'mood' sounds like 'mud';
-explain extended select aes_decrypt(aes_encrypt('abc','1'),'1');
-explain extended select concat('*',space(5),'*');
-explain extended select reverse('abc');
-explain extended select rpad('a',4,'1');
-explain extended select lpad('a',4,'1');
-explain extended select concat_ws(',','',NULL,'a');
-explain extended select make_set(255,_latin2'a', _latin2'b', _latin2'c');
-explain extended select elt(2,1);
-explain extended select locate("a","b",2);
-explain extended select format(130,10);
-explain extended select char(0);
-explain extended select conv(130,16,10);
-explain extended select hex(130);
-explain extended select binary 'HE';
-explain extended select export_set(255,_latin2'y', _latin2'n', _latin2' ');
-explain extended select FIELD('b' COLLATE latin1_bin,'A','B');
-explain extended select FIND_IN_SET(_latin1'B', _latin1'a,b,c,d');
-explain extended select collation(conv(130,16,10));
-explain extended select coercibility(conv(130,16,10));
-explain extended select length('\n\t\r\b\0\_\%\\');
-explain extended select bit_length('\n\t\r\b\0\_\%\\');
-explain extended select bit_length('\n\t\r\b\0\_\%\\');
-explain extended select concat('monty',' was here ','again');
-explain extended select length('hello');
-explain extended select char(ascii('h'));
-explain extended select ord('h');
-explain extended select quote(1/0);
-explain extended select crc32("123");
-explain extended select replace('aaaa','a','b');
-explain extended select insert('txs',2,1,'hi');
-explain extended select left(_latin2'a',1);
-explain extended select right(_latin2'a',1);
-explain extended select lcase(_latin2'a');
-explain extended select ucase(_latin2'a');
-explain extended select SUBSTR('abcdefg',3,2);
-explain extended select substring_index("1abcd;2abcd;3abcd;4abcd", ';', 2);
-explain extended select trim(_latin2' a ');
-explain extended select ltrim(_latin2' a ');
-explain extended select rtrim(_latin2' a ');
-explain extended select decode(encode(repeat("a",100000),"monty"),"monty");
+explain select md5('hello');
+explain select sha('abc');
+explain select sha1('abc');
+explain select soundex('');
+explain select 'mood' sounds like 'mud';
+explain select aes_decrypt(aes_encrypt('abc','1'),'1');
+explain select concat('*',space(5),'*');
+explain select reverse('abc');
+explain select rpad('a',4,'1');
+explain select lpad('a',4,'1');
+explain select concat_ws(',','',NULL,'a');
+explain select make_set(255,_latin2'a', _latin2'b', _latin2'c');
+explain select elt(2,1);
+explain select locate("a","b",2);
+explain select format(130,10);
+explain select char(0);
+explain select conv(130,16,10);
+explain select hex(130);
+explain select binary 'HE';
+explain select export_set(255,_latin2'y', _latin2'n', _latin2' ');
+explain select FIELD('b' COLLATE latin1_bin,'A','B');
+explain select FIND_IN_SET(_latin1'B', _latin1'a,b,c,d');
+explain select collation(conv(130,16,10));
+explain select coercibility(conv(130,16,10));
+explain select length('\n\t\r\b\0\_\%\\');
+explain select bit_length('\n\t\r\b\0\_\%\\');
+explain select bit_length('\n\t\r\b\0\_\%\\');
+explain select concat('monty',' was here ','again');
+explain select length('hello');
+explain select char(ascii('h'));
+explain select ord('h');
+explain select quote(1/0);
+explain select crc32("123");
+explain select replace('aaaa','a','b');
+explain select insert('txs',2,1,'hi');
+explain select left(_latin2'a',1);
+explain select right(_latin2'a',1);
+explain select lcase(_latin2'a');
+explain select ucase(_latin2'a');
+explain select SUBSTR('abcdefg',3,2);
+explain select substring_index("1abcd;2abcd;3abcd;4abcd", ';', 2);
+explain select trim(_latin2' a ');
+explain select ltrim(_latin2' a ');
+explain select rtrim(_latin2' a ');
 
 #
 # lpad returns incorrect result (Bug #2182)
@@ -544,8 +512,8 @@ drop table t1, t2;
 #
 
 create table t1 (c1 INT, c2 INT UNSIGNED);
-insert into t1 values ('21474836461','21474836461');
-insert into t1 values ('-21474836461','-21474836461');
+insert ignore into t1 values ('21474836461','21474836461');
+insert ignore into t1 values ('-21474836461','-21474836461');
 show warnings;
 select * from t1;
 drop table t1;
@@ -575,33 +543,6 @@ select trim(leading NULL from 'kate') as "must_be_null";
 select trim(trailing NULL from 'xyz') as "must_be_null";
 
 #
-# Bug #7751 - conversion for a bigint unsigned constant 
-#
-
-CREATE TABLE t1 (
-  id int(11) NOT NULL auto_increment,
-  a bigint(20) unsigned default NULL,
-  PRIMARY KEY  (id)
-) ENGINE=MyISAM;
-
-INSERT INTO t1 VALUES
-('0','16307858876001849059');
-
-SELECT CONV('e251273eb74a8ee3', 16, 10);
-
-EXPLAIN 
-SELECT id
-  FROM t1
-  WHERE a = 16307858876001849059;
-
-EXPLAIN 
-  SELECT id
-  FROM t1
-  WHERE a = CONV('e251273eb74a8ee3', 16, 10);
-
-DROP TABLE t1;
-
-#
 # Bug #6317: string function CHAR, parameter is NULL, wrong result
 #
 SELECT CHAR(NULL,121,83,81,'76') as my_column;
@@ -610,7 +551,7 @@ SELECT CHAR_LENGTH(CHAR(NULL,121,83,81,'76')) as my_column;
 # Test case for bug #8669: null aes_decrypt result in order by query
 #
 
-CREATE TABLE t1 (id int PRIMARY KEY, str char(255) NOT NULL);
+CREATE TABLE t1 (id int PRIMARY KEY, str char(255) NOT NULL) charset latin1;
 CREATE TABLE t2 (id int NOT NULL UNIQUE);
 INSERT INTO t2 VALUES (1),(2);
 INSERT INTO t1 VALUES (1, aes_encrypt('foo', 'bar'));
@@ -637,7 +578,9 @@ CREATE TABLE t2 (num int primary key);
 INSERT INTO t1 VALUES ('notnumber');
 INSERT INTO t2 VALUES (0), (1); 
 
+--skip_if_hypergraph  # Different warnings.
 SELECT * FROM t1, t2 WHERE num=str;
+--skip_if_hypergraph  # Different warnings.
 SELECT * FROM t1, t2 WHERE num=substring(str from 1 for 6);
 
 DROP TABLE t1,t2;
@@ -710,7 +653,15 @@ drop table t1;
 #
 # Bug #9854  hex() and out of range handling
 #
-select hex(29223372036854775809), hex(-29223372036854775809);
+select hex(29223372036854775809) as hex_signed,
+       hex(cast(29223372036854775809 as unsigned)) as hex_unsigned;
+select conv(29223372036854775809, -10, 16) as conv_signed,
+       conv(29223372036854775809, 10, 16) as conv_unsigned;
+
+select hex(-29223372036854775809) as hex_signed,
+       hex(cast(-29223372036854775809 as unsigned)) as hex_unsigned;
+select conv(-29223372036854775809, -10, 16) as conv_signed,
+       conv(-29223372036854775809, 10, 16) as conv_unsigned;
 
 #
 # Bug #11311: Incorrect length returned from LPAD() and RPAD()
@@ -728,7 +679,7 @@ drop table t1;
 #
 
 select load_file("lkjlkj");
-select ifnull(load_file("lkjlkj"),"it's null");
+select ifnull(load_file("lkjlkj"),"it is null");
 
 #
 # Bug#15351: Wrong collation used for comparison of md5() and sha()
@@ -766,37 +717,13 @@ DROP TABLE t1;
 CREATE TABLE t1 (s varchar(10));
 INSERT INTO t1 VALUES ('yadda'), ('yaddy');
 
-EXPLAIN EXTENDED SELECT s FROM t1 WHERE TRIM(s) > 'ab';
-EXPLAIN EXTENDED SELECT s FROM t1 WHERE TRIM('y' FROM s) > 'ab';
-EXPLAIN EXTENDED SELECT s FROM t1 WHERE TRIM(LEADING 'y' FROM s) > 'ab';
-EXPLAIN EXTENDED SELECT s FROM t1 WHERE TRIM(TRAILING 'y' FROM s) > 'ab';
-EXPLAIN EXTENDED SELECT s FROM t1 WHERE TRIM(BOTH 'y' FROM s) > 'ab';
+EXPLAIN SELECT s FROM t1 WHERE TRIM(s) > 'ab';
+EXPLAIN SELECT s FROM t1 WHERE TRIM('y' FROM s) > 'ab';
+EXPLAIN SELECT s FROM t1 WHERE TRIM(LEADING 'y' FROM s) > 'ab';
+EXPLAIN SELECT s FROM t1 WHERE TRIM(TRAILING 'y' FROM s) > 'ab';
+EXPLAIN SELECT s FROM t1 WHERE TRIM(BOTH 'y' FROM s) > 'ab';
 
 DROP TABLE t1;
- 
-#
-# Bug#23409: ENCODE() and DECODE() functions aren't printed correctly
-#
-create table t1(f1 varchar(4));
-explain extended select encode(f1,'zxcv') as 'enc' from t1;
-explain extended select decode(f1,'zxcv') as 'enc' from t1;
-drop table t1;
-
-#
-# Bug #31758 inet_ntoa, oct, crashes server with null + filesort 
-#
-create table t1 (a bigint not null)engine=myisam;
-insert into t1 set a = 1024*1024*1024*4;
-delete from t1 order by (inet_ntoa(a)) desc limit 10;
-drop table t1;
-create table t1 (a char(36) not null)engine=myisam;
-insert ignore into t1 set a = ' ';
-insert ignore into t1 set a = ' ';
-select * from t1 order by (oct(a));
-drop table t1;
-
---echo End of 4.1 tests
-
 #
 # Bug #13361: SELECT FORMAT(<decimal field with null>, 2) crashes
 #
@@ -830,24 +757,25 @@ select "18383815659218730760" + 0;
 # Bug #21698: substitution of a string field for a constant under a function 
 #
 
-CREATE TABLE t1 (code varchar(10));
+CREATE TABLE t1 (code varchar(10)) charset utf8mb4;
 INSERT INTO t1 VALUES ('a12'), ('A12'), ('a13');
 
 SELECT ASCII(code), code FROM t1 WHERE code='A12';
 SELECT ASCII(code), code FROM t1 WHERE code='A12' AND ASCII(code)=65;
 
-INSERT INTO t1 VALUES ('a12 '), ('A12  ');
+# a12<BEL> and A12<BEL><BEL>, respectively.
+INSERT INTO t1 VALUES (_utf16 0x0061003100320007), (_utf16 0x00410031003200070007);
 
 SELECT LENGTH(code), code FROM t1 WHERE code='A12';
 SELECT LENGTH(code), code FROM t1 WHERE code='A12' AND LENGTH(code)=5;
 
 ALTER TABLE t1 ADD INDEX (code);
-CREATE TABLE t2 (id varchar(10) PRIMARY KEY);
+CREATE TABLE t2 (id varchar(10) PRIMARY KEY) charset utf8mb4;
 INSERT INTO t2 VALUES ('a11'), ('a12'), ('a13'), ('a14');
 
 SELECT * FROM t1 INNER JOIN t2 ON t1.code=t2.id 
   WHERE t2.id='a12' AND (LENGTH(code)=5 OR code < 'a00');
-EXPLAIN EXTENDED 
+EXPLAIN 
 SELECT * FROM t1 INNER JOIN t2 ON code=id 
   WHERE id='a12' AND (LENGTH(code)=5 OR code < 'a00');
 
@@ -856,14 +784,6 @@ DROP TABLE t1,t2;
 #
 # Bug#22684: The Functions ENCODE, DECODE and FORMAT are not real functions
 #
-
-select encode(NULL, NULL);
-select encode("data", NULL);
-select encode(NULL, "password");
-
-select decode(NULL, NULL);
-select decode("data", NULL);
-select decode(NULL, "password");
 
 select format(NULL, NULL);
 select format(pi(), NULL);
@@ -891,27 +811,6 @@ select benchmark(-1, 1);
 # 3) Each md5() result must be identical.
 # 4) The md5() result must never change, and must be stable across releases.
 #
-set @password="password";
-set @my_data="clear text to encode";
-select md5(encode(@my_data, "password"));
-select md5(encode(@my_data, _utf8 "password"));
-select md5(encode(@my_data, binary "password"));
-select md5(encode(@my_data, _latin1 "password"));
-select md5(encode(@my_data, _koi8r "password"));
-select md5(encode(@my_data, (select "password" from dual)));
-select md5(encode(@my_data, concat("pass", "word")));
-select md5(encode(@my_data, @password));
-
-set @my_data="binary encoded data";
-select md5(decode(@my_data, "password"));
-select md5(decode(@my_data, _utf8 "password"));
-select md5(decode(@my_data, binary "password"));
-select md5(decode(@my_data, _latin1 "password"));
-select md5(decode(@my_data, _koi8r "password"));
-select md5(decode(@my_data, (select "password" from dual)));
-select md5(decode(@my_data, concat("pass", "word")));
-select md5(decode(@my_data, @password));
-
 set @dec=5;
 select format(pi(), (1+1));
 select format(pi(), (select 3 from dual));
@@ -1178,6 +1077,21 @@ SELECT UNHEX('G');
 SELECT UNHEX('G') IS NULL;
 
 #
+# Bug #22358933: UNHEX WITH INVALID ARGUMENT LEAD TO VALGRIND ERROR
+#
+DO UNHEX(-1);
+SHOW warnings;
+DO UNHEX(-182680438);
+SHOW warnings;
+DO UNHEX(-2251799813685249);
+SHOW warnings;
+
+#
+# Bug #19642015 UNHEX() RUNTIME ERROR: LEFT SHIFT OF NEGATIVE VALUE -1
+#
+select unhex('5078-04-25');
+
+#
 # Bug #26281: INSERT() function mishandles NUL on boundary condition
 #
 SELECT INSERT('abc', 3, 3, '1234');
@@ -1192,12 +1106,16 @@ CREATE TABLE t1 (a INT);
 CREATE VIEW v1 AS SELECT CRC32(a) AS C FROM t1;
 
 INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+--sorted_result
 SELECT CRC32(a), COUNT(*) FROM t1 GROUP BY 1;
 SELECT CRC32(a), COUNT(*) FROM t1 GROUP BY 1 ORDER BY 1;
+--sorted_result
 SELECT * FROM (SELECT CRC32(a) FROM t1) t2;
 CREATE TABLE t2 SELECT CRC32(a) FROM t1;
 desc t2;
+--sorted_result
 SELECT * FROM v1;
+--sorted_result
 SELECT * FROM (SELECT * FROM v1) x;
 
 DROP TABLE t1, t2;
@@ -1307,53 +1225,6 @@ DROP TABLE t1, t2;
 
 --echo End of 5.0 tests
 
-#
-# Bug#44358 valgrind errors with decode() function
-#
---disable_warnings
-drop table if exists t1;
---enable_warnings
-create table t1(f1 tinyint default null)engine=myisam;
-insert into t1 values (-1),(null);
-explain select 1 as a from t1,(select decode(f1,f1) as b from t1) a;
-explain select 1 as a from t1,(select encode(f1,f1) as b from t1) a;
-drop table t1;
-
-
---echo #
---echo # Bug#49141: Encode function is significantly slower in 5.1 compared to 5.0
---echo #
-
---disable_warnings
-DROP TABLE IF EXISTS t1, t2;
---enable_warnings
-
-CREATE TABLE t1 (a VARCHAR(20), b INT);
-CREATE TABLE t2 (a VARCHAR(20), b INT);
-
-INSERT INTO t1 VALUES ('ABC', 1);
-INSERT INTO t2 VALUES ('ABC', 1);
-
-SELECT DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), t2.a)
-  FROM t1,t2 WHERE t1.b = t1.b > 0 GROUP BY t2.b;
-
-SELECT DECODE((SELECT ENCODE('secret', 'ABC') FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), t2.a)
-  FROM t1,t2 WHERE t1.b = t1.b > 0 GROUP BY t2.b;
-
-SELECT DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b), 'ABC')
-  FROM t1,t2 WHERE t1.b = t1.b > 0 GROUP BY t2.b;
-
-TRUNCATE TABLE t1;
-TRUNCATE TABLE t2;
-
-INSERT INTO t1 VALUES ('EDF', 3), ('BCD', 2), ('ABC', 1);
-INSERT INTO t2 VALUES ('EDF', 3), ('BCD', 2), ('ABC', 1);
-
-SELECT DECODE((SELECT ENCODE('secret', t1.a) FROM t1,t2 WHERE t1.a = t2.a GROUP BY t1.b LIMIT 1), t2.a)
-  FROM t2 WHERE t2.b = 1 GROUP BY t2.b;
-
-DROP TABLE t1, t2;
-
 --echo #
 --echo # Bug#52164 Assertion failed: param.sort_length, file .\filesort.cc, line 149
 --echo #
@@ -1382,6 +1253,7 @@ SELECT insert( substring_index( 'a', 'a', 'b' ), 1, 0, 'x' );
 --eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/bug58165.txt' INTO TABLE t1;
 SELECT * FROM t1;
 DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/bug58165.txt
 
 --echo #
 --echo # Bug#12634989 VALGRIND WARNING ABOUT UNINITIALIZED VALUES CREATED IN ITEM_FUNC_DAYOFMONTH
@@ -1394,7 +1266,7 @@ SELECT REPEAT('1', DAY(FROM_UNIXTIME(-1)));
 SELECT RPAD('hi', DAY(FROM_UNIXTIME(-1)),'?');
 SELECT LPAD('hi', DAY(FROM_UNIXTIME(-1)),'?');
 
-CREATE TABLE t1
+CREATE TABLE t1 charset utf8mb4
 SELECT SUBSTRING('1', DAY(FROM_UNIXTIME(-1))) AS f1,
        LEFT('1', DAY(FROM_UNIXTIME(-1))) AS f2,
        RIGHT('1', DAY(FROM_UNIXTIME(-1))) AS f3,
@@ -1466,7 +1338,7 @@ SELECT format(123, 1, 'Non-existent-locale');
 --echo #
 SELECT FORMAT(123.33, 2, 'no_NO'), FORMAT(1123.33, 2, 'no_NO');
 SELECT FORMAT(12333e-2, 2, 'no_NO'), FORMAT(112333e-2, 2, 'no_NO');
-CREATE TABLE t1 AS SELECT format(123,2,'no_NO');
+CREATE TABLE t1 charset utf8mb4 AS SELECT format(123,2,'no_NO');
 SHOW CREATE TABLE t1;
 SELECT * FROM t1;
 DROP TABLE t1;
@@ -1513,11 +1385,12 @@ format(rpad('111111111.1',
              '999999999999999999999999999999999999999999'),0,'be_BY')
 ;
 
+--error ER_DATA_OUT_OF_RANGE
 DO
 round(
   concat( (
     coalesce( (
-      linefromwkb('2147483648',
+      ST_linefromwkb('2147483648',
                   -b'1111111111111111111111111111111111111111111')),
       ( convert('[.DC2.]',decimal(30,30)) ),
       bit_count('')
@@ -1550,10 +1423,10 @@ let $1=64;
 while($1)
 {
   dec $1;
-  eval CREATE TABLE t1 AS SELECT TO_BASE64(REPEAT('a',$1)) AS to_base64;
+  eval CREATE TABLE t1 charset utf8mb4 AS SELECT TO_BASE64(REPEAT('a',$1)) AS to_base64;
   SHOW CREATE TABLE t1;
   SELECT to_base64, LENGTH(to_base64) FROM t1;
-  CREATE TABLE t2 AS SELECT from_base64(to_base64) AS from_base64 FROM t1;
+  CREATE TABLE t2 charset utf8mb4 AS SELECT from_base64(to_base64) AS from_base64 FROM t1;
   SHOW CREATE TABLE t2;
   SELECT from_base64, LENGTH(from_base64) FROM t2;
   DROP TABLE t2;
@@ -1722,21 +1595,32 @@ SELECT * FROM t1 WHERE a=hex('a');
 SELECT * FROM t1 WHERE a=to_base64('a');
 DROP TABLE t1;
 SET NAMES latin1;
+--echo #
+--echo # Bug #11765149 DUPLICATE ENTRY ERROR WHEN DOING GROUP BY
+--echo #
+create table t1(a varchar(20));
+insert into t1 values(''), (' '), ('xxxxxxxxxxxxxxx');
+create table t2(a int);
+insert into t2 values(0),(0),(1),(0),(10),(-2),(30),(NULL);
+
+--sorted_result
+select t1.a as str, length(t1.a) as str_length, t2.a as pos, t2.a + 10 as length, insert(t1.a, t2.a, t2.a + 10, '1234567') as 'insert' from t1, t2;
+drop table t1,t2;
 
 --echo #
---echo # Bug #21056907: CONTENTS OF NOT REQUESTED CHAR/VARCHAR COLUMN ARE
---echo #                REVEALED
+--echo # Bug #19174480: INSERT STRING FUNCTIONS RECENTLY CRASHING
+--echo #
+CREATE TABLE t1(a TIMESTAMP(5)) ENGINE=INNODB;
+INSERT INTO t1 VALUES('1978-01-03 00:00:00'),('2000-001-02 00:00:00');
+SELECT 1 FROM t1 GROUP BY insert(a,'1','11','1');
+SELECT insert(a,1,1,1) FROM t1;
 
-CREATE TABLE t1 (id INT, d TEXT);
-INSERT INTO t1 VALUES (1, 'this is a secret'), (2, 'public data');
-SELECT id, insert(':', 1, 0, d) FROM t1;
-SELECT id, insert(0x3a, 1, 0, d) FROM t1;
 DROP TABLE t1;
-
 --echo #
 --echo # Bug#22888420 CONCAT_WS: ASSERTION FAILED: !S.USES_BUFFER_OWNED_BY(THIS)
 --echo #
 
+--error ER_WRONG_ARGUMENTS
 do concat('a',concat_ws('a', 0x2859, 'a' ,
                         trim(period_add('a',1) from (1&''))
                         )
@@ -1745,3 +1629,1002 @@ do concat('a',concat_ws('a', 0x2859, 'a' ,
 --echo #
 --echo # End of 5.6 tests
 --echo #
+
+--echo #
+--echo # Bug#19646643 REPEAT() WASTES CPU TIME ON LARGE INPUT VALUES
+--echo #              THAT GAURANTEE EMPTY RESULT
+--echo #
+
+SET @@global.max_allowed_packet=1024*1024;
+--enable_connect_log
+# switching connection to allow the new max_allowed_packet take effect
+--connect (newconn, localhost, root,,)
+
+select length(repeat("",1)) as a;
+select length(repeat("",1024*1024*1024)) as a;
+select length(repeat("1",1024*1024)) as a;
+select length(repeat("1",1024*1024*1024)) as a;
+
+--disconnect newconn
+--source include/wait_until_disconnected.inc
+
+--connection default
+--disable_connect_log
+SET @@global.max_allowed_packet:= DEFAULT;
+
+--echo #
+--echo # Bug#20316028 RPAD + UTF16 ON X86 BUILD RUNNING ON WIN64 STACK
+--echo #              EXPLOITABLE
+
+do rpad(_utf16"33",1073741826,_latin1"44");
+
+--echo #
+--echo # Bug#13740934 ASSERTION FAILED: ARGS[0]->FIXED ITEM_FUNC_CONV_CHARSET::ITEM_FUNC_CONV_CHARSET
+--echo #
+
+CREATE TABLE t1(a TIME);
+INSERT INTO t1 VALUES ();
+SELECT (SELECT (SELECT 1 FROM t1 a WHERE t1.a <_ucs2'a')) AS d5 FROM t1 GROUP BY 1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#21317406 TRUNCATED DATA WITH SUBQUERY & UTF8
+--echo #
+
+SELECT length(rpad(_utf8 0xD0B1, 65536, _utf8 0xD0B2)) AS data;
+SELECT length(data) AS len FROM (
+  SELECT rpad(_utf8 0xD0B1, 65536, _utf8 0xD0B2) AS data
+) AS sub;
+
+SELECT length(rpad(_utf8 0xD0B1, 65535, _utf8 0xD0B2)) AS data;
+SELECT length(data) AS len FROM (
+  SELECT rpad(_utf8 0xD0B1, 65535, _utf8 0xD0B2) AS data
+) AS sub;
+
+SELECT length(repeat(_utf8mb4 0xE29883, 21844)) AS data;
+SELECT length(data) AS len
+FROM ( SELECT repeat(_utf8mb4 0xE29883, 21844) AS data ) AS sub;
+
+SELECT length(repeat(_utf8mb4 0xE29883, 21846)) AS data;
+SELECT length(data) AS len
+FROM ( SELECT repeat(_utf8mb4 0xE29883, 21846) AS data ) AS sub;
+
+--echo #
+--echo # Bug #22884187 RTRIM GETS EXPONENTIALLY SLOWER ON LARGE STRINGS
+--echo #
+
+set names utf8;
+SELECT TRIM(BOTH 'å' FROM 'aæaå');
+set names default;
+SELECT HEX(TRIM(CONVERT(_gb18030 0x20202081408141208144202020 USING utf32)));
+
+--echo #
+--echo # Bug#21447969 FILTER USING TRIM RESULTS IN CORRECT
+--echo #
+
+CREATE TABLE t1 (COUNTRY char(100));
+INSERT INTO t1 VALUES ("Norway"), ("Australia");
+
+SELECT COUNTRY FROM t1 
+WHERE trim(leading 'A' FROM  COUNTRY) = 'ustralia';
+
+SELECT  COUNTRY  FROM t1 
+WHERE  trim(trailing 'a' FROM COUNTRY)= 'Australi';
+
+SELECT COUNTRY FROM t1 
+WHERE trim(leading  'A' FROM COUNTRY) = 'ustralia'  
+  AND trim(trailing 'a' FROM COUNTRY) = 'Australi';
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#22391186 TRUE WHERE CLAUSE DOESN'T RETURN EXPECTED ROW, 
+--echo #              BUT EMPTY SET
+--echo #
+
+CREATE DATABASE testt CHARACTER SET utf8mb4;
+USE testt;
+SET NAMES 'utf8mb4';
+CREATE TABLE t1(c1 CHAR(20));
+INSERT INTO t1 VALUES('11');
+SELECT c1 <=  REPEAT( SUBSTR( UPPER('Rdlpikti') , 1 , 2 ), 8 ) FROM t1;
+SELECT * FROM t1 WHERE c1 <=  REPEAT( SUBSTR( UPPER('Rdlpikti') , 1 , 2 ), 8);
+SELECT * FROM t1 WHERE c1 <=  REPEAT( SUBSTR( UPPER('Rdlpikti') , 1 , 2 ), 8);
+DROP TABLE t1;
+DROP DATABASE testt;
+SET NAMES DEFAULT;
+
+USE test;
+
+--echo #
+--echo # Bug#22297983 HEX() FUNCTION CONVERTS DECIMAL TO DOUBLE AND
+--echo #              THUS RETURNS WRONG RESULT
+--echo #
+
+select hex(cast(9007199254740992 as decimal(30,0)));
+select hex(cast(9007199254740993 as decimal(30,0)));
+select hex(cast(9007199254740994 as decimal(30,0)));
+
+select hex(cast(0x20000000000000 as unsigned) + 1);
+select hex(cast(0x20000000000000 as decimal(30,0)) + 1);
+select hex(cast(0x20000000000000 as decimal(30,0)) + 2);
+
+--echo #
+--echo # Bug#22523836 FUNCTION REPLACE WITH BINARY OP DOESNT RETURN EXPECTED
+--echo #              NULL, WITH PARAM AS NULL
+--echo #
+
+SELECT REPLACE( 'a', binary 'b', NULL ) as xxx;
+SELECT REPLACE( 'a', binary '', NULL ) as xxx;
+
+SELECT REPLACE( 'a', 'b', NULL ) as xxx;
+SELECT REPLACE( 'a', '', NULL ) as xxx;
+
+SELECT REPLACE( NULL, 'b', 'bravo' ) as xxx;
+SELECT REPLACE( NULL, '', 'bravo' ) as xxx;
+
+SELECT REPLACE( 'a', NULL, 'bravo' ) as xxx;
+SELECT REPLACE( 'a', binary NULL, 'bravo' ) as xxx;
+
+--echo #
+--echo # Bug#22565155 DATA ROWS LOST AFTER ADDING DISTINCT WITH
+--echo # SUBSTR() IN SELECT LIST
+--echo #
+
+CREATE TABLE t1(c1 CHAR(30));
+INSERT INTO t1 VALUES('111'),('222');
+
+SELECT DISTINCT substr(c1, 1, 2147483647) FROM t1;
+SELECT DISTINCT substr(c1, 1, 2147483648) FROM t1;
+SELECT DISTINCT substr(c1, -1, 2147483648) FROM t1;
+SELECT DISTINCT substr(c1, -2147483647, 2147483648) FROM t1;
+SELECT DISTINCT substr(c1, 9223372036854775807, 23) FROM t1;
+
+SELECT DISTINCT left(c1, 3) FROM t1;
+SELECT DISTINCT left(c1, 2147483647) FROM t1;
+SELECT DISTINCT left(c1, 2147483648) FROM t1;
+
+SELECT DISTINCT right(c1, 3) FROM t1;
+SELECT DISTINCT right(c1, 2147483647) FROM t1;
+SELECT DISTINCT right(c1, 2147483648) FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#22545429 FUNC SUBSTRING_INDEX WORKS INCORRECTLY
+--echo #              WHEN THE COUNT PARAM IS A BIGINT UNSIGNED
+--echo #
+
+SELECT SUBSTRING_INDEX( 'xyz', 'abc', 9223372036854775807 );
+SELECT SUBSTRING_INDEX( 'xyz', 'abc', 9223372036854775808 );
+SELECT SUBSTRING_INDEX( 'xyz', 'abc', 18446744073709551615 );
+
+set names utf8;
+SELECT SUBSTRING_INDEX( 'xyz', 'abc', 9223372036854775807 );
+SELECT SUBSTRING_INDEX( 'xyz', 'abc', 9223372036854775808 );
+SELECT SUBSTRING_INDEX( 'xyz', 'abc', 18446744073709551615 );
+
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', 1);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', -1);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', 100);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', -100);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', 2147483647);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', -2147483647);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', 2147483648);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', -2147483648);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', 2147483649);
+SELECT SUBSTRING_INDEX('www.mysql.com', '.', -2147483649);
+set names default;
+
+--echo #
+--echo # Bug#22882717 "BIN", "OCT" FUNCTION LEADS TO MANY VALGRIND ERRORS
+--echo #
+
+SELECT BIN(MID(REPEAT('b',64),21,229));
+SELECT BIN(MID(1.051098E+308,9,99));
+SELECT BIN(RIGHT(REPEAT('b',64),30));
+SELECT BIN(SUBSTRING(REPEAT('b',64),9));
+SELECT OCT(LEFT(REPEAT('b',64),15));
+
+--echo #
+--echo # Bug#22900560 CAST .. AS BINARY.. HEAP-USE-AFTER-FREE FROM ASAN
+--echo #
+
+do
+from_base64(aes_encrypt(right(cast((0x5d44f4d736397d92c8267c12)as decimal),1),
+                        rand(to_days('2028-12-04 15:50:01.284969'))));
+
+do from_base64(cast(right(11,1)as binary(24)));
+do convert(inet_aton(cast(left(-1,1)as binary(30))) using utf8);
+do from_base64(cast((left(collation(4097),((repeat('1',32))or((-18772)))))
+                    as binary(40)));
+
+do from_base64(cast((mid(17653,row('-688:20:12.162697',(null)) >=
+row(('*.)$'),(0xc254b6)),1))as binary(34)));
+
+do from_base64(cast((mid(uuid(),20,64)) as binary(55)));
+set @e:=_latin1'77';
+do inet_aton(aes_encrypt(left(@e,1),5));
+
+--echo #
+--echo # Bug#23194118 WEIGHT_STRING: ASSERTION FAILED:
+--echo #              SRC, FILE .\STRINGS\CTYPE-UTF8.CC, LINE 8686
+--echo #
+
+SET NAMES utf8;
+CREATE TABLE t(a INT) engine=innodb;
+INSERT INTO t VALUES(1);
+SELECT 1 FROM t WHERE WEIGHT_STRING(CONCAT_WS('1',''));
+SELECT 1 FROM t WHERE WEIGHT_STRING(CONCAT('',''));
+SET NAMES DEFAULT;
+DROP TABLE t;
+
+--echo #
+--echo # Bug#24376444 USING COLLATE IN WHERE CLAUSE PREVENTS OPTIMIZER FROM
+--echo #              CONSIDERING INDEXES
+CREATE TABLE dd_table (name VARCHAR(64) COLLATE utf8_tolower_ci, UNIQUE KEY(name));
+INSERT INTO dd_table VALUES('t1'), ('t2');
+CREATE VIEW view1 AS SELECT name AS table_name FROM dd_table;
+CREATE VIEW view2 AS SELECT name COLLATE utf8_tolower_ci AS table_name FROM dd_table;
+DELIMITER |;
+CREATE PROCEDURE sub1(id CHAR(10) CHARACTER SET utf8)
+BEGIN
+SELECT * FROM view1 WHERE table_name=id COLLATE utf8_tolower_ci;
+EXPLAIN SELECT * FROM view1 WHERE table_name=id COLLATE utf8_tolower_ci;
+SELECT * FROM view2 WHERE table_name=id;
+EXPLAIN SELECT * FROM view2 WHERE table_name=id;
+SELECT * FROM dd_table WHERE name COLLATE utf8_tolower_ci = id;
+EXPLAIN SELECT * FROM dd_table WHERE name COLLATE utf8_tolower_ci = id;
+SELECT * FROM view1 WHERE id COLLATE utf8_tolower_ci=table_name;
+EXPLAIN SELECT * FROM view1 WHERE id COLLATE utf8_tolower_ci=table_name;
+SELECT * FROM view2 WHERE id=table_name;
+EXPLAIN SELECT * FROM view2 WHERE id=table_name;
+SELECT * FROM dd_table WHERE id = name COLLATE utf8_tolower_ci;
+EXPLAIN SELECT * FROM dd_table WHERE id = name COLLATE utf8_tolower_ci;
+SELECT * FROM view1 WHERE table_name COLLATE utf8_tolower_ci = id;
+EXPLAIN SELECT * FROM view1 WHERE table_name COLLATE utf8_tolower_ci = id;
+END |
+DELIMITER ;|
+CALL sub1('t1');
+DROP PROCEDURE sub1;
+DROP VIEW view1;
+DROP VIEW view2;
+DROP TABLE dd_table;
+
+--echo #
+--echo # Bug#24911350 LOCATE('HE','HELLO',NULL) SHOULD RETURN NULL INSTEAD OF 0
+--echo #
+select locate('he','hello',null),locate('he',null,2),locate(null,'hello',2);
+select locate(null,'hello',null),locate('he',null,null);
+select left('hello',null),left(null,1),left(null,null);
+select right('hello',null),right(null,1),right(null,null);
+select mid('hello',1,null),mid('hello',null,1),mid(null,1,1);
+select substr('hello',null,2),substr('hello',2,null),substr(null,1,2);
+select substr(null,null,null),mid(null,null,null);
+select substring_index('the king of the the null','the',null);
+select substring_index('the king of the the null',null,3);
+select substring_index(null,'the',3);
+select substring_index(null,null,3);
+select substring_index(null,null,null);
+select insert(null,2,1,'hi'),insert('txs',null,1,'hi');
+select insert('txs',2,null,'hi'),insert('txs',2,1,null);
+select insert('txs',null,null,'hi'),insert(null,null,null,null);
+
+--echo #
+--echo # Bug #24930038 BITWISE SHIFT: ASSERTION FAILED: NULL_VALUE OR LOST CONNECTION TO SERVER ERROR
+--echo #
+SET @orig_sql_mode = @@SQL_MODE;
+SET SQL_MODE='';
+SELECT REPEAT(0x1111, 40000000) >> 1;
+SELECT (~(REPEAT(0xb822, 0x5C9C380)));
+SET SQL_MODE=@orig_sql_mode;
+
+--echo #
+--echo # Bug#25688192 ASSERTION FAILED: MAYBE_NULL IN ITEM_FUNC_CONCAT::VAL_STR
+--echo #
+
+set @max_allowed_packet=@@global.max_allowed_packet;
+set global max_allowed_packet=2048;
+
+--enable_connect_log
+connect (con1,localhost,root,,);
+
+set sql_mode="";
+do concat(export_set(1,1,repeat('a',31),' $',213));
+
+disconnect con1;
+--source include/wait_until_disconnected.inc
+connection default;
+set global max_allowed_packet=@max_allowed_packet;
+--disable_connect_log
+
+--echo #
+--echo # Bug#26524721 ASSERTION MAYBE_NULL FAILED IN ITEM_FUNC_CONCAT::VAL_STR
+--echo #
+CREATE TABLE t(x VARCHAR(10) NOT NULL);
+# Disable ONLY_FULL_GROUP_BY to allow the query.
+--source include/turn_off_only_full_group_by.inc
+# Disable strict mode to trigger the assert (strict mode affects the
+# nullability of the CONCAT function).
+--source include/turn_off_strict_mode.inc
+SELECT COUNT(*), CONCAT(x, 'x') FROM (SELECT * FROM t) AS tt;
+--source include/restore_strict_mode.inc
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+DROP TABLE t;
+
+
+--echo # Bug#26049942 create table .. as select .. quote() give wrong length
+
+SET NAMES latin1;
+CREATE TABLE t1 AS SELECT quote('a');
+SHOW CREATE TABLE t1;
+SET NAMES utf8;
+CREATE TABLE t2 AS SELECT quote('a');
+SHOW CREATE TABLE t2;
+SET NAMES utf8mb4;
+CREATE TABLE t3 AS SELECT quote('a');
+SHOW CREATE TABLE t3;
+SET NAMES DEFAULT;
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug #27410088: LOWER(CHAR(51386)) NOT EVALUATED CONSISTENTLY IN
+--echo #                STORED PROCEDURE
+--echo #
+DELIMITER |;
+CREATE PROCEDURE proc (ofs INT, count INT)
+BEGIN
+  DECLARE i INT DEFAULT ofs;
+  WHILE i < count DO
+    SELECT i AS i;
+    IF LOWER(CHAR(i USING utf8)) <> LOWER(CHAR(i USING utf8mb4)) THEN
+      SELECT i AS 'found funny character';
+    END IF;
+    SET i = i + 1;
+  END WHILE;
+END|
+DELIMITER ;|
+# There should be same result for following two calls.
+--disable_warnings
+CALL proc(51390, 51394);
+CALL proc(51390, 51394);
+--enable_warnings
+DROP PROCEDURE proc;
+
+--echo #
+--echo # Bug#29133127 ASSERTION `MAYBE_NULL' FAILED
+--echo #              |ITEM_FUNC_CONCAT::VAL_STR(STRING*)
+--echo #
+SET GLOBAL max_allowed_packet=1024;
+
+connect (con1,localhost,root,,);
+
+--source include/turn_off_strict_mode.inc
+SET collation_connection=utf32_unicode_ci;
+SELECT
+CONCAT('"',CONCAT('";"',repeat('a',60),
+                        repeat('b',60),
+                        repeat('c',60),
+                        repeat ('d',100)),'"');
+SELECT
+CONCAT('"',CONCAT_WS('";"',repeat('a',60),
+                           repeat('b',60),
+                           repeat('c',60),
+                           repeat ('d',100)),'"');
+SELECT
+CONCAT_WS('"',CONCAT_WS('";"',repeat('a',60),
+                              repeat('b',60),
+                              repeat('c',60),
+                              repeat ('d',100)),'"');
+--source include/restore_strict_mode.inc
+SELECT
+CONCAT('"',CONCAT('";"',repeat('a',60),
+                        repeat('b',60),
+                        repeat('c',60),
+                        repeat ('d',100)),'"');
+SELECT
+CONCAT('"',CONCAT_WS('";"',repeat('a',60),
+                           repeat('b',60),
+                           repeat('c',60),
+                           repeat ('d',100)),'"');
+SELECT
+CONCAT_WS('"',CONCAT_WS('";"',repeat('a',60),
+                              repeat('b',60),
+                              repeat('c',60),
+                              repeat ('d',100)),'"');
+connection default;
+disconnect con1;
+
+SET GLOBAL max_allowed_packet=default;
+
+--source include/wait_until_count_sessions.inc
+
+--echo #
+--echo # Bug#29739778 ASSERTION FAILED: MAYBE_NULL,
+--echo #              IN ITEM_STR_FUNC::PUSH_PACKET_OVERFLOW_WARNING
+--echo #
+
+set sql_mode='';
+
+do repeat(row_count()  ,((-9223372036854775808 )<<('{ }'  ))  );
+do ((repeat(1,9223372036854775808))or(convert((0x6d5b5d8d)using dec8)));
+
+set sql_mode=default;
+
+--echo #
+--echo # Bug #30114420 ASSERTION `CURRENT_THD->IS_ERROR()'
+--echo #               FAILED|SQL/ITEM_STRFUNC.CC
+--echo #
+
+CREATE TABLE t1(c1 VARCHAR(10));
+INSERT INTO t1 VALUES ('Alaska');
+--error ER_CANNOT_CONVERT_STRING
+SELECT HEX(LPAD('', 42, REPLACE(COMPRESS(42),c1,''))) FROM t1;
+--error ER_CANNOT_CONVERT_STRING
+SELECT HEX(LPAD('', 42, SUBSTRING_INDEX(COMPRESS(42),c1,1))) FROM t1;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT LPAD('', 42, REPLACE(AES_ENCRYPT(c1, 'key'),c1,'')) FROM t1;
+
+SELECT LPAD('', 42, REPLACE(MD5(c1),c1,'')) FROM t1;
+--error ER_CANNOT_CONVERT_STRING
+SELECT HEX(LPAD('', 42, TRIM(BOTH c1 FROM x'ff'))) FROM t1;
+--error ER_CANNOT_CONVERT_STRING
+SELECT HEX(LPAD('', 42, REPLACE(x'ffff',c1,''))) FROM t1;
+--error ER_CANNOT_CONVERT_STRING
+SELECT HEX(LPAD('', 42, TRIM(x'ffff' FROM c1))) FROM t1;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT LPAD('', 42, REPLACE(c1, 'las', x'ff')) FROM t1;
+--error ER_CANNOT_CONVERT_STRING
+SELECT LPAD('', 42, REPLACE(c1, x'ff', 'las')) FROM t1;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT HEX(SUBSTRING_INDEX(_utf8mb4 x'41F09F8DA3F09F8DA3' , x'f0', 2)) FROM t1;
+
+DROP TABLE t1;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT TRIM(BOTH x'f0' FROM _utf8mb4 x'F09F8DA3F09F8DA3');
+
+SELECT TRIM(BOTH x'F09F8DA3' FROM _utf8mb4 x'F09F8DA3F09F8DA3');
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT TRIM(_latin2 x'a3' from _latin1 "hello");
+--error ER_CANNOT_CONVERT_STRING
+SELECT REPLACE(_latin1 "hello", _latin2 x'a3', "hei");
+--error ER_CANNOT_CONVERT_STRING
+SELECT REPLACE(_latin1 "hello", "hei", _latin2 x'a3');
+--error ER_CANNOT_CONVERT_STRING
+SELECT SUBSTRING_INDEX(_latin1 "hello", _latin2 x'a3', 42);
+
+# F09F8DA3 == sushi
+SELECT TRIM(leading _utf8mb4 x'F09F8DA3' from _gb18030 x'9439B9376181308B33');
+SELECT SUBSTRING_INDEX(_utf8mb4 x'C3A6C3B8F09F8DA361C3A6C3B8F09F8DA362',
+                       _gb18030 x'81308B339439B937', 2);
+
+# 9439B937 == sushi
+SELECT REPLACE('æøåæøå',_utf16 x'00e5', _gb18030 x'9439B937');
+SELECT REPLACE(_latin1 x'E6F8E5E6F8E5',_utf16 x'00e5', _utf32 x'00000061');
+
+--echo # Bug#31358389: Crash in Item::add_accum_properties()
+
+--error ER_M_BIGGER_THAN_D
+DO INSERT(1, 1, 1, CAST(1 AS DECIMAL(1,3)));
+
+
+--echo #
+--echo # Bug #31798093 RECENT REGRESSION:
+--echo #               ARG_COMPARATOR::COMPARE JUMPING TO INVALID CODE IN MEMORY
+DO CONVERT( NULLIF( @a , 'c' ) USING BINARY);
+
+--echo #
+--echo # Bug #31887870
+--echo # QUERY WITH RPAD FUNCTION USING CHINESE STRING LEADS TO MESSY CODE
+--echo #
+
+CREATE TABLE t1 (
+  id INT NOT NULL,
+  c1 VARCHAR(10)
+);
+
+INSERT INTO t1 VALUES (111,'111');
+
+# E4B8ADE69687 == Zhōngwén
+SELECT
+RPAD(id, 11, _utf8mb4 x'E4B8ADE69687') as rpad_id,
+LPAD(id, 11, _utf8mb4 x'E4B8ADE69687') as lpad_id,
+RPAD(c1, 11, _utf8mb4 x'E4B8ADE69687') as rpad_c1,
+LPAD(c1, 11, _utf8mb4 x'E4B8ADE69687') as lpad_c1
+FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #22523946 GET MESS CODE FOR FUNC INSERT()
+--echo #               WITH STR AS INT CONST AND NEWSTR AS MULTI-BYTE
+--echo #
+
+# E4B8ADE69687 == Zhōngwén
+SELECT INSERT(1, 1, 2, _utf8mb4 x'E4B8ADE69687');
+
+--echo #
+--echo # Bug #21943299 FAILED CAST OF STRING-RETURNING FUNCTION TO DOUBLE
+--echo #               EMITS NO WARNING
+
+SELECT 'a' + 0;
+SELECT CAST('a' as DOUBLE);
+SELECT CAST(CONCAT('a') as DOUBLE);
+
+--echo # Bug #22538859 "CONCAT( '2005' , '-01-01') - 100"
+--echo #               DOESN'T THROW ANY WARNING
+--echo #
+
+SELECT '2005-01-01' - 100;
+SELECT CONCAT('2005' , '-01-01') - 100;
+--echo # Bug#32096341: ISNULL continuously returns the same value for LOAD_FILE
+
+--let $file=$MYSQLTEST_VARDIR/tmp/bug32096341.txt
+CREATE TABLE t1(id INTEGER NOT NULL PRIMARY KEY);
+INSERT INTO t1 VALUES(0);
+--disable_query_log
+eval CREATE PROCEDURE p1()
+SELECT ISNULL(LOAD_FILE("$file")) AS "is null";
+--enable_query_log
+CALL p1();
+--disable_query_log
+eval SELECT * INTO OUTFILE "$file" from t1;
+--enable_query_log
+CALL p1();
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#isable_query_log;
+remove_file $file;
+
+--echo #
+--echo # Bug #32163391 ASSERTION `CRC32_Z(CRC, POS, LENGTH)
+--echo #               < STD::NUMERIC_LIMITS<HA_CHECKSUM>::MAX()' FAILED.
+
+do crc32(char(1.134475e+308));
+
+--echo #
+--echo # Bug#32192454: WL14340: RPDSERVER SIG11 AT
+--echo # RPDMPR_BVFLT_RPDMPR_DTYPE_SB8_RPDOQC_OPT_TYPE_GT_TRUE
+--echo #
+CREATE TABLE t(x LONGTEXT);
+# The data type length of UNHEX(x) used to be 0. Should be 2147483648.
+--enable_metadata
+SELECT UNHEX(x) FROM t;
+--disable_metadata
+DROP TABLE t;
+
+--echo Bug#32501472: Concatenation may create invalid UTF8 strings
+
+CREATE TABLE t1(a CHAR(1) CHARACTER SET utf8mb4);
+INSERT INTO t1 VALUES('a');
+--error ER_CANNOT_CONVERT_STRING
+SELECT CONCAT(a, x'ff') FROM t1;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT CONCAT_WS(',', a, x'ff') FROM t1;
+--error ER_CANNOT_CONVERT_STRING
+SELECT CONCAT_WS(x'ff', a, a) FROM t1;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT INSERT(a, 1, 1, x'ff') FROM t1;
+DROP TABLE t1;
+
+CREATE TABLE t1(a VARCHAR(3), b VARCHAR(3));
+INSERT INTO t1 VALUES('on','off');
+--error ER_CANNOT_CONVERT_STRING
+SELECT EXPORT_SET(7, a, b, x'ff', 4) FROM t1;
+--error ER_CANNOT_CONVERT_STRING
+SELECT EXPORT_SET(7, a, x'ff', b, 4) FROM t1;
+--error ER_CANNOT_CONVERT_STRING
+SELECT MAKE_SET(7, a, b, x'ff') FROM t1;
+DROP TABLE t1;
+
+--echo Bug#30746908: Assertion `(tlen % 4) == 0' in my_strnncollsp_utf32
+
+CREATE TABLE t(a INTEGER);
+INSERT INTO t VALUES (1),(2);
+SELECT (SELECT 1
+        FROM t
+        WHERE CONVERT(1 USING utf32) <> GROUP_CONCAT(1)
+       );
+--error ER_CANNOT_CONVERT_STRING
+SELECT (SELECT 1
+        FROM t
+        WHERE CONVERT(1 USING gb18030) <> GROUP_CONCAT(x'a3')
+        );
+DROP TABLE t;
+
+--echo # Bug#32694458: Assertion `thd->is_error()' failed|sql/sql_select.cc
+
+SELECT INSERT('a', 1, 1, YEAR(UNHEX('w')));
+
+--echo # Bug#32746552: my_strnncollsp_utf32: assertion `(slen % 4) == 0' failed
+
+DO USER() in
+(COERCIBILITY(@c),
+ CONVERT(LAST_VALUE(FROM_UNIXTIME(1536999169)) OVER() USING utf32));
+
+--echo #
+--echo # Bug #32746536 MULTIPLE FUNCTIONS: ASSERTION `IS_NULLABLE()' FAILED.
+--echo #
+
+--error ER_CANNOT_CONVERT_STRING
+DO ST_ISVALID(INSTR(9223372036854775806 ,0x46bc299f));
+
+--error ER_CANNOT_CONVERT_STRING
+DO ST_SRID(LOCATE(0x58ed0b8e,8,135));
+
+--echo #
+--echo # Bug #32864958 ITEM_STR_FUNC::PUSH_PACKET_OVERFLOW_WARNING:
+--echo #               ASSERTION `IS_NULLABLE()' FAILED.
+
+--source include/turn_off_strict_mode.inc
+
+--error ER_DATA_OUT_OF_RANGE
+DO NOT CAST(UTC_TIME AS CHAR(2877246026) CHARACTER SET ujis);
+
+DO REPEAT(LAST_INSERT_ID(''), 4294967295);
+
+DO REPEAT(LAST_INSERT_ID(''), 0x96e4ed7e70a7fec7f11572c8980a);
+
+--source include/restore_strict_mode.inc
+
+--echo # Bug#33142010: Failure on complex const argument to string functions
+
+CREATE VIEW v AS SELECT LPAD('x', 1 NOT IN (0), 1) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE VIEW v AS SELECT RPAD('x', 1 NOT IN (0), 1) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE VIEW v AS SELECT SHA2('x', 1 NOT IN (0)) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE VIEW v AS SELECT SUBSTR('x', 1 NOT IN (0)) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE VIEW v AS SELECT SUBSTR('x', 1, 1 NOT IN (0)) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE VIEW v AS SELECT REPEAT('x', 1 NOT IN (0)) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE VIEW v AS SELECT SPACE(1 NOT IN (0)) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE VIEW v AS SELECT LEFT('x', 1 NOT IN (0)) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE VIEW v AS SELECT RIGHT('x', 1 NOT IN (0)) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+CREATE TABLE t(s SET('0', '1'));
+CREATE VIEW v AS SELECT FIND_IN_SET(1 NOT IN (0), s) AS c FROM t;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+DROP TABLE t;
+
+CREATE VIEW v AS SELECT STR_TO_DATE('2020', 1 NOT IN (0)) AS c;
+SHOW CREATE TABLE v;
+SELECT * FROM v;
+DROP VIEW v;
+
+--echo #
+--echo # Bug #33180446 SPACE(): Item_str_func::push_packet_overflow_warning:
+--echo #               Assertion `is_nullable()' failed.
+
+# set_nullable(is_nullable() || thd->is_strict_mode());
+--source include/turn_off_strict_mode.inc
+
+SELECT space(9223372036854775808);
+SELECT length(space(9223372036854775809));
+
+CREATE TABLE t(i BIGINT UNSIGNED);
+INSERT INTO t values(9223372036854775808);
+
+SELECT space(i) FROM t;
+
+DROP TABLE t;
+
+SET @@collation_connection = 'utf32_bin';
+
+SELECT space(1073741824);
+
+SET @@collation_connection = default;
+
+--source include/restore_strict_mode.inc
+
+--echo #
+--echo # Bug#31374305 - FORMAT() NOT DISPLAYING WHOLE NUMBER SIDE CORRECTLY
+--echo #                FOR ES_MX AND ES_ES LOCALES
+--echo #
+
+DELIMITER |;
+CREATE PROCEDURE load_locale_format_table()
+BEGIN
+  DECLARE locale_list VARCHAR(1000) DEFAULT '
+  es_AR,es_BO,es_CL,es_CO,es_CR,es_DO,es_EC,es_ES,es_GT,es_HN,
+  es_MX,es_NI,es_PA,es_PE,es_PR,es_PY,es_SV,es_US,es_UY,es_VE';
+  SET @fmt_stmt = 'INSERT INTO locale_format VALUES
+                   (?, FORMAT(12131254123412541,2,?));';
+  PREPARE stmt FROM @fmt_stmt;
+  WHILE locale_list != '' DO
+    /* get the first locale from the list */
+    SET @locale =
+          TRIM(REPLACE((SUBSTRING_INDEX(locale_list, ',', 1)), '\n',''));
+    EXECUTE stmt USING @locale, @locale;
+    /* remove the first locale from the list */
+    IF LOCATE(',', locale_list) > 0 THEN
+      SET locale_list =
+      SUBSTRING(locale_list, LOCATE(',', locale_list) + 1);
+    ELSE
+      SET locale_list = '';
+    END IF;
+  END WHILE;
+  DEALLOCATE PREPARE stmt;
+END|
+DELIMITER ;|
+
+CREATE TABLE locale_format(locale VARCHAR(10), formatted_string VARCHAR(100));
+CALL load_locale_format_table();
+SELECT * FROM locale_format;
+DROP PROCEDURE load_locale_format_table;
+DROP TABLE locale_format;
+
+--echo # Bug#33661337: more gcols corruption
+
+SET sql_mode = '';
+CREATE TABLE t (
+  a INT,
+  b BLOB,
+  c INT GENERATED ALWAYS AS (1) VIRTUAL,
+  d INT,
+  e INT GENERATED ALWAYS AS (LPAD('111', b, '1')) VIRTUAL,
+  UNIQUE KEY (e),
+  KEY(b(1),a,e),
+  KEY(e,b(1))
+);
+
+INSERT INTO t(b) VALUES('32');
+INSERT INTO t(d, b) VALUES(2, '222222') ON DUPLICATE KEY UPDATE a=644, b=3;
+INSERT IGNORE INTO t(a,b,d) VALUES (1, '1536999167', 1);
+CHECK TABLE t EXTENDED;
+DELETE FROM t;
+CHECK TABLE t EXTENDED;
+
+DROP TABLE t;
+
+SET sql_mode = DEFAULT;
+
+CREATE TABLE t1(c VARCHAR(10));
+INSERT INTO t1 VALUES(NULL), ('pad');
+SELECT RPAD(c, 4, 'x') FROM t1;
+SELECT RPAD(c, 3, 'x') FROM t1;
+SELECT LPAD(c, 4, 'x') FROM t1;
+SELECT LPAD(c, 3, 'x') FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #33830073 Assertion 'num_codepoints >= scanner.get_char_index()'
+--echo #               strings/ctype-uca.cc
+--echo #
+
+CREATE TABLE t1 (
+  col_varchar_key VARCHAR(1),
+  pk INT,
+  col_datetime_key DATETIME
+);
+
+INSERT INTO t1 VALUES
+('A',NULL,'2007-02-13 18:06:37'),
+('A',620107048,'1970-03-31 03:32:33'),
+('o',1818429552,'2012-10-20 12:37:31'),
+('1',-400273832,'1983-12-21 12:07:34'),
+('0',-1712505984,'2012-06-18 11:56:20'),
+('A',374506608,'2033-03-09 05:26:16'),
+('O',-1889503289,NULL),
+('w',1560969033,'1972-09-08 05:19:31'),
+(NULL,1521527768,'2010-02-04 14:20:22');
+
+SELECT
+CONCAT_WS(
+  REPEAT(CONCAT(col_varchar_key COLLATE utf8mb4_roman_ci), -1330441018),
+    CONCAT_WS('',
+      CONCAT(HEX(STRCMP('9', col_varchar_key))),
+      (col_datetime_key - INTERVAL -1941528800 DAY_MINUTE))
+)
+AS field1
+FROM t1
+GROUP BY field1 WITH ROLLUP
+;
+
+DROP TABLE t1;
+
+CREATE TABLE t1 AS SELECT HEX(-1) AS f;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #33881339 Default collation causes inconsistent results
+--echo #
+
+CREATE TABLE t0(c0 DECIMAL);
+INSERT INTO t0 VALUES(NULL);
+--error ER_TRUNCATED_WRONG_VALUE
+UPDATE t0 SET c0 = 1 WHERE (t0.c0 IS NULL)>>('');
+DROP TABLE t0;
+
+CREATE TABLE t0(c0 DECIMAL);
+INSERT INTO t0 VALUES(NULL);
+--skip_if_hypergraph  # Does not raise error. (Neither does the old optimizer
+                      # if the query is changed to use multi-table syntax.)
+--error ER_TRUNCATED_WRONG_VALUE
+UPDATE t0 SET c0 = 1 WHERE (t0.c0 IS NULL)>>('' COLLATE 'utf8mb4_0900_ai_ci');
+DROP TABLE t0;
+
+--echo # Bug#34274525: Two string values with explicit collate clauses
+--echo #               should not be implicitly coerced
+
+# Explicit COLLATE clause and different collations is not allowed
+--error ER_CANT_AGGREGATE_2COLLATIONS
+SELECT _latin1 'ß' COLLATE latin1_general_ci = _utf8mb4 'ss' COLLATE utf8mb4_0900_ai_ci AS c;
+
+# Same collation is OK
+SELECT _utf8mb4 'ß' COLLATE utf8mb4_0900_ai_ci = _utf8mb4 'ss' COLLATE utf8mb4_0900_ai_ci AS c;
+
+SELECT _latin1 'ß' COLLATE latin1_general_ci = _latin1 'ss' COLLATE latin1_general_ci AS c;
+
+# Default collations are OK:
+
+SELECT _latin1 'ß' = _utf8mb4 'ss' AS c;
+
+SELECT _utf8mb4 'ss' = _latin1 'ß' AS c;
+
+SELECT _utf8mb4 'ss' = _utf8mb3 'ß' AS c;
+
+SELECT _utf8mb3 'ß' = _utf8mb4 'ss' AS c;
+
+--echo # Bug#34962821 space():
+--echo #              Item_str_func::push_packet_overflow_warning:
+--echo #              Assertion `is_nullable()' failed.
+SET @@sql_mode='';
+--disable_warnings
+DO SPACE(SHA(UUID_SHORT()));
+--enable_warnings
+SET @@sql_mode = default;
+
+--echo #
+--echo # Bug#34961236 [rl]pad() + row_count():
+--echo # Item::null_return_str(): Assertion `m_nullable' failed.
+--echo #
+
+SET @@sql_mode='';
+--error ER_INVALID_JSON_TEXT_IN_PARAM
+DO LPAD(BIT_XOR(1), ROW_COUNT(), JSON_PRETTY('-$ *?(8}'));
+SET @@sql_mode='';
+--error ER_INVALID_JSON_TEXT_IN_PARAM
+DO RPAD(BIT_XOR(1), ROW_COUNT(), JSON_PRETTY('-$ *?(8}'));
+SET @@sql_mode = default;
+
+--echo #
+--echo # Bug#34781507 random_bytes(): Assertion `is_nullable()' failed.
+--echo # and Assertion `!null_value || is_nullable()' failed
+--echo #
+
+SET @@sql_mode='';
+--error ER_DATA_OUT_OF_RANGE
+DO RANDOM_BYTES(CAST((RANDOM_BYTES('?+,$ F5')) as unsigned));
+SET @@sql_mode = default;
+
+--echo #
+--echo # Bug#35129361 my_strnncollsp_utf16 Assertion `(slen % 2) == 0' failed.
+--echo #
+
+CREATE TABLE t1 (
+  c1 varchar(255)
+);
+
+INSERT INTO t1 VALUES('m'),('u'),('i');
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT
+  CASE (AES_ENCRYPT(0, c1))
+  WHEN '1234556789' THEN -1535639552
+  WHEN (CONVERT(c1 USING utf16)) THEN c1 END
+FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#35129166 push_packet_overflow_warning(THD*, const char*):
+--echo #              Assertion `is_nullable()' failed
+--echo #
+
+SET SESSION SQL_MODE='';
+
+CREATE TABLE t1 (
+  col_varchar_255_utf8_key varchar(255),
+  col_int int DEFAULT NULL,
+  pk int NOT NULL AUTO_INCREMENT,
+
+  PRIMARY KEY (pk),
+  KEY col_varchar_255_utf8_key (col_varchar_255_utf8_key)
+);
+
+INSERT INTO t1 VALUES
+('that',4,1),
+('r',-1153105920,2);
+
+CREATE VIEW v1 AS SELECT * FROM t1;
+
+SELECT
+pk FROM v1
+ORDER BY  "cant"  IN ( ( FORMAT(  LAST_INSERT_ID( pk ) , 42 ) ) );
+
+SELECT
+STDDEV_POP( ( LAST_INSERT_ID( ( - 2313724308561592320 ) ) ) ) AS field5
+FROM t1
+GROUP BY HEX( col_varchar_255_utf8_key )
+ORDER BY SPACE( LAST_INSERT_ID() );
+
+DROP VIEW v1;
+DROP TABLE t1;
+
+SET SESSION SQL_MODE=DEFAULT;
+
+--echo #
+--echo # Bug#35148945: String* Item::null_return_str():
+--echo #               Assertion `m_nullable' failed
+--echo #
+
+CREATE TABLE t (a VARCHAR(10) NOT NULL);
+
+INSERT INTO t
+WITH RECURSIVE seq AS (
+   SELECT 1 AS n UNION ALL SELECT n + 1 FROM seq WHERE n < 200
+)
+SELECT 'abc' FROM seq;
+
+SET sql_mode = '';
+# We don't care about the result, only that it doesn't hit an assertion.
+--disable_result_log
+SELECT LPAD(a, ASCII(RANDOM_BYTES(1)) - 10, 'abc') FROM t;
+--enable_result_log
+SET sql_mode = DEFAULT;
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#35499232 The quote function may return binary data
+--echo #
+
+SELECT QUOTE(x'01');
+SELECT QUOTE(NULL);
+--error ER_CANNOT_CONVERT_STRING
+SELECT QUOTE(x'80');
+--error ER_INVALID_CHARACTER_STRING
+SELECT QUOTE(_utf8mb4 x'80');

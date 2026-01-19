@@ -16,17 +16,28 @@ create table t2 (id int, a bigint unsigned not null, c char(10), d int, primary 
 insert into t2 values (1,1,"a",1),(3,4,"A",4),(3,5,"B",5),(3,6,"C",6),(4,7,"D",7);
 
 select t1.*,t2.* from t1 JOIN t2 where t1.a=t2.a;
+# Tests printing of EXPLAIN FORMAT=tree for outer join BKA (in join_outer_bka.test).
+--skip_if_hypergraph  # No BKA support.
+EXPLAIN FORMAT=tree select t1.*,t2.* from t1 left join t2 on (t1.a=t2.a) order by t1.grp,t1.a,t2.c;
 select t1.*,t2.* from t1 left join t2 on (t1.a=t2.a) order by t1.grp,t1.a,t2.c;
+--sorted_result
 select t1.*,t2.* from { oj t2 left outer join t1 on (t1.a=t2.a) };
+--sorted_result
 select t1.*,t2.* from t1 as t0,{ oj t2 left outer join t1 on (t1.a=t2.a) } WHERE t0.a=2;
+--sorted_result
 select t1.*,t2.* from t1 left join t2 using (a);
+--sorted_result
 select t1.*,t2.* from t1 left join t2 using (a) where t1.a=t2.a;
+--sorted_result
 select t1.*,t2.* from t1 left join t2 using (a,c);
 --sorted_result
 select t1.*,t2.* from t1 left join t2 using (c);
+--sorted_result
 select t1.*,t2.* from t1 natural left outer join t2;
 
+--sorted_result
 select t1.*,t2.* from t1 left join t2 on (t1.a=t2.a) where t2.id=3;
+--sorted_result
 select t1.*,t2.* from t1 left join t2 on (t1.a=t2.a) where t2.id is null;
 
 explain select t1.*,t2.* from t1,t2 where t1.a=t2.a and isnull(t2.a)=1;
@@ -107,7 +118,9 @@ INSERT INTO t2 VALUES (7,3,1000,2000,0,0,746294,937484,'yes');
 # right table, when selecting on an id that does not exist in the right table
 # t2 but this select returns an empty set!!!!
 SELECT t1.usr_id,t1.uniq_id,t1.increment,t2.usr2_id,t2.c_amount,t2.max FROM t1 LEFT JOIN t2 ON t2.id = t1.uniq_id WHERE t1.uniq_id = 4 ORDER BY t2.c_amount;
+--source include/turn_off_only_full_group_by.inc
 SELECT t1.usr_id,t1.uniq_id,t1.increment,t2.usr2_id,t2.c_amount,t2.max FROM t1 LEFT JOIN t2 ON t2.id = t1.uniq_id WHERE t1.uniq_id = 4 GROUP BY t2.c_amount;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 # Removing the ORDER BY works:
 SELECT t1.usr_id,t1.uniq_id,t1.increment,t2.usr2_id,t2.c_amount,t2.max FROM t1 LEFT JOIN t2 ON t2.id = t1.uniq_id WHERE t1.uniq_id = 4;
 
@@ -251,7 +264,13 @@ select count(*) from t2 right join t1 on (t1.id = t2.owner);
 
 --sorted_result
 select t1.name, t2.name, t2.id,t3.id from t2 right join t1 on (t1.id = t2.owner) left join t1 as t3 on t3.id=t2.owner;
+--sorted_result
 select t1.name, t2.name, t2.id,t3.id from t1 right join t2 on (t1.id = t2.owner) right join t1 as t3 on t3.id=t2.owner;
+# In join_outer_bka.test, demonstrates that when combining outer BKA and BNL,
+# we revert to simple nested loops.
+--skip_if_hypergraph  # Depends on the query plan.
+explain format=tree select t1.name, t2.name, t2.id, t2.owner, t3.id from t1 left join t2 on (t1.id = t2.owner) right join t1 as t3 on t3.id=t2.owner;
+--sorted_result
 select t1.name, t2.name, t2.id, t2.owner, t3.id from t1 left join t2 on (t1.id = t2.owner) right join t1 as t3 on t3.id=t2.owner;
 
 drop table t1,t2;
@@ -260,6 +279,9 @@ create table t1 (id int not null, str char(10), index(str));
 insert into t1 values (1, null), (2, null), (3, "foo"), (4, "bar");
 select * from t1 where str is not null order by id;
 select * from t1 where str is null;
+explain select * from t1 where str is null;
+--skip_if_hypergraph  # Depends on the query plan.
+explain format=tree select * from t1 where str is null;  # Tests printing of index condition pushdown on RefIterator.
 drop table t1;
 
 #
@@ -347,8 +369,11 @@ insert into t2 values (15, 'white');
 insert into t2 values (7, 'green');
 select * from t1;
 select * from t2;
+--sorted_result
 select * from t2 natural join t1;
+--sorted_result
 select t2.count, t1.name from t2 natural join t1;
+--sorted_result
 select t2.count, t1.name from t2 inner join t1 using (color);
 drop table t1;
 drop table t2;
@@ -366,16 +391,21 @@ CREATE TABLE t2 (
   KEY pcode (pcode)
 );
 INSERT INTO t2 VALUES ('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw2000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3000'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw3500'),('kvw6000'),('kvw6000'),('kld2000');
+--source include/turn_off_only_full_group_by.inc
 
+--sorted_result
 SELECT t1.pcode, IF(ISNULL(t2.pcode), 0, COUNT(*)) AS count FROM t1
 LEFT JOIN t2 ON t1.pcode = t2.pcode GROUP BY t1.pcode;
+--sorted_result
 SELECT SQL_BIG_RESULT t1.pcode, IF(ISNULL(t2.pcode), 0, COUNT(*)) AS count FROM t1 LEFT JOIN t2 ON t1.pcode = t2.pcode GROUP BY t1.pcode;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1,t2;
 
 #
 # Another left join problem
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
   id int(11),
   pid int(11),
@@ -405,7 +435,7 @@ INSERT INTO t2 VALUES (1,1);
 explain SELECT * from t1 left join t2 on t1.id=t2.id where t2.id IS NULL;
 SELECT * from t1 left join t2 on t1.id=t2.id where t2.id IS NULL;
 drop table t1,t2;
-
+SET sql_mode = default;
 #
 # Test problem with using key_column= constant in ON and WHERE
 #
@@ -423,6 +453,7 @@ create table t1 (fooID smallint unsigned auto_increment, primary key (fooID));
 create table t2 (fooID smallint unsigned not null, barID smallint unsigned not null, primary key (fooID,barID));
 insert into t1 (fooID) values (10),(20),(30);
 insert into t2 values (10,1),(20,2),(30,3);
+ANALYZE TABLE t1, t2;
 explain select * from t2 left join t1 on t1.fooID = t2.fooID and t1.fooID = 30;
 select * from t2 left join t1 on t1.fooID = t2.fooID and t1.fooID = 30;
 --sorted_result
@@ -463,7 +494,8 @@ create table t3 (c1 int, c2 int);
 insert into t1 values (1,2), (2,2), (3,2);
 insert into t2 values (1,3), (2,3);
 insert into t3 values (2,4),        (3,4);
-
+ANALYZE TABLE t1, t2, t3;
+--sorted_result
 select * from t1 left join t2  on  b1 = a1 left join t3  on  c1 = a1  and  b1 is null;
 explain select * from t1 left join t2  on  b1 = a1 left join t3  on  c1 = a1  and  b1 is null;
 
@@ -509,7 +541,7 @@ insert into t2 values("7", "4");
 insert into t2 values("8", "12");
 insert into t2 values("9", "11");
 insert into t2 values("10", "10");
-
+ANALYZE TABLE t1, t2;
 explain select s.*, '*', m.*, (s.match_1_h - m.home) UUX from 
   (t2 s left join t1 m on m.match_id = 1) 
   order by m.match_id desc;
@@ -652,10 +684,14 @@ CREATE TABLE t2 (a int PRIMARY KEY, b int);
 INSERT INTO t1 VALUES (1,1), (2,1), (3,1), (4,2);
 INSERT INTO t2 VALUES (1,2), (2,2);
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a WHERE t1.b=1;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a
   WHERE t1.b=1 XOR (NOT ISNULL(t2.a) AND t2.b=1);
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a WHERE not(0+(t1.a=30 and t2.b=1));
 
 DROP TABLE t1,t2;
@@ -734,32 +770,52 @@ CREATE TABLE t2 (a int PRIMARY KEY, b int);
 INSERT INTO t1 VALUES (1,2), (2,1), (3,2), (4,3), (5,6), (6,5), (7,8), (8,7), (9,10);
 INSERT INTO t2 VALUES (3,0), (4,1), (6,4), (7,5);
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t2.b <= t1.a AND t1.a <= t1.b;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a BETWEEN t2.b AND t1.b;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE NOT(t1.a NOT BETWEEN t2.b AND t1.b);
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t2.b > t1.a OR t1.a > t1.b;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a NOT BETWEEN t2.b AND t1.b;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE NOT(t1.a BETWEEN t2.b AND t1.b);
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a = t2.a OR t2.b > t1.a OR t1.a > t1.b;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE NOT(t1.a != t2.a AND t1.a BETWEEN t2.b AND t1.b);
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a = t2.a AND (t2.b > t1.a OR t1.a > t1.b);
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE NOT(t1.a != t2.a OR t1.a BETWEEN t2.b AND t1.b);
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a = t2.a OR t1.a = t2.b;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a IN(t2.a, t2.b);
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE NOT(t1.a NOT IN(t2.a, t2.b));
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a != t1.b AND t1.a != t2.b;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a NOT IN(t1.b, t2.b);
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE NOT(t1.a IN(t1.b, t2.b));
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t2.a != t2.b OR (t1.a != t2.a AND t1.a != t2.b);
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE NOT(t2.a = t2.b AND t1.a IN(t2.a, t2.b));
 
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t2.a != t2.b AND t1.a != t1.b AND t1.a != t2.b;
+--sorted_result
 SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE NOT(t2.a = t2.b OR t1.a IN(t1.b, t2.b));
 
 EXPLAIN SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a WHERE t1.a = t2.a OR t1.a = t2.b;
@@ -790,9 +846,13 @@ INSERT INTO t2 VALUES (2), (3);
 CREATE VIEW v1 AS SELECT a FROM t1 JOIN t2 ON t1.a=t2.b;
 CREATE VIEW v2 AS SELECT b FROM t2 JOIN t1 ON t2.b=t1.a;
 
+# We see the functional dependency implied by ON:
+
+--sorted_result
 SELECT v1.a, v2. b 
   FROM v1 LEFT OUTER JOIN v2 ON (v1.a=v2.b) AND (v1.a >= 3)
     GROUP BY v1.a;
+--sorted_result
 SELECT v1.a, v2. b 
   FROM { OJ v1 LEFT OUTER JOIN v2 ON (v1.a=v2.b) AND (v1.a >= 3) }
     GROUP BY v1.a;
@@ -856,12 +916,13 @@ INSERT INTO t1 VALUES
   (1,'aaaaaaa'), (5,'eeeeeee'), (4,'ddddddd'), (2,'bbbbbbb'), (3,'ccccccc');
 INSERT INTO t2 VALUES
   (3,10), (2,20), (5,30), (3,20), (5,10), (3,40), (3,30), (2,10), (2,40);
-
+ANALYZE TABLE t1, t2;
 EXPLAIN
 SELECT t1.id, a FROM t1 LEFT JOIN t2 ON t1.id=t2.id WHERE t2.b IS NULL;
 
 flush status;
 SELECT t1.id, a FROM t1 LEFT JOIN t2 ON t1.id=t2.id WHERE t2.b IS NULL;
+--skip_if_hypergraph  # Depends on the query plan.
 show status like 'Handler_read%';
 
 DROP TABLE t1,t2;
@@ -874,7 +935,7 @@ CREATE TABLE t1 (c int  PRIMARY KEY, e int NOT NULL);
 INSERT INTO t1 VALUES (1,0), (2,1);
 CREATE TABLE t2 (d int PRIMARY KEY);
 INSERT INTO t2 VALUES (1), (2), (3);
-
+ANALYZE TABLE t1, t2;
 EXPLAIN SELECT * FROM t1 LEFT JOIN t2 ON e<>0 WHERE c=1 AND d IS NULL;
 SELECT * FROM t1 LEFT JOIN t2 ON e<>0 WHERE c=1 AND d IS NULL;
 SELECT * FROM t1 LEFT JOIN t2 ON e<>0 WHERE c=1 AND d<=>NULL;
@@ -891,6 +952,7 @@ INSERT INTO t1 VALUES (1);
 CREATE TABLE t2 ( a INT, b INT );
 INSERT INTO t2 VALUES (1, 1),(1, 2),(1, 3),(2, 4),(2, 5);
 
+ANALYZE TABLE t1, t2;
 EXPLAIN
 SELECT t1.a, COUNT( t2.b ), SUM( t2.b ), MAX( t2.b )
 FROM t1 LEFT JOIN t2 USING( a )
@@ -919,7 +981,7 @@ INSERT INTO t1 VALUES (1, NULL, 3);
 CREATE TABLE t2(f1 INT, f2 INT);
 INSERT INTO t2 VALUES (2, 1);
 
-EXPLAIN EXTENDED SELECT * FROM t1 LEFT JOIN t2 ON t1.f2 = t2.f2
+EXPLAIN SELECT * FROM t1 LEFT JOIN t2 ON t1.f2 = t2.f2
 WHERE (COALESCE(t1.f1, t2.f1), f3) IN ((1, 3), (2, 2));
 
 SELECT * FROM t1 LEFT JOIN t2 ON t1.f2 = t2.f2
@@ -961,11 +1023,12 @@ CREATE TABLE t2 (f1 INT NOT NULL);
 INSERT INTO t2 VALUES
 (5),(3),(0),(3),(1),(0),(1),(7),(1),(0),(0),(8),(4),(9),(0),(2),(0),(8),(5),(1);
 
-SELECT STRAIGHT_JOIN COUNT(*) FROM t1 TA1
-RIGHT JOIN t2 TA2 JOIN t2 TA3 ON TA2.f1 ON TA3.f1;
+ANALYZE TABLE t1, t2;
+SELECT STRAIGHT_JOIN COUNT(*) FROM t1 ta1
+RIGHT JOIN t2 ta2 JOIN t2 ta3 ON ta2.f1 ON ta3.f1;
 
-EXPLAIN SELECT STRAIGHT_JOIN COUNT(*) FROM t1 TA1
-RIGHT JOIN t2 TA2 JOIN t2 TA3 ON TA2.f1 ON TA3.f1;
+EXPLAIN SELECT STRAIGHT_JOIN COUNT(*) FROM t1 ta1
+RIGHT JOIN t2 ta2 JOIN t2 ta3 ON ta2.f1 ON ta3.f1;
 
 DROP TABLE t1, t2;
 
@@ -975,7 +1038,7 @@ DROP TABLE t1, t2;
 CREATE TABLE t1(f1 INT, PRIMARY KEY (f1));
 INSERT INTO t1 VALUES (1),(2);
 
-EXPLAIN EXTENDED SELECT STRAIGHT_JOIN jt1.f1 FROM t1 AS jt1
+EXPLAIN SELECT STRAIGHT_JOIN jt1.f1 FROM t1 AS jt1
  LEFT JOIN t1 AS jt2
   RIGHT JOIN t1 AS jt3
     JOIN t1 AS jt4 ON 1
@@ -984,7 +1047,7 @@ EXPLAIN EXTENDED SELECT STRAIGHT_JOIN jt1.f1 FROM t1 AS jt1
   RIGHT JOIN t1 AS jt6 ON jt6.f1
  ON 1;
 
-EXPLAIN EXTENDED SELECT STRAIGHT_JOIN jt1.f1 FROM t1 AS jt1
+EXPLAIN SELECT STRAIGHT_JOIN jt1.f1 FROM t1 AS jt1
  RIGHT JOIN t1 AS jt2
   RIGHT JOIN t1 AS jt3
     JOIN t1 AS jt4 ON 1
@@ -1328,7 +1391,21 @@ SELECT t1.col_int
 FROM t1
   LEFT JOIN t2
     LEFT JOIN t3
-      JOIN t4  
+      JOIN t4
+      ON t3.col_int  = t4.pk
+    ON t2.col_varchar_10 = t3.col_varchar_10
+  ON t2.col_int = t1.pk
+WHERE   t1.col_int_key IS NULL OR t4.pk < t3.col_int;
+
+# Demonstrates the case where we put a condition on the top level above
+# an outer join with const tables on the left side. The found_match test
+# is redundant and should probably be removed if we can.
+--skip_if_hypergraph  # Depends on the query plan.
+EXPLAIN FORMAT=tree SELECT t1.col_int
+FROM t1
+  LEFT JOIN t2
+    LEFT JOIN t3
+      JOIN t4
       ON t3.col_int  = t4.pk
     ON t2.col_varchar_10 = t3.col_varchar_10
   ON t2.col_int = t1.pk
@@ -1509,6 +1586,16 @@ eval EXPLAIN SELECT STRAIGHT_JOIN $rest_of_query;
 eval SELECT $rest_of_query;
 eval EXPLAIN SELECT $rest_of_query;
 
+# In this case, LEFT JOIN must be converted to inner join:
+let $query=
+SELECT * FROM t5 LEFT JOIN t6 ON t5.col_int=1000
+WHERE t6.col_int_key IS TRUE;
+eval EXPLAIN $query;
+# but not here
+let $query=
+SELECT * FROM t5 LEFT JOIN t6 ON t5.col_int=1000
+WHERE t6.col_int_key IS NOT TRUE;
+eval EXPLAIN $query;
 drop table t1,t2,t3,t4,t5,t6;
 
 --echo #
@@ -1523,6 +1610,7 @@ eval EXPLAIN $query;
 FLUSH STATUS;
 eval $query;
 # Without the "not exists" optimization, there would be more read_rnd_next
+--skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'HANDLER_READ%';
 DROP TABLE t1,t2;
 
@@ -1546,13 +1634,1137 @@ DROP TABLE t1, t2;
 --echo # Bug#13980954 Missing data on left join + null value + where..in
 --echo #
 
-CREATE TABLE t1 (ik INT, vc varchar(1)) ENGINE=Innodb;
+CREATE TABLE t1 (ik INT, vc varchar(1)) charset utf8mb4 ENGINE=Innodb;
 
 let $query=
 SELECT straight_join t1.vc, t1.ik
 FROM t1 JOIN t1 AS t2 ON t1.vc=t2.vc LEFT JOIN t1 AS t3 ON t1.vc=t3.vc;
 
+--skip_if_hypergraph  # Depends on the query plan.
 eval explain format=json $query;
 eval $query;
 
 DROP TABLE t1;
+
+--echo #
+--echo # Bug #18345786 CRASH AROUND ST_JOIN_TABLE::AND_WITH_CONDITION
+--echo #
+
+CREATE TABLE t1(a INT) ENGINE=INNODB;
+SET @a:=(SELECT ROW(1, 2)=
+                ROW((SELECT 1 FROM t1 LEFT JOIN t1 t2 ON 1), 1));
+DROP TABLE t1;
+
+--echo #
+--echo # Coverage for "unique row not found"
+--echo #
+
+create table t1(a int, unique key(a)) engine=innodb;
+insert into t1 values(1);
+let $query=
+select * from t1 left join t1 as t2
+              on t2.a=12
+         where t1.a=1;
+eval explain $query;
+eval $query;
+drop table t1;
+
+--echo #
+--echo # Bug#18717059 MISSING ROWS ON NESTED JOIN WITH SUBQUERY  
+--echo #              WITH MYISAM OR MEMORY    
+--echo #
+CREATE TABLE t1 (
+  pk INT,
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  PRIMARY KEY (pk),
+  KEY col_varchar_key (col_varchar_key, col_int_key)
+) ENGINE=MyISAM;
+
+INSERT INTO t1 VALUES (23,4,'d');
+INSERT INTO t1 VALUES (24,8,'g');
+INSERT INTO t1 VALUES (25,NULL,'x');
+INSERT INTO t1 VALUES (26,NULL,'f');
+INSERT INTO t1 VALUES (27,0,'p');
+INSERT INTO t1 VALUES (28,NULL,'j');
+INSERT INTO t1 VALUES (29,8,'c');
+
+CREATE TABLE t2 (
+  pk INT,
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  PRIMARY KEY (pk)
+) ENGINE=MyISAM;
+
+let $query=
+  SELECT 9
+  FROM t1 AS table1
+    RIGHT JOIN t1 AS table2
+    ON table2.col_int_key = table1.col_int_key
+      AND table1.col_varchar_key = (
+        SELECT subquery2_t2.col_varchar_key
+        FROM t2
+          STRAIGHT_JOIN ( t2 AS subquery2_t2
+            JOIN t1 AS subquery2_t3
+          ) ON ( subquery2_t3.col_int_key = subquery2_t2.pk )
+      );
+
+eval $query;      
+eval CREATE TABLE where_subselect_table AS
+  $query;
+
+set optimizer_switch='condition_fanout_filter=on';
+eval SELECT *
+FROM where_subselect_table
+WHERE (9) IN ( $query )
+ /* TRANSFORM_OUTCOME_UNORDERED_MATCH */;
+
+set optimizer_switch='condition_fanout_filter=off';    
+eval SELECT *
+FROM where_subselect_table
+WHERE (9) IN ( $query )
+ /* TRANSFORM_OUTCOME_UNORDERED_MATCH */;
+ 
+DROP TABLE t1, t2, where_subselect_table;
+
+--echo # Bug#14358878 Wrong results on table left join view
+
+CREATE TABLE a (id INTEGER);
+CREATE TABLE b (id INTEGER);
+
+CREATE ALGORITHM=MERGE VIEW vmerge AS SELECT 1 AS id, id AS b_id FROM b;
+CREATE ALGORITHM=TEMPTABLE VIEW vmat AS SELECT 1 AS id, id AS b_id FROM b;
+
+INSERT INTO a(id) VALUES (1);
+
+SELECT *
+FROM a LEFT JOIN vmerge AS v ON a.id = v.id;
+
+SELECT *
+FROM a LEFT JOIN vmat AS v ON a.id = v.id;
+
+SELECT *
+FROM a LEFT JOIN (SELECT 1 AS one, id FROM b) AS v ON a.id = v.id;
+
+SELECT *
+FROM a LEFT JOIN (SELECT DISTINCT 1 AS one, id FROM b) AS v ON a.id = v.id;
+
+SELECT *
+FROM a LEFT JOIN vmerge AS v ON a.id = v.id
+UNION DISTINCT
+SELECT *
+FROM a LEFT JOIN vmerge AS v ON a.id = v.id;
+
+SELECT *
+FROM a LEFT JOIN vmerge AS v ON a.id = v.id
+UNION ALL
+SELECT *
+FROM a LEFT JOIN vmerge AS v ON a.id = v.id;
+
+DROP VIEW vmerge, vmat;
+DROP TABLE a, b;
+
+--echo # Bug#15936817 Table left join view, unmatched rows problem where
+--echo #              view contains an IF
+
+CREATE TABLE small (
+  id INTEGER not null,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE big (
+  id INTEGER not null,
+  PRIMARY KEY (id)
+);
+
+INSERT INTO small VALUES (1), (2);
+INSERT INTO big VALUES (1), (2), (3), (4);
+
+CREATE VIEW small_view AS
+SELECT *, IF (id % 2 = 1, 1, 0) AS is_odd
+FROM small;
+
+CREATE VIEW big_view AS
+SELECT big.*, small_view.id AS small_id, small_view.is_odd
+FROM big LEFT JOIN small_view ON small_view.id = big.id;
+
+SELECT * FROM big_view;
+
+SELECT big.*, small.id AS small_id, small.is_odd
+FROM big LEFT JOIN
+     (SELECT id, IF (id % 2 = 1, 1, 0) AS is_odd FROM small) AS small
+     ON big.id = small.id;
+
+--echo # Check the IS NULL and thruth predicates
+
+SELECT big.*, dt.*
+FROM big LEFT JOIN (SELECT id as dt_id,
+                           id IS NULL AS nul,
+                           id IS NOT NULL AS nnul,
+                           id IS TRUE AS t,
+                           id IS NOT TRUE AS nt,
+                           id IS FALSE AS f,
+                           id IS NOT FALSE AS nf,
+                           id IS UNKNOWN AS u,
+                           id IS NOT UNKNOWN AS nu
+                    FROM small) AS dt
+     ON big.id=dt.dt_id;
+
+--echo # Check comparison predicates
+
+SELECT big.*, dt.*
+FROM big LEFT JOIN (SELECT id as dt_id,
+                           id = 1 AS eq,
+                           id <> 1 AS ne,
+                           id > 1 AS gt,
+                           id >= 1 AS ge,
+                           id < 1 AS lt,
+                           id <= 1 AS le,
+                           id <=> 1 AS equal
+                    FROM small) AS dt
+     ON big.id=dt.dt_id;
+
+--echo # Check CASE, NULLIF and COALESCE
+
+SELECT big.*, dt.*
+FROM big LEFT JOIN (SELECT id as dt_id,
+                           CASE id WHEN 0 THEN 0 ELSE 1 END AS simple,
+                           CASE WHEN id=0 THEN NULL ELSE 1 END AS cond,
+                           NULLIF(1, NULL) AS nullif,
+                           IFNULL(1, NULL) AS ifnull,
+                           COALESCE(id) AS coal,
+                           INTERVAL(NULL, 1, 2, 3) as intv,
+                           IF (id % 2 = 1, NULL, 1) AS iff
+                    FROM small) AS dt
+     ON big.id=dt.dt_id;
+
+DROP VIEW small_view, big_view;
+DROP TABLE small, big;
+
+ 
+ --echo #
+ --echo # Bug#16893426 OPTIMIZER FAILS TO OPTIMIZE EXPRESSION OF THE
+ --echo #              FORM 'FOO' IS NULL
+ --echo #
+ 
+ CREATE TABLE t1 (
+   id int(11) NOT NULL PRIMARY KEY,
+   name varchar(20),
+   INDEX (name)
+ ) ENGINE=InnoDB;
+ 
+ CREATE TABLE t2 (
+   id int(11) NOT NULL PRIMARY KEY,
+   f_id int(11),
+   FOREIGN KEY (f_id) REFERENCES t2(id)
+ ) ENGINE=InnoDB;
+ 
+ INSERT INTO t1 VALUES (1,'A1'),(2,'A2'),(3,'B');
+ INSERT INTO t2 VALUES (1,1),(2,2),(3,2),(4,3),(5,3);
+ 
+ -- disable_result_log
+ ANALYZE TABLE t1;
+ ANALYZE TABLE t2;
+ -- enable_result_log
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE t1.name LIKE 'A%';
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ DEALLOCATE PREPARE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE t1.name LIKE 'A%' OR 'ASDFGH' IS NULL;
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ DEALLOCATE PREPARE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE 0 OR 0;
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ DEALLOCATE PREPARE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE 1 OR 0;
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ DEALLOCATE PREPARE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE NOT(NOT (0)) OR 1;
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ DEALLOCATE PREPARE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE NOT(NOT (0)) OR 0 = 1;
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ DEALLOCATE PREPARE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE 1 IS NOT TRUE AND 0 IS TRUE ;
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE 'a' LIKE 1 OR 2 LIKE '2%' ;
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE 1 IS NOT NULL;
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE (1<2 AND 2<3) OR (1>1 AND 2<3);
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE (1>=1 AND 2<=2) OR (1=1 AND 2<3);
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ 
+ let $query= SELECT * FROM t2 LEFT JOIN t1 ON t2.f_id = t1.id
+              WHERE (1<>1 AND 2=2) OR (1 BETWEEN 0 AND 2);
+ eval EXPLAIN $query;
+ eval $query;
+ eval PREPARE stmt FROM "$query";
+ EXECUTE stmt;
+ 
+ DROP TABLE t1,t2;
+ 
+ --echo #
+ --echo # Bug#22103398 BUG#16893426:SIG11 IN
+ --echo # ST_SELECT_LEX::FLATTEN_SUBQUERIES | SQL_RESOLVER.CC
+ --echo #
+ 
+ CREATE TABLE t1(c1 INT,	c2 INT,	c3 CHAR(1), KEY(c3))ENGINE=InnoDB;
+ CREATE TABLE t2(c1 INT,	c2 INT,	c3 CHAR(1), KEY(c3))ENGINE=InnoDB;
+ 
+ SELECT b.c2 AS f1 FROM (t2 AS a JOIN
+                        ((t2 AS b JOIN t2 AS c ON (c.c3=b.c3)))
+                        ON (c.c1=b.c2))
+     WHERE (c.c3 IN (SELECT subquery1_b.c3 AS subquery1_f1
+                     FROM (t1 AS subquery1_a JOIN t2 AS subquery1_b ON
+                           (subquery1_b.c1=subquery1_a.c1)))) AND
+           (a.c1=a.c1 AND (SELECT''FROM DUAL) IS NULL);
+ DROP TABLE t1, t2;
+ 
+ --echo # End of Bug#16893426
+ 
+
+--echo # Bug#22561937 Wrong result on outer join with multiple join conditions
+--echo #              and derived table
+
+CREATE TABLE t1 (
+  col_int INT,
+  pk INT NOT NULL,
+  PRIMARY KEY (pk)
+);
+
+INSERT INTO t1 VALUES
+ (2,1), (2,2), (6,3), (4,4), (7,5),
+ (188,6), (0,7), (6,8), (0,9), (9,10);
+
+CREATE TABLE t2 (
+  pk INT NOT NULL,
+  col_int INT,
+  PRIMARY KEY (pk)
+);
+
+INSERT INTO t2 VALUES
+ (1,0), (2,0), (3,2), (4,NULL), (5,2),
+ (6,3), (7,3), (8,100), (9,3), (10,6);
+
+let $query=
+SELECT table2.pk, table1.col_int
+FROM t2 AS table1
+     LEFT JOIN t1 AS table2
+     ON table2.pk < table1.col_int AND
+        table2.pk = table1.col_int;
+
+eval explain $query;
+eval $query;
+
+let $query=
+SELECT table2.pk, table1.col_int
+FROM t2 AS table1
+     LEFT JOIN (SELECT * FROM t1) AS table2
+     ON table2.pk < table1.col_int AND
+        table2.pk = table1.col_int;
+
+eval explain $query;
+eval $query;
+
+DROP TABLE t1, t2;
+
+--echo # Bug#22671557: Wrong results on JOIN when composite index is present
+
+CREATE TABLE t1 (
+  col_int INT DEFAULT NULL,
+  col_int_key INT DEFAULT NULL,
+  pk INT NOT NULL,
+  PRIMARY KEY (pk),
+  KEY test_idx (col_int_key,col_int)
+);
+
+INSERT INTO t1 VALUES (0, -7, 1), (9, NULL, 15), (182, NULL, 25);
+
+CREATE TABLE t2 (
+  col_int INT DEFAULT NULL,
+  pk INT NOT NULL,
+  PRIMARY KEY (pk)
+);
+
+INSERT INTO t2 VALUES (NULL, 4), (-208, 5), (5, 6), (NULL, 75);
+
+CREATE TABLE t3 (
+  col_datetime_key DATETIME DEFAULT NULL,
+  pk INT NOT NULL,
+  PRIMARY KEY (pk)
+);
+
+INSERT INTO t3 VALUES ('1970-01-01 00:00:00', 5);
+
+CREATE TABLE t4 (
+  col_int INT DEFAULT NULL,
+  pk INT NOT NULL,
+  col_int_key INT DEFAULT NULL,
+  PRIMARY KEY (pk),
+  KEY col_int_key (col_int_key)
+);
+
+INSERT INTO t4 VALUES (0, 15, 6), (9, 16, 6);
+
+--sorted_result
+SELECT alias2.col_datetime_key
+FROM
+    t1 AS alias1
+      LEFT JOIN t3 AS alias2
+        LEFT JOIN t2 AS alias3
+          LEFT JOIN t4 AS alias4
+          ON alias3.pk = alias4.col_int_key
+        ON alias2.pk = alias3.col_int
+      ON alias1.col_int = alias4.col_int
+;
+
+DROP TABLE t1, t2, t3, t4;
+
+--echo # Bug#22833364: Left join returns incorrect results on the outer side
+
+CREATE TABLE ta (
+  a1 varchar(1024) NOT NULL,
+  a2 int NOT NULL,
+  KEY user_id(a2)
+);
+
+INSERT INTO ta (a1, a2) VALUES ('row1', 4), ('row2', 4);
+
+CREATE TABLE tb (
+  b1 int NOT NULL,
+  b2 varchar(1024) NOT NULL,
+  b3 int NOT NULL,
+  PRIMARY KEY (b1)
+);
+
+INSERT INTO tb (b1, b2, b3) VALUES
+ (1, 'text1', 0), (2, 'text2', 0), (3, 'text3', 1), (4, 'text4', 1);
+
+let $query=
+SELECT ta.a1, tb.b1, tb.b2
+FROM ta LEFT OUTER JOIN tb
+     ON ta.a2 = tb.b1 AND tb.b3 = 0;
+
+eval explain $query;
+eval $query;
+
+DROP TABLE ta, tb;
+
+--echo # Bug#23079533: Left join on PK + extra condition doesn't return match
+
+CREATE TABLE m (
+  machineid VARCHAR(32) NOT NULL,
+  orderid bigint unsigned DEFAULT NULL,
+  extra bigint unsigned DEFAULT NULL,
+  PRIMARY KEY (machineid)
+);
+
+INSERT INTO m (machineid, orderid)
+VALUES ('m1', NULL), ('m2', 2), ('m3', NULL), ('m4', NULL);
+
+CREATE TABLE o (
+  orderid bigint unsigned NOT NULL,
+  machineid VARCHAR(32) DEFAULT NULL,
+  PRIMARY KEY (orderid)
+);
+
+INSERT INTO o (orderid, machineid)
+VALUES (1, 'm2'), (2, 'm2');
+
+--sorted_result
+SELECT o.*,'|' as sep, m.*
+FROM o LEFT JOIN m
+     ON m.machineid = o.machineid AND
+        m.orderid = o.orderid;
+
+DROP TABLE m, o;
+
+--echo # Bug#23086825: Incorrect query results using left join against derived
+
+CREATE TABLE t1 (
+  adslot varchar(5) NOT NULL
+);
+
+INSERT INTO t1(adslot) VALUES ('1'), ('2'), ('3');
+
+CREATE TABLE t2 (
+  ionumber varchar(20) NOT NULL,
+  adslot varchar(5) NOT NULL
+);
+
+INSERT INTO t2 (ionumber, adslot) VALUES ('01602', 1), ('01602', 3);
+
+CREATE TABLE t3 (
+  ionumber varchar(20) NOT NULL,
+  ioattribute varchar(5) NOT NULL,
+  PRIMARY KEY (ionumber)
+);
+INSERT INTO t3 VALUES ('01602', 'BOB'), ('01603', 'SALLY');
+
+--sorted_result
+SELECT s.adslot, lid.ionumber1, lid.ionumber2, lid.ioattribute
+FROM t1 s LEFT JOIN
+     (SELECT lid.adslot,
+             i.ionumber as ionumber1,
+             lid.ionumber as ionumber2,
+             i.ioattribute
+      FROM t2 lid JOIN t3 i
+           USING (ionumber)
+     ) AS lid
+    USING (adslot);
+
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug #26432173: INCORRECT SUBQUERY OPTIMIZATION WITH
+--echo #                LEFT JOIN(SUBQUERY) AND ORDER BY
+--echo #
+
+CREATE TABLE t1 (a INT);
+INSERT t1 values (1),(2),(15),(24),(5);
+CREATE TABLE t2 (t1_a INT, b VARCHAR(10));
+
+#No temp table is used. So correct result.
+let query1=
+SELECT t1.a, subq.st_value
+FROM t1
+LEFT JOIN (SELECT t2.t1_a, 'red' AS st_value
+           FROM t2) AS subq
+  ON subq.t1_a = t1.a;
+
+#Problematic query where const column is in the inner table of outer join.
+let query2=
+SELECT t1.a, subq.st_value
+FROM t1
+LEFT JOIN (SELECT t2.t1_a, 'red' AS st_value
+           FROM t2) AS subq
+  ON subq.t1_a = t1.a
+ORDER BY t1.a;
+
+#fix doesn't apply here since const column is in the outer table of outer join.
+let query3=
+SELECT t1.a, subq.st_value
+FROM (SELECT t2.t1_a, 'red' AS st_value
+      FROM t2) AS subq
+LEFT JOIN t1
+  ON subq.t1_a = t1.a
+ORDER BY t1.a;
+
+ANALYZE TABLE t1, t2;
+eval EXPLAIN $query1;
+eval EXPLAIN $query2;
+eval EXPLAIN $query3;
+
+eval $query1;
+eval $query2;
+eval $query3;
+
+DROP TABLE t1, t2;
+
+--echo # Bug #18898433: EXTREMELY SLOW PERFORMANCE WITH OUTER JOINS AND JOIN
+--echo #                BUFFER.
+--echo #
+
+CREATE TABLE t1 (i INT NOT NULL);
+INSERT INTO t1 VALUES (0),(2),(3),(4);
+CREATE TABLE t2 (i INT NOT NULL);
+INSERT INTO t2 VALUES (0),(1),(3),(4);
+CREATE TABLE t3 (i INT NOT NULL);
+INSERT INTO t3 VALUES (0),(1),(2),(4);
+CREATE TABLE t4 (i INT NOT NULL);
+INSERT INTO t4 VALUES (0),(1),(2),(3);
+let query1=
+SELECT *
+FROM t1 LEFT JOIN
+     (
+       (t2 LEFT JOIN t3 ON t3.i= t2.i)
+       LEFT JOIN t4 ON t3.i= t4.i
+     )ON t2.i= t1.i;
+
+let query2=
+SELECT *
+FROM t1 LEFT JOIN
+     (
+       (t2 INNER JOIN t3 ON t3.i= t2.i)
+       LEFT JOIN t4 ON t3.i= t4.i
+     )ON t2.i= t1.i;
+
+let query3=
+SELECT *
+FROM t1 LEFT JOIN t2 ON t2.i= t1.i
+        LEFT JOIN t3 ON t3.i= t2.i
+        LEFT JOIN t4 ON t3.i= t4.i;
+ANALYZE TABLE t1, t2, t3, t4;
+eval EXPLAIN $query1;
+eval EXPLAIN $query2;
+eval EXPLAIN $query3;
+
+flush status;
+--sorted_result
+eval $query1;
+--skip_if_hypergraph  # Depends on the query plan.
+SHOW STATUS LIKE 'HANDLER_%';
+
+flush status;
+--sorted_result
+eval $query2;
+--skip_if_hypergraph  # Depends on the query plan.
+SHOW STATUS LIKE 'HANDLER_%';
+
+flush status;
+--sorted_result
+eval $query3;
+--skip_if_hypergraph  # Depends on the query plan.
+SHOW STATUS LIKE 'HANDLER_%';
+
+DROP TABLE t1, t2, t3, t4;
+
+
+--echo #
+--echo # Bug #26627181: WRONG RESULT WITH LEFT JOIN + DERIVED TABLES
+--echo #
+
+CREATE TABLE t1 (id INT);
+CREATE TABLE t2 (id INT);
+INSERT INTO t1 VALUES (1), (2);
+INSERT INTO t2 VALUES (1);
+
+let query1=
+SELECT *
+FROM (SELECT id
+      FROM t1) AS a
+    LEFT JOIN
+    (SELECT id, 2 AS tall
+     FROM t2) AS b
+    ON a.id = b.id
+WHERE b.tall IS NOT NULL;
+
+eval EXPLAIN $query1;
+eval $query1;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug #23169204: Left join + merged derived table + group by = bad result
+--echo #
+
+CREATE TABLE t1(doc text);
+CREATE TABLE t2(a INTEGER DEFAULT NULL);
+INSERT INTO t2 VALUES(1);
+
+# Derived table is materialized due to LIMIT.
+# t1 is empty so the derived table is empty, so NULL-complementing produces
+# NULL for 'je' in the SELECT list.
+SELECT je
+FROM t2 LEFT JOIN (SELECT 1 AS je FROM t1 LIMIT 1) AS dt ON FALSE;
+
+SELECT je
+FROM t2 LEFT JOIN (SELECT 1 AS je FROM t1 LIMIT 1) AS dt ON FALSE
+GROUP BY je;
+
+# Remove LIMIT (to have the derived table be merged), produces NULL too.
+
+SELECT je
+FROM t2 LEFT JOIN (SELECT 1 AS je FROM t1) AS dt ON FALSE;
+
+SELECT je
+FROM t2 LEFT JOIN (SELECT 1 AS je FROM t1) AS dt ON FALSE
+GROUP BY je;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#22489105 WL#9571 : SIG11 IN ITEM_SUBSELECT::EXEC | SQL/ITEM_SUBSELECT.CC
+--echo #
+SELECT (SELECT * FROM (SELECT 'a') t) AS f1 HAVING (f1 = 'a' OR TRUE);
+SELECT (SELECT * FROM (SELECT 'a') t) + 1 AS f1 HAVING (f1 = 'a' OR TRUE);
+SELECT 1 + (SELECT * FROM (SELECT 'a') t) AS f1 HAVING (f1 = 'a' OR TRUE);
+
+--echo #
+--echo # Bug#28237111: WL#9571: TABLE FULL ERROR
+--echo #
+
+CREATE TABLE t1 (pk INTEGER, f1 INTEGER, primary key(pk));
+CREATE TABLE t2 (pk INTEGER, f1 INTEGER, primary key(pk));
+CREATE TABLE t3 (pk INTEGER);
+
+INSERT INTO t1 VALUES (1,1),(2,1),(3,1);
+INSERT INTO t2 VALUES (1,1),(2,1),(3,1);
+INSERT INTO t3 VALUES (1);
+
+SELECT  * FROM (t1 RIGHT JOIN
+                (SELECT * FROM t3 WHERE (DAYNAME('1995')))  AS table2 ON
+                (( t1.f1 ,t1.pk) IN (SELECT 7,4 UNION SELECT 9,2))) WHERE
+(NOT EXISTS (SELECT t1.f1 FROM (t1 INNER JOIN t2 ON (t1.pk=t2.f1))
+             WHERE 0 IS NOT NULL)) AND t1.f1 >  50;
+
+DROP TABLE t3,t1,t2;
+
+--echo #
+--echo # Bug#28341790: WL#9571: SIG11 IN ITEM_COND::FIX_FIELDS() AT SQL/ITEM_CMPFUNC.CC
+--echo #
+
+CREATE TABLE t1 (col_varchar varchar(1) DEFAULT NULL);
+INSERT INTO t1 VALUES ('Z') ;
+CREATE TABLE t2 (col_varchar varchar(1) DEFAULT NULL);
+INSERT INTO t2 VALUES ('Z') ;
+
+PREPARE prep_stmt FROM " SELECT 1 FROM ( ( SELECT * FROM t1 WHERE col_varchar
+>= 1 )  AS table1 RIGHT JOIN t2 ON ( ( NULL < NULL ) IS NULL OR 1 = 0 ) ) " ;
+
+EXECUTE prep_stmt ;
+EXECUTE prep_stmt ;
+
+DROP TABLE t1,t2;
+
+--echo #
+--echo # More coverage for IS TRUE in LEFT JOIN conditions
+--echo #
+
+CREATE TABLE t1(c1 INT);
+INSERT INTO t1 VALUES(1),(2);
+CREATE TABLE t2(c2 INT);
+INSERT INTO t2 VALUES(1);
+# returns two rows
+SELECT * FROM t1 LEFT JOIN t2 ON c1=c2;
+# returns one row, c1=2, execute as left join
+SELECT * FROM t1 LEFT JOIN t2 ON c1=c2 WHERE c2 IS NULL;
+# returns one row, c1=1, execute as inner join
+SELECT * FROM t1 LEFT JOIN t2 ON c1=c2 WHERE c2 IS NOT NULL;
+# returns one row, c1=1, execute as left join
+SELECT * FROM t1 LEFT JOIN t2 ON c1=c2 WHERE (c2 IS NOT NULL) = 1;
+# same
+SELECT * FROM t1 LEFT JOIN t2 ON c1=c2 WHERE (c2 IS NOT NULL) IS TRUE;
+# returns one row, c1=2, execute as left join
+SELECT * FROM t1 LEFT JOIN t2 ON c1=c2 WHERE (c2 IS NOT NULL) = 0;
+# same
+SELECT * FROM t1 LEFT JOIN t2 ON c1=c2 WHERE (c2 IS NOT NULL) IS FALSE;
+
+DROP TABLE t1,t2;
+
+--echo #
+--echo # Bug#29402481: INCORRECT RESULT FROM OUTER JOIN QUERIES
+--echo #
+
+CREATE TABLE t1 (
+  pk int primary key auto_increment,
+  col_int_unique int unique
+) ENGINE=InnoDB;
+
+INSERT INTO t1(col_int_unique) values (6),(7);
+
+CREATE TABLE t2 (
+  pk int primary key auto_increment,
+  col_int_key int(11) DEFAULT NULL,
+  col_int_unique int(11) DEFAULT NULL,
+  UNIQUE KEY `ix2` (col_int_key,col_int_unique),
+  KEY col_int_key (col_int_key)
+) ENGINE=InnoDB;
+
+# t2 intentionally left empty. Insert of values not matching
+# join-cond would have had the same effect.
+
+CREATE TABLE t3 (
+  pk int NOT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO t3(pk) values (6),(7);
+
+# Test case check that last predicate term in join condition for t3
+# 't1.col_int_unique = t2.col_int_key', is not eliminated in optimizer
+# by test_if_ref(), even if it is 'covered' by the REF join condition
+# used by t2: t2 rows may be NULL-complimented when t3 join-cond
+# is evaluated, thus it is needed to exclude match on 't2.col_int_key'
+# being NULL.
+
+SELECT STRAIGHT_JOIN t1.col_int_unique, t2.col_int_key, t3.pk
+  FROM
+    (t1 LEFT JOIN t2 ON t1.col_int_unique = t2.col_int_key)
+        LEFT JOIN t3 ON t3.pk = t1.col_int_unique AND
+	                t1.col_int_unique = t2.col_int_key;
+
+
+DROP TABLE t1,t2,t3;
+
+
+--echo #
+--echo # Bug#29493830 CONST'IFIED OUTER JOIN RETURN INCORRECT RESULTS
+--echo #
+
+CREATE TABLE t1 (
+  col_int_unique INT DEFAULT NULL,
+  col_int_key INT DEFAULT NULL,
+  UNIQUE KEY col_int_unique (col_int_unique)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (5,0);
+
+CREATE TABLE t2 (
+  col_char_16_unique char(16) DEFAULT NULL,
+  col_int_key INT DEFAULT NULL,
+  col_int_unique INT DEFAULT NULL,
+  UNIQUE KEY col_int_unique (col_int_unique)
+) ENGINE=InnoDB;
+
+INSERT INTO t2 VALUES ("just",21,5);
+
+CREATE TABLE t3 (
+  col_int INT DEFAULT NULL,
+  col_char_16_unique CHAR(16) DEFAULT NULL,
+  UNIQUE KEY col_char_16_unique (col_char_16_unique)
+) ENGINE=InnoDB;
+
+INSERT INTO t3 VALUES (9,"foo");
+
+CREATE TABLE t4 (
+  col_int INT DEFAULT NULL,
+  col_int_unique INT DEFAULT NULL,
+  UNIQUE KEY col_int_unique (col_int_unique)
+) ENGINE=InnoDB;
+
+INSERT INTO t4 VALUES (9,5);
+
+# t3 will be marked by the optimizer as 'Impossible ON condition'
+# and const optimized as a NULL row. However the optimizer failed
+# to set 'TABLE::const_table = true'. When later also const optimizing
+# t4, join_read_const_table() failed to evaluate the predicate term
+# 't3.col_int = t4.col_int' on t4. -> incorrect result.
+
+let query = SELECT STRAIGHT_JOIN
+  t3.col_int, t4.col_int,
+  t3.col_int = t4.col_int or t4.col_int IS NULL
+  FROM (t1
+    LEFT JOIN t2
+    ON t1.col_int_key = t2.col_int_key AND
+       t1.col_int_unique = t2.col_int_unique
+    LEFT JOIN t3
+    ON t3.col_char_16_unique = t2.col_char_16_unique
+    LEFT JOIN t4
+    ON t4.col_int = t3.col_int AND    #Note, this pred term
+       t4.col_int_unique = t1.col_int_unique
+ ) WHERE t1.col_int_unique = 5;
+
+eval explain $query;
+eval $query;
+
+DROP TABLE t1, t2, t3, t4;
+
+--echo #
+--echo # Bug #30659532: WL#13476: DIFFERENT NUMBER OF ROWS WITH NESTED LOOP JOINS
+--echo #
+
+CREATE TABLE t1 (
+  pk INTEGER NOT NULL
+);
+
+INSERT INTO t1 VALUES (1);
+INSERT INTO t1 VALUES (2);
+
+CREATE TABLE t2 (
+  pk INTEGER NOT NULL,
+  PRIMARY KEY (pk)
+);
+
+INSERT INTO t2 VALUES (1);
+INSERT INTO t2 VALUES (2);
+INSERT INTO t2 VALUES (3);
+
+CREATE TABLE t3 (
+  f1 INTEGER,
+  f2 INTEGER,
+  KEY k2 (f2)
+);
+
+INSERT INTO t3 VALUES (NULL,NULL);
+INSERT INTO t3 VALUES (NULL,295010100);
+INSERT INTO t3 VALUES (NULL,NULL);
+INSERT INTO t3 VALUES (NULL,-1762438755);
+INSERT INTO t3 VALUES (NULL,4);
+
+ANALYZE TABLE t1, t2, t3;
+
+# For BKA, verify that the multi-equality rewriting of the MRR iterator
+# (which is really unneeded in this case, but still done) doesn't change
+# the condition on t1.
+let $query =
+  SELECT * FROM t1 LEFT JOIN t2 ON t1.pk = t2.pk LEFT JOIN t3 ON t2.pk = t3.f2 WHERE t2.pk < 5;
+
+--skip_if_hypergraph  # Depends on the query plan.
+eval EXPLAIN FORMAT=tree $query;
+eval $query;
+
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug #30654713: WL#13476: DIFFERENT ROWS WITH BATCHED KEY ACCESS LEFT JOIN
+--echo #
+
+CREATE TABLE t1 (
+  col_int INTEGER,
+  a INTEGER,
+  b varchar(10),
+  KEY key_a (a)
+);
+
+INSERT INTO t1 VALUES (5,NULL,'p');
+INSERT INTO t1 VALUES (6,NULL,'');
+INSERT INTO t1 VALUES (7,NULL,'');
+INSERT INTO t1 VALUES (8,NULL,'Z');
+INSERT INTO t1 VALUES (9,4,'g');
+INSERT INTO t1 VALUES (10,NULL,'if');
+INSERT INTO t1 VALUES (11,NULL,'j');
+INSERT INTO t1 VALUES (12,9,'');
+
+CREATE TABLE t2 (
+  a INTEGER,
+  b varchar(10),
+  KEY key_b (b)
+);
+
+INSERT INTO t2 VALUES (1,'j');
+INSERT INTO t2 VALUES (2,'o');
+INSERT INTO t2 VALUES (3,'z');
+INSERT INTO t2 VALUES (4,'really');
+
+ANALYZE TABLE t1, t2;
+
+let $query =
+  SELECT t1.col_int as t1_ci, t1.a as t1_a, t1.b as t1_b, t2.a as t2_a, t2.b as t2_b, t3.col_int as t3_ci, t3.a as t3_a, t3.b as t3_b
+  FROM t1
+  LEFT JOIN ( t2 LEFT JOIN t1 AS t3 ON t2.a=t3.a )
+    ON t1.b = t2.b;
+
+# Verify that we've got BKA (in join_outer_bka.test) on the innermost join,
+# but not on the outermost, because that join is not right-deep.
+--skip_if_hypergraph  # No BKA support.
+eval EXPLAIN format=tree $query;
+--sorted_result
+eval $query;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#30520749 - REGRESSION: LEFT JOIN WITH IMPOSSIBLE ON CONDITION PERFORMS SLOWLY
+--echo #
+
+# Same test as in hash_join.test, just for nested loop join.
+
+set optimizer_switch='block_nested_loop=off';
+
+CREATE TABLE t1 ( f1 INTEGER );
+INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
+CREATE TABLE t2 AS SELECT * FROM t1;
+ANALYZE TABLE t1, t2;
+
+# Conditions referring to no sides should be pushed, and the entire right side
+# should be removed.
+--skip_if_hypergraph  # Depends on the query plan.
+EXPLAIN FORMAT=tree SELECT * FROM t1 LEFT JOIN t2 ON 1=2;
+
+DROP TABLE t1, t2;
+
+set optimizer_switch='block_nested_loop=on';
+
+--echo #
+--echo # Bug #31252625: DATA IN WRONG ROW ON LEFT JOIN
+--echo #
+
+CREATE TABLE t1 (
+  id INTEGER NOT NULL,
+  b INTEGER,
+  PRIMARY KEY (id)
+);
+INSERT INTO t1 VALUES (17,NULL);
+INSERT INTO t1 VALUES (136,564);
+INSERT INTO t1 VALUES (137,NULL);
+
+CREATE TABLE t2 (
+  id INTEGER NOT NULL,
+  PRIMARY KEY (id)
+);
+INSERT INTO t2 VALUES (564);
+
+ANALYZE TABLE t1, t2;
+SELECT * FROM t1 LEFT JOIN t2 ON t1.b = t2.id GROUP BY t1.id;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#33639644: sig11 in CreateIteratorFromAccessPath
+--echo #
+CREATE TABLE t1 (x INTEGER);
+INSERT INTO t1 VALUES (1);
+CREATE TABLE t2 (x INTEGER);
+INSERT INTO t2 VALUES (1), (2), (3), (4);
+WITH subq(x) AS (SELECT 1 AS x FROM t1 AS t1a, t1 AS t1b, t2 WHERE FALSE)
+SELECT 1 FROM t1 LEFT JOIN subq ON t1.x = subq.x ORDER BY subq.x;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#34668756: impossible on not optimized in 8.x like 5.6
+--echo #
+CREATE TABLE t1 (f1 INT, f2 INT);
+CREATE TABLE t2 (f1 INT, f2 INT);
+CREATE TABLE t3 (f1 INT, f2 INT);
+INSERT INTO t1 VALUES(1, 10), (2, 20), (3, 30), (4, 40);
+INSERT INTO t2 VALUES(1, 10), (2, 20), (5, 30), (6, 40);
+INSERT INTO t3 VALUES(1, 20), (3, 30), (7, 40), (8, 50);
+
+ANALYZE TABLE t1, t2, t3;
+
+#Inner-joined tables with always false join condition and false WHERE clause
+EXPLAIN
+SELECT t1.f1
+FROM t1 JOIN t2 ON t1.f1 = t2.f2 AND 1=2;
+EXPLAIN
+SELECT t1.f1
+FROM t1 JOIN t2 ON t1.f1 = t2.f2
+WHERE 1=2;
+EXPLAIN
+SELECT t1.f1
+FROM t1 JOIN t2 ON t1.f1 = t2.f2 AND 1=2 JOIN t3 ON t2.f1=t3.f1 AND 1=2;
+EXPLAIN
+SELECT t1.f1
+FROM t1 JOIN t2 ON t1.f1 = t2.f2 JOIN t3 ON t2.f1=t3.f1
+WHERE 1=2;
+
+#Outer-joined tables with always false join condition and false WHERE clause
+EXPLAIN
+SELECT t1.f1,t2.f1
+FROM t1 LEFT JOIN t2 ON t1.f1=t2.f1 AND t1.f2=t2.f2 AND 1=2;
+EXPLAIN
+SELECT t1.f1,t2.f1
+FROM t1 LEFT JOIN t2 ON t1.f1=t2.f1 AND t1.f2=t2.f2
+WHERE 1=2;
+EXPLAIN
+SELECT t1.f1,t2.f1
+FROM t1 LEFT JOIN t2 ON t1.f1=t2.f1 AND 1=2 LEFT JOIN t3 ON t2.f1=t3.f1 AND 1=2;
+EXPLAIN
+SELECT t1.f1,t2.f1
+FROM t1 LEFT JOIN t2 ON t1.f1=t2.f1 AND 1=2 LEFT JOIN t3 ON t2.f1=t3.f1
+WHERE 1=2;
+
+#Semi join with false WHERE clause
+EXPLAIN
+SELECT f1,f2
+FROM t1 WHERE EXISTS (SELECT t2.f1,t2.f2 FROM t2 WHERE 1=2);
+EXPLAIN
+SELECT f1,f2
+FROM t1 WHERE NOT EXISTS (SELECT t2.f1,t2.f2 FROM t2 WHERE 1=2);
+
+#Anti-join tables with always false join condition and false WHERE clause
+EXPLAIN
+SELECT t2.f1,t2.f2
+FROM t1 RIGHT JOIN t2 ON t1.f1=t2.f1 AND 1=2;
+EXPLAIN
+SELECT t2.f1,t2.f2
+FROM t1 RIGHT JOIN t2 ON t1.f1=t2.f1 AND 1=2
+WHERE t1.f1>NULL;
+
+EXPLAIN
+SELECT t3.f1
+FROM t1 JOIN t2 ON t1.f1=t2.f1 AND 1=2 LEFT JOIN t3 ON t1.f1=t3.f1 AND 1=2
+WHERE 1=2;
+EXPLAIN
+SELECT t3.f1
+FROM t1 JOIN t2 ON t1.f1=t2.f1 LEFT JOIN t3 ON t1.f1=t3.f1 AND 1=2;
+EXPLAIN
+SELECT t2.f1
+FROM t1 RIGHT JOIN t2 ON t1.f1=t2.f1 AND 1=2 LEFT JOIN t3 ON t1.f1=t3.f1 AND 1=2;
+
+DROP TABLES t1,t2,t3;
+
+--echo #
+--echo # Bug#36418426: Even though there is an index, the index is not being used enough when LEFT JOIN.
+--echo #
+
+CREATE TABLE t1 (
+  id int NOT NULL,
+  f1 int NOT NULL,
+  f2 int NOT NULL,
+  f3 int NOT NULL,
+  f4 int NOT NULL,
+  f5 int NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx1 (f2,f3,f4,f5)
+);
+
+INSERT INTO t1 VALUES (16, 25, 35, 45, 55, 65);
+INSERT INTO t1 VALUES (17, 29, 39, 49, 59, 69);
+INSERT INTO t1 VALUES (18, 23, 33, 43, 53, 63);
+INSERT INTO t1 VALUES (19, 27, 37, 47, 57, 67);
+
+CREATE TABLE t2 (
+  id int NOT NULL,
+  f1 int NOT NULL,
+  f2 int NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx2 (f1,f2)
+);
+
+INSERT INTO t2 VALUES (36, 55, 65);
+INSERT INTO t2 VALUES (37, 59, 69);
+INSERT INTO t2 VALUES (38, 53, 63);
+INSERT INTO t2 VALUES (39, 57, 67);
+
+ANALYZE TABLE t1, t2;
+
+EXPLAIN
+SELECT * FROM t2 USE INDEX(idx2) LEFT JOIN t1 USE INDEX(idx1) ON t1.f2=t2.f2 AND t1.f3 = 20 and t1.f4 > 10 and t1.f5>20;
+
+DROP TABLES t1,t2;

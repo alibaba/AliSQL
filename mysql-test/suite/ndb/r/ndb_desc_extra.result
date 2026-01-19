@@ -1,0 +1,452 @@
+create table test.t1 (a int auto_increment primary key, b int) engine=ndb;
+create table test.t2 (a int primary key, b int) engine=ndb;
+Table with auto-inc, initial value
+-- t1 --
+Database: test
+Schema: def
+Name: t1
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 1
+insert into test.t1 (b) values (888);
+select * from test.t1 order by a;
+a	b
+1	888
+Table with auto-inc, new value
+-- t1 --
+Database: test
+Schema: def
+Name: t1
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 2
+insert into test.t1 (a,b) values (12345, 888);
+select * from test.t1 order by a;
+a	b
+1	888
+12345	888
+Table with auto-inc, forced value
+-- t1 --
+Database: test
+Schema: def
+Name: t1
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 12346
+insert into test.t1 (b) values (888);
+select * from test.t1 order by a;
+a	b
+1	888
+12345	888
+12346	888
+Table with auto-inc, next value after forced
+-- t1 --
+Database: test
+Schema: def
+Name: t1
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 12347
+drop table test.t1;
+create table test.t1 (a int auto_increment primary key, b int) engine=ndb;
+Re-created table with auto-inc, initial value
+-- t1 --
+Database: test
+Schema: def
+Name: t1
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 1
+drop table test.t1;
+create table test.t1 (a int primary key, b int) engine=ndb;
+Re-created table with no auto-inc key
+-- t1 --
+Database: test
+Schema: def
+Name: t1
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+Table with no auto-inc
+drop table test.t1;
+drop table test.t2;
+Show behaviour with a larger autoinc prefetch size
+set ndb_autoincrement_prefetch_sz = 8;
+create table test.t3 (a int auto_increment primary key, b int) engine=ndb;
+Initial value : 1
+-- t3 --
+Database: test
+Schema: def
+Name: t3
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 1
+insert into test.t3 (b) values (1);
+select * from test.t3 order by a;
+a	b
+1	1
+After 1 insertion : 1 + 8 = 9
+-- t3 --
+Database: test
+Schema: def
+Name: t3
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 9
+insert into test.t3 (b) values (1), (1), (1), (1), (1), (1), (1);
+select * from test.t3 order by a;
+a	b
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+After 8 insertions : Still 9
+-- t3 --
+Database: test
+Schema: def
+Name: t3
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 9
+insert into test.t3 (b) values (1);
+select * from test.t3 order by a;
+a	b
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+9	1
+After 9 insertions : 9 + 8 = 17
+-- t3 --
+Database: test
+Schema: def
+Name: t3
+Table id: XXX
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 0
+ForceVarPart: 1
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options: readbackup
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+a Int PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY AUTO_INCR
+b Int NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(a) - UniqueHashIndex
+PRIMARY(a) - OrderedIndex
+-- AutoIncrement info
+AutoIncrement: 17
+drop table test.t3;
+Show embedded-metadata behaviour
+sys/def/SYSTAB_0 has no embedded metadata
+-- SYSTAB_0 --
+Version: Any
+Fragment type: HashMapPartition
+K Value: 6
+Min load factor: 78
+Max load factor: 80
+Temporary table: no
+Number of attributes: 2
+Number of primary keys: 1
+Length of frm data: XXX
+Max Rows: 0
+Row Checksum: 1
+Row GCI: 1
+SingleUserMode: 2
+ForceVarPart: 0
+PartitionCount: 8
+FragmentCount: 8
+PartitionBalance: FOR_RP_BY_LDM
+ExtraRowGciBits: 0
+ExtraRowAuthorBits: 0
+TableStatus: Retrieved
+Table options:
+HashMap: DEFAULT-HASHMAP-3840-8
+-- Attributes --
+SYSKEY_0 Unsigned PRIMARY KEY DISTRIBUTION KEY AT=FIXED ST=MEMORY
+NEXTID Bigunsigned NOT NULL AT=FIXED ST=MEMORY
+-- Indexes -- 
+PRIMARY KEY(SYSKEY_0) - UniqueHashIndex
+-- Embedded metadata
+Packed len : 0
+
+mysql/def/ndb_apply_status has embedded frm
+include/assert_grep.inc [Version 1 embedded metadata (frm)]
+User table has SDI with creating mysqld version
+create table test.user_tab(a int primary key, b varchar(50) default 'Hello', c blob, d json) engine=ndb;
+include/assert_grep.inc [SDI contains MySQL Server version]
+drop table test.user_tab;

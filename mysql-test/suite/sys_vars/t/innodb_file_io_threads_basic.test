@@ -22,7 +22,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/have_innodb.inc
 
 --echo '#---------------------BS_STVARS_027_01----------------------#'
 ####################################################################
@@ -61,30 +60,38 @@ SELECT COUNT(@@GLOBAL.innodb_write_io_threads);
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 
+--disable_warnings
 SELECT @@GLOBAL.innodb_read_io_threads = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_read_io_threads';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.innodb_read_io_threads);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='innodb_read_io_threads';
+--enable_warnings
 --echo 1 Expected
 
+--disable_warnings
 SELECT @@GLOBAL.innodb_write_io_threads = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_write_io_threads';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.innodb_write_io_threads);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='innodb_write_io_threads';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -120,8 +127,8 @@ SELECT COUNT(@@GLOBAL.innodb_read_io_threads);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_read_io_threads = @@SESSION.innodb_read_io_threads;
---echo Expected error 'Readonly variable'
+SELECT innodb_read_io_threads;
+--echo Expected error 'Unknown column'
 
 SELECT COUNT(@@innodb_write_io_threads);
 --echo 1 Expected
@@ -138,7 +145,7 @@ SELECT COUNT(@@GLOBAL.innodb_write_io_threads);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_write_io_threads = @@SESSION.innodb_write_io_threads;
---echo Expected error 'Readonly variable'
+SELECT innodb_write_io_threads;
+--echo Expected error 'Unknown column'
 
 

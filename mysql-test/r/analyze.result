@@ -30,22 +30,17 @@ check table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
 drop table t1;
-create table t1 (a mediumtext, fulltext key key1(a)) charset utf8 collate utf8_general_ci engine myisam;
+create table t1 (a mediumtext, fulltext key key1(a)) charset utf8 collate utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 insert into t1 values ('hello');
 analyze table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 analyze table t1;
 Table	Op	Msg_type	Msg_text
-test.t1	analyze	status	Table is already up to date
-drop table t1;
-CREATE TABLE t1 (a int);
-prepare stmt1 from "SELECT * FROM t1 PROCEDURE ANALYSE()";
-execute stmt1;
-Field_name	Min_value	Max_value	Min_length	Max_length	Empties_or_zeros	Nulls	Avg_value_or_avg_length	Std	Optimal_fieldtype
-execute stmt1;
-Field_name	Min_value	Max_value	Min_length	Max_length	Empties_or_zeros	Nulls	Avg_value_or_avg_length	Std	Optimal_fieldtype
-deallocate prepare stmt1;
+test.t1	analyze	status	OK
 drop table t1;
 create temporary table t1(a int, index(a));
 insert into t1 values('1'),('2'),('3'),('4'),('5');
@@ -53,8 +48,8 @@ analyze table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 show index from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	1	a	1	a	A	5	NULL	NULL	YES	BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	1	a	1	a	A	5	NULL	NULL	YES	BTREE			YES	NULL
 drop table t1;
 End of 4.1 tests
 create table t1(a int);
@@ -64,3 +59,16 @@ optimize table t1 extended;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'extended' at line 1
 drop table t1;
 End of 5.0 tests
+#
+# Bug#33079073 - sql_cmd_call::execute_inner(thd*): assertion
+#                `thd->is_error() || thd->killed' failed.
+# Assertion to check if error state is set in the diagnostics area
+# on ANALYZE TABLE to UPDATE HISTOGRAM non-success in SP is failed.
+#
+CREATE PROCEDURE p() ANALYZE TABLE v UPDATE HISTOGRAM ON w;
+# Without fix, assert condition fails for following statement in the debug
+# build. Statement executes successfully in the non-debug build.
+CALL p();
+Table	Op	Msg_type	Msg_text
+test.v	histogram	Error	Table 'test.v' doesn't exist
+DROP PROCEDURE p;

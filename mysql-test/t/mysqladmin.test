@@ -1,11 +1,8 @@
-# Embedded server doesn't support external clients
---source include/not_embedded.inc
 #
 # Test "mysqladmin ping"
 #
 
 --exec $MYSQLADMIN --no-defaults --default-character-set=latin1 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u root --password= ping 2>&1
-
 
 #
 # Bug#10608 mysqladmin breaks on "database" variable in my.cnf
@@ -17,6 +14,7 @@
 database=db1
 EOF
 
+# Error 7 is EXIT_UNKNOWN_VARIABLE.
 --replace_regex /.*mysqladmin.*: unknown/mysqladmin: unknown/
 --error 7
 --exec $MYSQLADMIN --defaults-file=$MYSQLTEST_VARDIR/tmp/bug10608.cnf --default-character-set=latin1 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u root --password= ping 2>&1
@@ -44,7 +42,7 @@ remove_file $MYSQLTEST_VARDIR/tmp/bug10608.cnf;
 --echo #
 
 --echo # Executing mysqladmin with --sleep=1 and --count=2.
---exec $MYSQLADMIN -u root -S $MASTER_MYSOCK -P $MASTER_MYPORT --sleep=1 --count=2 ping > $MYSQLTEST_VARDIR/tmp/mysqladmin.tmp
+--exec $MYSQLADMIN --no-defaults -u root -S $MASTER_MYSOCK -P $MASTER_MYPORT --sleep=1 --count=2 ping > $MYSQLTEST_VARDIR/tmp/mysqladmin.tmp
 --echo # Done.
 --echo # Displaying the output :
 --cat_file $MYSQLTEST_VARDIR/tmp/mysqladmin.tmp
@@ -61,15 +59,111 @@ remove_file $MYSQLTEST_VARDIR/tmp/bug10608.cnf;
 EOF
 
 --echo # Using --defaults-extra-file option with 'cnf_file'.
---exec $MYSQLADMIN --defaults-extra-file=$MYSQLTEST_VARDIR/tmp/cnf_file -uroot -S $MASTER_MYSOCK -P $MASTER_MYPORT ping 2>&1
+--exec $MYSQLADMIN --defaults-extra-file=$MYSQLTEST_VARDIR/tmp/cnf_file -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT ping 2>&1
 
+# Testing with non-empty --defaults-extra-file with .cnf extension.
+--write_file $MYSQLTEST_VARDIR/tmp/cnf_test.cnf
+[client]
+host = 127.0.0.1
+EOF
+
+--exec $MYSQLADMIN --defaults-extra-file=$MYSQLTEST_VARDIR/tmp/cnf_test.cnf -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT ping 2>&1
+
+--remove_file $MYSQLTEST_VARDIR/tmp/cnf_test.cnf
+
+# Uncomment the following scenarios after Bug#27406735 is fixed
+# Testing with non-existing defaults-extra-file
+#--error 1
+#--exec $MYSQLADMIN --defaults-extra-file=$MYSQLTEST_VARDIR/tmp/nonexistent.cnf -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT ping < /dev/null > /dev/null 2>&1
+
+# Testing with non-existing defaults-file
+#--error 1
+#--exec $MYSQLADMIN --defaults-file=$MYSQLTEST_VARDIR/tmp/nonexistent.cnf -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT --show-warnings ping < /dev/null > /dev/null  2>&1
+
+# Testing defaults-file with with no .cnf or .ini extension
+--exec $MYSQLADMIN --defaults-file=$MYSQLTEST_VARDIR/tmp/cnf_file -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT --show-warnings ping 2>&1
 --remove_file $MYSQLTEST_VARDIR/tmp/cnf_file
+
+# Testing with non-empty --defaults-file with .cnf extension
+--write_file $MYSQLTEST_VARDIR/tmp/cnf_test_df.cnf
+[client]
+host = 127.0.0.1
+EOF
+
+--exec $MYSQLADMIN --defaults-file=$MYSQLTEST_VARDIR/tmp/cnf_test_df.cnf -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT ping 2>&1
+--remove_file $MYSQLTEST_VARDIR/tmp/cnf_test_df.cnf
+
+# Using option relative
+--exec $MYSQLADMIN -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT --sleep=1 --count=2 extended status < /dev/null > /dev/null  2>&1
+
+# Running mysqladmin with --compress
+--exec $MYSQLADMIN -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT --compress --skip-verbose ping 2>&1
+
+# Testing option --login-path
+CREATE USER testadmin_user1;
+FLUSH PRIVILEGES;
+--exec $MYSQL_CONFIG_EDITOR set --login-path=test-login-path1 --user=testadmin_user1 --host=127.0.0.1 2>&1
+--exec $MYSQLADMIN --no-defaults --login-path=test-login-path1 --port=$MASTER_MYPORT ping 2>&1
+DROP USER testadmin_user1;
+--remove_file $MYSQL_TEST_LOGIN_FILE
+
+# Using --server-public-key-path and --get-server-public-key
+CREATE USER tester@localhost IDENTIFIED WITH caching_sha2_password BY 'abcd';
+--exec $MYSQLADMIN --host=127.0.0.1 -P $MASTER_MYPORT --ssl-mode=DISABLED -utester -pabcd --server-public-key-path=$MYSQL_TEST_DIR/std_data/rsa_public_key.pem ping
+--exec $MYSQLADMIN --host=127.0.0.1 -P $MASTER_MYPORT --ssl-mode=DISABLED -utester -pabcd --get-server-public-key ping
+DROP USER tester@localhost;
 
 --echo #
 --echo # Bug#12688860 : SECURITY RECOMMENDATION: PASSWORDS ON CLI
 --echo #
 
---exec $MYSQLADMIN -uroot --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT ping 2>&1
+--exec $MYSQLADMIN --no-defaults -uroot --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT ping 2>&1
 
---echo
+
+--echo #
+--echo # Bug#21796658: OLD-PASSWORD SUBCOMMAND IS STILL IN MYSQLADMIN --HELP IN 5.7
+--echo #
+
+--let $admin_outfile=$MYSQLTEST_VARDIR/tmp/bug21796658.output
+
+--echo # execute mysqladmin --help
+# Returns 1 on normal execution
+--error 1
+--exec $MYSQLADMIN --help 2>&1 > $admin_outfile
+
+--echo # check the output of mysqladmin for old-password
+--let $assert_text= check the output of mysqladmin for old-password
+--let $assert_file= $admin_outfile
+--let $assert_select=old-password
+--let $assert_count=0
+--source include/assert_grep.inc
+
+--echo # cleanup
+--remove_file $admin_outfile
+
+
+--echo #
+--echo # Bug #32798288: MORE MEANINFUL MESSAGE FOR MISSING INCLUDE DIRECTORY
+--echo #
+let $file = $MYSQLTEST_VARDIR/tmp/b32092739.out;
+write_file $file;
+!includedir /nonexistent
+EOF
+let $file2 = $MYSQLTEST_VARDIR/tmp/b32092739_file.out;
+write_file $file2;
+!include /nonexistent
+EOF
+--replace_regex /OS errno.*/OS error/
+--replace_result $file file
+--error 1
+exec $MYSQLADMIN --defaults-file=$file -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT --show-warnings ping 2>&1 ;
+# On windows we skip permission check for configs. Hence (on unix) we need to
+# replace the my_stat error with a simulated my_open (on windows) error.
+--replace_regex /OS errno.*/OS error/ /Can.t get stat of ..nonexistent./File '\\nonexistent' not found/
+--replace_result $file2 file2
+exec $MYSQLADMIN --defaults-file=$file2 -uroot -h localhost --password="" -S $MASTER_MYSOCK -P $MASTER_MYPORT --show-warnings ping 2>&1 ;
+remove_file $file;
+remove_file $file2;
+
+
 --echo End of tests

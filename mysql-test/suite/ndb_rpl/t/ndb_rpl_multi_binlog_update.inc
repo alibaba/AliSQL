@@ -34,10 +34,10 @@
 #    Can act as slave, not binlogging
 #    Identification: connection (srv_slave), config (mysqld.1.slave).
 #  - MySQLD2: 
-#    Can act as slave, binlogging, log-slave-updates = off
+#    Can act as slave, binlogging, log-replica-updates = off
 #    Identification: connection (srv_slave1), config (mysqld.2.slave).
 #  - MySQLD3 
-#    Can act as slave, binlogging, log-slave-updates = on
+#    Can act as slave, binlogging, log-replica-updates = on
 #    Identification: connection (srv_slave2), config (mysqld.3.slave).
 #
 # See rpl_ndb_multi_binlog_update.test for default configuration.
@@ -142,8 +142,9 @@ connection srv_master;
 --echo connection srv_master;
 show variables like 'server_id';
 show variables like 'log_bin';
-show variables like 'log_slave_updates';
---source include/show_binlog_events2.inc
+show variables like 'log_replica_updates';
+let $show_binlog_events_mask_columns=2,5; # Show server_id
+--source include/show_binlog_events.inc
 let $BINLOG_FILENAME=master-bin;
 --source suite/ndb_rpl/t/ndb_rpl_get_binlog_events.inc
 
@@ -155,8 +156,9 @@ connection srv_master1;
 --echo connection srv_master1;
 show variables like 'server_id';
 show variables like 'log_bin';
-show variables like 'log_slave_updates';
---source include/show_binlog_events2.inc
+show variables like 'log_replica_updates';
+# Binlogging disabled, show it's empty
+show binlog events;
 
 connection srv_master2;
 --echo 
@@ -165,8 +167,9 @@ connection srv_master2;
 --echo connection srv_master2;
 show variables like 'server_id';
 show variables like 'log_bin';
-show variables like 'log_slave_updates';
---source include/show_binlog_events2.inc
+show variables like 'log_replica_updates';
+let $show_binlog_events_mask_columns=2,5; # Show server_id
+--source include/show_binlog_events.inc
 let $BINLOG_FILENAME=master-bin;
 --source suite/ndb_rpl/t/ndb_rpl_get_binlog_events.inc
 
@@ -177,8 +180,9 @@ connection srv_slave;
 --echo connection srv_slave;
 show variables like 'server_id';
 show variables like 'log_bin';
-show variables like 'log_slave_updates';
---source include/show_binlog_events2.inc
+show variables like 'log_replica_updates';
+# Binlogging disabled, show it's empty
+show binlog events;
 
 connection srv_slave1;
 --echo 
@@ -187,8 +191,9 @@ connection srv_slave1;
 --echo connection srv_slave1;
 show variables like 'server_id';
 show variables like 'log_bin';
-show variables like 'log_slave_updates';
---source include/show_binlog_events2.inc
+show variables like 'log_replica_updates';
+let $show_binlog_events_mask_columns=2,5; # Show server_id
+--source include/show_binlog_events.inc
 let $BINLOG_FILENAME=slave-master-bin;
 --source suite/ndb_rpl/t/ndb_rpl_get_binlog_events.inc
 
@@ -199,8 +204,9 @@ connection srv_slave2;
 --echo connection srv_slave2;
 show variables like 'server_id';
 show variables like 'log_bin';
-show variables like 'log_slave_updates';
---source include/show_binlog_events2.inc
+show variables like 'log_replica_updates';
+let $show_binlog_events_mask_columns=2,5; # Show server_id
+--source include/show_binlog_events.inc
 let $BINLOG_FILENAME=slave-master-bin;
 --source suite/ndb_rpl/t/ndb_rpl_get_binlog_events.inc
 

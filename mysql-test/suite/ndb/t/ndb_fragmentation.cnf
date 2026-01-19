@@ -1,0 +1,12 @@
+!include ../my.cnf
+
+[cluster_config.1]
+ThreadConfig=main,rep,recv,ldm={count=4}
+ndbd=,,,,,
+ndb_mgmd=
+
+[cluster_config.ndbd.5.1]
+Nodegroup=65536
+
+[cluster_config.ndbd.6.1]
+Nodegroup=65536

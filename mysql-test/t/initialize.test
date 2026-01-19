@@ -1,0 +1,320 @@
+--source include/big_test.inc
+
+
+let BASEDIR= `select @@basedir`;
+let DDIR=$MYSQL_TMP_DIR/installdb_test;
+let MYSQLD_LOG=$MYSQL_TMP_DIR/server.log;
+let extra_args=--no-defaults --innodb_dedicated_server=OFF --console --loose-skip-auto_generate_certs --loose-skip-sha256_password_auto_generate_rsa_keys --skip-ssl --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR;
+let BOOTSTRAP_SQL=$MYSQL_TMP_DIR/tiny_bootstrap.sql;
+let PASSWD_FILE=$MYSQL_TMP_DIR/password_file.txt;
+
+--echo # Save the count of columns in mysql
+--let $mysql_cnt=`SELECT COUNT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='mysql'`
+
+--echo # shut server down
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+--echo # Server is down
+
+--echo #
+--echo # Try --initialize
+--echo #
+
+--echo # Run the server with --initialize
+--exec $MYSQLD $extra_args --initialize --datadir=$DDIR --log-error-verbosity=1 > $MYSQLD_LOG 2>&1
+
+--echo extract the root password
+--perl
+  use strict;
+  my $log= $ENV{'MYSQLD_LOG'} or die;
+  my $passwd_file= $ENV{'PASSWD_FILE'} or die;
+  my $FILE;
+  open(FILE, "$log") or die;
+  while (my $row = <FILE>)
+  {
+    if ($row =~ m/.*A temporary password is generated for root.localhost: ([^ \n][^ \n]*)/)
+    {
+      my $passwd=$1;
+      print "password found\n";
+      my $OUT_FILE;
+      open(OUT_FILE, "> $passwd_file");
+      print OUT_FILE "delimiter lessprobability;\n";
+      print OUT_FILE "let new_pwd=$passwd";
+      print OUT_FILE "lessprobability\n";
+      print OUT_FILE "--delimiter ;\n";
+      close(OUT_FILE);
+    }
+  }
+  close(FILE);
+EOF
+
+source $passwd_file;
+
+--echo # Restart the server against DDIR
+--exec echo "restart:--datadir=$DDIR " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--echo # connect as root
+connect(root_con,localhost,root,$new_pwd,mysql);
+
+--echo # must fail due to password expiration
+--error ER_MUST_CHANGE_PASSWORD
+SELECT 1;
+
+--echo # reset the password
+SET PASSWORD='';
+
+--echo # Check the count of columns in mysql
+--let $cnt=`SELECT COUNT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='mysql';`
+if ($cnt != $mysql_cnt)
+{
+--echo # Column count doesn't match. mtr=$mysql_cnt server=$cnt
+--echo list columns in I_S.COLUMNS for the mysql db
+SELECT TABLE_NAME,COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA='mysql' ORDER BY TABLE_NAME,ORDINAL_POSITION;
+}
+
+--echo # check the user account
+SELECT user, host, plugin, LENGTH(authentication_string)
+  FROM mysql.user ORDER by user;
+
+--echo # Check the sys schema exists with the right object counts
+--echo #
+--echo # If this value differs, also update SYS_PROCEDURE_COUNT within ./client/upgrade/program.cc
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA = 'sys' AND ROUTINE_TYPE = 'PROCEDURE';
+--echo # If this value differs, also update SYS_FUNCTION_COUNT within ./client/upgrade/program.cc
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA = 'sys' AND ROUTINE_TYPE = 'FUNCTION';
+--echo # If this value differs, also update SYS_TABLE_COUNT within ./client/upgrade/program.cc
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'sys' AND TABLE_TYPE = 'BASE TABLE';
+--echo # If this value differs, also update SYS_VIEW_COUNT within ./client/upgrade/program.cc
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'sys' AND TABLE_TYPE = 'VIEW';
+--echo # If this value differs, also update SYS_TRIGGER_COUNT within ./client/upgrade/program.cc
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TRIGGERS WHERE TRIGGER_SCHEMA = 'sys';
+
+CREATE DATABASE test;
+
+--echo # shut server down
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+--echo # Server is down
+
+--echo # close the test connection
+connection default;
+disconnect root_con;
+
+--echo # remove the password file
+remove_file $PASSWD_FILE;
+
+--echo # delete mysqld log
+remove_file $MYSQLD_LOG;
+
+--echo # delete datadir
+--force-rmdir $DDIR
+
+
+--echo #
+--echo # Try --initialize-insecure --init-file
+--echo #
+
+--echo # create bootstrap file
+write_file $BOOTSTRAP_SQL;
+CREATE DATABASE test;
+CREATE TABLE mysql.t1(a INT) ENGINE=innodb;
+INSERT INTO mysql.t1 VALUES (1);
+INSERT INTO mysql.t1 VALUES (2);
+EOF
+
+--echo # Run the server with --initialize-insecure --init-file
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --init-file=$BOOTSTRAP_SQL > $MYSQLD_LOG 2>&1
+
+
+--echo # Restart the server against DDIR
+--exec echo "restart:--datadir=$DDIR " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--echo # connect as root
+connect(root_con,localhost,root,,mysql);
+
+--echo # must pass: no password expiration
+SELECT 1;
+
+--echo # Check the count of columns in mysql
+--let $cnt=`SELECT COUNT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='mysql';`
+--echo # Take out the extra t1 column
+--dec $cnt
+if ($cnt != $mysql_cnt)
+{
+--echo # Column count doesn't match. mtr=$mysql_cnt server=$cnt
+--echo list columns in I_S.COLUMNS for the mysql db
+SELECT TABLE_NAME,COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA='mysql' ORDER BY TABLE_NAME,ORDINAL_POSITION;
+}
+
+--echo # check the user account
+SELECT user, host, plugin, LENGTH(authentication_string)
+  FROM mysql.user ORDER BY user;
+
+--echo # check the result of running --init-file
+SELECT a FROM t1 ORDER BY a;
+
+--echo # shut server down
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+--echo # Server is down
+
+--echo # close the test connection
+connection default;
+disconnect root_con;
+
+--echo # delete mysqld log
+remove_file $MYSQLD_LOG;
+
+--echo # delete bootstrap file
+remove_file $BOOTSTRAP_SQL;
+
+--echo # delete datadir
+--force-rmdir $DDIR
+
+
+--echo #
+--echo # Try --initialize-insecure --init-file=empty_file for error handling
+--echo #
+
+--echo # Run the server with --initialize-insecure --init-file=empty
+--error 1
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --init-file=$NO_SUCH_BOOTSTRAP_SQL > $MYSQLD_LOG 2>&1
+
+--echo # delete mysqld log
+remove_file $MYSQLD_LOG;
+
+--echo # delete datadir
+--force-rmdir $DDIR
+
+
+--echo #
+--echo # Try --initialize-insecure --init-file=relative_path for error handling
+--echo #
+
+--echo # Run the server with --initialize-insecure --init-file=haha.sql
+--error 1
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --init-file=haha.sql > $MYSQLD_LOG 2>&1
+
+--echo # delete mysqld log
+remove_file $MYSQLD_LOG;
+
+--echo # delete datadir
+--force-rmdir $DDIR
+
+
+--echo #
+--echo # Bug#22777039 - MYSQLD --INITIALIZE DOES NOT SUPPORT THE KEYRING_FILE_DATA OPTION
+--echo #
+--exec $MYSQLD $extra_args --datadir=$DDIR --initialize --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --keyring_file_data=$MYSQL_TMP_DIR/keyring $KEYRING_PLUGIN_OPT > $MYSQLD_LOG 2>&1
+
+--echo # delete mysqld log
+remove_file $MYSQLD_LOG;
+
+--echo # delete temp keyring file
+remove_file $MYSQL_TMP_DIR/keyring;
+
+--echo # delete datadir
+--force-rmdir $DDIR
+
+
+--echo #
+--echo # Bug#29584642 DATABASE INITIALISATION FAILURE WITH INNODB_DEFAULT_ROW_FORMAT=REDUNDANT
+--echo #
+--echo # The database initialization would fail without the fix.
+--exec $MYSQLD $extra_args --datadir=$DDIR --initialize --innodb_default_row_format=redundant > $MYSQLD_LOG 2>&1
+
+--echo # delete mysqld log
+remove_file $MYSQLD_LOG;
+
+--echo # delete datadir
+--force-rmdir $DDIR
+
+
+--echo #
+--echo # Bug#29780434 MYSQLD --INITIALIZE FAILS IF LOST+FOUND FROM FILESYSTEM IS IN DATADIR
+--echo #
+
+--echo # Create the data directory and subdirectories.
+--mkdir $DDIR
+--echo # Add a sub-directory in it with a name that is not ignored.
+--mkdir $DDIR/subdir
+--echo # Add a sub-directory in it with a name that is ignored.
+--mkdir $DDIR/lost+found
+--echo # Add a "hidden" sub-directory, starting with '.'.
+--mkdir $DDIR/.hsubdir
+
+--echo # Run the server with --initialize. Should fail due to 'subdir'.
+--error 1
+--exec $MYSQLD $extra_args --initialize --datadir=$DDIR > $MYSQLD_LOG 2>&1
+
+--echo # Remove the subdirectory which is not accepted, and start the server with --initialize again.
+--force-rmdir $DDIR/subdir
+--exec $MYSQLD $extra_args --initialize --datadir=$DDIR > $MYSQLD_LOG 2>&1
+
+--echo # Remove data dir and log file.
+--remove_file $MYSQLD_LOG
+--force-rmdir $DDIR
+
+--echo #
+--echo # Bug#31496943: INITIALIZE WITH INNODB_PAGE_SIZE=4096 GETS
+--echo # "SPECIFIED KEY WAS TOO LONG" ERRORS
+--echo #
+
+let DDIR=$MYSQL_TMP_DIR/initialize_4k;
+let MYSQLD_LOG=$MYSQL_TMP_DIR/initialize_4k.err;
+
+--echo # Create bootstrap file which creates test schema (needed for
+--echo # wait_until_connected
+write_file $BOOTSTRAP_SQL;
+CREATE DATABASE test;
+EOF
+
+--echo # Run the server with --initialize-insecure and 4K pages.
+--exec $MYSQLD --no-defaults --initialize-insecure --innodb_page_size=4K --datadir=$DDIR --init-file=$BOOTSTRAP_SQL >$MYSQLD_LOG 2>&1
+
+--echo # Look for error messages from my_message_stderr (there should be none)
+--perl
+  use strict;
+  my $log= $ENV{'MYSQLD_LOG'} || die "Failed to read MYSQLD_LOG from env: $!";
+  open(FILE, "$log") || die "Failed to open error log: $!";
+  while (<FILE>) {
+     /mysqld: Specified key was too long/ && print;
+  }
+  close(FILE);
+EOF
+
+--echo # Restart the server against the 4k DDIR to make sure it can be started
+--exec echo "restart:--innodb_page_size=4k --datadir=$DDIR " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+SELECT * FROM information_schema.schemata;
+
+--echo # Shut server down
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+--echo # Server is down
+
+--echo # Remove 4k data dir, log, and bootstrap file.
+--remove_file $MYSQLD_LOG
+--remove_file $BOOTSTRAP_SQL
+--force-rmdir $DDIR
+
+--echo #
+--echo # Cleanup
+--echo #
+--echo # Restarting the server
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+

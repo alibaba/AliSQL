@@ -103,11 +103,11 @@ update ignore t1 set id=id+1; # This will change all rows
 select * from t1;
 update ignore t1 set id=1023 where id=1010;
 select * from t1 where parent_id=102;
---replace_column 9 #
+--replace_column 10 #
 explain select level from t1 where level=1;
---replace_column 9 #
+--replace_column 10 #
 explain select level,id from t1 where level=1;
---replace_column 9 #
+--replace_column 10 #
 explain select level,id,parent_id from t1 where level=1;
 select level,id from t1 where level=1;
 select level,id,parent_id from t1 where level=1;
@@ -129,6 +129,7 @@ eval CREATE TABLE t1 (
 replace into t1 (gesuchnr,benutzer_id) values (2,1);
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
 replace into t1 (gesuchnr,benutzer_id) values (1,1);
+--sorted_result
 select * from t1;
 drop table t1;
 
@@ -335,9 +336,13 @@ drop table t1;
 #
 # Test that keys are created in right order
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 
 eval CREATE TABLE t1 (a int not null, b int not null,c int not null,
 key(a),primary key(a,b), unique(c),key(a),unique(b)) ENGINE = $engine_type;
+
+SET sql_mode = default;
+
 --replace_column 7 #
 show index from t1;
 drop table t1;
@@ -456,7 +461,7 @@ update ignore t1 set id=id+1; # This will change all rows
 select * from t1;
 update ignore t1 set id=1023 where id=1010;
 select * from t1 where parent_id=102;
---replace_column 9 #
+--replace_column 10 #
 explain select level from t1 where level=1;
 select level,id from t1 where level=1;
 select level,id,parent_id from t1 where level=1;
@@ -505,6 +510,7 @@ insert into t1 (a) values(1),(2),(3);
 select t1.a from t1 natural join t1 as t2 where t1.b >= @a order by t1.a;
 select a from t1 natural join t1 as t2 where b >= @a order by a;
 update t1 set a=5 where a=1;
+--sorted_result
 select a from t1;
 drop table t1;
 
@@ -543,17 +549,6 @@ INSERT INTO t1 VALUES (1, 1);
 SELECT MIN(B),MAX(b) FROM t1 WHERE t1.a = 1;
 drop table t1;
 
-#
-# Test INSERT DELAYED
-#
-
-eval CREATE TABLE t1 (a int unsigned NOT NULL) engine=$engine_type;
-# Can't test this in 3.23
-# INSERT DELAYED INTO t1 VALUES (1);
-INSERT INTO t1 VALUES (1);
-SELECT * FROM t1;
-DROP TABLE t1;
-
 
 #
 # Crash when using many tables (Test case by Jeremy D Zawodny)
@@ -561,7 +556,7 @@ DROP TABLE t1;
 
 eval create table t1 (a int  primary key,b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int, a1 int, a2 int, a3 int, a4 int, a5 int, a6 int, a7 int, a8 int, a9 int, b1 int, b2 int, b3 int, b4 int, b5 int, b6 int) engine = $engine_type;
 insert into t1 values (1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 where a > 0 and a < 50;
 drop table t1;
 
@@ -574,7 +569,9 @@ insert into t1 values (0,0,0,'ABCDEFGHIJ'),(2,2,2,'BCDEFGHIJK'),(1,1,1,'CDEFGHIJ
 LOCK TABLES t1 WRITE;
 --error ER_DUP_ENTRY
 insert into t1 values (99,1,2,'D'),(1,1,2,'D');
+--sorted_result
 select id from t1;
+--sorted_result
 select id from t1;
 UNLOCK TABLES;
 DROP TABLE t1;
@@ -585,6 +582,7 @@ LOCK TABLES t1 WRITE;
 begin;
 --error ER_DUP_ENTRY
 insert into t1 values (99,1,2,'D'),(1,1,2,'D');
+--sorted_result
 select id from t1;
 insert ignore into t1 values (100,1,2,'D'),(1,1,99,'D');
 commit;
@@ -692,21 +690,21 @@ drop table t1;
 
 eval create table t1 (a int not null, b int not null, c int not null, primary key (a),key(b)) engine=$engine_type;
 insert into t1 values (3,3,3),(1,1,1),(2,2,2),(4,4,4);
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 order by a;
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 order by b;
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 order by c;
---replace_column 9 #
+--replace_column 10 #
 explain select a from t1 order by a;
---replace_column 9 #
+--replace_column 10 #
 explain select b from t1 order by b;
---replace_column 9 #
+--replace_column 10 #
 explain select a,b from t1 order by b;
---replace_column 9 #
+--replace_column 10 #
 explain select a,b from t1;
---replace_column 9 #
+--replace_column 10 #
 explain select a,b,c from t1;
 drop table t1;
 
@@ -722,6 +720,8 @@ drop table t1;
 # Test of multi-table-delete
 #
 
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+
 eval CREATE TABLE t1 (
   number bigint(20) NOT NULL default '0',
   cname char(15) NOT NULL default '',
@@ -735,12 +735,14 @@ eval CREATE TABLE t1 (
   assigned_scps int(11) default '0',
   status tinyint(4) default '0'
 ) ENGINE=$engine_type;
+
 INSERT INTO t1 VALUES (4077711111,'SeanWheeler',90,2,20020111112846,500,00000000000000,-1,2,3,1);
 INSERT INTO t1 VALUES (9197722223,'berry',90,3,20020111112809,500,20020102114532,501,4,10,0);
 INSERT INTO t1 VALUES (650,'San Francisco',0,0,20011227111336,342,00000000000000,-1,1,24,1);
 INSERT INTO t1 VALUES (302467,'Sue\'s Subshop',90,3,20020109113241,500,20020102115111,501,7,24,0);
 INSERT INTO t1 VALUES (6014911113,'SudzCarwash',520,1,20020102115234,500,20020102115259,501,33,32768,0);
 INSERT INTO t1 VALUES (333,'tubs',99,2,20020109113440,501,20020109113440,500,3,10,0);
+
 eval CREATE TABLE t2 (
   number bigint(20) NOT NULL default '0',
   cname char(15) NOT NULL default '',
@@ -766,6 +768,8 @@ select * from t2;
 select * from t2;
 drop table t1,t2;
 
+SET sql_mode = default;
+
 #
 # A simple test with some isolation levels
 # TODO: Make this into a test using replication to really test how
@@ -776,7 +780,7 @@ eval create table t1 (id int unsigned not null auto_increment, code tinyint unsi
 
 BEGIN;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-SELECT @@tx_isolation,@@global.tx_isolation;
+SELECT @@transaction_isolation, @@global.transaction_isolation;
 insert into t1 (code, name) values (1, 'Tim'), (1, 'Monty'), (2, 'David');
 select id, code, name from t1 order by id;
 COMMIT;
@@ -931,6 +935,12 @@ select * from t1;
 # Range key (in t1)
 update t1,t2 set t1.b=t1.b+2,t2.b=t1.b+10 where t1.b between 3 and 5 and t1.a=t2.a+100;
 select * from t1;
+# It is unspecified whether the assignment of t2.b sees the
+# modification of t1.b on the same row. The hypergraph optimizer
+# chooses a different plan (not using range scan on t1.b, as that
+# prevents immediate update) and does the assignments in a different
+# order.
+--skip_if_hypergraph
 select * from t2;
 
 drop table t1,t2;
@@ -972,10 +982,10 @@ insert into t1 (a) select b from t2;
 insert into t2 (a) select b from t1;
 insert into t1 (a) select b from t2;
 select count(*) from t1;
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 where c between 1 and 2500;
 update t1 set c=a;
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 where c between 1 and 2500;
 drop table t1,t2;
 
@@ -1220,9 +1230,6 @@ drop table t2;
 
 # Test error handling
 
-# Clean up filename -- embedded server reports whole path without .frm,
-# regular server reports relative path with .frm (argh!)
---replace_result \\ / $MYSQL_TEST_DIR . /var/master-data/ / t2.frm t2
 --error 1005
 eval create table t2 (id int(11) not null, id2 int(11) not null, constraint t1_id_fk foreign key (id2,id) references t1 (id)) engine = $engine_type;
 
@@ -1469,11 +1476,8 @@ source include/varchar.inc;
 #
 # Some errors/warnings on create
 #
-
-# Clean up filename -- embedded server reports whole path without .frm,
-# regular server reports relative path with .frm (argh!)
---replace_result \\ / $MYSQL_TEST_DIR . /var/master-data/ / t1.frm t1
-create table t1 (v varchar(65530), key(v));
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+create table t1 (v varchar(65530), key(v)) charset latin1;
 drop table t1;
 create table t1 (v varchar(65536));
 show create table t1;
@@ -1481,11 +1485,11 @@ drop table t1;
 create table t1 (v varchar(65530) character set utf8);
 show create table t1;
 drop table t1;
-
+SET sql_mode = default;
 eval set default_storage_engine=$default;
 
 # InnoDB specific varchar tests
-eval create table t1 (v varchar(16384)) engine=$engine_type;
+eval create table t1 (v varchar(16384)) charset latin1 engine=$engine_type;
 drop table t1;
 
 #

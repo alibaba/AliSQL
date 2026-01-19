@@ -1,300 +1,15 @@
+--source include/no_valgrind_without_big.inc
 --disable_warnings
 DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
 --enable_warnings
 
-####Checking the bit values####
-SELECT 0 + b'0'; 
-SELECT 0 + (0<<0);
-######### INSERT/SELECT######### 
-
-#### Insert and select 0 bit data into the table####
-CREATE TABLE t1(c1 BIT(0));
-CREATE TABLE t2(c1 BIT(0), c2 BIT(0), c3 BIT(0));
-let $i=0;
-while($i){
-let $j=$i/2;
-eval set @v1=$i;
-eval set @v2=$j;
-set @v3=repeat('1',@v1);
-let $STR0= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR0');
-set @v3=repeat('0',@v1);
-let $STR1= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR1');
-set @v3=repeat('01',@v2);
-let $STR2= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR2');
-set @v3=repeat('10',@v2);
-let $STR3= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR3');
-set @v3=repeat('1',@v1);
-set @v4=repeat('01',@v2);
-set @v5=repeat('10',@v2);
-let $STR0= query_get_value(select @v3 as I,I,1);
-let $STR2= query_get_value(select @v4 as I,I,1);
-let $STR3= query_get_value(select @v5 as I,I,1);
-eval INSERT INTO t2 VALUES ("b'$STR0'","b'$STR2","b'$STR3'");
-dec $i;
-}
-INSERT INTO t1 VALUES (b'0');
-INSERT INTO t2 VALUES (b'0', b'0', b'0');
---sorted_result
-SELECT HEX(c1) FROM t1;
---sorted_result
-SELECT HEX(c1),HEX(c2),HEX(c3) FROM t2;
---sorted_result
-SELECT OCT(c1) FROM t1;
---sorted_result
-SELECT OCT(c1),OCT(c2),OCT(c3) FROM t2;
---sorted_result
-SELECT BIN(c1) FROM t1;
---sorted_result
-SELECT BIN(c1),BIN(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1),OCT(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1+0),HEX(c2+1),HEX(c3+2) FROM t2;
---sorted_result
-SELECT OCT(c1+0),OCT(c2+1),OCT(c3+2) FROM t2;
---sorted_result
-SELECT BIN(c1+0),BIN(c2+1),BIN(c3+2) FROM t2;
---sorted_result
-SELECT CONCAT(HEX(c1),HEX(c2),HEX(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(OCT(c1),OCT(c2),OCT(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(BIN(c1),BIN(c2),BIN(c3)) FROM t2;
---error 1439
-CREATE TABLE t3 (c1 BIT(65));
-# Checking for bug #9571
-CREATE TABLE t4(i INT, b BIT NOT NULL);
-ALTER TABLE t4 ADD PRIMARY KEY (i);
-CREATE TABLE t5(c1  BIT(0) NOT NULL PRIMARY KEY, c2  BIT(0));
-CREATE TABLE t6(c1  BIT(0), c2  BIT(0));
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
-
-#Insert permissible NULLs
-INSERT IGNORE INTO t5 VALUES(96,null);
-INSERT INTO t6 VALUES(null,null);
-# Now select using various table access methods (full table scan, range scan, index scan etc.)
-## Full table scan ##
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
---sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
---sorted_result
-SELECT OCT(c2) FROM t5 WHERE c1 = 68;
-## Forward index scan, covering ##
---sorted_result
-SELECT bin(c1) FROM t5;
-## Backward index scan, covering ##
-SELECT oct(c1) FROM t5 ORDER BY c1 DESC;
-## Forward index scan, non-covering ##
-SELECT hex(c1),hex(c2) FROM t5 ORDER BY c1 LIMIT 2 ;
-## Backward index scan, non-covering ##
-SELECT * FROM t5 ORDER BY c1 DESC LIMIT 2 /* comment7 */;
-## ref type access
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 LIMIT 2;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC LIMIT 2 ;
-## Range access, ordered ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1; 
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 LIMIT 2 ;
-## Range access, backwards scan ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'   ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0'  ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
-#Inserting different charachers
-CREATE TABLE t7(c1  BIT(0));
-INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
---sorted_result
-SELECT * FROM t7;
-############# UPDATE ###########
-
-# Update order by limit
-UPDATE t6 SET c1='10' WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Update with arithmetic operations 
-UPDATE t6 SET c1=c2+c1 WHERE c2 < 100;
-
-UPDATE t6 SET c2=c2+100 WHERE c1 >=100 ORDER BY c1 LIMIT 4;
-
-
-# Update with NULL ( NULL to number & number to NULL)
-UPDATE t6 SET c2=NULL WHERE c1=23;
-
-UPDATE t6 SET c2=10 WHERE c2=NULL;
-
-
-# Update range values
-UPDATE t6 SET c1=12 WHERE c1=b'101' AND c2=178;
-
-UPDATE t6 SET c1=c1+2,c2=c1+c2 WHERE c2=46 OR c2=b'1001';
-
-UPDATE t6 SET c2=123 WHERE c1 IN (30,b'101',88);
-
-
-# Update outside range would be clipped to closest endpoints
-UPDATE t6 SET c1=b'1111111111111111111111111111111111111111111111111111111111111111111' WHERE c2 < 10; 
-
-UPDATE t6 SET c2=-1 WHERE c1=94;
-
-
-# Update ignore on bad null error
---sorted_result
-SELECT hex(c1) FROM t5 WHERE c1<>0;
-SET SQL_MODE=STRICT_ALL_TABLES;
---error ER_BAD_NULL_ERROR
-UPDATE t5 SET c1=NULL WHERE c1<>0;
-UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
-
-#Multi table update
---disable_warnings
-UPDATE t5,t6 SET t5.c2=t6.c1+t5.c1, t6.c2=t5.c1+t6.c1 WHERE t5.c1 > 100 OR t6.c2 > 100;
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Update using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-UPDATE t5 SET c2='a' WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-UPDATE t5 SET c2=13 where c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---disable_warnings
-UPDATE t5 SET c2=c2+10 WHERE c1 IN (b'001',b'101',b'111');
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-UPDATE t5,t6 SET t5.c2=t6.c1+t6.c2 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-############# DELETE ###########
-
-TRUNCATE t5;
-TRUNCATE t6;
-
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135),(null,23),(1,null),(null,null);
-
-# Delete by order by limit
-DELETE FROM t6  WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Delete rows with NULL column
-DELETE FROM t6 WHERE c2=NULL;
-
-
-# Delete with range values 
-DELETE FROM t6 WHERE c1=b'101' AND c2=178;
-
-DELETE FROM t6  WHERE c2=46 OR c2=b'1001';
-
-DELETE FROM t6 WHERE c1 IN (30,b'101',88);
-
-
-#Multi table delete
-DELETE t5,t6 FROM t5,t6 WHERE t5.c1 > 100 OR t6.c2 > 100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Delete using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-DELETE FROM t5  WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-DELETE FROM t5 WHERE c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
-DELETE FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-# Droping the tables
-DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
+# Set max_error_count to contain number of warnings in result file
+SET @@session.max_error_count = 64;
 ####Checking the bit values####
 SELECT 0 + b'0'; 
 SELECT 0 + (0<<1);
 ######### INSERT/SELECT######### 
-
+SET SQL_MODE='';
 #### Insert and select 1 bit data into the table####
 CREATE TABLE t1(c1 BIT(1));
 CREATE TABLE t2(c1 BIT(1), c2 BIT(1), c3 BIT(1));
@@ -373,7 +88,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -437,6 +152,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(1));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -480,7 +196,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -661,7 +377,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -725,6 +441,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(2));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -768,7 +485,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -949,7 +666,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -1013,6 +730,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(4));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -1056,7 +774,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -1237,7 +955,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -1301,6 +1019,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(8));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -1344,7 +1063,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -1525,7 +1244,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -1589,6 +1308,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(16));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -1632,7 +1352,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -1813,7 +1533,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -1877,6 +1597,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(32));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -1920,7 +1641,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -2101,7 +1822,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -2165,6 +1886,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(64));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -2208,295 +1930,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
-
-#Multi table update
---disable_warnings
-UPDATE t5,t6 SET t5.c2=t6.c1+t5.c1, t6.c2=t5.c1+t6.c1 WHERE t5.c1 > 100 OR t6.c2 > 100;
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Update using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-UPDATE t5 SET c2='a' WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-UPDATE t5 SET c2=13 where c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---disable_warnings
-UPDATE t5 SET c2=c2+10 WHERE c1 IN (b'001',b'101',b'111');
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-UPDATE t5,t6 SET t5.c2=t6.c1+t6.c2 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-############# DELETE ###########
-
-TRUNCATE t5;
-TRUNCATE t6;
-
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135),(null,23),(1,null),(null,null);
-
-# Delete by order by limit
-DELETE FROM t6  WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Delete rows with NULL column
-DELETE FROM t6 WHERE c2=NULL;
-
-
-# Delete with range values 
-DELETE FROM t6 WHERE c1=b'101' AND c2=178;
-
-DELETE FROM t6  WHERE c2=46 OR c2=b'1001';
-
-DELETE FROM t6 WHERE c1 IN (30,b'101',88);
-
-
-#Multi table delete
-DELETE t5,t6 FROM t5,t6 WHERE t5.c1 > 100 OR t6.c2 > 100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Delete using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-DELETE FROM t5  WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-DELETE FROM t5 WHERE c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
-DELETE FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-# Droping the tables
-DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
-####Checking the bit values####
-SELECT 0 + b'1'; 
-SELECT 0 + (1<<0);
-######### INSERT/SELECT######### 
-
-#### Insert and select 0 bit data into the table####
-CREATE TABLE t1(c1 BIT(0));
-CREATE TABLE t2(c1 BIT(0), c2 BIT(0), c3 BIT(0));
-let $i=0;
-while($i){
-let $j=$i/2;
-eval set @v1=$i;
-eval set @v2=$j;
-set @v3=repeat('1',@v1);
-let $STR0= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR0');
-set @v3=repeat('0',@v1);
-let $STR1= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR1');
-set @v3=repeat('01',@v2);
-let $STR2= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR2');
-set @v3=repeat('10',@v2);
-let $STR3= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR3');
-set @v3=repeat('1',@v1);
-set @v4=repeat('01',@v2);
-set @v5=repeat('10',@v2);
-let $STR0= query_get_value(select @v3 as I,I,1);
-let $STR2= query_get_value(select @v4 as I,I,1);
-let $STR3= query_get_value(select @v5 as I,I,1);
-eval INSERT INTO t2 VALUES ("b'$STR0'","b'$STR2","b'$STR3'");
-dec $i;
-}
-INSERT INTO t1 VALUES (b'1');
-INSERT INTO t2 VALUES (b'1', b'1', b'1');
---sorted_result
-SELECT HEX(c1) FROM t1;
---sorted_result
-SELECT HEX(c1),HEX(c2),HEX(c3) FROM t2;
---sorted_result
-SELECT OCT(c1) FROM t1;
---sorted_result
-SELECT OCT(c1),OCT(c2),OCT(c3) FROM t2;
---sorted_result
-SELECT BIN(c1) FROM t1;
---sorted_result
-SELECT BIN(c1),BIN(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1),OCT(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1+0),HEX(c2+1),HEX(c3+2) FROM t2;
---sorted_result
-SELECT OCT(c1+0),OCT(c2+1),OCT(c3+2) FROM t2;
---sorted_result
-SELECT BIN(c1+0),BIN(c2+1),BIN(c3+2) FROM t2;
---sorted_result
-SELECT CONCAT(HEX(c1),HEX(c2),HEX(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(OCT(c1),OCT(c2),OCT(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(BIN(c1),BIN(c2),BIN(c3)) FROM t2;
---error 1439
-CREATE TABLE t3 (c1 BIT(65));
-# Checking for bug #9571
-CREATE TABLE t4(i INT, b BIT NOT NULL);
-ALTER TABLE t4 ADD PRIMARY KEY (i);
-CREATE TABLE t5(c1  BIT(0) NOT NULL PRIMARY KEY, c2  BIT(0));
-CREATE TABLE t6(c1  BIT(0), c2  BIT(0));
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
-
-#Insert permissible NULLs
-INSERT IGNORE INTO t5 VALUES(96,null);
-INSERT INTO t6 VALUES(null,null);
-# Now select using various table access methods (full table scan, range scan, index scan etc.)
-## Full table scan ##
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
---sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
---sorted_result
-SELECT OCT(c2) FROM t5 WHERE c1 = 68;
-## Forward index scan, covering ##
---sorted_result
-SELECT bin(c1) FROM t5;
-## Backward index scan, covering ##
-SELECT oct(c1) FROM t5 ORDER BY c1 DESC;
-## Forward index scan, non-covering ##
-SELECT hex(c1),hex(c2) FROM t5 ORDER BY c1 LIMIT 2 ;
-## Backward index scan, non-covering ##
-SELECT * FROM t5 ORDER BY c1 DESC LIMIT 2 /* comment7 */;
-## ref type access
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 LIMIT 2;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC LIMIT 2 ;
-## Range access, ordered ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1; 
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 LIMIT 2 ;
-## Range access, backwards scan ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'   ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0'  ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
-#Inserting different charachers
-CREATE TABLE t7(c1  BIT(0));
-INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
---sorted_result
-SELECT * FROM t7;
-############# UPDATE ###########
-
-# Update order by limit
-UPDATE t6 SET c1='10' WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Update with arithmetic operations 
-UPDATE t6 SET c1=c2+c1 WHERE c2 < 100;
-
-UPDATE t6 SET c2=c2+100 WHERE c1 >=100 ORDER BY c1 LIMIT 4;
-
-
-# Update with NULL ( NULL to number & number to NULL)
-UPDATE t6 SET c2=NULL WHERE c1=23;
-
-UPDATE t6 SET c2=10 WHERE c2=NULL;
-
-
-# Update range values
-UPDATE t6 SET c1=12 WHERE c1=b'101' AND c2=178;
-
-UPDATE t6 SET c1=c1+2,c2=c1+c2 WHERE c2=46 OR c2=b'1001';
-
-UPDATE t6 SET c2=123 WHERE c1 IN (30,b'101',88);
-
-
-# Update outside range would be clipped to closest endpoints
-UPDATE t6 SET c1=b'1111111111111111111111111111111111111111111111111111111111111111111' WHERE c2 < 10; 
-
-UPDATE t6 SET c2=-1 WHERE c1=94;
-
-
-# Update ignore on bad null error
---sorted_result
-SELECT hex(c1) FROM t5 WHERE c1<>0;
-SET SQL_MODE=STRICT_ALL_TABLES;
---error ER_BAD_NULL_ERROR
-UPDATE t5 SET c1=NULL WHERE c1<>0;
-UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -2677,7 +2111,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -2741,6 +2175,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(1));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -2784,7 +2219,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -2965,7 +2400,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -3029,6 +2464,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(2));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -3072,7 +2508,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -3253,7 +2689,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -3317,6 +2753,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(4));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -3360,7 +2797,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -3541,7 +2978,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -3605,6 +3042,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(8));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -3648,7 +3086,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -3829,7 +3267,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -3893,6 +3331,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(16));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -3936,7 +3375,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -4117,7 +3556,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -4181,6 +3620,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(32));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -4224,7 +3664,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -4405,7 +3845,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -4469,6 +3909,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(64));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -4512,295 +3953,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
-
-#Multi table update
---disable_warnings
-UPDATE t5,t6 SET t5.c2=t6.c1+t5.c1, t6.c2=t5.c1+t6.c1 WHERE t5.c1 > 100 OR t6.c2 > 100;
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Update using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-UPDATE t5 SET c2='a' WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-UPDATE t5 SET c2=13 where c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---disable_warnings
-UPDATE t5 SET c2=c2+10 WHERE c1 IN (b'001',b'101',b'111');
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-UPDATE t5,t6 SET t5.c2=t6.c1+t6.c2 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-############# DELETE ###########
-
-TRUNCATE t5;
-TRUNCATE t6;
-
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135),(null,23),(1,null),(null,null);
-
-# Delete by order by limit
-DELETE FROM t6  WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Delete rows with NULL column
-DELETE FROM t6 WHERE c2=NULL;
-
-
-# Delete with range values 
-DELETE FROM t6 WHERE c1=b'101' AND c2=178;
-
-DELETE FROM t6  WHERE c2=46 OR c2=b'1001';
-
-DELETE FROM t6 WHERE c1 IN (30,b'101',88);
-
-
-#Multi table delete
-DELETE t5,t6 FROM t5,t6 WHERE t5.c1 > 100 OR t6.c2 > 100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Delete using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-DELETE FROM t5  WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-DELETE FROM t5 WHERE c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
-DELETE FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-# Droping the tables
-DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
-####Checking the bit values####
-SELECT 0 + b'10'; 
-SELECT 0 + (10<<0);
-######### INSERT/SELECT######### 
-
-#### Insert and select 0 bit data into the table####
-CREATE TABLE t1(c1 BIT(0));
-CREATE TABLE t2(c1 BIT(0), c2 BIT(0), c3 BIT(0));
-let $i=0;
-while($i){
-let $j=$i/2;
-eval set @v1=$i;
-eval set @v2=$j;
-set @v3=repeat('1',@v1);
-let $STR0= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR0');
-set @v3=repeat('0',@v1);
-let $STR1= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR1');
-set @v3=repeat('01',@v2);
-let $STR2= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR2');
-set @v3=repeat('10',@v2);
-let $STR3= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR3');
-set @v3=repeat('1',@v1);
-set @v4=repeat('01',@v2);
-set @v5=repeat('10',@v2);
-let $STR0= query_get_value(select @v3 as I,I,1);
-let $STR2= query_get_value(select @v4 as I,I,1);
-let $STR3= query_get_value(select @v5 as I,I,1);
-eval INSERT INTO t2 VALUES ("b'$STR0'","b'$STR2","b'$STR3'");
-dec $i;
-}
-INSERT INTO t1 VALUES (b'10');
-INSERT INTO t2 VALUES (b'10', b'10', b'10');
---sorted_result
-SELECT HEX(c1) FROM t1;
---sorted_result
-SELECT HEX(c1),HEX(c2),HEX(c3) FROM t2;
---sorted_result
-SELECT OCT(c1) FROM t1;
---sorted_result
-SELECT OCT(c1),OCT(c2),OCT(c3) FROM t2;
---sorted_result
-SELECT BIN(c1) FROM t1;
---sorted_result
-SELECT BIN(c1),BIN(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1),OCT(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1+0),HEX(c2+1),HEX(c3+2) FROM t2;
---sorted_result
-SELECT OCT(c1+0),OCT(c2+1),OCT(c3+2) FROM t2;
---sorted_result
-SELECT BIN(c1+0),BIN(c2+1),BIN(c3+2) FROM t2;
---sorted_result
-SELECT CONCAT(HEX(c1),HEX(c2),HEX(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(OCT(c1),OCT(c2),OCT(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(BIN(c1),BIN(c2),BIN(c3)) FROM t2;
---error 1439
-CREATE TABLE t3 (c1 BIT(65));
-# Checking for bug #9571
-CREATE TABLE t4(i INT, b BIT NOT NULL);
-ALTER TABLE t4 ADD PRIMARY KEY (i);
-CREATE TABLE t5(c1  BIT(0) NOT NULL PRIMARY KEY, c2  BIT(0));
-CREATE TABLE t6(c1  BIT(0), c2  BIT(0));
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
-
-#Insert permissible NULLs
-INSERT IGNORE INTO t5 VALUES(96,null);
-INSERT INTO t6 VALUES(null,null);
-# Now select using various table access methods (full table scan, range scan, index scan etc.)
-## Full table scan ##
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
---sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
---sorted_result
-SELECT OCT(c2) FROM t5 WHERE c1 = 68;
-## Forward index scan, covering ##
---sorted_result
-SELECT bin(c1) FROM t5;
-## Backward index scan, covering ##
-SELECT oct(c1) FROM t5 ORDER BY c1 DESC;
-## Forward index scan, non-covering ##
-SELECT hex(c1),hex(c2) FROM t5 ORDER BY c1 LIMIT 2 ;
-## Backward index scan, non-covering ##
-SELECT * FROM t5 ORDER BY c1 DESC LIMIT 2 /* comment7 */;
-## ref type access
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 LIMIT 2;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC LIMIT 2 ;
-## Range access, ordered ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1; 
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 LIMIT 2 ;
-## Range access, backwards scan ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'   ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0'  ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
-#Inserting different charachers
-CREATE TABLE t7(c1  BIT(0));
-INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
---sorted_result
-SELECT * FROM t7;
-############# UPDATE ###########
-
-# Update order by limit
-UPDATE t6 SET c1='10' WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Update with arithmetic operations 
-UPDATE t6 SET c1=c2+c1 WHERE c2 < 100;
-
-UPDATE t6 SET c2=c2+100 WHERE c1 >=100 ORDER BY c1 LIMIT 4;
-
-
-# Update with NULL ( NULL to number & number to NULL)
-UPDATE t6 SET c2=NULL WHERE c1=23;
-
-UPDATE t6 SET c2=10 WHERE c2=NULL;
-
-
-# Update range values
-UPDATE t6 SET c1=12 WHERE c1=b'101' AND c2=178;
-
-UPDATE t6 SET c1=c1+2,c2=c1+c2 WHERE c2=46 OR c2=b'1001';
-
-UPDATE t6 SET c2=123 WHERE c1 IN (30,b'101',88);
-
-
-# Update outside range would be clipped to closest endpoints
-UPDATE t6 SET c1=b'1111111111111111111111111111111111111111111111111111111111111111111' WHERE c2 < 10; 
-
-UPDATE t6 SET c2=-1 WHERE c1=94;
-
-
-# Update ignore on bad null error
---sorted_result
-SELECT hex(c1) FROM t5 WHERE c1<>0;
-SET SQL_MODE=STRICT_ALL_TABLES;
---error ER_BAD_NULL_ERROR
-UPDATE t5 SET c1=NULL WHERE c1<>0;
-UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -4981,7 +4134,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -5045,6 +4198,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(1));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -5088,7 +4242,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -5269,7 +4423,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -5333,6 +4487,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(2));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -5376,7 +4531,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -5557,7 +4712,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -5621,6 +4776,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(4));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -5664,7 +4820,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -5845,7 +5001,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -5909,6 +5065,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(8));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -5952,7 +5109,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -6133,7 +5290,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -6197,6 +5354,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(16));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -6240,7 +5398,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -6421,7 +5579,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -6485,6 +5643,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(32));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -6528,7 +5687,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -6709,7 +5868,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -6773,6 +5932,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(64));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -6816,295 +5976,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
-
-#Multi table update
---disable_warnings
-UPDATE t5,t6 SET t5.c2=t6.c1+t5.c1, t6.c2=t5.c1+t6.c1 WHERE t5.c1 > 100 OR t6.c2 > 100;
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Update using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-UPDATE t5 SET c2='a' WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-UPDATE t5 SET c2=13 where c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---disable_warnings
-UPDATE t5 SET c2=c2+10 WHERE c1 IN (b'001',b'101',b'111');
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-UPDATE t5,t6 SET t5.c2=t6.c1+t6.c2 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-############# DELETE ###########
-
-TRUNCATE t5;
-TRUNCATE t6;
-
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135),(null,23),(1,null),(null,null);
-
-# Delete by order by limit
-DELETE FROM t6  WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Delete rows with NULL column
-DELETE FROM t6 WHERE c2=NULL;
-
-
-# Delete with range values 
-DELETE FROM t6 WHERE c1=b'101' AND c2=178;
-
-DELETE FROM t6  WHERE c2=46 OR c2=b'1001';
-
-DELETE FROM t6 WHERE c1 IN (30,b'101',88);
-
-
-#Multi table delete
-DELETE t5,t6 FROM t5,t6 WHERE t5.c1 > 100 OR t6.c2 > 100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Delete using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-DELETE FROM t5  WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-DELETE FROM t5 WHERE c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
-DELETE FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-# Droping the tables
-DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
-####Checking the bit values####
-SELECT 0 + b'1010'; 
-SELECT 0 + (1010<<0);
-######### INSERT/SELECT######### 
-
-#### Insert and select 0 bit data into the table####
-CREATE TABLE t1(c1 BIT(0));
-CREATE TABLE t2(c1 BIT(0), c2 BIT(0), c3 BIT(0));
-let $i=0;
-while($i){
-let $j=$i/2;
-eval set @v1=$i;
-eval set @v2=$j;
-set @v3=repeat('1',@v1);
-let $STR0= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR0');
-set @v3=repeat('0',@v1);
-let $STR1= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR1');
-set @v3=repeat('01',@v2);
-let $STR2= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR2');
-set @v3=repeat('10',@v2);
-let $STR3= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR3');
-set @v3=repeat('1',@v1);
-set @v4=repeat('01',@v2);
-set @v5=repeat('10',@v2);
-let $STR0= query_get_value(select @v3 as I,I,1);
-let $STR2= query_get_value(select @v4 as I,I,1);
-let $STR3= query_get_value(select @v5 as I,I,1);
-eval INSERT INTO t2 VALUES ("b'$STR0'","b'$STR2","b'$STR3'");
-dec $i;
-}
-INSERT INTO t1 VALUES (b'1010');
-INSERT INTO t2 VALUES (b'1010', b'1010', b'1010');
---sorted_result
-SELECT HEX(c1) FROM t1;
---sorted_result
-SELECT HEX(c1),HEX(c2),HEX(c3) FROM t2;
---sorted_result
-SELECT OCT(c1) FROM t1;
---sorted_result
-SELECT OCT(c1),OCT(c2),OCT(c3) FROM t2;
---sorted_result
-SELECT BIN(c1) FROM t1;
---sorted_result
-SELECT BIN(c1),BIN(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1),OCT(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1+0),HEX(c2+1),HEX(c3+2) FROM t2;
---sorted_result
-SELECT OCT(c1+0),OCT(c2+1),OCT(c3+2) FROM t2;
---sorted_result
-SELECT BIN(c1+0),BIN(c2+1),BIN(c3+2) FROM t2;
---sorted_result
-SELECT CONCAT(HEX(c1),HEX(c2),HEX(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(OCT(c1),OCT(c2),OCT(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(BIN(c1),BIN(c2),BIN(c3)) FROM t2;
---error 1439
-CREATE TABLE t3 (c1 BIT(65));
-# Checking for bug #9571
-CREATE TABLE t4(i INT, b BIT NOT NULL);
-ALTER TABLE t4 ADD PRIMARY KEY (i);
-CREATE TABLE t5(c1  BIT(0) NOT NULL PRIMARY KEY, c2  BIT(0));
-CREATE TABLE t6(c1  BIT(0), c2  BIT(0));
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
-
-#Insert permissible NULLs
-INSERT IGNORE INTO t5 VALUES(96,null);
-INSERT INTO t6 VALUES(null,null);
-# Now select using various table access methods (full table scan, range scan, index scan etc.)
-## Full table scan ##
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
---sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
---sorted_result
-SELECT OCT(c2) FROM t5 WHERE c1 = 68;
-## Forward index scan, covering ##
---sorted_result
-SELECT bin(c1) FROM t5;
-## Backward index scan, covering ##
-SELECT oct(c1) FROM t5 ORDER BY c1 DESC;
-## Forward index scan, non-covering ##
-SELECT hex(c1),hex(c2) FROM t5 ORDER BY c1 LIMIT 2 ;
-## Backward index scan, non-covering ##
-SELECT * FROM t5 ORDER BY c1 DESC LIMIT 2 /* comment7 */;
-## ref type access
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 LIMIT 2;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC LIMIT 2 ;
-## Range access, ordered ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1; 
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 LIMIT 2 ;
-## Range access, backwards scan ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'   ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0'  ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
-#Inserting different charachers
-CREATE TABLE t7(c1  BIT(0));
-INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
---sorted_result
-SELECT * FROM t7;
-############# UPDATE ###########
-
-# Update order by limit
-UPDATE t6 SET c1='10' WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Update with arithmetic operations 
-UPDATE t6 SET c1=c2+c1 WHERE c2 < 100;
-
-UPDATE t6 SET c2=c2+100 WHERE c1 >=100 ORDER BY c1 LIMIT 4;
-
-
-# Update with NULL ( NULL to number & number to NULL)
-UPDATE t6 SET c2=NULL WHERE c1=23;
-
-UPDATE t6 SET c2=10 WHERE c2=NULL;
-
-
-# Update range values
-UPDATE t6 SET c1=12 WHERE c1=b'101' AND c2=178;
-
-UPDATE t6 SET c1=c1+2,c2=c1+c2 WHERE c2=46 OR c2=b'1001';
-
-UPDATE t6 SET c2=123 WHERE c1 IN (30,b'101',88);
-
-
-# Update outside range would be clipped to closest endpoints
-UPDATE t6 SET c1=b'1111111111111111111111111111111111111111111111111111111111111111111' WHERE c2 < 10; 
-
-UPDATE t6 SET c2=-1 WHERE c1=94;
-
-
-# Update ignore on bad null error
---sorted_result
-SELECT hex(c1) FROM t5 WHERE c1<>0;
-SET SQL_MODE=STRICT_ALL_TABLES;
---error ER_BAD_NULL_ERROR
-UPDATE t5 SET c1=NULL WHERE c1<>0;
-UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -7285,7 +6157,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -7349,6 +6221,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(1));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -7392,7 +6265,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -7573,7 +6446,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -7637,6 +6510,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(2));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -7680,7 +6554,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -7861,7 +6735,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -7925,6 +6799,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(4));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -7968,7 +6843,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -8149,7 +7024,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -8213,6 +7088,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(8));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -8256,7 +7132,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -8437,7 +7313,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -8501,6 +7377,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(16));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -8544,7 +7421,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -8725,7 +7602,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -8789,6 +7666,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(32));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -8832,7 +7710,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -9013,7 +7891,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -9077,6 +7955,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(64));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -9120,295 +7999,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
-
-#Multi table update
---disable_warnings
-UPDATE t5,t6 SET t5.c2=t6.c1+t5.c1, t6.c2=t5.c1+t6.c1 WHERE t5.c1 > 100 OR t6.c2 > 100;
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Update using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-UPDATE t5 SET c2='a' WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-UPDATE t5 SET c2=13 where c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---disable_warnings
-UPDATE t5 SET c2=c2+10 WHERE c1 IN (b'001',b'101',b'111');
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-UPDATE t5,t6 SET t5.c2=t6.c1+t6.c2 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-############# DELETE ###########
-
-TRUNCATE t5;
-TRUNCATE t6;
-
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135),(null,23),(1,null),(null,null);
-
-# Delete by order by limit
-DELETE FROM t6  WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Delete rows with NULL column
-DELETE FROM t6 WHERE c2=NULL;
-
-
-# Delete with range values 
-DELETE FROM t6 WHERE c1=b'101' AND c2=178;
-
-DELETE FROM t6  WHERE c2=46 OR c2=b'1001';
-
-DELETE FROM t6 WHERE c1 IN (30,b'101',88);
-
-
-#Multi table delete
-DELETE t5,t6 FROM t5,t6 WHERE t5.c1 > 100 OR t6.c2 > 100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Delete using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-DELETE FROM t5  WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-DELETE FROM t5 WHERE c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
-DELETE FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-# Droping the tables
-DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
-####Checking the bit values####
-SELECT 0 + b'1010101010101010'; 
-SELECT 0 + (1010101010101010<<0);
-######### INSERT/SELECT######### 
-
-#### Insert and select 0 bit data into the table####
-CREATE TABLE t1(c1 BIT(0));
-CREATE TABLE t2(c1 BIT(0), c2 BIT(0), c3 BIT(0));
-let $i=0;
-while($i){
-let $j=$i/2;
-eval set @v1=$i;
-eval set @v2=$j;
-set @v3=repeat('1',@v1);
-let $STR0= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR0');
-set @v3=repeat('0',@v1);
-let $STR1= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR1');
-set @v3=repeat('01',@v2);
-let $STR2= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR2');
-set @v3=repeat('10',@v2);
-let $STR3= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR3');
-set @v3=repeat('1',@v1);
-set @v4=repeat('01',@v2);
-set @v5=repeat('10',@v2);
-let $STR0= query_get_value(select @v3 as I,I,1);
-let $STR2= query_get_value(select @v4 as I,I,1);
-let $STR3= query_get_value(select @v5 as I,I,1);
-eval INSERT INTO t2 VALUES ("b'$STR0'","b'$STR2","b'$STR3'");
-dec $i;
-}
-INSERT INTO t1 VALUES (b'1010101010101010');
-INSERT INTO t2 VALUES (b'1010101010101010', b'1010101010101010', b'1010101010101010');
---sorted_result
-SELECT HEX(c1) FROM t1;
---sorted_result
-SELECT HEX(c1),HEX(c2),HEX(c3) FROM t2;
---sorted_result
-SELECT OCT(c1) FROM t1;
---sorted_result
-SELECT OCT(c1),OCT(c2),OCT(c3) FROM t2;
---sorted_result
-SELECT BIN(c1) FROM t1;
---sorted_result
-SELECT BIN(c1),BIN(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1),OCT(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1+0),HEX(c2+1),HEX(c3+2) FROM t2;
---sorted_result
-SELECT OCT(c1+0),OCT(c2+1),OCT(c3+2) FROM t2;
---sorted_result
-SELECT BIN(c1+0),BIN(c2+1),BIN(c3+2) FROM t2;
---sorted_result
-SELECT CONCAT(HEX(c1),HEX(c2),HEX(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(OCT(c1),OCT(c2),OCT(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(BIN(c1),BIN(c2),BIN(c3)) FROM t2;
---error 1439
-CREATE TABLE t3 (c1 BIT(65));
-# Checking for bug #9571
-CREATE TABLE t4(i INT, b BIT NOT NULL);
-ALTER TABLE t4 ADD PRIMARY KEY (i);
-CREATE TABLE t5(c1  BIT(0) NOT NULL PRIMARY KEY, c2  BIT(0));
-CREATE TABLE t6(c1  BIT(0), c2  BIT(0));
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
-
-#Insert permissible NULLs
-INSERT IGNORE INTO t5 VALUES(96,null);
-INSERT INTO t6 VALUES(null,null);
-# Now select using various table access methods (full table scan, range scan, index scan etc.)
-## Full table scan ##
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
---sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
---sorted_result
-SELECT OCT(c2) FROM t5 WHERE c1 = 68;
-## Forward index scan, covering ##
---sorted_result
-SELECT bin(c1) FROM t5;
-## Backward index scan, covering ##
-SELECT oct(c1) FROM t5 ORDER BY c1 DESC;
-## Forward index scan, non-covering ##
-SELECT hex(c1),hex(c2) FROM t5 ORDER BY c1 LIMIT 2 ;
-## Backward index scan, non-covering ##
-SELECT * FROM t5 ORDER BY c1 DESC LIMIT 2 /* comment7 */;
-## ref type access
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 LIMIT 2;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC LIMIT 2 ;
-## Range access, ordered ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1; 
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 LIMIT 2 ;
-## Range access, backwards scan ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'   ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0'  ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
-#Inserting different charachers
-CREATE TABLE t7(c1  BIT(0));
-INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
---sorted_result
-SELECT * FROM t7;
-############# UPDATE ###########
-
-# Update order by limit
-UPDATE t6 SET c1='10' WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Update with arithmetic operations 
-UPDATE t6 SET c1=c2+c1 WHERE c2 < 100;
-
-UPDATE t6 SET c2=c2+100 WHERE c1 >=100 ORDER BY c1 LIMIT 4;
-
-
-# Update with NULL ( NULL to number & number to NULL)
-UPDATE t6 SET c2=NULL WHERE c1=23;
-
-UPDATE t6 SET c2=10 WHERE c2=NULL;
-
-
-# Update range values
-UPDATE t6 SET c1=12 WHERE c1=b'101' AND c2=178;
-
-UPDATE t6 SET c1=c1+2,c2=c1+c2 WHERE c2=46 OR c2=b'1001';
-
-UPDATE t6 SET c2=123 WHERE c1 IN (30,b'101',88);
-
-
-# Update outside range would be clipped to closest endpoints
-UPDATE t6 SET c1=b'1111111111111111111111111111111111111111111111111111111111111111111' WHERE c2 < 10; 
-
-UPDATE t6 SET c2=-1 WHERE c1=94;
-
-
-# Update ignore on bad null error
---sorted_result
-SELECT hex(c1) FROM t5 WHERE c1<>0;
-SET SQL_MODE=STRICT_ALL_TABLES;
---error ER_BAD_NULL_ERROR
-UPDATE t5 SET c1=NULL WHERE c1<>0;
-UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -9589,7 +8180,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -9653,6 +8244,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(1));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -9696,7 +8288,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -9877,7 +8469,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -9941,6 +8533,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(2));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -9984,7 +8577,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -10165,7 +8758,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -10229,6 +8822,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(4));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -10272,7 +8866,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -10453,7 +9047,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -10517,6 +9111,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(8));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -10560,7 +9155,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -10741,7 +9336,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -10805,6 +9400,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(16));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -10848,7 +9444,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -11029,7 +9625,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -11093,6 +9689,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(32));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -11136,7 +9733,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -11317,7 +9914,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -11381,6 +9978,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(64));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -11424,295 +10022,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
-
-#Multi table update
---disable_warnings
-UPDATE t5,t6 SET t5.c2=t6.c1+t5.c1, t6.c2=t5.c1+t6.c1 WHERE t5.c1 > 100 OR t6.c2 > 100;
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Update using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-UPDATE t5 SET c2='a' WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-UPDATE t5 SET c2=13 where c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---disable_warnings
-UPDATE t5 SET c2=c2+10 WHERE c1 IN (b'001',b'101',b'111');
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-UPDATE t5,t6 SET t5.c2=t6.c1+t6.c2 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-############# DELETE ###########
-
-TRUNCATE t5;
-TRUNCATE t6;
-
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135),(null,23),(1,null),(null,null);
-
-# Delete by order by limit
-DELETE FROM t6  WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Delete rows with NULL column
-DELETE FROM t6 WHERE c2=NULL;
-
-
-# Delete with range values 
-DELETE FROM t6 WHERE c1=b'101' AND c2=178;
-
-DELETE FROM t6  WHERE c2=46 OR c2=b'1001';
-
-DELETE FROM t6 WHERE c1 IN (30,b'101',88);
-
-
-#Multi table delete
-DELETE t5,t6 FROM t5,t6 WHERE t5.c1 > 100 OR t6.c2 > 100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Delete using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-DELETE FROM t5  WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-DELETE FROM t5 WHERE c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
-DELETE FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-# Droping the tables
-DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
-####Checking the bit values####
-SELECT 0 + b'101010101010101010101010101010'; 
-SELECT 0 + (101010101010101010101010101010<<0);
-######### INSERT/SELECT######### 
-
-#### Insert and select 0 bit data into the table####
-CREATE TABLE t1(c1 BIT(0));
-CREATE TABLE t2(c1 BIT(0), c2 BIT(0), c3 BIT(0));
-let $i=0;
-while($i){
-let $j=$i/2;
-eval set @v1=$i;
-eval set @v2=$j;
-set @v3=repeat('1',@v1);
-let $STR0= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR0');
-set @v3=repeat('0',@v1);
-let $STR1= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR1');
-set @v3=repeat('01',@v2);
-let $STR2= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR2');
-set @v3=repeat('10',@v2);
-let $STR3= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR3');
-set @v3=repeat('1',@v1);
-set @v4=repeat('01',@v2);
-set @v5=repeat('10',@v2);
-let $STR0= query_get_value(select @v3 as I,I,1);
-let $STR2= query_get_value(select @v4 as I,I,1);
-let $STR3= query_get_value(select @v5 as I,I,1);
-eval INSERT INTO t2 VALUES ("b'$STR0'","b'$STR2","b'$STR3'");
-dec $i;
-}
-INSERT INTO t1 VALUES (b'101010101010101010101010101010');
-INSERT INTO t2 VALUES (b'101010101010101010101010101010', b'101010101010101010101010101010', b'101010101010101010101010101010');
---sorted_result
-SELECT HEX(c1) FROM t1;
---sorted_result
-SELECT HEX(c1),HEX(c2),HEX(c3) FROM t2;
---sorted_result
-SELECT OCT(c1) FROM t1;
---sorted_result
-SELECT OCT(c1),OCT(c2),OCT(c3) FROM t2;
---sorted_result
-SELECT BIN(c1) FROM t1;
---sorted_result
-SELECT BIN(c1),BIN(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1),OCT(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1+0),HEX(c2+1),HEX(c3+2) FROM t2;
---sorted_result
-SELECT OCT(c1+0),OCT(c2+1),OCT(c3+2) FROM t2;
---sorted_result
-SELECT BIN(c1+0),BIN(c2+1),BIN(c3+2) FROM t2;
---sorted_result
-SELECT CONCAT(HEX(c1),HEX(c2),HEX(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(OCT(c1),OCT(c2),OCT(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(BIN(c1),BIN(c2),BIN(c3)) FROM t2;
---error 1439
-CREATE TABLE t3 (c1 BIT(65));
-# Checking for bug #9571
-CREATE TABLE t4(i INT, b BIT NOT NULL);
-ALTER TABLE t4 ADD PRIMARY KEY (i);
-CREATE TABLE t5(c1  BIT(0) NOT NULL PRIMARY KEY, c2  BIT(0));
-CREATE TABLE t6(c1  BIT(0), c2  BIT(0));
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
-
-#Insert permissible NULLs
-INSERT IGNORE INTO t5 VALUES(96,null);
-INSERT INTO t6 VALUES(null,null);
-# Now select using various table access methods (full table scan, range scan, index scan etc.)
-## Full table scan ##
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
---sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
---sorted_result
-SELECT OCT(c2) FROM t5 WHERE c1 = 68;
-## Forward index scan, covering ##
---sorted_result
-SELECT bin(c1) FROM t5;
-## Backward index scan, covering ##
-SELECT oct(c1) FROM t5 ORDER BY c1 DESC;
-## Forward index scan, non-covering ##
-SELECT hex(c1),hex(c2) FROM t5 ORDER BY c1 LIMIT 2 ;
-## Backward index scan, non-covering ##
-SELECT * FROM t5 ORDER BY c1 DESC LIMIT 2 /* comment7 */;
-## ref type access
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 LIMIT 2;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC LIMIT 2 ;
-## Range access, ordered ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1; 
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 LIMIT 2 ;
-## Range access, backwards scan ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'   ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0'  ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
-#Inserting different charachers
-CREATE TABLE t7(c1  BIT(0));
-INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
---sorted_result
-SELECT * FROM t7;
-############# UPDATE ###########
-
-# Update order by limit
-UPDATE t6 SET c1='10' WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Update with arithmetic operations 
-UPDATE t6 SET c1=c2+c1 WHERE c2 < 100;
-
-UPDATE t6 SET c2=c2+100 WHERE c1 >=100 ORDER BY c1 LIMIT 4;
-
-
-# Update with NULL ( NULL to number & number to NULL)
-UPDATE t6 SET c2=NULL WHERE c1=23;
-
-UPDATE t6 SET c2=10 WHERE c2=NULL;
-
-
-# Update range values
-UPDATE t6 SET c1=12 WHERE c1=b'101' AND c2=178;
-
-UPDATE t6 SET c1=c1+2,c2=c1+c2 WHERE c2=46 OR c2=b'1001';
-
-UPDATE t6 SET c2=123 WHERE c1 IN (30,b'101',88);
-
-
-# Update outside range would be clipped to closest endpoints
-UPDATE t6 SET c1=b'1111111111111111111111111111111111111111111111111111111111111111111' WHERE c2 < 10; 
-
-UPDATE t6 SET c2=-1 WHERE c1=94;
-
-
-# Update ignore on bad null error
---sorted_result
-SELECT hex(c1) FROM t5 WHERE c1<>0;
-SET SQL_MODE=STRICT_ALL_TABLES;
---error ER_BAD_NULL_ERROR
-UPDATE t5 SET c1=NULL WHERE c1<>0;
-UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -11893,7 +10203,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -11957,6 +10267,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(1));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -12000,7 +10311,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -12181,7 +10492,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -12245,6 +10556,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(2));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -12288,7 +10600,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -12469,7 +10781,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -12533,6 +10845,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(4));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -12576,7 +10889,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -12757,7 +11070,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -12821,6 +11134,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(8));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -12864,7 +11178,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -13045,7 +11359,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -13109,6 +11423,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(16));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -13152,7 +11467,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -13333,7 +11648,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -13397,6 +11712,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(32));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -13440,7 +11756,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -13621,7 +11937,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -13685,6 +12001,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(64));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -13728,296 +12045,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
-
-#Multi table update
---disable_warnings
-UPDATE t5,t6 SET t5.c2=t6.c1+t5.c1, t6.c2=t5.c1+t6.c1 WHERE t5.c1 > 100 OR t6.c2 > 100;
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Update using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-UPDATE t5 SET c2='a' WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-UPDATE t5 SET c2=13 where c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---disable_warnings
-UPDATE t5 SET c2=c2+10 WHERE c1 IN (b'001',b'101',b'111');
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-UPDATE t5,t6 SET t5.c2=t6.c1+t6.c2 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-############# DELETE ###########
-
-TRUNCATE t5;
-TRUNCATE t6;
-
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135),(null,23),(1,null),(null,null);
-
-# Delete by order by limit
-DELETE FROM t6  WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Delete rows with NULL column
-DELETE FROM t6 WHERE c2=NULL;
-
-
-# Delete with range values 
-DELETE FROM t6 WHERE c1=b'101' AND c2=178;
-
-DELETE FROM t6  WHERE c2=46 OR c2=b'1001';
-
-DELETE FROM t6 WHERE c1 IN (30,b'101',88);
-
-
-#Multi table delete
-DELETE t5,t6 FROM t5,t6 WHERE t5.c1 > 100 OR t6.c2 > 100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Delete using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-DELETE FROM t5  WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-DELETE FROM t5 WHERE c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
-DELETE FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-# Droping the tables
-DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
-####Checking the bit values####
-# Produces different output on different platforms
-#SELECT 0 + b'1010101010101010101010101010101010101010101010101010101010101010'; 
-SELECT 0 + (1010101010101010101010101010101010101010101010101010101010101010<<0);
-######### INSERT/SELECT######### 
-
-#### Insert and select 0 bit data into the table####
-CREATE TABLE t1(c1 BIT(0));
-CREATE TABLE t2(c1 BIT(0), c2 BIT(0), c3 BIT(0));
-let $i=0;
-while($i){
-let $j=$i/2;
-eval set @v1=$i;
-eval set @v2=$j;
-set @v3=repeat('1',@v1);
-let $STR0= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR0');
-set @v3=repeat('0',@v1);
-let $STR1= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR1');
-set @v3=repeat('01',@v2);
-let $STR2= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR2');
-set @v3=repeat('10',@v2);
-let $STR3= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR3');
-set @v3=repeat('1',@v1);
-set @v4=repeat('01',@v2);
-set @v5=repeat('10',@v2);
-let $STR0= query_get_value(select @v3 as I,I,1);
-let $STR2= query_get_value(select @v4 as I,I,1);
-let $STR3= query_get_value(select @v5 as I,I,1);
-eval INSERT INTO t2 VALUES ("b'$STR0'","b'$STR2","b'$STR3'");
-dec $i;
-}
-INSERT INTO t1 VALUES (b'1010101010101010101010101010101010101010101010101010101010101010');
-INSERT INTO t2 VALUES (b'1010101010101010101010101010101010101010101010101010101010101010', b'1010101010101010101010101010101010101010101010101010101010101010', b'1010101010101010101010101010101010101010101010101010101010101010');
---sorted_result
-SELECT HEX(c1) FROM t1;
---sorted_result
-SELECT HEX(c1),HEX(c2),HEX(c3) FROM t2;
---sorted_result
-SELECT OCT(c1) FROM t1;
---sorted_result
-SELECT OCT(c1),OCT(c2),OCT(c3) FROM t2;
---sorted_result
-SELECT BIN(c1) FROM t1;
---sorted_result
-SELECT BIN(c1),BIN(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1),OCT(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1+0),HEX(c2+1),HEX(c3+2) FROM t2;
---sorted_result
-SELECT OCT(c1+0),OCT(c2+1),OCT(c3+2) FROM t2;
---sorted_result
-SELECT BIN(c1+0),BIN(c2+1),BIN(c3+2) FROM t2;
---sorted_result
-SELECT CONCAT(HEX(c1),HEX(c2),HEX(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(OCT(c1),OCT(c2),OCT(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(BIN(c1),BIN(c2),BIN(c3)) FROM t2;
---error 1439
-CREATE TABLE t3 (c1 BIT(65));
-# Checking for bug #9571
-CREATE TABLE t4(i INT, b BIT NOT NULL);
-ALTER TABLE t4 ADD PRIMARY KEY (i);
-CREATE TABLE t5(c1  BIT(0) NOT NULL PRIMARY KEY, c2  BIT(0));
-CREATE TABLE t6(c1  BIT(0), c2  BIT(0));
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
-
-#Insert permissible NULLs
-INSERT IGNORE INTO t5 VALUES(96,null);
-INSERT INTO t6 VALUES(null,null);
-# Now select using various table access methods (full table scan, range scan, index scan etc.)
-## Full table scan ##
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
---sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
---sorted_result
-SELECT OCT(c2) FROM t5 WHERE c1 = 68;
-## Forward index scan, covering ##
---sorted_result
-SELECT bin(c1) FROM t5;
-## Backward index scan, covering ##
-SELECT oct(c1) FROM t5 ORDER BY c1 DESC;
-## Forward index scan, non-covering ##
-SELECT hex(c1),hex(c2) FROM t5 ORDER BY c1 LIMIT 2 ;
-## Backward index scan, non-covering ##
-SELECT * FROM t5 ORDER BY c1 DESC LIMIT 2 /* comment7 */;
-## ref type access
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 LIMIT 2;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC LIMIT 2 ;
-## Range access, ordered ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1; 
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 LIMIT 2 ;
-## Range access, backwards scan ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'   ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0'  ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
-#Inserting different charachers
-CREATE TABLE t7(c1  BIT(0));
-INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
---sorted_result
-SELECT * FROM t7;
-############# UPDATE ###########
-
-# Update order by limit
-UPDATE t6 SET c1='10' WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Update with arithmetic operations 
-UPDATE t6 SET c1=c2+c1 WHERE c2 < 100;
-
-UPDATE t6 SET c2=c2+100 WHERE c1 >=100 ORDER BY c1 LIMIT 4;
-
-
-# Update with NULL ( NULL to number & number to NULL)
-UPDATE t6 SET c2=NULL WHERE c1=23;
-
-UPDATE t6 SET c2=10 WHERE c2=NULL;
-
-
-# Update range values
-UPDATE t6 SET c1=12 WHERE c1=b'101' AND c2=178;
-
-UPDATE t6 SET c1=c1+2,c2=c1+c2 WHERE c2=46 OR c2=b'1001';
-
-UPDATE t6 SET c2=123 WHERE c1 IN (30,b'101',88);
-
-
-# Update outside range would be clipped to closest endpoints
-UPDATE t6 SET c1=b'1111111111111111111111111111111111111111111111111111111111111111111' WHERE c2 < 10; 
-
-UPDATE t6 SET c2=-1 WHERE c1=94;
-
-
-# Update ignore on bad null error
---sorted_result
-SELECT hex(c1) FROM t5 WHERE c1<>0;
-SET SQL_MODE=STRICT_ALL_TABLES;
---error ER_BAD_NULL_ERROR
-UPDATE t5 SET c1=NULL WHERE c1<>0;
-UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -14199,7 +12227,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -14263,6 +12291,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(1));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -14306,7 +12335,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -14488,7 +12517,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -14552,6 +12581,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(2));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -14595,7 +12625,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -14777,7 +12807,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -14841,6 +12871,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(4));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -14884,7 +12915,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -15066,7 +13097,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -15130,6 +13161,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(8));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -15173,7 +13205,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -15355,7 +13387,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -15419,6 +13451,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(16));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -15462,7 +13495,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -15644,7 +13677,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -15708,6 +13741,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(32));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -15751,7 +13785,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -15933,7 +13967,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -15997,6 +14031,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(64));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -16040,296 +14075,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
-
-#Multi table update
---disable_warnings
-UPDATE t5,t6 SET t5.c2=t6.c1+t5.c1, t6.c2=t5.c1+t6.c1 WHERE t5.c1 > 100 OR t6.c2 > 100;
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Update using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-UPDATE t5 SET c2='a' WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-UPDATE t5 SET c2=13 where c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---disable_warnings
-UPDATE t5 SET c2=c2+10 WHERE c1 IN (b'001',b'101',b'111');
---enable_warnings
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-UPDATE t5,t6 SET t5.c2=t6.c1+t6.c2 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-############# DELETE ###########
-
-TRUNCATE t5;
-TRUNCATE t6;
-
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135),(null,23),(1,null),(null,null);
-
-# Delete by order by limit
-DELETE FROM t6  WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Delete rows with NULL column
-DELETE FROM t6 WHERE c2=NULL;
-
-
-# Delete with range values 
-DELETE FROM t6 WHERE c1=b'101' AND c2=178;
-
-DELETE FROM t6  WHERE c2=46 OR c2=b'1001';
-
-DELETE FROM t6 WHERE c1 IN (30,b'101',88);
-
-
-#Multi table delete
-DELETE t5,t6 FROM t5,t6 WHERE t5.c1 > 100 OR t6.c2 > 100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-
-# Delete using various access methods
-TRUNCATE t5;
-TRUNCATE t6;
-INSERT IGNORE INTO t5 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-INSERT INTO t6 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
-
-# Update using Const
-# EXPLAIN SELECT * FROM t5 WHERE c1=6 AND c2=6;
-DELETE FROM t5  WHERE c1=6 AND c2=6;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using range
-# EXPLAIN SELECT * FROM t5 WHERE c1 BETWEEN 5 AND 9;
-DELETE FROM t5 WHERE c1 BETWEEN 5 AND 9;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-# EXPLAIN SELECT * FROM t5 WHERE c1 IN (b'001',b'101',b'111');
-DELETE FROM t5 WHERE c1 IN (b'001',b'101',b'111');
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-
-# Update using eq_ref
-# EXPLAIN SELECT * FROM t5,t6 WHERE t5.c1=t6.c1 AND t5.c2=t6.c2;
-DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
-
-# Droping the tables
-DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
-####Checking the bit values####
-# Produces different output for different platform
-#SELECT 0 + b'10101010101010101010101010101010101010101010101010101010101010101'; 
-SELECT 0 + (10101010101010101010101010101010101010101010101010101010101010101<<0);
-######### INSERT/SELECT######### 
-
-#### Insert and select 0 bit data into the table####
-CREATE TABLE t1(c1 BIT(0));
-CREATE TABLE t2(c1 BIT(0), c2 BIT(0), c3 BIT(0));
-let $i=0;
-while($i){
-let $j=$i/2;
-eval set @v1=$i;
-eval set @v2=$j;
-set @v3=repeat('1',@v1);
-let $STR0= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR0');
-set @v3=repeat('0',@v1);
-let $STR1= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR1');
-set @v3=repeat('01',@v2);
-let $STR2= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR2');
-set @v3=repeat('10',@v2);
-let $STR3= query_get_value(select @v3 as I,I,1);
-eval INSERT INTO t1 VALUES (b'$STR3');
-set @v3=repeat('1',@v1);
-set @v4=repeat('01',@v2);
-set @v5=repeat('10',@v2);
-let $STR0= query_get_value(select @v3 as I,I,1);
-let $STR2= query_get_value(select @v4 as I,I,1);
-let $STR3= query_get_value(select @v5 as I,I,1);
-eval INSERT INTO t2 VALUES ("b'$STR0'","b'$STR2","b'$STR3'");
-dec $i;
-}
-INSERT INTO t1 VALUES (b'10101010101010101010101010101010101010101010101010101010101010101');
-INSERT INTO t2 VALUES (b'10101010101010101010101010101010101010101010101010101010101010101', b'10101010101010101010101010101010101010101010101010101010101010101', b'10101010101010101010101010101010101010101010101010101010101010101');
---sorted_result
-SELECT HEX(c1) FROM t1;
---sorted_result
-SELECT HEX(c1),HEX(c2),HEX(c3) FROM t2;
---sorted_result
-SELECT OCT(c1) FROM t1;
---sorted_result
-SELECT OCT(c1),OCT(c2),OCT(c3) FROM t2;
---sorted_result
-SELECT BIN(c1) FROM t1;
---sorted_result
-SELECT BIN(c1),BIN(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1),OCT(c2),BIN(c3) FROM t2;
---sorted_result
-SELECT HEX(c1+0),HEX(c2+1),HEX(c3+2) FROM t2;
---sorted_result
-SELECT OCT(c1+0),OCT(c2+1),OCT(c3+2) FROM t2;
---sorted_result
-SELECT BIN(c1+0),BIN(c2+1),BIN(c3+2) FROM t2;
---sorted_result
-SELECT CONCAT(HEX(c1),HEX(c2),HEX(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(OCT(c1),OCT(c2),OCT(c3)) FROM t2;
---sorted_result
-SELECT CONCAT(BIN(c1),BIN(c2),BIN(c3)) FROM t2;
---error 1439
-CREATE TABLE t3 (c1 BIT(65));
-# Checking for bug #9571
-CREATE TABLE t4(i INT, b BIT NOT NULL);
-ALTER TABLE t4 ADD PRIMARY KEY (i);
-CREATE TABLE t5(c1  BIT(0) NOT NULL PRIMARY KEY, c2  BIT(0));
-CREATE TABLE t6(c1  BIT(0), c2  BIT(0));
-#Borrowed from suite/ndb/t/ndb_bitfield.test
-INSERT IGNORE INTO t5 VALUES (95, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (69, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
-INSERT INTO t6 VALUES (94, 46), (31, 438), (61, 152), (78, 123), (88, 411), (122, 118), (0, 177),(75, 42), (108, 67), (79, 349), (59, 188), (68, 206), (49, 345), (118, 380),(111, 368), (94, 468), (56, 379), (77, 133), (29, 399), (9, 363), (23, 36),(116, 390), (119, 368), (87, 351), (123, 411), (24, 398), (34, 202), (28, 499),(30, 83), (5, 178), (60, 343), (4, 245), (104, 280), (106, 446), (127, 403),(44, 307), (68, 454), (57, 135);
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
-
-#Insert permissible NULLs
-INSERT IGNORE INTO t5 VALUES(96,null);
-INSERT INTO t6 VALUES(null,null);
-# Now select using various table access methods (full table scan, range scan, index scan etc.)
-## Full table scan ##
---sorted_result
-SELECT HEX(c1),HEX(c2) FROM t5;
---sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
---sorted_result
-SELECT OCT(c2) FROM t5 WHERE c1 = 68;
-## Forward index scan, covering ##
---sorted_result
-SELECT bin(c1) FROM t5;
-## Backward index scan, covering ##
-SELECT oct(c1) FROM t5 ORDER BY c1 DESC;
-## Forward index scan, non-covering ##
-SELECT hex(c1),hex(c2) FROM t5 ORDER BY c1 LIMIT 2 ;
-## Backward index scan, non-covering ##
-SELECT * FROM t5 ORDER BY c1 DESC LIMIT 2 /* comment7 */;
-## ref type access
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 LIMIT 2;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 = '0' ORDER BY c1 DESC LIMIT 2 ;
-## Range access, ordered ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64'  ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1; 
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 LIMIT 2 ;
-## Range access, backwards scan ##
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <> '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >  '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'  ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <  '0'   ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <= '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0'  ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 <=>'0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 BETWEEN '0' AND '64' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IN ( '0' , '64' ) ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 >= '0' AND c1 < '64' AND c2 = '0' ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NULL ORDER BY c1 DESC LIMIT 2 ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC ;
-SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
-#Inserting different charachers
-CREATE TABLE t7(c1  BIT(0));
-INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
---sorted_result
-SELECT * FROM t7;
-############# UPDATE ###########
-
-# Update order by limit
-UPDATE t6 SET c1='10' WHERE c2 > 100 ORDER BY c2 LIMIT 1;
-
-
-# Update with arithmetic operations 
-UPDATE t6 SET c1=c2+c1 WHERE c2 < 100;
-
-UPDATE t6 SET c2=c2+100 WHERE c1 >=100 ORDER BY c1 LIMIT 4;
-
-
-# Update with NULL ( NULL to number & number to NULL)
-UPDATE t6 SET c2=NULL WHERE c1=23;
-
-UPDATE t6 SET c2=10 WHERE c2=NULL;
-
-
-# Update range values
-UPDATE t6 SET c1=12 WHERE c1=b'101' AND c2=178;
-
-UPDATE t6 SET c1=c1+2,c2=c1+c2 WHERE c2=46 OR c2=b'1001';
-
-UPDATE t6 SET c2=123 WHERE c1 IN (30,b'101',88);
-
-
-# Update outside range would be clipped to closest endpoints
-UPDATE t6 SET c1=b'1111111111111111111111111111111111111111111111111111111111111111111' WHERE c2 < 10; 
-
-UPDATE t6 SET c2=-1 WHERE c1=94;
-
-
-# Update ignore on bad null error
---sorted_result
-SELECT hex(c1) FROM t5 WHERE c1<>0;
-SET SQL_MODE=STRICT_ALL_TABLES;
---error ER_BAD_NULL_ERROR
-UPDATE t5 SET c1=NULL WHERE c1<>0;
-UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
---sorted_result
-SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -16511,7 +14257,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -16575,6 +14321,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(1));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -16618,7 +14365,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -16800,7 +14547,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -16864,6 +14611,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(2));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -16907,7 +14655,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -17089,7 +14837,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -17153,6 +14901,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(4));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -17196,7 +14945,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -17378,7 +15127,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -17442,6 +15191,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(8));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -17485,7 +15235,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -17667,7 +15417,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -17731,6 +15481,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(16));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -17774,7 +15525,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -17956,7 +15707,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -18020,6 +15771,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(32));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -18063,7 +15815,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -18245,7 +15997,7 @@ INSERT INTO t6 VALUES(null,null);
 --sorted_result
 SELECT HEX(c1),HEX(c2) FROM t5;
 --sorted_result
-SELECT count(*) as total_rows, min(c1) as min_value, max(c1) FROM t5;
+SELECT COUNT(*) AS total_rows, HEX(MIN(c1)) AS min_value, HEX(MAX(c1)) FROM t5;
 --sorted_result
 SELECT OCT(c2) FROM t5 WHERE c1 = 68;
 ## Forward index scan, covering ##
@@ -18309,6 +16061,7 @@ SELECT hex(c1),hex(c2) FROM t5 WHERE c1 IS NOT NULL ORDER BY c1 DESC LIMIT 2 ;
 #Inserting different charachers
 CREATE TABLE t7(c1  BIT(64));
 INSERT INTO t7 VALUES('a'),('A'),('z'),('Z'),('!'),('`'),('@'),('#'),('~'),('$'),('%'),('^'),('&'),('*'),('('),(')'),('-'),('_'),('+'),('='),('1'),('9');
+--replace_regex /[^[:print:]]/#/
 --sorted_result
 SELECT * FROM t7;
 ############# UPDATE ###########
@@ -18352,7 +16105,7 @@ UPDATE t5 SET c1=NULL WHERE c1<>0;
 UPDATE IGNORE t5 SET c1=NULL WHERE c1>100;
 --sorted_result
 SELECT hex(c1),hex(c2) FROM t5;
-SET SQL_MODE=DEFAULT;
+SET SQL_MODE='ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 #Multi table update
 --disable_warnings
@@ -18449,4 +16202,4 @@ DELETE t5,t6 FROM t5,t6 WHERE  t5.c1=t6.c1 AND t5.c2=t6.c2;
 
 # Droping the tables
 DROP TABLE IF EXISTS t1,t2,t3,t4,t5,t6,t7;
-
+SET @@session.max_error_count = default;

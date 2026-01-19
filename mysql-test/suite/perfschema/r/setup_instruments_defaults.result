@@ -5,35 +5,46 @@ SELECT * FROM performance_schema.setup_instruments
 WHERE name IN (
 'wait/synch/mutex/sql/LOCK_user_conn',
 'wait/synch/mutex/sql/LOCK_uuid_generator',
-'wait/synch/mutex/sql/LOCK_xid_cache',
+'wait/synch/mutex/sql/LOCK_transaction_cache',
 'stage/sql/creating table')
 AND enabled = 'yes' AND timed = 'no'
 ORDER BY name;
-NAME	ENABLED	TIMED
-stage/sql/creating table	YES	NO
-wait/synch/mutex/sql/LOCK_user_conn	YES	NO
-wait/synch/mutex/sql/LOCK_uuid_generator	YES	NO
-wait/synch/mutex/sql/LOCK_xid_cache	YES	NO
+NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
+stage/sql/creating table	YES	NO		NULL	0	NULL
+wait/synch/mutex/sql/LOCK_transaction_cache	YES	NO	singleton	NULL	0	NULL
+wait/synch/mutex/sql/LOCK_user_conn	YES	NO	singleton	NULL	0	NULL
+wait/synch/mutex/sql/LOCK_uuid_generator	YES	NO	singleton	NULL	0	NULL
 SELECT * FROM performance_schema.setup_instruments
-WHERE name = 'wait/synch/mutex/sql/LOCK_thread_count'
+WHERE name = 'wait/synch/mutex/sql/LOCK_thd_list'
 AND enabled = 'no' AND timed = 'no';
-NAME	ENABLED	TIMED
-wait/synch/mutex/sql/LOCK_thread_count	NO	NO
+NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
 SELECT * FROM performance_schema.setup_instruments
 WHERE name IN (
 'wait/synch/mutex/sql/LOG_INFO::lock',
-'wait/synch/mutex/sql/THD::LOCK_thd_data')
+'wait/synch/mutex/sql/THD::LOCK_thd_list')
 AND enabled = 'yes' AND timed = 'yes'
 ORDER BY name;
-NAME	ENABLED	TIMED
-wait/synch/mutex/sql/LOG_INFO::lock	YES	YES
-wait/synch/mutex/sql/THD::LOCK_thd_data	YES	YES
+NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
 SELECT * FROM performance_schema.setup_instruments
 WHERE name = 'wait/synch/mutex/sql/hash_filo::lock'
 AND enabled = 'no' AND timed = 'no'
 ORDER BY name;
-NAME	ENABLED	TIMED
-wait/synch/mutex/sql/hash_filo::lock	NO	NO
+NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
+wait/synch/mutex/sql/hash_filo::lock	NO	NO		NULL	0	NULL
+#
+# Verify that the memory instruments are never timed
+#
+SELECT * FROM performance_schema.setup_instruments
+WHERE name like 'memory/%'
+AND timed = 'YES';
+NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
+#
+# Verify that the memory/performance_schema instruments are never disabled
+#
+SELECT * FROM performance_schema.setup_instruments
+WHERE name like 'memory/performance_schema/%'
+AND enabled = 'NO';
+NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
 #
 # Verify that the instrument startup settings are not not visible.
 #
@@ -47,18 +58,27 @@ Variable_name	Value
 #
 SELECT * FROM performance_schema.setup_instruments
 WHERE name like "%wait/io/table/sql/handler%";
-NAME	ENABLED	TIMED
-wait/io/table/sql/handler	YES	YES
+NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
+wait/io/table/sql/handler	YES	YES		NULL	0	NULL
 #
-# Stop server
-# Restart server with wait/io/table/sql/handler disabled
-# Enable reconnect
-# Wait until connected again
-# Disable reconnect
+# Verify that stored programs micro instructions are documented
 #
-# Verify that wait/io/table is disabled
-#
-SELECT * FROM performance_schema.setup_instruments
-WHERE name like "%wait/io/table/sql/handler%";
-NAME	ENABLED	TIMED
-wait/io/table/sql/handler	NO	NO
+SELECT NAME, DOCUMENTATION FROM performance_schema.setup_instruments
+WHERE NAME like "statement/sp/%" ORDER BY NAME;
+NAME	DOCUMENTATION
+statement/sp/cclose	Stored Program: CLOSE cursor
+statement/sp/cfetch	Stored Program: FETCH cursor
+statement/sp/copen	Stored Program: OPEN cursor
+statement/sp/cpop	Stored Program: uninstall a DECLARE CURSOR microcode instruction
+statement/sp/cpush	Stored Program: install a DECLARE CURSOR microcode instruction
+statement/sp/error	Stored Program: CASE WHEN not found microcode instruction
+statement/sp/freturn	Stored Program: RETURN from STORED FUNCTION
+statement/sp/hpop	Stored Program: uninstall a DECLARE HANDLER microcode instruction
+statement/sp/hpush_jump	Stored Program: install a DECLARE HANDLER microcode instruction
+statement/sp/hreturn	Stored Program: return from a DECLARE HANDLER microcode instruction
+statement/sp/jump	Stored Program: jump microcode instruction
+statement/sp/jump_if_not	Stored Program: jump if false microcode instruction
+statement/sp/set	Stored Program: SET statement
+statement/sp/set_case_expr	Stored Program: CASE microcode instruction
+statement/sp/set_trigger_field	Stored Program: SET NEW.<field> in TRIGGER
+statement/sp/stmt	Stored Program: SQL statement

@@ -1,7 +1,7 @@
 #
 # Check some special create statements.
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --disable_warnings
 drop table if exists t1,t2,t3,t4,t5;
 drop database if exists mysqltest;
@@ -40,8 +40,10 @@ drop table if exists t1;
 --error 1075
 create table t1 (ordid int(8) not null auto_increment, ord  varchar(50) not null, primary key (ord,ordid)) engine=heap;
 
--- error 1049
+--error ER_BAD_DB_ERROR
 create table not_existing_database.test (a int);
+--error ER_BAD_DB_ERROR
+create temporary table not_existing_database.test (a int);
 create table `a/a` (a int);
 show create table `a/a`;
 create table t1 like `a/a`;
@@ -77,14 +79,14 @@ create table 1ea10 (1a20 int,1e int);
 insert into 1ea10 values(1,1);
 select 1ea10.1a20,1e+ 1e+10 from 1ea10;
 drop table 1ea10;
-create table t1 (t1.index int);
+create table t1 (`index` int);
 drop table t1;
 # Test that we get warning for this
 drop database if exists mysqltest;
 create database mysqltest;
-create table mysqltest.$test1 (a$1 int, $b int, c$ int);
-insert into mysqltest.$test1 values (1,2,3);
-select a$1, $b, c$ from mysqltest.$test1;
+create table mysqltest.`$test1` (a$1 int, `$b` int, c$ int);
+insert into mysqltest.`$test1` values (1,2,3);
+select a$1, `$b`, c$ from mysqltest.`$test1`;
 create table mysqltest.test2$ (a int);
 drop table mysqltest.test2$;
 drop database mysqltest;
@@ -279,7 +281,7 @@ create table t1 (,b int);
 
 create table t1 (a int, key(a));
 create table t2 (b int, foreign key(b) references t1(a), key(b));
-drop table if exists t1,t2;
+drop table if exists t2,t1;
 
 #
 # Test for CREATE TABLE .. LIKE ..
@@ -294,10 +296,14 @@ show create table t3;
 select * from t3;
 # Disable PS becasue of @@warning_count
 create table if not exists t3 like t1;
+# HANDLER_READ_KEY count differs when using ps protocol because of prepare
+# phase of ps protocol results in call to innodb storage engine apis to check
+# for table existence.
 --disable_ps_protocol
 select @@warning_count;
 --enable_ps_protocol
 create temporary table t3 like t2;
+--replace_result InnoDB TMP_TABLE_ENGINE MyISAM TMP_TABLE_ENGINE 
 show create table t3;
 select * from t3;
 drop table t3;
@@ -307,6 +313,7 @@ drop table t2, t3;
 create database mysqltest;
 create table mysqltest.t3 like t1;
 create temporary table t3 like mysqltest.t3;
+--replace_result InnoDB TMP_TABLE_ENGINE MyISAM TMP_TABLE_ENGINE 
 show create table t3;
 create table t2 like t3;
 show create table t2;
@@ -522,15 +529,16 @@ drop table t1;
 #
 # Bug#10413: Invalid column name is not rejected
 #
---error 1103
+--error ER_PARSE_ERROR
 create table t1(column.name int);
---error 1103
+--error ER_PARSE_ERROR
 create table t1(test.column.name int);
---error 1102
+--error ER_PARSE_ERROR
 create table t1(xyz.t1.name int);
+--error ER_PARSE_ERROR
 create table t1(t1.name int);
+--error ER_PARSE_ERROR
 create table t2(test.t2.name int);
-drop table t1,t2;
 
 #
 # Bug #12537: UNION produces longtext instead of varchar
@@ -692,19 +700,6 @@ create table t1(a set("a,b","c,d") not null);
 
 
 #
-# Bug #14155: Maximum value of MAX_ROWS handled incorrectly on 64-bit
-# platforms
-#
-create table t1 (i int) engine=myisam max_rows=100000000000;
-show create table t1;
-alter table t1 max_rows=100;
-show create table t1;
-alter table t1 max_rows=100000000000;
-show create table t1;
-drop table t1;
-
-
-#
 # Tests for errors happening at various stages of CREATE TABLES ... SELECT
 #
 # (Also checks that it behaves atomically in the sense that in case
@@ -718,7 +713,7 @@ create table t1 select * from t2;
 create table t1 select * from t1;
 # Error which happens before select_create::prepare()
 --error ER_CANT_AGGREGATE_2COLLATIONS
-create table t1 select coalesce('a' collate latin1_swedish_ci,'b' collate latin1_bin);
+create table t1 select coalesce(_latin1 'a' collate latin1_swedish_ci,_latin1 'b' collate latin1_bin);
 # Error during table creation
 --error ER_KEY_COLUMN_DOES_NOT_EXITS
 create table t1 (primary key(a)) select "b" as b;
@@ -741,7 +736,7 @@ select * from t1;
 drop table t1;
 # Error before select_create::prepare()
 --error ER_CANT_AGGREGATE_2COLLATIONS
-create table t1 select coalesce('a' collate latin1_swedish_ci,'b' collate latin1_bin);
+create table t1 select coalesce(_latin1 'a' collate latin1_swedish_ci,_latin1 'b' collate latin1_bin);
 
 
 # Base vs temporary tables dillema (a.k.a. bug#24508 "Inconsistent
@@ -815,337 +810,6 @@ create table t1 (upgrade int);
 drop table t1;
 
 
-#
-# Bug #26642: create index corrupts table definition in .frm
-#
-# Problem with creating keys with maximum key-parts and maximum name length
-# This test is made for a mysql server supporting names up to 64 bytes
-# and a maximum of 16 key segements per Key
-#
-
-create table t1 (
-  c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int,
-  c9 int, c10 int, c11 int, c12 int, c13 int, c14 int, c15 int, c16 int,
-
- key a001_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a002_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a003_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a004_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a005_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a006_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a007_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a008_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a009_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- key a010_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a011_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a012_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a013_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a014_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a015_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a016_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a017_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a018_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a019_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- key a020_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a021_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a022_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a023_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a024_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a025_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a026_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a027_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a028_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a029_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- key a030_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a031_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a032_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a033_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a034_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a035_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a036_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a037_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a038_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a039_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- key a040_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a041_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a042_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a043_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a044_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a045_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a046_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a047_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a048_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a049_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- key a050_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a051_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a052_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a053_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a054_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a055_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a056_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a057_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a058_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a059_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- key a060_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a061_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a062_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a063_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- key a064_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16)
-);
-
-# Check that the table is not corrupted
-show create table t1;
-flush tables;
-show create table t1;
-
-# Repeat test using ALTER to add indexes
-
-drop table t1;
-create table t1 (c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, 
-c8 int, c9 int, c10 int, c11 int, c12 int, c13 int, c14 int, c15 int, c16 int);
-
-alter table t1
-
- add key a001_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a002_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a003_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a004_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a005_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a006_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a007_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a008_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a009_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- add key a010_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a011_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a012_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a013_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a014_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a015_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a016_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a017_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a018_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a019_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- add key a020_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a021_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a022_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a023_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a024_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a025_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a026_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a027_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a028_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a029_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- add key a030_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a031_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a032_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a033_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a034_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a035_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a036_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a037_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a038_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a039_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- add key a040_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a041_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a042_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a043_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a044_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a045_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a046_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a047_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a048_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a049_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- add key a050_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a051_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a052_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a053_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a054_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a055_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a056_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a057_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a058_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a059_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
-
- add key a060_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a061_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a062_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a063_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16),
- add key a064_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16);
-
-show create table t1;
-flush tables;
-show create table t1;
-
-# Test the server limits; if any of these pass, all above tests need
-# to be rewritten to hit the limit
-#
-# Ensure limit is really 64 keys
---error 1069
-alter table t1 add key 
- a065_long_123456789_123456789_123456789_123456789_123456789_1234 (
-  c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16);
-
-drop table t1;
-
-# Ensure limit is really 16 key parts per key
-
-create table t1 (c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, 
-c8 int, c9 int, c10 int, c11 int, c12 int, c13 int, c14 int, c15 int, 
-c16 int, c17 int);
-
-# Get error for max key parts
---error 1070
-alter table t1 add key i1 (
- c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16, c17);
-
-# Get error for max key-name length
---error 1059
-alter table t1 add key 
- a001_long_123456789_123456789_123456789_123456789_123456789_12345 (c1);
-
-show create table t1;
-
-drop table t1;
-
 --echo
 --echo Bug #26104 Bug on foreign key class constructor
 --echo
@@ -1163,9 +827,13 @@ drop table if exists t1,t2;
 create table t1(a int not null, b int not null, primary key (a, b));
 --error ER_WRONG_FK_DEF
 create table t2(a int not null, b int not null, c int not null, primary key (a),
-foreign key fk_bug26104 (b,c) references t1(a));
+                constraint fk_bug26104 foreign key (b,c) references t1(a));
 drop table t1;
 
+# HANDLER_READ_KEY count differs when using ps protocol because of prepare
+# phase of ps protocol results in call to innodb storage engine apis to check
+# for table existence.
+--disable_ps_protocol
 #
 # Bug#15130:CREATE .. SELECT was denied to use advantages of the SQL_BIG_RESULT.
 #
@@ -1175,6 +843,7 @@ flush status;
 create table t2 select sql_big_result f1,count(f2) from t1 group by f1;
 show status like 'handler_read%';
 drop table t1,t2;
+--enable_ps_protocol
 
 #
 # Bug #25162: Backing up DB from 5.1 adds 'USING BTREE' to KEYs on table creates
@@ -1264,7 +933,7 @@ INSERT INTO t2 select * from t1;
 SELECT * from t2;
 drop table t2;
 
-CREATE TEMPORARY TABLE t2 (a int, b int, primary key (a));
+CREATE TEMPORARY TABLE t2 (a int, b int, primary key (a)) ENGINE=InnoDB;
 --error ER_DUP_ENTRY
 INSERT INTO t2 SELECT * FROM t1;
 SELECT * from t2;
@@ -1295,7 +964,6 @@ USE aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 --error ER_TOO_LONG_IDENT
 SHOW CREATE DATABASE aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
 
-#
 # Bug#21432 Database/Table name limited to 64 bytes, not chars, problems with multi-byte
 #
 set names utf8;
@@ -1323,16 +991,16 @@ from имя_таблицы_в_кодировке_утф8_длиной_больш
 select * from имя_таблицы_в_кодировке_утф8_длиной_больше_чем_48;
 
 select TABLE_NAME from information_schema.tables where
-table_schema='test';
+table_schema='test' order by TABLE_NAME;
 
 select COLUMN_NAME from information_schema.columns where
-table_schema='test';
+table_schema='test' order by COLUMN_NAME;
 
 select INDEX_NAME from information_schema.statistics where
-table_schema='test';
+table_schema='test' order by INDEX_NAME;
 
 select TABLE_NAME from information_schema.views where
-table_schema='test';
+table_schema='test' order by TABLE_NAME;
 
 show create table имя_таблицы_в_кодировке_утф8_длиной_больше_чем_48;
 show create view имя_вью_кодировке_утф8_длиной_больше_чем_42;
@@ -1399,16 +1067,20 @@ create table t2 as select f1() from t1;
 drop table t1,t2;
 drop function f1;
 
-#
+# WL6599_CREATE_LIKE_IS_VIEW
 # Bug#25629 CREATE TABLE LIKE does not work with INFORMATION_SCHEMA
 #
 create table t1 like information_schema.processlist;
+--replace_result InnoDB TMP_TABLE_ENGINE MyISAM TMP_TABLE_ENGINE 
 show create table t1;
 drop table t1;
 create temporary table t1 like information_schema.processlist;
+--replace_result InnoDB TMP_TABLE_ENGINE MyISAM TMP_TABLE_ENGINE 
 show create table t1;
 drop table t1;
-create table t1 like information_schema.character_sets;
+# See WL6599 HLS/6g on why "CREATE LIKE " is not allowed on I_S system
+# views. We use 'CREATE .. AS SELECT * FROM <I_S table>' now.
+create table t1 as select * from information_schema.character_sets;
 show create table t1;
 drop table t1;
 
@@ -1478,15 +1150,12 @@ CREATE TABLE t1(c1 TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURREN
 
 --echo
 
-SET sql_mode = NO_ZERO_DATE;
+SET sql_mode = 'NO_ZERO_DATE';
 
 --echo
 CREATE TABLE t2(c1 TIMESTAMP, c2 TIMESTAMP DEFAULT 0);
 DROP TABLE t2;
 
---echo
---error ER_INVALID_DEFAULT
-CREATE TABLE t2(c1 TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, c2 TIMESTAMP NOT NULL);
 
 --echo
 --echo # -- Check that NULL column still can be created.
@@ -1501,24 +1170,11 @@ ALTER TABLE t1 ADD INDEX(c1);
 SET sql_mode = '';
 
 --echo
-
-CREATE TABLE t3(c1 DATETIME NOT NULL);
-INSERT INTO t3 VALUES (0);
-
---echo
-SET sql_mode = TRADITIONAL;
-
---echo
---error ER_TRUNCATED_WRONG_VALUE
-ALTER TABLE t3 ADD INDEX(c1);
-
---echo
 --echo # -- Cleanup.
 
 SET sql_mode = '';
 DROP TABLE t1;
 DROP TABLE t2;
-DROP TABLE t3;
 
 --echo
 --echo # -- End of Bug#18834.
@@ -1638,7 +1294,7 @@ END ; |
 INSERT INTO t1 (pk, int_key) SELECT `pk` , `int_key` FROM B ;
 
 --delimiter |
---error ER_NOT_SUPPORTED_YET
+--error ER_TRG_ALREADY_EXISTS
 CREATE TRIGGER f BEFORE INSERT ON t1 FOR EACH ROW 
 BEGIN 
   UPDATE A SET `pk`=1 WHERE `pk`=0 ; 
@@ -1898,7 +1554,7 @@ drop temporary table t1;
 --echo #
 drop view t1;
 create view t1 as select a + 5 as a from t2;
---error ER_NON_INSERTABLE_TABLE
+--error ER_NONUPDATEABLE_COLUMN
 insert into t1 (a) values (1);
 --error ER_NONUPDATEABLE_COLUMN
 update t1 set a=3 where a=2;
@@ -1985,7 +1641,7 @@ drop table t1;
 create table if not exists t1 (a int, b date, c date) select 1 as b, 2 as c;
 select * from t1;
 drop table t1;
-set @@session.sql_mode='STRICT_ALL_TABLES';
+set @@session.sql_mode=default;
 --error ER_TRUNCATED_WRONG_VALUE
 create table if not exists t1 (a int, b date, c date) select 1 as b, 2 as c;
 --error ER_NO_SUCH_TABLE
@@ -1999,7 +1655,6 @@ select * from t1;
 create table if not exists t1 (a int, b date, c date) 
   ignore select 1 as b, 2 as c;
 select * from t1;
-set @@session.sql_mode=default;
 drop table t1;
 
 create table if not exists t1 (a int unique, b int)
@@ -2084,7 +1739,7 @@ drop function f;
 --echo #
 
 --error ER_TOO_BIG_ROWSIZE
-CREATE TABLE t1 (v varchar(65535));
+CREATE TABLE t1 (v varchar(65535) CHARACTER SET latin1);
 
 --echo #
 --echo # Bug#11746295 - 25168: "INCORRECT TABLE NAME" INSTEAD OF "IDENTIFIER TOO
@@ -2095,3 +1750,643 @@ CREATE TABLE t1 (v varchar(65535));
 CREATE TABLE t01234567890123456789012345678901234567890123456789012345678901234567890123456789(a int);
 --error ER_TOO_LONG_IDENT
 CREATE DATABASE t01234567890123456789012345678901234567890123456789012345678901234567890123456789;
+
+--echo #
+--echo # Bug #20573701 DROP DATABASE ASSERT ON DEBUG WHEN OTHER FILES PRESENT IN
+--echo #               DB FOLDER.
+--echo #
+let $MYSQLD_DATADIR= `SELECT @@datadir`;
+# Case 1: A database with no tables and has an unrelated file in it's database
+#         directory. Dropping such database should throw ER_DB_DROP_RMDIR
+#         error.
+CREATE DATABASE db_with_no_tables_and_an_unrelated_file_in_data_directory;
+--write_file $MYSQLD_DATADIR/db_with_no_tables_and_an_unrelated_file_in_data_directory/intruder.txt
+EOF
+--replace_result $MYSQLD_DATADIR ./ \\ /
+--replace_regex /errno: [0-9]+ - .*\)/errno: ## - ...)/
+--error ER_DB_DROP_RMDIR
+DROP DATABASE db_with_no_tables_and_an_unrelated_file_in_data_directory;
+# Cleanup
+--remove_file $MYSQLD_DATADIR/db_with_no_tables_and_an_unrelated_file_in_data_directory/intruder.txt
+DROP DATABASE db_with_no_tables_and_an_unrelated_file_in_data_directory;
+
+# Case 2: A database with tables in it and has an unrelated file in it's database
+#         directory. Dropping such database should throw ER_DB_DROP_RMDIR
+#         error.
+CREATE DATABASE db_with_tables_and_an_unrelated_file_in_data_directory;
+--write_file $MYSQLD_DATADIR/db_with_tables_and_an_unrelated_file_in_data_directory/intruder.txt
+EOF
+--replace_result $MYSQLD_DATADIR ./ \\ /
+--replace_regex /errno: [0-9]+ - .*\)/errno: ## - ...)/
+--error ER_DB_DROP_RMDIR
+DROP DATABASE db_with_tables_and_an_unrelated_file_in_data_directory;
+# Cleanup
+--remove_file $MYSQLD_DATADIR/db_with_tables_and_an_unrelated_file_in_data_directory/intruder.txt
+DROP DATABASE db_with_tables_and_an_unrelated_file_in_data_directory;
+
+# Case 3: A database (fakely created using mkdir) and has an unrelated file in it's database
+#         directory. Dropping such database should throw ER_SCHEMA_DIR_UNKNOWN
+#         error (creating a database with mkdir is not supported with new DD).
+--mkdir $MYSQLD_DATADIR/db_created_with_mkdir_and_an_unrelated_file_in_data_directory
+--write_file $MYSQLD_DATADIR/db_created_with_mkdir_and_an_unrelated_file_in_data_directory/intruder.txt
+EOF
+--replace_result $MYSQLD_DATADIR ./ \\ /
+--error ER_SCHEMA_DIR_UNKNOWN
+DROP DATABASE db_created_with_mkdir_and_an_unrelated_file_in_data_directory;
+# Cleanup
+--remove_file $MYSQLD_DATADIR/db_created_with_mkdir_and_an_unrelated_file_in_data_directory/intruder.txt
+--rmdir $MYSQLD_DATADIR/db_created_with_mkdir_and_an_unrelated_file_in_data_directory
+
+--echo #
+--echo # Bug#20857556: IMPROPER ERROR DURING CREATE TABLE
+--echo #
+
+--echo # Without the patch ER_WRONG_TABLE_NAME was getting reported.
+--error ER_PATH_LENGTH
+CREATE TABLE t1 (id INT) INDEX DIRECTORY = 'a#######################################################b#######################################################################################b#####################################################################################b######################################################################################b######################################################################################b#############################################################################################################';
+--error ER_PATH_LENGTH
+CREATE TABLE t2 (id INT NOT NULL, name VARCHAR(30))
+ENGINE = InnoDB
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10) INDEX DIRECTORY = 'a#######################################################b#######################################################################################b#####################################################################################b######################################################################################b######################################################################################b#############################################################################################################'
+);
+
+--error ER_WRONG_VALUE
+CREATE TABLE t3 (id INT) INDEX DIRECTORY = 'test';
+
+--error ER_WRONG_VALUE
+CREATE TABLE t4 (id INT NOT NULL, name VARCHAR(30))
+ENGINE = InnoDB
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10) INDEX DIRECTORY = 'test'
+);
+
+
+# TODO : Enable following once shared tablespaces are allowed in Partitioned
+#	 Tables (wl#12034).
+#--echo #
+#--echo # Bug #27331588: ASSERTION `THD->MDL_CONTEXT.OWNS_EQUAL_OR_STRONGER_LOCK
+#--echo # MDL_KEY::TABLESPACE
+#--echo #
+#
+#SET GLOBAL innodb_file_per_table= 0;
+#CREATE TABLE t (i INT) PARTITION BY HASH(i) PARTITIONS 2;
+#CREATE TABLE t_like LIKE t;
+#DROP TABLES t, t_like;
+#SET GLOBAL innodb_file_per_table= DEFAULT;
+
+
+--echo #
+--echo # BUG 27516741 - MYSQL SERVER DOES NOT WRITE INNODB ROW_TYPE
+--echo #                TO .FRM FILE WHEN DEFAULT USED
+
+--echo # Set up.
+SET @saved_innodb_default_row_format= @@global.innodb_default_row_format;
+SET @saved_show_create_table_verbosity= @@session.show_create_table_verbosity;
+
+--echo # Current InnoDB default row format and 'show_create_table_verbosity'
+--echo # values respectively.
+SELECT @@global.innodb_default_row_format;
+SELECT @@session.show_create_table_verbosity;
+
+CREATE TABLE t1(fld1 INT) ENGINE= InnoDB;
+CREATE TABLE t2(fld1 INT) ENGINE= InnoDB, ROW_FORMAT= DEFAULT;
+SET GLOBAL innodb_default_row_format= 'COMPACT';
+CREATE TABLE t3(fld1 INT) ENGINE= InnoDB;
+CREATE TABLE t4(fl1 INT) ENGINE= InnoDB, ROW_FORMAT= COMPRESSED;
+
+--echo # Test without show_create_table_verbosity enabled.
+--echo # Row format used is not displayed for all tables
+--echo # except t4 where it is explicitly specified.
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t3;
+SHOW CREATE TABLE t4;
+
+--echo # Test with show_create_table_verbosity enabled.
+--echo # Row format used is displayed for all tables.
+SET SESSION show_create_table_verbosity= ON;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t3;
+SHOW CREATE TABLE t4;
+
+SET GLOBAL innodb_default_row_format= 'DYNAMIC';
+SET SESSION show_create_table_verbosity= OFF;
+
+--echo # Test with corresponding temporary tables.
+CREATE TEMPORARY TABLE t1(fld1 INT) ENGINE= InnoDB;
+CREATE TEMPORARY TABLE t2(fld1 INT) ENGINE= InnoDB, ROW_FORMAT= DEFAULT;
+SET GLOBAL innodb_default_row_format= 'COMPACT';
+CREATE TEMPORARY TABLE t3(fld1 INT) ENGINE= InnoDB;
+CREATE TEMPORARY TABLE t4(fl1 INT) ENGINE= InnoDB, ROW_FORMAT= REDUNDANT;
+
+--echo # Test without show_create_table_verbosity enabled.
+--echo # Row format used is not displayed for all tables
+--echo # except t4 where it is explicitly specified.
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t3;
+SHOW CREATE TABLE t4;
+
+--echo # Test with show_create_table_verbosity enabled.
+--echo # Row format used is displayed for all tables.
+SET SESSION show_create_table_verbosity= ON;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t3;
+SHOW CREATE TABLE t4;
+
+--echo # Clean up.
+DROP TABLE t1, t2, t3, t4;
+DROP TABLE t1, t2, t3, t4;
+SET GLOBAL innodb_default_row_format= @saved_innodb_default_row_format;
+SET SESSION show_create_table_verbosity= @saved_show_create_table_verbosity;
+
+
+--echo #
+--echo # Bug#27592803: ASSERTION FAILED: RC == TYPE_OK,
+--echo #
+--echo # Make sure that it is possible to create enums using binary string
+--echo # values that are not valid utf8
+
+CREATE TABLE t0(a ENUM('aaa', 'bbb', 'ccc') BYTE);
+SHOW CREATE TABLE t0;
+SHOW COLUMNS FROM t0;
+
+--echo # Tables t1 and t2 uses a binary value that is legal as utf8, so they
+--echo # would not trigger an assert.
+CREATE TABLE t1(a ENUM( b'1001001'));
+SHOW CREATE TABLE t1;
+SHOW COLUMNS FROM t1;
+
+CREATE TABLE t2(a ENUM( b'1001001') BYTE);
+SHOW CREATE TABLE t2;
+SHOW COLUMNS FROM t2;
+
+--echo # Tables t3 - t6 contains binary values that are not valid utf8
+--echo # which would previously result in assert. With the fix we get the hex
+--echo # representation of the binary value instead.
+CREATE TABLE t3(a ENUM( b'10010010') BYTE);
+SHOW CREATE TABLE t3;
+SHOW COLUMNS FROM t3;
+
+CREATE TABLE t4(a ENUM( b'1001001101101111') BYTE);
+SHOW CREATE TABLE t4;
+SHOW COLUMNS FROM t4;
+
+CREATE TABLE t5(a ENUM( b'10010011011011111111011000011') BYTE);
+SHOW CREATE TABLE t5;
+SHOW COLUMNS FROM t5;
+
+CREATE TABLE t6 (a INT);
+ALTER TABLE t6
+MODIFY COLUMN a ENUM( b'10010011011011111111011000011') BYTE UNIQUE FIRST;
+SHOW CREATE TABLE t6;
+SHOW COLUMNS FROM t6;
+
+DROP TABLE t6;
+DROP TABLE t5;
+DROP TABLE t4;
+DROP TABLE t3;
+DROP TABLE t2;
+DROP TABLE t1;
+DROP TABLE t0;
+
+
+--echo # Bug#17468242/Wl#11807: Provide an option to prevent creation of tables
+--echo # without a unique/pk
+--echo #
+
+SET GLOBAL sql_require_primary_key= ON;
+SELECT @@global.sql_require_primary_key;
+
+--echo # Checking variable at session level
+--echo # Should not affect this session
+SELECT @@session.sql_require_primary_key;
+CREATE TABLE t1(i INT);
+CREATE TABLE t2(i INT PRIMARY KEY, j INT);
+ALTER TABLE t2 DROP COLUMN i;
+
+DROP TABLE t2;
+DROP TABLE t1;
+
+--echo # Create new connection which will inherit global setting
+connect(con1, localhost, root);
+
+SELECT @@session.sql_require_primary_key;
+--error ER_TABLE_WITHOUT_PK
+CREATE TABLE t1(i INT);
+CREATE TABLE t1(i INT PRIMARY KEY, j INT);
+--error ER_TABLE_WITHOUT_PK
+ALTER TABLE t1 DROP COLUMN i;
+
+DROP TABLE t1;
+
+--echo # Overdide inherited global setting locally
+SET SESSION sql_require_primary_key= OFF;
+
+SELECT @@session.sql_require_primary_key;
+CREATE TABLE t1(i INT);
+CREATE TABLE t2(i INT PRIMARY KEY, j INT);
+ALTER TABLE t2 DROP COLUMN i;
+
+DROP TABLE t2;
+DROP TABLE t1;
+
+--echo # Verify CREATE LIKE
+CREATE TABLE t1(i INT);
+
+SET SESSION sql_require_primary_key= ON;
+
+--error ER_TABLE_WITHOUT_PK
+CREATE TABLE t2 LIKE t1;
+
+--echo # Verify CREATE AS SELECT ...
+CREATE TABLE t3 (I INT PRIMARY KEY);
+
+--error ER_TABLE_WITHOUT_PK
+CREATE TABLE t4 AS SELECT 1;
+
+--error ER_TABLE_WITHOUT_PK
+CREATE TABLE t4 AS SELECT * FROM t1;
+
+--echo # PK attribute is not propagated by CREATE AS
+--error ER_TABLE_WITHOUT_PK
+CREATE TABLE t4 AS SELECT * FROM t3;
+
+--echo # PK attribute specified explicitly is ok
+CREATE TABLE t4(i INT PRIMARY KEY) AS SELECT * FROM t3;
+SHOW CREATE TABLE t4;
+
+--echo # Drop and add PK in same ALTER statement should be ok
+CREATE TABLE t5(i INT PRIMARY KEY, j INT);
+ALTER TABLE t5 DROP PRIMARY KEY, ADD CONSTRAINT PRIMARY KEY (j);
+
+--echo # Restriction also applies to temporary tables
+--error ER_TABLE_WITHOUT_PK
+CREATE TEMPORARY TABLE t6(i INT);
+ 
+--echo # Cleanup
+DROP TABLE t5;
+DROP TABLE t4;
+DROP TABLE t3;
+DROP TABLE t1;
+
+disconnect con1;
+connection default;
+
+--echo # Create user without SUPER privilege.
+CREATE USER subuser@localhost;
+REVOKE SUPER ON *.* FROM subuser@localhost;
+#GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO subuser@localhost;
+
+--echo # Connect as user subuser@localhost;
+connect (con_sub,localhost,subuser,,);
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET SESSION sql_require_primary_key= OFF;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET GLOBAL sql_require_primary_key= OFF;
+
+connection default;
+disconnect con_sub;
+DROP USER subuser@localhost;
+
+SET GLOBAL sql_require_primary_key= OFF;
+
+
+--echo #
+--echo # Bug#28022129: NOW() DOESN?T HONOR NO_ZERO_DATE SQL_MODE
+--echo #
+
+SET @saved_mode= @@sql_mode;
+
+CREATE TABLE t1(fld1 int);
+
+--echo # NO_ZERO_DATE and STRICT SQL mode.
+
+CREATE TABLE t2 SELECT fld1, CURDATE() fld2 FROM t1;
+CREATE TABLE t3 AS SELECT now();
+
+--echo # With patch, zero date is not generated as default.
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t3;
+DROP TABLE t2, t3;
+
+SET SQL_MODE= "NO_ZERO_DATE";
+
+--echo # NO_ZERO_DATE SQL mode.
+CREATE TABLE t2 SELECT fld1, CURDATE() fld2 FROM t1;
+CREATE TABLE t3 AS SELECT now();
+
+--echo # Zero date is generated as default in non strict mode.
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t3;
+DROP TABLE t1, t2, t3;
+
+SET SQL_MODE= DEFAULT;
+
+--echo # Test cases added for coverage.
+
+CREATE TABLE t1(fld1 DATETIME NOT NULL DEFAULT '1111:11:11');
+
+--echo # CREATE TABLE..SELECT using fields of another table.
+CREATE TABLE t2 AS SELECT * FROM t1;
+--echo # Default value is copied from the source table column.
+SHOW CREATE TABLE t2;
+
+DROP TABLE t1, t2;
+
+--echo # CREATE TABLE..SELECT based on trigger fields.
+CREATE TABLE t1 (fld1 INT, fld2 DATETIME DEFAULT '1211:1:1');
+
+DELIMITER |;
+CREATE TRIGGER t1_bi BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+  CREATE TEMPORARY TABLE t2 AS SELECT NEW.fld1, NEW.fld2;
+END
+|
+DELIMITER ;|
+
+INSERT INTO t1 VALUES (1, '1111:11:11');
+SHOW CREATE TABLE t2;
+
+DROP TABLE t1;
+DROP TEMPORARY TABLE t2;
+SET SQL_MODE= @saved_mode;
+
+--echo #
+--echo # Bug #29283055: CREATE TABLE IF NOT EXISTS .. SHOULD NOT ALWAYS
+--echo # FAIL ON SQL_REQUIRE_PRIMARY_KEY
+--echo #
+
+--echo # Create table without PK
+CREATE TABLE t1(i INT);
+
+SET SESSION sql_require_primary_key=1;
+
+--echo # This must not fail when t1 already exists, even if it does not have
+--echo # a pk
+CREATE TABLE IF NOT EXISTS t1(i INT);
+
+--echo # Cleanup
+SET SESSION sql_require_primary_key=DEFAULT;
+DROP TABLE t1;
+
+--echo #
+--echo # WL#13127: Deprecate integer display width and ZEROFILL option
+--echo #
+
+CREATE TABLE types(id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(100));
+INSERT INTO types(name) VALUES
+('TINYINT'), ('SMALLINT'), ('MEDIUMINT'), ('INT'), ('BIGINT'),
+('TINYINT(10)'), ('SMALLINT(10)'), ('MEDIUMINT(10)'), ('INT(10)'), ('BIGINT(10)'),
+('DOUBLE'), ('FLOAT'), ('DECIMAL(5, 2)'), ('YEAR');
+--let $count = `SELECT COUNT(*) FROM types`
+--let $i = 0
+while ($i < $count) {
+--inc $i
+--let $type=`SELECT name FROM types WHERE id = $i`
+--eval CREATE TABLE t1(col $type ZEROFILL)
+CREATE TABLE t2 LIKE t1;
+CREATE TABLE t3 AS SELECT * FROM t1;
+# Should not give warnings.
+ALTER TABLE t1 ADD COLUMN col2 VARCHAR(10);
+--eval ALTER TABLE t1 MODIFY COLUMN col2 $type ZEROFILL
+--eval ALTER TABLE t1 ADD COLUMN col3 $type ZEROFILL
+DROP TABLE t1, t2, t3;
+--eval CREATE FUNCTION f1(x $type ZEROFILL) RETURNS INT DETERMINISTIC RETURN 1
+--eval CREATE FUNCTION f2(x INT) RETURNS $type ZEROFILL DETERMINISTIC RETURN 1
+DELIMITER //;
+eval CREATE FUNCTION f3() RETURNS INT DETERMINISTIC
+BEGIN
+  DECLARE x $type ZEROFILL DEFAULT 1;
+  RETURN x;
+END//
+DELIMITER ;//
+DROP FUNCTION f1;
+DROP FUNCTION f2;
+DROP FUNCTION f3;
+}
+DROP TABLE types;
+
+--echo #
+--echo # WL#13528: Remove integer display width from SHOW CREATE output
+--echo #
+
+CREATE TABLE t1(
+  a TINYINT,
+  b SMALLINT,
+  c MEDIUMINT,
+  d INT,
+  e BIGINT,
+  f TINYINT(1),
+  g SMALLINT(1),
+  h MEDIUMINT(1),
+  i INT(1),
+  j BIGINT(1),
+  k TINYINT ZEROFILL,
+  l SMALLINT ZEROFILL,
+  m MEDIUMINT ZEROFILL,
+  n INT ZEROFILL,
+  o BIGINT ZEROFILL
+);
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 't1';
+DESCRIBE t1;
+
+CREATE VIEW v1 AS SELECT * FROM t1;
+--sorted_result
+SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'v1';
+DESCRIBE v1;
+DROP VIEW v1;
+DROP TABLE t1;
+
+CREATE FUNCTION f1(a INT) RETURNS INT RETURN 1;
+CREATE FUNCTION f2(a INT ZEROFILL) RETURNS INT ZEROFILL RETURN 1;
+
+SHOW CREATE FUNCTION f1;
+SHOW CREATE FUNCTION f2;
+
+--sorted_result
+SELECT DTD_IDENTIFIER FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_NAME = 'f1';
+--sorted_result
+SELECT DTD_IDENTIFIER FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_NAME = 'f2';
+--sorted_result
+SELECT DTD_IDENTIFIER FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME = 'f1';
+--sorted_result
+SELECT DTD_IDENTIFIER FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME = 'f2';
+
+DROP FUNCTION f1;
+DROP FUNCTION f2;
+
+CREATE PROCEDURE p1(a INT, b INT ZEROFILL) BEGIN END;
+
+# Not part of SHOW CREATE output ...
+SHOW CREATE PROCEDURE p1;
+
+# ... but part of I_S.PARAMETERS
+--sorted_result
+SELECT DTD_IDENTIFIER FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME = 'p1';
+
+DROP PROCEDURE p1;
+
+--echo #
+--echo # Bug#30556657: REVERT I_S/SHOW CREATE CHANGES REGARDING TINYINT(1)
+--echo #
+
+CREATE TABLE t1(a BOOLEAN, b TINYINT(1), c TINYINT(1) UNSIGNED, d TINYINT(1) ZEROFILL);
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 't1';
+DESCRIBE t1;
+
+CREATE VIEW v1 AS SELECT * FROM t1;
+--sorted_result
+SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'v1';
+DESCRIBE v1;
+DROP VIEW v1;
+DROP TABLE t1;
+
+CREATE FUNCTION f1(a BOOLEAN, b TINYINT(1), c TINYINT(1) UNSIGNED,
+                   d TINYINT(1) ZEROFILL) RETURNS BOOLEAN RETURN 1;
+SHOW CREATE FUNCTION f1;
+--sorted_result
+SELECT DTD_IDENTIFIER FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_NAME = 'f1';
+--sorted_result
+SELECT DTD_IDENTIFIER FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME = 'f1';
+DROP FUNCTION f1;
+
+CREATE PROCEDURE p1(a BOOLEAN, b TINYINT(1), c TINYINT(1) UNSIGNED,
+                    d TINYINT(1) ZEROFILL) BEGIN END;
+SHOW CREATE PROCEDURE p1;
+--sorted_result
+SELECT DTD_IDENTIFIER FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME = 'p1';
+DROP PROCEDURE p1;
+
+
+--echo #
+--echo # Bug#32227101: CREATE TABLE PRODUCES CORE
+--echo #
+--echo # Bug#33114368: 'SHOW TABLE STATUS' WITH HUGE AVG_ROW_LENGTH:
+--echo # DD::PROPERTIES::GET: ASSERTION `FALSE' FAILED.
+--echo #
+--echo # These issues are related and arise from insufficient input checking
+--echo # of numeric table options.
+--echo # From bug#33114368 we see that even if no overflow occurs on CREATE,
+--echo # there can be a risk of overflow when the option value is used
+--echo # elsewhere.
+--echo # The safest thing to do is to constrain values to the largest
+--echo # value permitted by the frm-file format (unless the range of the option
+--echo # value has been explicitly changed in 8.0).
+--echo #
+--echo # key_block_size, parser type: signed_num (int)
+--echo # std::uint32_t HA_CREATE_INFO::key_block_size
+--echo # 2 bytes in frm
+--echo # Only settable for myisam, but also used in Innodb
+
+--echo # key_block_size = 2^31-1 - rejected by explicit check 
+--error ER_PARSE_ERROR
+CREATE TABLE t1(i INT PRIMARY KEY) KEY_BLOCK_SIZE = 2147483647;
+
+--echo # key_block_size = -(2^31)+1 - rejected by parser (parser switched
+--echo # back to using ulong_num now that there is an explicit check).
+--error ER_PARSE_ERROR
+CREATE TABLE t1(i INT PRIMARY KEY) KEY_BLOCK_SIZE = -2147483647;
+
+--echo # key_block_size = 2^31 - rejected by explicit check
+--error ER_PARSE_ERROR
+CREATE TABLE t1(i INT PRIMARY KEY) KEY_BLOCK_SIZE = 2147483648;
+
+--echo # key_block_size = -2^31 - rejected by parser (parser switched
+--echo # back to using ulong_num now that there is an explicit check).
+--error ER_PARSE_ERROR
+CREATE TABLE t1(i INT PRIMARY KEY) KEY_BLOCK_SIZE = -2147483648;
+
+--echo # key_block_size = 2^32-1 - rejected by explicit check
+--error ER_PARSE_ERROR
+CREATE TABLE t2(i INT PRIMARY KEY) KEY_BLOCK_SIZE = 4294967295;
+
+--echo # key_block_size = 2^32 - rejected by explicit check
+--error ER_PARSE_ERROR
+CREATE TABLE t3(i INT PRIMARY KEY) KEY_BLOCK_SIZE = 4294967296;
+
+--echo # key_block_size = 3927749503218772669 - now rejected by parser
+--error ER_PARSE_ERROR
+CREATE TABLE t4(
+c0 DECIMAL ZEROFILL  UNIQUE KEY STORAGE MEMORY,
+c1 DECIMAL ZEROFILL  PRIMARY KEY COLUMN_FORMAT DYNAMIC UNIQUE KEY STORAGE MEMORY NOT NULL,
+c2 FLOAT ZEROFILL  COMMENT 'asdf'  COLUMN_FORMAT FIXED NULL STORAGE MEMORY,
+c3 TINYINT(120) ZEROFILL   STORAGE DISK UNIQUE KEY NULL COMMENT 'asdf'
+) CHECKSUM = 1, AUTO_INCREMENT = 1093400439, KEY_BLOCK_SIZE = 3927749503218772669, COMPRESSION = 'NONE';
+
+--echo # Only values which will fit in the two bytes allocated in the frm file
+--echo # format are accepted.
+CREATE TABLE t1(a INT) ENGINE=myisam key_block_size=65535;
+--replace_column 12 @ts@ 13 @ts@
+SHOW TABLE STATUS LIKE 't1';
+DROP TABLE t1;
+
+
+--echo #
+--echo # Bug #33114368	'SHOW TABLE STATUS' WITH HUGE AVG_ROW_LENGTH:
+--echo # DD::PROPERTIES::GET: ASSERTION `FALSE' FAILED.
+--echo #
+
+--echo # avg_row_length, parser type: ulong_num (ulong) 
+--echo # ulong HA_CREATE_INFO::avg_row_length
+--echo # 4 bytes in frm
+--error ER_PARSE_ERROR
+CREATE TABLE t1(a INT) avg_row_length=18446744073709551615;
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1(a INT) avg_row_length=4294967296;
+
+--echo # Only values which will fit in the four bytes allocated in the frm file
+--echo # format are accepted.
+CREATE TABLE t1(a INT) avg_row_length=4294967295;
+--replace_column 12 @ts@ 13 @ts@
+SHOW TABLE STATUS LIKE 't1';
+DROP TABLE t1;
+
+--echo # max_rows, parser type: ulonglong_num (ulonglong)
+--echo # ulonglong HA_CREATE_INFO::max_rows
+--echo # 4 bytes in frm
+--echo # max_rows is capped and a warning produced
+CREATE TABLE t1(a INT) max_rows=18446744073709551615;
+--replace_column 12 @ts@ 13 @ts@
+SHOW TABLE STATUS LIKE 't1';
+DROP TABLE t1;
+
+--echo # min_rows, parser type: ulonglong_num (ulonglong)
+--echo # ulonglong HA_CREATE_INFO::min_rows
+--echo # 4 bytes in frm
+--echo # min_rows is capped and a warning produced
+CREATE TABLE t1(a INT) min_rows=18446744073709551615;
+--replace_column 12 @ts@ 13 @ts@
+SHOW TABLE STATUS LIKE 't1';
+DROP TABLE t1;
+
+--echo # Bug#34523475: Inconsequent type derivation when using @variable
+
+CREATE TABLE t1 AS SELECT @max_error_count UNION SELECT 'a';
+SHOW CREATE TABLE t1;
+CREATE TABLE t2 AS SELECT @max_error_count UNION SELECT 'a';
+SHOW CREATE TABLE t2;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#34861841: Assertion: `false' in CostingReceiver::ProposeAccessPath
+--echo #
+
+CREATE TABLE t1 (x INT);
+INSERT INTO t1 VALUES (1), (2), (3);
+CREATE TABLE t2 (pk INT PRIMARY KEY);
+INSERT INTO t2 VALUES (1), (2), (3);
+CREATE TABLE t3 AS
+  SELECT 1 FROM t1 LEFT JOIN t2
+  ON t1.x IN (SELECT it1.pk FROM t2 AS it1, t2 AS it2);
+SELECT COUNT(*) FROM t3;
+DROP TABLE t1, t2, t3;

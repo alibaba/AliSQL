@@ -1,0 +1,501 @@
+# ==== Purpose ====
+#
+#  The purpose of this test script is to test the behavior of
+#  INSERT/UPDATE/DELETE with a partitioned table and a non partitioned
+#  table.
+#
+#  ==== Requirements ====
+#
+#  R1. partition_id written to the binary log when there is partitioning
+#      and no sub-partitioning shall range from 0 to (N-1) for a table with
+#      N partitions.
+#  R2. partition_id written to the binary log when there is subpartitioning
+#      shall range from 0 to (M x N - 1) where M is the number of partition and
+#      N is the number of subpartition.
+#  R3. Statements that modify multiple rows of the same partition/subpartition
+#      shall generate only one event.
+#  R4. Statements that modify multiple rows of different partitions/subpartition
+#      shall generate multiple events, one for every row that moves from one
+#      partition to another.
+#  R5. partition_id shall be read and written in endian-independent way
+#  R6. partition_id shall not be written to the binary log when there is
+#      no partitioning.
+#  R7. It shall be possible to have both partition_id and ndb_extra_row_info in
+#      same event.
+#
+#  ==== Implementation ====
+#
+#  Create a table with partitions(RANGE), and test for (R1), (R3) and (R4)
+#  Create a table with partitions(RANGE), with more than one byte(partitions >=128) partitions, and test for (R5)
+#  Create a table with partitions(RANGE) and sub_partitions(KEY), and test for (R2)-(R4)
+#  Create a table without partition and test for (R6)
+#  Sync with slave successfully
+#  Drop the tables created
+#  Create a table with partitions and INSERT a row which has both partition
+#  and ndb_extra_row_info (R7)
+#  Test PARTIAL_UPDATE_EVENT on a partitioned table
+#
+# ==== References ====
+#
+# Bug#32358736:PARSING INCORRECTLY EXTRA ROW INFO OF BINLOG
+# Bug#28712618:INSERT/UPDATE/DELETE WITH MULTIPLE ROWS IN SAME PARTITION CREATE MULTIPLE EVENT
+# WL#12168:Add Partition Information into the Binary Log
+#
+
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+# mysqlbinlog should be debug compiled.
+--source include/mysqlbinlog_have_debug.inc
+
+--echo #####1.Verifying the value of partition_id written to the binary log #####
+
+--let $iteration = 1
+
+while ($iteration <= 2)
+{
+  if ($iteration == 1)
+  {
+    CREATE TABLE employees (store_id INT NOT NULL) PARTITION BY RANGE (store_id)
+    ( PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20), PARTITION p2 VALUES LESS THAN (30));
+  }
+
+  if ($iteration == 2)
+  {
+    CREATE TABLE employees (store_id INT NOT NULL);
+    ALTER TABLE employees PARTITION BY RANGE (store_id) ( PARTITION p0 VALUES LESS THAN (10),
+                                                          PARTITION p1 VALUES LESS THAN (20),
+                                                          PARTITION p2 VALUES LESS THAN (30));
+  }
+
+  --source include/save_binlog_position.inc
+  INSERT INTO employees VALUES(22);
+  # Check if the partition_id is correctly logged for this event.
+  # It is stored in the third partition so the partition_id should be 2
+  --let $expected_partition_id = 2
+  --source suite/rpl/include/rpl_partition_info.inc
+
+  ALTER TABLE employees ADD PARTITION (PARTITION p3 VALUES LESS THAN (40));
+  --source include/save_binlog_position.inc
+  INSERT INTO employees VALUES(38);
+
+  # Check if the partition_id is correctly logged for this event.
+  # It is stored in the third partition so the partition_id should be 3
+  --let $expected_partition_id = 3
+  --source suite/rpl/include/rpl_partition_info.inc
+
+  --source include/save_binlog_position.inc
+  UPDATE employees SET store_id = 39 WHERE store_id = 38;
+
+  # Check if the old and new partition_id is correctly logged for this event.
+  # It is stored in the third partition before and after UPDATE so both
+  # partition_id should be 3
+  --let $partition_id= 3 3
+  --source suite/rpl/include/rpl_partition_info_update.inc
+
+  --source include/save_binlog_position.inc
+  UPDATE employees SET store_id = 28 WHERE store_id = 39;
+
+  # Check if the old and new partition_id is correctly logged for this event.
+  # It is stored in the third partition before and in second after UPDATE so,
+  # the old partition_id is 3 and new partition_id should be 2
+  --let $partition_id= 3 2
+  --source suite/rpl/include/rpl_partition_info_update.inc
+
+  --echo #####2.INSERT, UPDATE, DELETE in a partitioned table affecting same and multiple partition #####
+  --echo #####3.Verifying the number of events created when executing statements affecting same and multiple partitions #####
+  --echo -----INSERT-----
+
+  # Test that only one Write_rows_event is logged
+  --source include/save_binlog_position.inc
+  INSERT INTO employees VALUES(4), (5);
+
+  --let $dont_print_pattern= 1
+  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
+  --source include/assert_binlog_events.inc
+
+  # Check if the partition_id is correctly logged for this event.
+  --let $expected_partition_id= 0
+  --source suite/rpl/include/rpl_partition_info.inc
+
+  # Test that two Write_rows_events are logged
+  --source include/save_binlog_position.inc
+  INSERT INTO employees VALUES(7), (15);
+
+  --let $event_sequence =!Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # !Commit
+  --source include/assert_binlog_events.inc
+
+  # Check if the partition_id is correctly logged for this event.
+  --let $expected_partition_id= 0;1
+  --source suite/rpl/include/rpl_partition_info.inc
+
+  --echo -----UPDATE-----
+
+  # Test that one Update_rows_events are logged
+  --source include/save_binlog_position.inc
+  UPDATE employees SET store_id = 9 WHERE store_id < 6;
+
+  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
+  --source include/assert_binlog_events.inc
+
+  # Check if the partition_id is correctly logged for this event.
+  --let $partition_id = 0 0
+  --source suite/rpl/include/rpl_partition_info_update.inc
+
+  # Test that two Update_rows_events are logged
+  # different source_partition_id but same target_partition_id
+  --source include/save_binlog_position.inc
+  UPDATE employees SET store_id = 12 WHERE store_id < 25 AND store_id > 10;
+
+  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
+  --source include/assert_binlog_events.inc
+
+  # Check if the partition_id is correctly logged for this event.
+  --let $partition_id = 1 1;2 1
+  --source suite/rpl/include/rpl_partition_info_update.inc
+
+  # Test that two Update_rows_events are logged
+  # same source_partition_id but different target_partition_id
+  --source include/save_binlog_position.inc
+  UPDATE employees SET store_id = store_id + 2 WHERE store_id < 10;
+
+  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
+  --source include/assert_binlog_events.inc
+
+  # Check if the partition_id is correctly logged for this event.
+  --let $partition_id = 0 1;0 0
+  --source suite/rpl/include/rpl_partition_info_update.inc
+
+  --echo -----DELETE-----
+
+  # Test that single Delete_rows_events are logged
+  --source include/save_binlog_position.inc
+  DELETE FROM employees where store_id < 10;
+
+  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
+  --source include/assert_binlog_events.inc
+
+  # Check if the partition_id is correctly logged for this event.
+  --let $expected_partition_id= 0
+  --source suite/rpl/include/rpl_partition_info.inc
+
+  # Test that two Delete_rows_events are logged
+  --source include/save_binlog_position.inc
+  DELETE FROM employees where store_id < 40;
+
+  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # Delete_rows # !Commit
+  --source include/assert_binlog_events.inc
+
+  # Check if the partition_id is correctly logged for this event.
+  --let $expected_partition_id= 1;2
+  --source suite/rpl/include/rpl_partition_info.inc
+
+  --inc $iteration
+
+  DROP TABLE employees;
+}
+--echo #####4.Verifying the value of partition_id written to the binary log in case of table with more than 128 partitions######
+CREATE TABLE tp (
+    id INT primary key
+)
+PARTITION BY RANGE( id ) (
+  PARTITION p0 VALUES LESS THAN (0), PARTITION p1 VALUES LESS THAN (1),
+  PARTITION p2 VALUES LESS THAN (2), PARTITION p3 VALUES LESS THAN (3),
+  PARTITION p4 VALUES LESS THAN (4), PARTITION p5 VALUES LESS THAN (5),
+  PARTITION p6 VALUES LESS THAN (6), PARTITION p7 VALUES LESS THAN (7),
+  PARTITION p8 VALUES LESS THAN (8), PARTITION p9 VALUES LESS THAN (9),
+  PARTITION p10 VALUES LESS THAN (10), PARTITION p11 VALUES LESS THAN (11),
+  PARTITION p12 VALUES LESS THAN (12), PARTITION p13 VALUES LESS THAN (13),
+  PARTITION p14 VALUES LESS THAN (14), PARTITION p15 VALUES LESS THAN (15),
+  PARTITION p16 VALUES LESS THAN (16), PARTITION p17 VALUES LESS THAN (17),
+  PARTITION p18 VALUES LESS THAN (18), PARTITION p19 VALUES LESS THAN (19),
+  PARTITION p20 VALUES LESS THAN (20), PARTITION p21 VALUES LESS THAN (21),
+  PARTITION p22 VALUES LESS THAN (22), PARTITION p23 VALUES LESS THAN (23),
+  PARTITION p24 VALUES LESS THAN (24), PARTITION p25 VALUES LESS THAN (25),
+  PARTITION p26 VALUES LESS THAN (26), PARTITION p27 VALUES LESS THAN (27),
+  PARTITION p28 VALUES LESS THAN (28), PARTITION p29 VALUES LESS THAN (29),
+  PARTITION p30 VALUES LESS THAN (30), PARTITION p31 VALUES LESS THAN (31),
+  PARTITION p32 VALUES LESS THAN (32), PARTITION p33 VALUES LESS THAN (33),
+  PARTITION p34 VALUES LESS THAN (34), PARTITION p35 VALUES LESS THAN (35),
+  PARTITION p36 VALUES LESS THAN (36), PARTITION p37 VALUES LESS THAN (37),
+  PARTITION p38 VALUES LESS THAN (38), PARTITION p39 VALUES LESS THAN (39),
+  PARTITION p40 VALUES LESS THAN (40), PARTITION p41 VALUES LESS THAN (41),
+  PARTITION p42 VALUES LESS THAN (42), PARTITION p43 VALUES LESS THAN (43),
+  PARTITION p44 VALUES LESS THAN (44), PARTITION p45 VALUES LESS THAN (45),
+  PARTITION p46 VALUES LESS THAN (46), PARTITION p47 VALUES LESS THAN (47),
+  PARTITION p48 VALUES LESS THAN (48), PARTITION p49 VALUES LESS THAN (49),
+  PARTITION p50 VALUES LESS THAN (50), PARTITION p51 VALUES LESS THAN (51),
+  PARTITION p52 VALUES LESS THAN (52), PARTITION p53 VALUES LESS THAN (53),
+  PARTITION p54 VALUES LESS THAN (54), PARTITION p55 VALUES LESS THAN (55),
+  PARTITION p56 VALUES LESS THAN (56), PARTITION p57 VALUES LESS THAN (57),
+  PARTITION p58 VALUES LESS THAN (58), PARTITION p59 VALUES LESS THAN (59),
+  PARTITION p60 VALUES LESS THAN (60), PARTITION p61 VALUES LESS THAN (61),
+  PARTITION p62 VALUES LESS THAN (62), PARTITION p63 VALUES LESS THAN (63),
+  PARTITION p64 VALUES LESS THAN (64), PARTITION p65 VALUES LESS THAN (65),
+  PARTITION p66 VALUES LESS THAN (66), PARTITION p67 VALUES LESS THAN (67),
+  PARTITION p68 VALUES LESS THAN (68), PARTITION p69 VALUES LESS THAN (69),
+  PARTITION p70 VALUES LESS THAN (70), PARTITION p71 VALUES LESS THAN (71),
+  PARTITION p72 VALUES LESS THAN (72), PARTITION p73 VALUES LESS THAN (73),
+  PARTITION p74 VALUES LESS THAN (74), PARTITION p75 VALUES LESS THAN (75),
+  PARTITION p76 VALUES LESS THAN (76), PARTITION p77 VALUES LESS THAN (77),
+  PARTITION p78 VALUES LESS THAN (78), PARTITION p79 VALUES LESS THAN (79),
+  PARTITION p80 VALUES LESS THAN (80), PARTITION p81 VALUES LESS THAN (81),
+  PARTITION p82 VALUES LESS THAN (82), PARTITION p83 VALUES LESS THAN (83),
+  PARTITION p84 VALUES LESS THAN (84), PARTITION p85 VALUES LESS THAN (85),
+  PARTITION p86 VALUES LESS THAN (86), PARTITION p87 VALUES LESS THAN (87),
+  PARTITION p88 VALUES LESS THAN (88), PARTITION p89 VALUES LESS THAN (89),
+  PARTITION p90 VALUES LESS THAN (90), PARTITION p91 VALUES LESS THAN (91),
+  PARTITION p92 VALUES LESS THAN (92), PARTITION p93 VALUES LESS THAN (93),
+  PARTITION p94 VALUES LESS THAN (94), PARTITION p95 VALUES LESS THAN (95),
+  PARTITION p96 VALUES LESS THAN (96), PARTITION p97 VALUES LESS THAN (97),
+  PARTITION p98 VALUES LESS THAN (98), PARTITION p99 VALUES LESS THAN (99),
+  PARTITION p100 VALUES LESS THAN (100), PARTITION p101 VALUES LESS THAN (101),
+  PARTITION p102 VALUES LESS THAN (102), PARTITION p103 VALUES LESS THAN (103),
+  PARTITION p104 VALUES LESS THAN (104), PARTITION p105 VALUES LESS THAN (105),
+  PARTITION p106 VALUES LESS THAN (106), PARTITION p107 VALUES LESS THAN (107),
+  PARTITION p108 VALUES LESS THAN (108), PARTITION p109 VALUES LESS THAN (109),
+  PARTITION p110 VALUES LESS THAN (110), PARTITION p111 VALUES LESS THAN (111),
+  PARTITION p112 VALUES LESS THAN (112), PARTITION p113 VALUES LESS THAN (113),
+  PARTITION p114 VALUES LESS THAN (114), PARTITION p115 VALUES LESS THAN (115),
+  PARTITION p116 VALUES LESS THAN (116), PARTITION p117 VALUES LESS THAN (117),
+  PARTITION p118 VALUES LESS THAN (118), PARTITION p119 VALUES LESS THAN (119),
+  PARTITION p120 VALUES LESS THAN (120), PARTITION p121 VALUES LESS THAN (121),
+  PARTITION p122 VALUES LESS THAN (122), PARTITION p123 VALUES LESS THAN (123),
+  PARTITION p124 VALUES LESS THAN (124), PARTITION p125 VALUES LESS THAN (125),
+  PARTITION p126 VALUES LESS THAN (126), PARTITION p127 VALUES LESS THAN (127),
+  PARTITION p128 VALUES LESS THAN (128), PARTITION p129 VALUES LESS THAN (129));
+
+--source include/save_binlog_position.inc
+INSERT INTO tp VALUES(126), (127), (128);
+# Check if the partition_id is correctly logged for this event.
+--let $expected_partition_id = 127;128;129
+--source suite/rpl/include/rpl_partition_info.inc
+
+--echo #####5.Verifying the value of partition_id written to the binary log in case of sub-partitions######
+
+CREATE TABLE sp(id INT, age INT) PARTITION BY RANGE(age) SUBPARTITION BY KEY(id) (
+ PARTITION p0 VALUES LESS THAN (30) (SUBPARTITION p0a, SUBPARTITION p0b),
+ PARTITION p1 VALUES LESS THAN (60) (SUBPARTITION p1a, SUBPARTITION p1b));
+
+--source include/save_binlog_position.inc
+INSERT INTO sp VALUES(101, 31);
+
+# Check if the partition_id is correctly logged for this event.
+--let $expected_partition_id = 2
+--source suite/rpl/include/rpl_partition_info.inc
+
+--source include/save_binlog_position.inc
+INSERT INTO sp VALUES (102, 32);
+
+# Check if the partition_id is correctly logged for this event.
+--let $expected_partition_id = 3
+--source suite/rpl/include/rpl_partition_info.inc
+
+--echo #####6.INSERTS, UPDATES, DELETES in a partitioned table affecting same and multiple sub_partition #####
+--echo #####7.Verifying the number of events created when executing statements affecting single and multiple sub_partitions #####
+
+--echo -----INSERT-----
+
+# A single statement writing multiple rows in the same partition
+# and sub_partition should generate just one row event.
+--source include/save_binlog_position.inc
+INSERT INTO sp VALUES(103, 31), (105, 32);
+
+# Test that only one Write_rows_event is logged
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
+--source include/assert_binlog_events.inc
+
+# Check if the partition_id is correctly logged for this event.
+--let $expected_partition_id = 2
+--source suite/rpl/include/rpl_partition_info.inc
+
+# A single statement writing multiple rows in the same partition
+# but different sub_partition should generate more than one rows event .
+--source include/save_binlog_position.inc
+INSERT INTO sp VALUES(104, 32), (105, 32);
+
+# Test that two Write_rows_event is logged
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # !Commit
+--source include/assert_binlog_events.inc
+
+# Check if the partition_id is correctly logged for this event.
+--let $expected_partition_id = 3;2
+--source suite/rpl/include/rpl_partition_info.inc
+
+--echo -----UPDATE-----
+
+# A single statement writing multiple rows in the same partition
+# and sub_partition should generate just one row event.
+--source include/save_binlog_position.inc
+UPDATE sp set age=31 where id = 102 or id=104;
+
+# Test that only one Update_rows_event is logged
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
+--source include/assert_binlog_events.inc
+
+# Check if the old and new partition_id is correctly logged for this event.
+--let $partition_id= 3 3
+--source suite/rpl/include/rpl_partition_info_update.inc
+
+# A single statement writing multiple rows in the same partition
+# but different sub_partition should generate more than one rows event .
+--source include/save_binlog_position.inc
+UPDATE sp set age=29 where id = 102 or id=103;
+
+# Test that two Update_rows_event is logged
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
+--source include/assert_binlog_events.inc
+
+# Check if the old and new partition_id is correctly logged for this event.
+--let $partition_id = 2 0;3 1
+--source suite/rpl/include/rpl_partition_info_update.inc
+
+--echo -----DELETE-----
+
+# A single statement writing multiple rows in the same partition
+# and sub_partition should generate just one row event.
+--source include/save_binlog_position.inc
+DELETE FROM sp where id = 101 or id=105;
+
+# Test that only one Delete_rows_event is logged
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
+--source include/assert_binlog_events.inc
+
+# Check if the partition_id is correctly logged for this event.
+--let $expected_partition_id = 2
+--source suite/rpl/include/rpl_partition_info.inc
+
+# A single statement writing multiple rows in the same partition
+# but different sub_partition should generate more than one rows event .
+--source include/save_binlog_position.inc
+DELETE FROM sp where id = 102 or id=103;
+
+# Test that two Delete_rows_event is logged
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # Delete_rows # !Commit
+--source include/assert_binlog_events.inc
+
+# Check if the partition_id is correctly logged for this event.
+--let $expected_partition_id = 0;1
+--source suite/rpl/include/rpl_partition_info.inc
+
+--echo #####8.INSERT, UPDATE, DELETE in a table with no partition #####
+--echo #####9.Verifying the number of events created when executing the above statements #####
+
+CREATE TABLE t(s int, x int);
+INSERT INTO t VALUES (11, 2);
+INSERT INTO t VALUES (13, 4);
+
+--echo -----INSERT-----
+
+# Test that only one Write_rows_event is logged
+--source include/save_binlog_position.inc
+INSERT INTO t VALUES (10, 1), (11, 20);
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
+--source include/assert_binlog_events.inc
+
+--echo -----UPDATE-----
+# Test that only one Update_rows_event is logged
+--source include/save_binlog_position.inc
+UPDATE t SET s= 7 WHERE x > 3;
+
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
+--source include/assert_binlog_events.inc
+
+--echo -----DELETE------
+# Test that only one Delete_rows_event is logged
+--source include/save_binlog_position.inc
+DELETE from t where x < 4;
+
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
+--source include/assert_binlog_events.inc
+
+--echo #####10.Sync with slave and check if all the tables are replicated correctly#####
+
+--source include/sync_slave_sql_with_master.inc
+
+let $diff_tables= master:tp, slave:tp;
+--source include/diff_tables.inc
+
+let $diff_tables= master:t, slave:t;
+--source include/diff_tables.inc
+
+let $diff_tables= master:sp, slave:sp;
+--source include/diff_tables.inc
+
+# Cleanup
+connection master;
+DROP TABLE tp;
+DROP TABLE t;
+DROP TABLE sp;
+
+--echo #####11.INSERT in a table which has both partition info and ndb_info #####
+
+# Set the debug points to be used for creating ndb_info
+#
+connection slave;
+--let $debug_point_silent= 1
+--let $debug_point= extra_row_ndb_info_check
+--source include/add_debug_point.inc
+connection master;
+--let $debug_point= extra_row_ndb_info_set_3
+--source include/add_debug_point.inc
+
+CREATE TABLE t1 (store_id INT NOT NULL) PARTITION BY RANGE (store_id) ( PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20));
+
+--source include/save_binlog_position.inc
+INSERT INTO t1 VALUES (1), (11), (15);
+
+# Test that three Write_rows_event is logged
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # Write_rows # !Commit
+--source include/assert_binlog_events.inc
+
+# Check if the partition_id is correctly logged for this event.
+--let $expected_partition_id = 0;1
+--source suite/rpl/include/rpl_partition_info.inc
+
+# needed for mysqlbinlog_only_decoded_rows
+--source include/have_grep.inc
+--let mysqlbinlog_only_decoded_rows =1
+--source include/mysqlbinlog.inc
+
+# Cleanup
+
+--source include/sync_slave_sql_with_master.inc
+--let $debug_point= extra_row_ndb_info_check
+--source include/remove_debug_point.inc
+connection master;
+--let $debug_point= extra_row_ndb_info_set_3
+--source include/remove_debug_point.inc
+
+--echo #####12.Test partial JSON Update #####
+SET @@SESSION.BINLOG_ROW_VALUE_OPTIONS= PARTIAL_JSON;
+
+--source include/save_binlog_position.inc
+UPDATE t1 SET  store_id = 8 WHERE store_id = 11;
+--let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit
+--source include/assert_binlog_events.inc
+
+--let $partition_id = 1 0
+--source suite/rpl/include/rpl_partition_info_update.inc
+
+# Verify that we get the expected error when trying to print ndb_info with a length < 2
+# mysqlbinlog should be debug compiled.
+--source include/mysqlbinlog_have_debug.inc
+
+--source include/save_binlog_position.inc
+INSERT INTO t1 VALUES (2);
+
+--exec $MYSQL_BINLOG -#d,simulate_error_in_ndb_info_print --force-if-open --start-position=$binlog_position -vv $binlog_fullpath > $MYSQLTEST_VARDIR/tmp/mysqlbinlog_partition_1.binlog
+
+--let $assert_file = $MYSQLTEST_VARDIR/tmp/mysqlbinlog_partition_1.binlog
+--let $assert_select=  The number of extra_row_ndb_info is smaller than the minimum acceptable value
+--let $assert_match=
+--let $assert_count= 1
+--let $assert_text= The error block is working fine for ndb_info print.
+--source include/assert_grep.inc
+
+DROP TABLE t1;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog_partition_1.binlog
+RESET MASTER;
+--source include/rpl_end.inc

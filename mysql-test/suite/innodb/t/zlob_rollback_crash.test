@@ -1,0 +1,57 @@
+--source include/have_innodb_max_16k.inc
+--source include/have_debug.inc
+
+# Valgrind can hang or return spurious messages on DBUG_SUICIDE
+--source include/not_valgrind.inc
+
+set global innodb_compression_level = 0;
+
+--disable_reconnect
+
+CREATE TABLE t(j1 JSON) row_format=compressed;
+
+set @data_1 = repeat('abcdefghijklmnopqrstuvwxyz1234', 6006);
+set @json_doc_1 = concat('["Sven", "', @data_1, '"]');
+set @json_doc_2 = concat('["Glen", "', @data_1, '"]');
+
+show create table t;
+
+start transaction;
+--echo # Insert data
+INSERT INTO t VALUES (@json_doc_1);
+
+SET SESSION DEBUG='+d,crash_end_of_lob_rollback_0';
+
+--source include/expect_crash.inc
+
+--error 2013
+rollback;
+
+--source include/start_mysqld.inc
+
+set @data_1 = repeat('abcdefghijklmnopqrstuvwxyz1234', 6006);
+set @json_doc_1 = concat('["Sven", "', @data_1, '"]');
+set @json_doc_2 = concat('["Glen", "', @data_1, '"]');
+
+select count(*) from t;
+
+INSERT INTO t VALUES (@json_doc_1);
+
+start transaction;
+--echo # Insert data
+INSERT INTO t VALUES (@json_doc_2);
+
+SET SESSION DEBUG='+d,crash_end_of_lob_rollback_0';
+
+--source include/expect_crash.inc
+
+--error 2013
+rollback;
+
+--source include/start_mysqld.inc
+
+select count(*) from t;
+
+drop table t;
+
+set global innodb_compression_level = default;

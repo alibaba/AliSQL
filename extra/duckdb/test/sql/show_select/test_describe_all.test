@@ -1,0 +1,31 @@
+# name: test/sql/show_select/test_describe_all.test
+# description: Test describe all
+# group: [show_select]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, a INTEGER);
+
+statement ok
+DESCRIBE;
+
+query TTTTTT
+DESCRIBE
+----
+memory	main	integers	[i, j, a]	[INTEGER, INTEGER, INTEGER]	false
+
+# issue #6393
+statement ok
+DROP TABLE integers
+
+statement ok
+create table t(plant text, dt date, mwh bigint);
+
+query TTTTTT
+DESCRIBE;
+----
+memory	main	t	[plant, dt, mwh]	[VARCHAR, DATE, BIGINT]	false

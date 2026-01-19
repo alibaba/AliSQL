@@ -1,12 +1,19 @@
 drop table if exists t1, t2;
-select null,\N,isnull(null),isnull(1/0),isnull(1/0 = null),ifnull(null,1),ifnull(null,"TRUE"),ifnull("TRUE","ERROR"),1/0 is null,1 is not null;
-NULL	NULL	isnull(null)	isnull(1/0)	isnull(1/0 = null)	ifnull(null,1)	ifnull(null,"TRUE")	ifnull("TRUE","ERROR")	1/0 is null	1 is not null
-NULL	NULL	1	1	1	1	TRUE	TRUE	1	1
-explain extended select null,\N,isnull(null),isnull(1/0),isnull(1/0 = null),ifnull(null,1),ifnull(null,"TRUE"),ifnull("TRUE","ERROR"),1/0 is null,1 is not null;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+select null,isnull(null),isnull(1/0),isnull(1/0 = null),ifnull(null,1),ifnull(null,"TRUE"),ifnull("TRUE","ERROR"),1/0 is null,1 is not null;
+NULL	isnull(null)	isnull(1/0)	isnull(1/0 = null)	ifnull(null,1)	ifnull(null,"TRUE")	ifnull("TRUE","ERROR")	1/0 is null	1 is not null
+NULL	1	1	1	1	TRUE	TRUE	1	1
 Warnings:
-Note	1003	/* select#1 */ select NULL AS `NULL`,NULL AS `NULL`,isnull(NULL) AS `isnull(null)`,isnull((1 / 0)) AS `isnull(1/0)`,isnull(((1 / 0) = NULL)) AS `isnull(1/0 = null)`,ifnull(NULL,1) AS `ifnull(null,1)`,ifnull(NULL,'TRUE') AS `ifnull(null,"TRUE")`,ifnull('TRUE','ERROR') AS `ifnull("TRUE","ERROR")`,isnull((1 / 0)) AS `1/0 is null`,(1 is not null) AS `1 is not null`
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+explain select null,isnull(null),isnull(1/0),isnull(1/0 = null),ifnull(null,1),ifnull(null,"TRUE"),ifnull("TRUE","ERROR"),1/0 is null,1 is not null;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Warning	1365	Division by 0
+Note	1003	/* select#1 */ select NULL AS `NULL`,(NULL is null) AS `isnull(null)`,((1 / 0) is null) AS `isnull(1/0)`,(((1 / 0) = NULL) is null) AS `isnull(1/0 = null)`,ifnull(NULL,1) AS `ifnull(null,1)`,ifnull(NULL,'TRUE') AS `ifnull(null,"TRUE")`,ifnull('TRUE','ERROR') AS `ifnull("TRUE","ERROR")`,((1 / 0) is null) AS `1/0 is null`,(1 is not null) AS `1 is not null`
 select 1 | NULL,1 & NULL,1+NULL,1-NULL;
 1 | NULL	1 & NULL	1+NULL	1-NULL
 NULL	NULL	NULL	NULL
@@ -28,9 +35,9 @@ field(NULL,"a","b","c")
 select 2 between null and 1,2 between 3 AND NULL,NULL between 1 and 2,2 between NULL and 3, 2 between 1 AND null;
 2 between null and 1	2 between 3 AND NULL	NULL between 1 and 2	2 between NULL and 3	2 between 1 AND null
 0	0	NULL	NULL	NULL
-explain extended select 2 between null and 1,2 between 3 AND NULL,NULL between 1 and 2,2 between NULL and 3, 2 between 1 AND null;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+explain select 2 between null and 1,2 between 3 AND NULL,NULL between 1 and 2,2 between NULL and 3, 2 between 1 AND null;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
 Note	1003	/* select#1 */ select (2 between NULL and 1) AS `2 between null and 1`,(2 between 3 and NULL) AS `2 between 3 AND NULL`,(NULL between 1 and 2) AS `NULL between 1 and 2`,(2 between NULL and 3) AS `2 between NULL and 3`,(2 between 1 and NULL) AS `2 between 1 AND null`
 SELECT NULL AND NULL, 1 AND NULL, NULL AND 1, NULL OR NULL, 0 OR NULL, NULL OR 0;
@@ -42,14 +49,22 @@ SELECT (NULL OR NULL) IS NULL;
 select NULL AND 0, 0 and NULL;
 NULL AND 0	0 and NULL
 0	0
-select inet_ntoa(null),inet_aton(null),inet_aton("122.256"),inet_aton("122.226."),inet_aton("");
-inet_ntoa(null)	inet_aton(null)	inet_aton("122.256")	inet_aton("122.226.")	inet_aton("")
-NULL	NULL	NULL	NULL	NULL
-explain extended select inet_ntoa(null),inet_aton(null),inet_aton("122.256"),inet_aton("122.226."),inet_aton("");
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+select inet_ntoa(null),inet_aton(null);
+inet_ntoa(null)	inet_aton(null)
+NULL	NULL
+explain select inet_ntoa(null),inet_aton(null);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
-Note	1003	/* select#1 */ select inet_ntoa(NULL) AS `inet_ntoa(null)`,inet_aton(NULL) AS `inet_aton(null)`,inet_aton('122.256') AS `inet_aton("122.256")`,inet_aton('122.226.') AS `inet_aton("122.226.")`,inet_aton('') AS `inet_aton("")`
+Note	1003	/* select#1 */ select inet_ntoa(NULL) AS `inet_ntoa(null)`,inet_aton(NULL) AS `inet_aton(null)`
+select inet6_ntoa(null),inet6_aton(null);
+inet6_ntoa(null)	inet6_aton(null)
+NULL	NULL
+explain select inet6_ntoa(null), inet6_aton(null);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select inet6_ntoa(NULL) AS `inet6_ntoa(null)`,inet6_aton(NULL) AS `inet6_aton(null)`
 create table t1 (x int);
 insert into t1 values (null);
 select * from t1 where x != 0;
@@ -71,7 +86,7 @@ indexed_field
 NULL
 NULL
 DROP TABLE t1;
-create table t1 (a int, b int) engine=myisam;
+create table t1 (a int, b int);
 insert into t1 values(20,null);
 select t2.b, ifnull(t2.b,"this is null") from t1 as t2 left join t1 as t3 on
 t2.b=t3.a;
@@ -88,7 +103,11 @@ b	ifnull(t2.b,"this is null")
 NULL	this is null
 NULL	this is null
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a varchar(16) NOT NULL default '', b smallint(6) NOT NULL default 0, c datetime NOT NULL default '0000-00-00 00:00:00', d smallint(6) NOT NULL default 0);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 SET a = "", d= "2003-01-14 03:54:55";
 Warnings:
 Warning	1265	Data truncated for column 'd' at row 1
@@ -105,14 +124,12 @@ ERROR 23000: Column 'a' cannot be null
 INSERT INTO t1 (a) values (null),(null);
 Warnings:
 Warning	1048	Column 'a' cannot be null
-Warning	1048	Column 'a' cannot be null
 INSERT INTO t1 (b) values (null);
 ERROR 23000: Column 'b' cannot be null
 INSERT INTO t1 (b) values (1/null);
 ERROR 23000: Column 'b' cannot be null
 INSERT INTO t1 (b) values (null),(null);
 Warnings:
-Warning	1048	Column 'b' cannot be null
 Warning	1048	Column 'b' cannot be null
 INSERT INTO t1 (c) values (null);
 ERROR 23000: Column 'c' cannot be null
@@ -121,14 +138,12 @@ ERROR 23000: Column 'c' cannot be null
 INSERT INTO t1 (c) values (null),(null);
 Warnings:
 Warning	1048	Column 'c' cannot be null
-Warning	1048	Column 'c' cannot be null
 INSERT INTO t1 (d) values (null);
 ERROR 23000: Column 'd' cannot be null
 INSERT INTO t1 (d) values (1/null);
 ERROR 23000: Column 'd' cannot be null
 INSERT INTO t1 (d) values (null),(null);
 Warnings:
-Warning	1048	Column 'd' cannot be null
 Warning	1048	Column 'd' cannot be null
 select * from t1;
 a	b	c	d
@@ -142,16 +157,24 @@ a	b	c	d
 	0	0000-00-00 00:00:00	0
 	0	0000-00-00 00:00:00	0
 drop table t1;
+SET sql_mode = default;
 create table t1 (a int not null, b int not null, index idx(a));
 insert into t1 values
 (1,1), (2,2), (3,3), (4,4), (5,5), (6,6),
 (7,7), (8,8), (9,9), (10,10), (11,11), (12,12);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 explain select * from t1 where a between 2 and 3;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	idx	idx	4	NULL	2	Using index condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx	idx	4	NULL	2	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (`test`.`t1`.`a` between 2 and 3)
 explain select * from t1 where a between 2 and 3 or b is null;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	idx	idx	4	NULL	2	Using index condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx	idx	4	NULL	2	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (`test`.`t1`.`a` between 2 and 3)
 drop table t1;
 select cast(NULL as signed);
 cast(NULL as signed)
@@ -168,18 +191,27 @@ insert into t1 select i*2 from t1;
 insert into t1 select i*2 from t1;
 insert into t1 select i*2 from t1;
 insert into t1 values(null);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 explain select * from t1 where i=2 or i is null;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref_or_null	i	i	5	const	9	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref_or_null	i	i	5	const	10	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i` from `test`.`t1` where ((`test`.`t1`.`i` = 2) or (`test`.`t1`.`i` is null))
 select count(*) from t1 where i=2 or i is null;
 count(*)
 10
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 alter table t1 change i i int not null;
 Warnings:
 Warning	1265	Data truncated for column 'i' at row 513
+SET sql_mode = default;
 explain select * from t1 where i=2 or i is null;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	i	i	4	const	7	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	i	i	4	const	9	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i` from `test`.`t1` where (`test`.`t1`.`i` = 2)
 select count(*) from t1 where i=2 or i is null;
 count(*)
 9
@@ -231,21 +263,21 @@ t1	CREATE TABLE `t1` (
   `c01` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c02` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c03` varchar(6) CHARACTER SET latin2 NOT NULL DEFAULT '',
-  `c04` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
+  `c04` varchar(6) CHARACTER SET latin2 NOT NULL DEFAULT '',
   `c05` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c06` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
-  `c07` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
-  `c08` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
+  `c07` varchar(6) CHARACTER SET latin2 NOT NULL DEFAULT '',
+  `c08` varchar(6) CHARACTER SET latin2 NOT NULL DEFAULT '',
   `c09` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c10` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c11` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c12` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c13` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
-  `c14` char(0) CHARACTER SET latin2 DEFAULT NULL,
-  `c15` char(0) CHARACTER SET latin2 DEFAULT NULL,
+  `c14` binary(0) DEFAULT NULL,
+  `c15` binary(0) DEFAULT NULL,
   `c16` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c17` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
-  `c18` char(0) CHARACTER SET latin2 DEFAULT NULL,
+  `c18` binary(0) DEFAULT NULL,
   `c19` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c20` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
   `c21` varchar(6) CHARACTER SET latin2 DEFAULT NULL,
@@ -258,14 +290,14 @@ t1	CREATE TABLE `t1` (
   `c29` varchar(381) CHARACTER SET latin2 DEFAULT NULL,
   `c30` varchar(317) CHARACTER SET latin2 DEFAULT NULL,
   `c31` varchar(192) CHARACTER SET latin2 DEFAULT NULL,
-  `c32` char(0) CHARACTER SET latin2 DEFAULT NULL,
+  `c32` binary(0) DEFAULT NULL,
   `c33` varchar(3) CHARACTER SET latin2 DEFAULT NULL,
   `c34` varchar(3) CHARACTER SET latin2 DEFAULT NULL,
   `c35` varchar(3) CHARACTER SET latin2 DEFAULT NULL,
-  `c36` varchar(3) CHARACTER SET latin2 DEFAULT NULL,
+  `c36` varbinary(3) DEFAULT NULL,
   `c37` varchar(10) CHARACTER SET latin2 DEFAULT NULL,
-  `c38` varchar(10) CHARACTER SET latin2 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `c38` varbinary(10) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 select 
 case 'str' when 'STR' then 'str' when null then 'null' end as c01,
@@ -278,12 +310,12 @@ field('str1', null, 'STR1') as c05,
 c01	c02	c03	c04	c05	c08	c09
 str	str	0	1	2	1	1
 set names latin1;
-create table bug19145a (e enum('a','b','c')          default 'b' , s set('x', 'y', 'z')          default 'y' ) engine=MyISAM;
-create table bug19145b (e enum('a','b','c')          default null, s set('x', 'y', 'z')          default null) engine=MyISAM;
-create table bug19145c (e enum('a','b','c') not null default 'b' , s set('x', 'y', 'z') not null default 'y' ) engine=MyISAM;
-create table bug19145setnotnulldefaultnull (e enum('a','b','c')          default null, s set('x', 'y', 'z') not null default null) engine=MyISAM;
+create table bug19145a (e enum('a','b','c')          default 'b' , s set('x', 'y', 'z')          default 'y' );
+create table bug19145b (e enum('a','b','c')          default null, s set('x', 'y', 'z')          default null);
+create table bug19145c (e enum('a','b','c') not null default 'b' , s set('x', 'y', 'z') not null default 'y' );
+create table bug19145setnotnulldefaultnull (e enum('a','b','c')          default null, s set('x', 'y', 'z') not null default null);
 ERROR 42000: Invalid default value for 's'
-create table bug19145enumnotnulldefaultnull (e enum('a','b','c') not null default null, s set('x', 'y', 'z')          default null) engine=MyISAM;
+create table bug19145enumnotnulldefaultnull (e enum('a','b','c') not null default null, s set('x', 'y', 'z')          default null);
 ERROR 42000: Invalid default value for 'e'
 alter table bug19145a alter column e set default null;
 alter table bug19145a alter column s set default null;
@@ -301,22 +333,22 @@ Table	Create Table
 bug19145a	CREATE TABLE `bug19145a` (
   `e` enum('a','b','c') DEFAULT NULL,
   `s` set('x','y','z') DEFAULT NULL,
-  `i` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `i` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show create table bug19145b;
 Table	Create Table
 bug19145b	CREATE TABLE `bug19145b` (
   `e` enum('a','b','c') DEFAULT NULL,
   `s` set('x','y','z') DEFAULT NULL,
-  `i` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `i` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show create table bug19145c;
 Table	Create Table
 bug19145c	CREATE TABLE `bug19145c` (
   `e` enum('a','b','c') NOT NULL DEFAULT 'b',
   `s` set('x','y','z') NOT NULL DEFAULT 'y',
-  `i` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `i` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table bug19145a;
 drop table bug19145b;
 drop table bug19145c;
@@ -326,20 +358,83 @@ drop table bug19145c;
 #             precision > 0 && scale <= precision'
 #
 CREATE TABLE t1 (a DECIMAL (1, 0) ZEROFILL, b DECIMAL (1, 0) ZEROFILL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
 INSERT INTO t1 (a, b) VALUES (0, 0);
 CREATE TABLE t2 SELECT IFNULL(a, b) FROM t1;
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 DESCRIBE t2;
 Field	Type	Null	Key	Default	Extra
 IFNULL(a, b)	decimal(1,0) unsigned	YES		NULL	
 DROP TABLE t2;
 CREATE TABLE t2 SELECT IFNULL(a, NULL) FROM t1;
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 DESCRIBE t2;
 Field	Type	Null	Key	Default	Extra
-IFNULL(a, NULL)	decimal(1,0)	YES		NULL	
+IFNULL(a, NULL)	decimal(1,0) unsigned	YES		NULL	
 DROP TABLE t2;
 CREATE TABLE t2 SELECT IFNULL(NULL, b) FROM t1;
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 DESCRIBE t2;
 Field	Type	Null	Key	Default	Extra
-IFNULL(NULL, b)	decimal(1,0)	YES		NULL	
+IFNULL(NULL, b)	decimal(1,0) unsigned	YES		NULL	
 DROP TABLE t1, t2;
 # End of 5.0 tests
+#
+# WL#7247: Removal of \N
+#
+SELECT \N;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\N' at line 1
+#
+# Bug#29337233 'LATE NULLS FILTERING' NEEDED EVEN FOR EQ_REF JOINS KEYS
+#
+create table t1 (
+pk int primary key,
+col_int_unique int,
+c char(255) not null default 'xxxx'
+) engine = innoDb;
+create unique index ix1 ON t1(col_int_unique);
+insert into t1(pk,col_int_unique) values (1,1), (2,NULL);
+insert into t1(pk,col_int_unique) values (3,3), (4,4), (5,5), (6,6), (7,7), (8,8);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN
+SELECT STRAIGHT_JOIN *
+FROM t1 LEFT OUTER JOIN t1 AS t2
+ON t1.col_int_unique = t2.col_int_unique;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	8	100.00	NULL
+1	SIMPLE	t2	NULL	eq_ref	ix1	ix1	5	test.t1.col_int_unique	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select straight_join `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`col_int_unique` AS `col_int_unique`,`test`.`t1`.`c` AS `c`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`col_int_unique` AS `col_int_unique`,`test`.`t2`.`c` AS `c` from `test`.`t1` left join `test`.`t1` `t2` on((`test`.`t2`.`col_int_unique` = `test`.`t1`.`col_int_unique`)) where true
+SELECT STRAIGHT_JOIN *
+FROM t1 LEFT OUTER JOIN t1 AS t2
+ON t1.col_int_unique = t2.col_int_unique;
+pk	col_int_unique	c	pk	col_int_unique	c
+1	1	xxxx	1	1	xxxx
+2	NULL	xxxx	NULL	NULL	NULL
+3	3	xxxx	3	3	xxxx
+4	4	xxxx	4	4	xxxx
+5	5	xxxx	5	5	xxxx
+6	6	xxxx	6	6	xxxx
+7	7	xxxx	7	7	xxxx
+8	8	xxxx	8	8	xxxx
+flush status;
+SELECT STRAIGHT_JOIN *
+FROM t1 JOIN t1 AS t2
+ON t1.col_int_unique = t2.col_int_unique
+WHERE t1.pk = 2;
+pk	col_int_unique	c	pk	col_int_unique	c
+show status like 'handler_read_key';
+Variable_name	Value
+Handler_read_key	1
+drop table t1;
+# Bug#33630225: Bad caching of converted constants in NULL-safe compare
+SELECT NULL <=> (0 <=> NULL);
+NULL <=> (0 <=> NULL)
+0

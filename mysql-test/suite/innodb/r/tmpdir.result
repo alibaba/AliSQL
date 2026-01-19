@@ -33,7 +33,7 @@ set global innodb_tmpdir = @@global.datadir;
 ERROR 42000: Variable 'innodb_tmpdir' can't be set to the value of 'MYSQL_DATADIR'
 show warnings;
 Level	Code	Message
-Warning	1210	InnoDB: Path Location should not be same as mysql data directory location.
+Warning	1210	InnoDB: Path location should not be same as mysql data directory location.
 Error	1231	DATADIR/data/'
 drop table t1;
 # innodb_tmpdir with valid location.

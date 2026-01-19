@@ -4,7 +4,7 @@
 CREATE DATABASE b12688860_db;
 CREATE TABLE b12688860_db.b12688860_tab (c1 INT);
 # Creating a temp sql file to be loaded.
-Warning: Using a password on the command line interface can be insecure.
+mysqlimport: [Warning] Using a password on the command line interface can be insecure.
 b12688860_db.b12688860_tab: Records: 3  Deleted: 0  Skipped: 0  Warnings: 0
 SELECT * FROM b12688860_db.b12688860_tab;
 c1
@@ -14,5 +14,37 @@ c1
 DROP TABLE b12688860_db.b12688860_tab;
 DROP DATABASE b12688860_db;
 # Dropping the temp file
+#
+# WL#2284: Increase the length of a user name
+#
+CREATE USER 'user_with_length_32_abcdefghijkl'@'localhost';
+GRANT ALL ON *.* TO 'user_with_length_32_abcdefghijkl'@'localhost';
+mysql.test: Records: 1  Deleted: 0  Skipped: 0  Warnings: 1
+# cleanup
+DROP TABLE mysql.test;
+DROP USER 'user_with_length_32_abcdefghijkl'@'localhost';
+#
+# WL#13292: Deprecate legacy connection compression parameters
+#
+CREATE TABLE mysql.test(a INT PRIMARY KEY);
+# exec mysqlimport --compress: must have a deprecation warning
+WARNING: --compress is deprecated and will be removed in a future version. Use --compression-algorithms instead.
+mysql.test: Records: 1  Deleted: 0  Skipped: 0  Warnings: 1
+# exec mysqlimport --compression-algorithms: must not have a deprecation warning
+mysql.test: Records: 1  Deleted: 0  Skipped: 1  Warnings: 2
+# cleanup
+DROP TABLE mysql.test;
+#
+# Bug#34999015: mysqlimport doesn't escape reserved-word table names
+#   when used with --delete
+#
+CREATE DATABASE b34999015_db;
+CREATE TABLE b34999015_db.`KEY` (`ID` INT NOT NULL, PRIMARY KEY (`ID`));
+# Creating a temp sql file to be loaded.
+# Test: should succeed
+b34999015_db.KEY: Records: 3  Deleted: 0  Skipped: 0  Warnings: 0
+# cleanup
+DROP TABLE b34999015_db.`KEY`
+DROP DATABASE b34999015_db;
 
 End of tests

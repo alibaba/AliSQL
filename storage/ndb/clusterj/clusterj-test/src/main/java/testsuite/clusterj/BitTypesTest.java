@@ -1,26 +1,41 @@
 /*
-  Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU General Public License for more details.
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
 package testsuite.clusterj;
 
+import com.mysql.clusterj.Query;
+import com.mysql.clusterj.query.QueryBuilder;
+import com.mysql.clusterj.query.QueryDomainType;
+import com.mysql.clusterj.query.Predicate;
+
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import testsuite.clusterj.model.BitTypes;
 import testsuite.clusterj.model.IdBase;
@@ -63,6 +78,10 @@ public class BitTypesTest extends AbstractClusterJModelTest {
     protected String getTableName() {
         return "bittypes";
     }
+    @Override
+    protected boolean getCleanupAfterTest() {
+        return false;
+    }
 
     /** Subclasses override this method to provide the model class for the test */
     @Override
@@ -80,6 +99,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             case 1: { // boolean
                 boolean data = (i % 2) == 0;
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (boolean)" + data);
                 return data;
             }
@@ -87,9 +107,10 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                 int data = 0;
                 // fill in the data, increasing by one for each row, column, and bit in the data
                 for (int d = 0; d < length; ++d) {
-                    data = (data * 2) + (int)(Math.random() * 2);
+                    data = 3 & ((data * 2) + (int)(Math.random() * 2));
                 }
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (byte)" + data);
                 return Byte.valueOf((byte)data);
             }
@@ -97,35 +118,40 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                 int data = 0;
                 // fill in the data, increasing by one for each row, column, and bit in the data
                 for (int d = 0; d < length; ++d) {
-                    data = (data * 2) + (int)(Math.random() * 2);
+                    data = 0xF & ((data * 2) + (int)(Math.random() * 2));
                 }
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (short)" + data);
                 return Short.valueOf((short)data);
             }
             case 8: 
             case 32: { // int
+                int mask = (length == 8) ? 0xFF: 0xFFFFFFFF;
                 int data = 0;
                 // fill in the data, increasing by one for each row, column, and bit in the data
                 for (int d = 0; d < length; ++d) {
                     data = (data * 2) + ((int)(Math.random() * 2));
                 }
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (int)" + data);
                 // TODO bug in JDBC handling high bit
                 data = Math.abs(data);
-                return Integer.valueOf(data);
+                return Integer.valueOf(mask & data);
             }
             case 16:
             case 64: { // long
+                long mask = (length == 16) ? 0xFFFFL : 0xFFFFFFFFFFFFFFFFL;
                 long data = 0;
                 // fill in the data, increasing by one for each row, column, and bit in the data
                 for (int d = 0; d < length / 8; ++d) {
                     data = (data * 256) + (i * 16) + d;
                 }
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (long)" + data);
-                return Long.valueOf(data);
+                return Long.valueOf(mask & data);
             }
             default:
                 fail("Bad length: " + length);
@@ -148,13 +174,14 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             errorIfNotEqual(where + " got failure on id for row " + i, i, actual[0]);
             for (int j = 1; j < expected.length; ++j) {
                 if (getDebug()) System.out.println("BitTypesTest.verify for " + i + ", " + j
+                        + " " + columnDescriptors[j - 1].getColumnName()
                         + "  is (" + actual[j].getClass().getName() + ")" + actual[j]);
                 switch (j) {
                     case 1: { // boolean
                         Boolean expectedColumn = (Boolean)expected[j];
                         Boolean actualColumn = (Boolean)actual[j];
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 expectedColumn, actualColumn);
                         break;
                     }
@@ -163,7 +190,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                         byte actualColumn = (Byte)actual[j];
                         // now compare bit by bit
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 Integer.toHexString(expectedColumn), Integer.toHexString(actualColumn));
                         break;
                     }
@@ -172,7 +199,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                         short actualColumn = (Short)actual[j];
                         // now compare bit by bit
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 Integer.toHexString(expectedColumn), Integer.toHexString(actualColumn));
                         break;
                     }
@@ -182,7 +209,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                         int actualColumn = (Integer)actual[j];
                         // now compare bit by bit
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 Integer.toHexString(expectedColumn), Integer.toHexString(actualColumn));
                         break;
                     }
@@ -192,7 +219,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                         long actualColumn = (Long)actual[j];
                         // now compare bit by bit
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 Long.toHexString(expectedColumn), Long.toHexString(actualColumn));
                         break;
                    }
@@ -209,9 +236,8 @@ public class BitTypesTest extends AbstractClusterJModelTest {
     }
 
     public void testWriteNDBReadJDBC() {
-//        TODO: investigate platform dependency when reading via JDBC
-//        writeNDBreadJDBC();
-//        failOnError();
+        writeNDBreadJDBC();
+        failOnError();
    }
 
     public void testWriteNDBReadNDB() {
@@ -220,10 +246,92 @@ public class BitTypesTest extends AbstractClusterJModelTest {
    }
 
     public void testWriteJDBCReadJDBC() {
-//      TODO: investigate platform dependency when reading via JDBC
-//        writeJDBCreadJDBC();
-//        failOnError();
+        writeJDBCreadJDBC();
+        failOnError();
    }
+
+    protected void complexQuery(Boolean bit1value, Byte bit2value, Short bit4value,
+            Integer bit8value, Long bit16value, Integer bit32value, Long bit64value, int expectedId) {
+        QueryBuilder qb = session.getQueryBuilder();
+        QueryDomainType<BitTypes> qdt = qb.createQueryDefinition(BitTypes.class);
+        Predicate p = qdt.get("id").greaterEqual(qdt.param("pid"));
+        Map<String, Object> params = new HashMap<String, Object>(8);
+        if (bit1value != null) {
+            p = p.and(qdt.get("bit1").equal(qdt.param("param1")));
+            params.put("param1", bit1value);
+        }
+        if (bit2value != null) {
+            p = p.and(qdt.get("bit2").equal(qdt.param("param2")));
+            params.put("param2", bit2value);
+        }
+        if (bit4value != null) {
+            p = p.and(qdt.get("bit4").equal(qdt.param("param4")));
+            params.put("param4", bit4value);
+        }
+        if (bit8value != null) {
+            p = p.and(qdt.get("bit8").equal(qdt.param("param8")));
+            params.put("param8", bit8value);
+        }
+        if (bit16value != null) {
+            p = p.and(qdt.get("bit16").equal(qdt.param("param16")));
+            params.put("param16", bit16value);
+        }
+        if (bit32value != null) {
+            p = p.and(qdt.get("bit32").equal(qdt.param("param32")));
+            params.put("param32", bit32value);
+        }
+        if (bit64value != null) {
+            p = p.and(qdt.get("bit64").equal(qdt.param("param64")));
+            params.put("param64", bit64value);
+        }
+        qdt.where(p);
+        Query<BitTypes> query = session.createQuery(qdt);
+        query.setParameter("pid", 0);
+        for (String key: params.keySet()) {
+            query.setParameter(key, params.get(key));
+        }
+        List<BitTypes> results = query.getResultList();
+        if (getDebug()) for (BitTypes result: results) {
+            System.out.println("result id " + result.getId() +
+            " bit1: " + result.getBit1() +
+            " bit2: " + Integer.toHexString(result.getBit2()) +
+            " bit4: " + Integer.toHexString(result.getBit4()) +
+            " bit8: " + Integer.toHexString(result.getBit8()) +
+            " bit16: " + Long.toHexString(result.getBit16()) +
+            " bit32: " + Integer.toHexString(result.getBit32()) +
+            " bit64: " + Long.toHexString(result.getBit64()));
+        }
+        if (results.size() != 1) {
+            error("complexQuery mismatch result.size(): expected 1, actual "+ results.size());
+            return;
+        }
+        BitTypes result = results.get(0);
+        errorIfNotEqual("complexQuery mismatch result id", expectedId, result.getId());
+    }
+
+    public void testQuery() {
+        generateInstances(getColumnDescriptors());
+        removeAll(getModelClass());
+        writeToNDB(columnDescriptors, instances);
+        // get the "random" value for row 3 bit2
+        Byte bit2For3 = (Byte)getExpected().get(3)[2];
+        // get the "random" value for row 4 bit4
+        Short bit4For4 = (Short)getExpected().get(4)[3];
+        // get the "random" value for row 5 bit8
+        Integer bit8For5 = (Integer)getExpected().get(5)[4];
+        // get the "random" value for row 7 bit32 (columns are origin 1-index)
+        Integer bit32For7 = (Integer)getExpected().get(7)[6];
+        //           bit1   bit2      bit4       bit8       bit16    bit32      bit64 result
+        //           bool   byte      short      int        long     int        long  int
+        complexQuery(false, null,     null,      null,      0x1011L, null,      null, 1);
+        complexQuery(false, bit2For3, null,      null,      0x3031L, null,      null, 3);
+        complexQuery(true,  null,     bit4For4,  null,      0x4041L, null,      null, 4);
+        complexQuery(false, null,     null,      bit8For5,  0x5051L, null,      null, 5);
+        complexQuery(true,  null,     null,      null,      0x6061L, null,      null, 6);
+        complexQuery(false, null,     null,      null,      null,    bit32For7, null, 7);
+        complexQuery(false, null,     null,      null,      null,    null,      0x9091929394959697L, 9);
+        failOnError();
+    }
 
    static ColumnDescriptor bit1 = new ColumnDescriptor
             ("bit1", new InstanceHandler() {
@@ -238,11 +346,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             preparedStatement.setBoolean(j, (Boolean)value);
         }
         public Object getResultSetValue(ResultSet rs, int j) throws SQLException {
-            String value = rs.getString(j);
-            if (value.length() == 0) {
-                value = "0";
-            }
-            return (Byte.parseByte(value) == 0x01)?Boolean.TRUE:Boolean.FALSE;
+            return rs.getBoolean(j);
         }
     });
 
@@ -259,11 +363,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             preparedStatement.setByte(j, (Byte)value);
         }
         public Object getResultSetValue(ResultSet rs, int j) throws SQLException {
-            String value = rs.getString(j);
-            if (value.length() == 0) {
-                value = "0";
-            }
-            return Byte.parseByte(value);
+            return rs.getByte(j);
         }
     });
 
@@ -280,11 +380,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             preparedStatement.setShort(j, (Short)value);
         }
         public Object getResultSetValue(ResultSet rs, int j) throws SQLException {
-            String value = rs.getString(j);
-            if (value.length() == 0) {
-                value = "0";
-            }
-            return Short.parseShort(value);
+            return rs.getShort(j);
         }
     });
 
@@ -301,11 +397,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             preparedStatement.setInt(j, (Integer)value);
         }
         public Object getResultSetValue(ResultSet rs, int j) throws SQLException {
-            String value = rs.getString(j);
-            if (value.length() == 0) {
-                value = "0";
-            }
-            return Integer.parseInt(value) & 0xff;
+            return rs.getInt(j);
         }
     });
 
@@ -322,11 +414,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             preparedStatement.setLong(j, (Long)value);
         }
         public Object getResultSetValue(ResultSet rs, int j) throws SQLException {
-            String value = rs.getString(j);
-            if (value.length() == 0) {
-                value = "0";
-            }
-            return Long.parseLong(value);
+            return rs.getLong(j);
         }
     });
 
@@ -343,11 +431,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             preparedStatement.setInt(j, (Integer)value);
         }
         public Object getResultSetValue(ResultSet rs, int j) throws SQLException {
-            String value = rs.getString(j);
-            if (value.length() == 0) {
-                value = "0";
-            }
-            return Integer.parseInt(value);
+            return rs.getInt(j);
         }
     });
 
@@ -364,11 +448,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             preparedStatement.setLong(j, (Long)value);
         }
         public Object getResultSetValue(ResultSet rs, int j) throws SQLException {
-            String value = rs.getString(j);
-            if (value.length() == 0) {
-                value = "0";
-            }
-            return Long.parseLong(value);
+            return rs.getLong(j);
         }
     });
 

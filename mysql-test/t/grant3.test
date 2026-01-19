@@ -1,14 +1,17 @@
-# Can't run with embedded server because we use GRANT
--- source include/not_embedded.inc
 
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
 
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "granting/revoking privileges in databases.");
 # Test of GRANT commands
 
 SET NAMES binary;
+
+set @orig_sql_mode_session= @@SESSION.sql_mode;
+set @orig_sql_mode_global= @@GLOBAL.sql_mode;
+set @orig_partial_revokes = @@global.partial_revokes;
+# Turn Off the partial_revokes to test with wildcard grants
+SET GLOBAL partial_revokes= OFF;
+
 connect (master,localhost,root,,);
 connection master;
 
@@ -45,6 +48,9 @@ flush privileges;
 # Bug#19828 Case sensitivity in Grant/Revoke
 #
 
+create user CUser@localhost;
+--error ER_CANNOT_USER
+create user CUser@LOCALHOST;
 grant select on test.* to CUser@localhost;
 grant select on test.* to CUser@LOCALHOST;
 flush privileges;
@@ -70,6 +76,7 @@ DROP USER CUser@LOCALHOST;
 
 #### table grants
 create table t1 (a int);
+create user CUser@localhost;
 grant select on test.t1 to CUser@localhost;
 grant select on test.t1 to CUser@LOCALHOST;
 flush privileges;
@@ -95,6 +102,7 @@ DROP USER CUser@LOCALHOST;
 
 ### column grants
 
+create user  CUser@localhost;
 grant select(a) on test.t1 to CUser@localhost;
 grant select(a) on test.t1 to CUser@LOCALHOST;
 flush privileges;
@@ -122,6 +130,7 @@ drop table t1;
 
 # revoke on a specific DB only
 
+create user  CUser2@LOCALHOST;
 grant select on test.* to CUser2@localhost;
 grant select on test.* to CUser2@LOCALHOST;
 flush privileges;
@@ -205,6 +214,11 @@ connection default;
 DROP USER 'user2'@'%';
 DROP DATABASE temp;
 
+set GLOBAL sql_mode= @orig_sql_mode_global;
+set SESSION sql_mode= @orig_sql_mode_session;
+--disable_warnings
+SET GLOBAL partial_revokes = @orig_partial_revokes;
+--enable_warnings
 --echo End of 5.0 tests
 
 # Wait till we reached the initial number of concurrent sessions

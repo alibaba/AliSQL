@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 #### I. Initialize ####
 [connection slave]
@@ -52,6 +52,8 @@ include/assert.inc [Rows until T3 in d2.t must be replicated now]
 include/assert.inc [Rows until 2 in d1.t must be replicated now]
 include/start_slave.inc
 [connection slave1]
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 [connection slave]
 SET @@global.innodb_lock_wait_timeout= @save.innodb_lock_wait_timeout;
 [connection master]

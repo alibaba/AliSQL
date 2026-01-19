@@ -1,0 +1,5 @@
+--skip-log-bin
+--duckdb_multi_trx_in_batch=on
+--duckdb_multi_trx_timeout=100000
+--duckdb_log_options='DUCKDB_MULTI_TRX_BATCH_COMMIT'
+--debug=+d,duckdb_print_dml

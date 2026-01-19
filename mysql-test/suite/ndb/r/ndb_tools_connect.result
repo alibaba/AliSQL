@@ -1,0 +1,66 @@
+Bug #11764714 - Adding --connect-retry-delay and --connect-retries  options to tools
+Testing ndbinfo_select_all
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to connect to management server.
+Testing ndb_mgm
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Testing ndb_blob_tool
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Disconnected
+Testing ndb_config
+Testing ndb_delete_all
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to connect to management server.
+Testing ndb_desc
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to connect to management server.
+Testing ndb_drop_index
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Testing ndb_drop_table
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to connect to management server.
+Testing ndb_index_stat
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Testing ndb_restore
+CREATE TABLE t1 (col1 int)engine=ndb;
+drop table t1;
+drop table t1;
+Testing ndb_select_all
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to connect to management server.
+Testing ndb_select_count
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to connect to management server.
+Testing ndb_show_tables
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+Unable to connect to management server.
+ - Error: '1001: Illegal connect string: Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+'
+
+Testing ndb_waiter
+Connecting to management server at nodeid=0,localhost:<MGMD-PORT>
+Node 1: STARTED
+Node 2: STARTED
+Connecting to management server at nodeid=0,no_such_host:1186
+Unable to resolve any of the address in connect string: nodeid=0,no_such_host:1186
+latest_error=1001, line=no_such_host

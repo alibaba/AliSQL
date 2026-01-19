@@ -1,0 +1,26 @@
+#
+# 1. Initial setup
+RESET MASTER;
+CREATE TABLE t1(c1 INT);
+INSERT INTO t1 VALUES(1);
+INSERT INTO t1 VALUES(2);
+FLUSH BINARY LOGS;
+#
+# 2. Execute an INSERT query and pause after it acquires commit_lock
+[START] INSERT INTO t1 VALUES (3);
+#
+# 3. Execute a SELECT query on performance_schema.log_status and wait
+#    until it is waiting for MYSQL_BIN_LOG::prep_xids_cond
+SELECT REPLACE(LOCAL->"$.gtid_executed", '"', '') INTO @ps_log_status FROM performance_schema.log_status;
+#
+# 4. Resume the INSERT query
+[END] INSERT INTO t1 VALUES (3);
+#
+# 5. Let the SELECT query complete
+#
+# 6. Verify that the correct GTID set is received from
+#    performance_schema.log_status
+include/assert.inc [Gtid_executed is updated with GTID 4]
+#
+# 7. Cleanup
+DROP TABLE t1;

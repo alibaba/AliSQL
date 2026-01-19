@@ -1,8 +1,13 @@
-if (`SELECT $PS_PROTOCOL + $SP_PROTOCOL + $CURSOR_PROTOCOL
-            + $VIEW_PROTOCOL > 0`)
-{
-   --skip Need normal protocol
-}
+# Start server with MyISAM
+--source include/force_myisam_default.inc
+
+# Skip the test if MyISAM is not available
+--source include/have_myisam.inc
+
+# Test requires: sp-protocol/ps-protocol/view-protocol/cursor-protocol disabled
+--source include/no_protocol.inc
+
+--source include/not_hypergraph.inc  # Does not output the same optimizer trace.
 
 # The main testing script
 --source suite/opt_trace/include/subquery.inc

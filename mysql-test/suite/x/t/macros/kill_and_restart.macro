@@ -1,0 +1,77 @@
+################################################################
+#
+# This file contains following restart-oriented macros:
+#
+# * Kill_and_restart_mysqld - SESSION_NAME MTR_EXPECT_FILE
+# * Expect_restart_mysqld_file - MTR_EXPECT_FILE
+# * Expect_restart_mysqld_instance - ID
+# * Wait_for_others_are_idle - NONE
+# * kill_client - %CLIENT_ID_TO_KILL%
+# * kill_client_expect_error - %CLIENT_ID_TO_KILL% %ERROR_CODE%
+#
+
+
+## Restart server macros
+#
+-->macro Kill_and_restart_mysqld	%SESSION_NAME%	%EXPECT_FILE%
+echo [Killing and restarting server associated with %SESSION_NAME%];
+quiet;
+setsession %SESSION_NAME%;
+callmacro Expect_restart_mysqld_file	%EXPECT_FILE%;
+quiet;
+
+#Kill Mysqld server
+shutdown_server 0;
+
+#Wait for the server restart
+reconnect;
+-->endmacro
+
+
+## Make MTR to expect MySQL Server to shutdown
+#
+-->macro Expect_restart_mysqld_file	%EXPECT_FILE%
+system echo restart > %EXPECT_FILE%;
+-->endmacro
+
+
+## Make MTR to expect MySQL Server to shutdown
+#
+-->macro Expect_restart_mysqld_instance %ID%
+env %MYSQLXTEST_VARDIR% MYSQLTEST_VARDIR;
+system echo restart > %MYSQLXTEST_VARDIR%/tmp/mysqld.%ID%.expect;
+-->endmacro
+
+
+# Wait for all other sql-session to be idle
+# only the current session (that check the state) can be active
+#
+# This macro can be used before killing other mysqlx session
+# to get stable status variable output.
+#
+-->macro Wait_for_others_are_idle
+-->echo WAIT [count(*) information_schema.PROCESSLIST == 1 - only current process can be active]
+wait_for 1
+	select count(*) from information_schema.PROCESSLIST where COMMAND!='Daemon' and COMMAND!='Sleep';
+-->endmacro
+
+
+-->macro kill_client	%CLIENT_ID_TO_KILL%
+quiet;
+callmacro Wait_for_others_are_idle;
+
+echo RUN [stmtadmin kill_client %CLIENT_ID_TO_KILL%];
+-->stmtadmin kill_client	{"id": %CLIENT_ID_TO_KILL% }
+-->recvresult
+noquiet;
+-->endmacro
+
+
+-->macro kill_client_expect_error	%CLIENT_ID_TO_KILL%	%ERROR_CODE%
+quiet;
+echo RUN [stmtadmin kill_client %CLIENT_ID_TO_KILL%];
+-->stmtadmin kill_client	{"id": %CLIENT_ID_TO_KILL% }
+-->expecterror %ERROR_CODE%
+-->recvresult
+noquiet;
+-->endmacro

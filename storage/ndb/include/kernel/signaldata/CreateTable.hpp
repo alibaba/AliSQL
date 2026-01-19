@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,37 +28,45 @@
 
 #include "SignalData.hpp"
 
+#define JAM_FILE_ID 151
+
 struct CreateTableReq {
-  STATIC_CONST( SignalLength = 5 );
-  
-  union { Uint32 clientRef, senderRef; };
-  union { Uint32 clientData, senderData; };
+  static constexpr Uint32 SignalLength = 5;
+
+  union {
+    Uint32 clientRef, senderRef;
+  };
+  union {
+    Uint32 clientData, senderData;
+  };
   Uint32 requestInfo;
   Uint32 transId;
   Uint32 transKey;
 
-  SECTION( DICT_TAB_INFO = 0 );
+  SECTION(DICT_TAB_INFO = 0);
 };
 
 struct CreateTableConf {
-  STATIC_CONST( SignalLength = 5 );
+  static constexpr Uint32 SignalLength = 5;
 
   Uint32 senderRef;
-  union { Uint32 clientData, senderData; };
+  union {
+    Uint32 clientData, senderData;
+  };
   Uint32 transId;
   Uint32 tableId;
   Uint32 tableVersion;
 };
 
 struct CreateTableRef {
-  STATIC_CONST( SignalLength = 9 );
+  static constexpr Uint32 SignalLength = 9;
 
   enum ErrorCode {
     NoError = 0,
     Busy = 701,
     BusyWithNR = 711,
     NotMaster = 702,
-    TooManySchemaOps = 783,     //wl3600_todo move the 3 to DictSignal.hpp
+    TooManySchemaOps = 783,  // wl3600_todo move the 3 to DictSignal.hpp
     InvalidTransKey = 781,
     InvalidTransId = 782,
     InvalidFormat = 703,
@@ -59,12 +75,13 @@ struct CreateTableRef {
     Inconsistency = 706,
     NoMoreTableRecords = 707,
     NoMoreAttributeRecords = 708,
+    NoMoreHashmapRecords = 712,
     AttributeNameTwice = 720,
     TableAlreadyExist = 721,
     InvalidArraySize = 736,
     ArraySizeTooBig = 737,
     RecordTooBig = 738,
-    InvalidPrimaryKeySize  = 739,
+    InvalidPrimaryKeySize = 739,
     NullablePrimaryKey = 740,
     InvalidCharset = 743,
     SingleUser = 299,
@@ -76,26 +93,30 @@ struct CreateTableRef {
     NoLoggingTemporaryTable = 778,
     InvalidHashMap = 790,
     TableDefinitionTooBig = 793,
-    FeatureRequiresUpgrade = 794
+    FeatureRequiresUpgrade = 794,
+    WrongPartitionBalanceFullyReplicated = 797,
+    NoLoggingDiskTable = 798,
+    NonDefaultPartitioningWithNoPartitions = 799,
+    TooManyFragments = 1224
   };
 
   Uint32 senderRef;
-  union { Uint32 clientData, senderData; };
+  union {
+    Uint32 clientData, senderData;
+  };
   Uint32 transId;
   Uint32 errorCode;
-  Uint32 errorLine; 
+  Uint32 errorLine;
   Uint32 errorNodeId;
   Uint32 masterNodeId;
   Uint32 errorStatus;
   Uint32 errorKey;
 
-  //wl3600_todo out
-  Uint32 getErrorCode() const {
-    return errorCode;
-  }
-  Uint32 getErrorLine() const {
-    return errorLine;
-  }
+  // wl3600_todo out
+  Uint32 getErrorCode() const { return errorCode; }
+  Uint32 getErrorLine() const { return errorLine; }
 };
+
+#undef JAM_FILE_ID
 
 #endif

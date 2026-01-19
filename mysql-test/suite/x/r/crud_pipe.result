@@ -1,0 +1,110 @@
+DROP DATABASE IF EXISTS xplugintest;
+Warnings:
+Note	1008	Can't drop database 'xplugintest'; database doesn't exist
+CREATE DATABASE xplugintest;
+USE xplugintest;
+CREATE TABLE test.counttest1 ( i INT );
+Send SELECT SLEEP (?)
+send Mysqlx.Sql.StmtExecute {
+  stmt: " SELECT SLEEP (?) "
+  args {
+    type: SCALAR
+    scalar {
+      type: V_UINT
+      v_unsigned_int: 5
+    }
+  }
+}
+
+send SELECT (100+?)
+send Mysqlx.Sql.StmtExecute {
+  stmt: "SELECT (100+?) "
+  args {
+    type: SCALAR
+    scalar {
+      type: V_UINT
+      v_unsigned_int: 10
+    }
+  }
+}
+
+retrive result of send message at once
+SLEEP (5)
+0
+0 rows affected
+
+command ok
+(100+10)
+110
+0 rows affected
+send Insert 
+send Mysqlx.Crud.Insert {
+  collection {
+    name: "table2"
+    schema: "xplugintest"
+  }
+  data_model: DOCUMENT
+  row {
+    field {
+      type: LITERAL
+      literal {
+        type: V_STRING
+        v_string {
+          value: "\n{\n         \"_id\": \"1\",\n         \"name\": \"Omar Bras\", \"id\": \"1\"\n}"
+        }
+      }
+    }
+  }
+  row {
+    field {
+      type: LITERAL
+      literal {
+        type: V_STRING
+        v_string {
+          value: "\n{\n         \"_id\": \"2\",\n         \"name\": \"Omar Mex\", \"id\": \"2\"\n}"
+        }
+      }
+    }
+  }
+}
+
+Send SELECT SLEEP (?)
+send Mysqlx.Sql.StmtExecute {
+  stmt: " SELECT SLEEP (?) "
+  args {
+    type: SCALAR
+    scalar {
+      type: V_UINT
+      v_unsigned_int: 2
+    }
+  }
+}
+
+Send SELECT FROM table2
+send Mysqlx.Sql.StmtExecute {
+  stmt: " SELECT doc FROM xplugintest.table2"
+}
+
+Send SELECT FROM table2
+send Mysqlx.Sql.StmtExecute {
+  stmt: " DROP DATABASE xplugintest"
+}
+
+retrive result of send message at once
+
+2 rows affected
+Records: 2  Duplicates: 0  Warnings: 0
+SLEEP (2)
+0
+0 rows affected
+doc
+{"id": "1", "_id": "1", "name": "Omar Bras"}
+{"id": "2", "_id": "2", "name": "Omar Mex"}
+0 rows affected
+
+1 rows affected
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok
+DROP TABLE test.counttest1;

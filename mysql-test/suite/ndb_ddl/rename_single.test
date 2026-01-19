@@ -1,0 +1,16 @@
+--source setup.inc
+
+
+# The test to rename to same name will fail
+let $expect_rename_to_same_name_to_fail = 1;
+
+# Test RENAME TABLE with one(single) table
+# - mysqld will rename the table
+# - run the same tests as is done for the different ALTER TABLE .. RENAME
+#   combinations
+#
+let $query =
+RENAME TABLE tx TO ty;
+--source alter_rename.inc
+
+--source cleanup.inc

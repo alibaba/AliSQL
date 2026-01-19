@@ -1,0 +1,56 @@
+## generated
+## Test resultset types
+
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+## Test starts here
+
+--write_file $MYSQL_TMP_DIR/result_types_float.xpl
+# test float and double
+USE xtest;
+CREATE TABLE test_float (f FLOAT, d DOUBLE);
+
+INSERT INTO test_float VALUES (1.0/81, 1.0/81);
+INSERT INTO test_float VALUES (1234567890.1234567890,1234567890.1234567890);
+
+SELECT * FROM test_float;
+EOF
+
+--write_file $MYSQL_TMP_DIR/result_types_unsigned.xpl
+USE xtest;
+CREATE TABLE test_unsigned (i INT UNSIGNED, b BIGINT UNSIGNED, t TINYINT UNSIGNED, s SMALLINT UNSIGNED, f FLOAT UNSIGNED, d DOUBLE UNSIGNED, de DECIMAL(10,2) UNSIGNED, dt DATETIME, ts TIMESTAMP);
+
+Mysqlx.Sql.StmtExecute {
+  stmt: "SELECT * FROM test_unsigned"
+}
+-->recvuntil Mysqlx.Sql.StmtExecuteOk
+EOF
+
+--write_file $MYSQL_TMP_DIR/result_types_set.xpl
+USE xtest;
+CREATE TABLE test_set (s SET('one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eightteen','nineteen','twenty','thirty','forty','fifty','sixty','seventy','eightty','ninety'));
+
+INSERT INTO test_set VALUES ('one,two');
+INSERT INTO test_set VALUES ('one,two,three,four,five,six,seven,eight,nine,ten,eleven,twelve,thirteen,fourteen,fifteen,sixteen,seventeen,eightteen,nineteen');
+INSERT INTO test_set VALUES ('one,two,three,four,five,six,seven,eight,nine,ten,eleven,twelve,thirteen,fourteen,fifteen,sixteen,seventeen,eightteen,nineteen,twenty,thirty,forty,fifty,sixty,seventy,eightty,ninety');
+
+SELECT * FROM test_set;
+EOF
+
+CREATE SCHEMA xtest;
+
+exec $MYSQLXTEST
+  -ux_root --password=''
+  --file=$MYSQL_TMP_DIR/result_types_float.xpl 2>&1;
+
+exec $MYSQLXTEST
+  -ux_root --password=''
+  --file=$MYSQL_TMP_DIR/result_types_unsigned.xpl 2>&1;
+
+exec $MYSQLXTEST
+  -ux_root --password=''
+  --file=$MYSQL_TMP_DIR/result_types_set.xpl 2>&1;
+
+## Cleanup
+--source ../include/xplugin_cleanup.inc

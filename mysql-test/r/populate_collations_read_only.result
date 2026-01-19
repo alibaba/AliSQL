@@ -1,0 +1,15 @@
+# Verify that restarting the server in --read-only mode skips
+# re-populating character sets and collations. Also verify the
+# same for --innodb-read-only.
+# 1. Server restart with --read-only:
+# 1.1 Request shutdown and wait for disconnect.
+# 1.2 Restart the server with --read-only and wait for reconnect.
+# 2. Server restart with --innodb-read-only:
+# 2.1 Request shutdown and wait for disconnect.
+# 2.2 Restart the server with --innodb-read-only and wait for reconnect.
+# 2.3 Search for the expected warning in the log file.
+Pattern "Skip re-populating collations and character sets tables in InnoDB read-only mode." found
+Pattern "Skip updating information_schema metadata in InnoDB read-only mode." found
+# 3. Clean server restart.
+# 3.1 Request shutdown and wait for disconnect.
+# 3.2 Restart the server with no additional options.

@@ -1,5 +1,8 @@
 drop table if exists t1,t2,t3,t11,t12;
 CREATE TABLE t1 (a tinyint(3), b tinyint(5));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,1);
 INSERT LOW_PRIORITY INTO t1 VALUES (1,2);
 INSERT INTO t1 VALUES (1,3);
@@ -51,6 +54,9 @@ CREATE TABLE `t1` (
 `i2` int(10) NOT NULL default '0',
 PRIMARY KEY  (`i`)
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 DELETE FROM t1 USING t1 WHERE post='1';
 ERROR 42S22: Unknown column 'post' in 'where clause'
 drop table t1;
@@ -59,7 +65,9 @@ bool     char(0) default NULL,
 not_null varchar(20) binary NOT NULL default '',
 misc     integer not null,
 PRIMARY KEY  (not_null)
-) ENGINE=MyISAM;
+) ;
+Warnings:
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
 INSERT INTO t1 VALUES (NULL,'a',4), (NULL,'b',5), (NULL,'c',6), (NULL,'d',7);
 select * from t1 where misc > 5 and bool is null;
 bool	not_null	misc
@@ -97,6 +105,11 @@ create table t2 (a int NOT NULL, b int, primary key (a));
 insert into t11 values (0, 10),(1, 11),(2, 12);
 insert into t12 values (33, 10),(0, 11),(2, 12);
 insert into t2 values (1, 21),(2, 12),(3, 23);
+analyze table t11,t12,t2;
+Table	Op	Msg_type	Msg_text
+test.t11	analyze	status	OK
+test.t12	analyze	status	OK
+test.t2	analyze	status	OK
 select * from t11;
 a	b
 0	10
@@ -104,9 +117,9 @@ a	b
 2	12
 select * from t12;
 a	b
-33	10
 0	11
 2	12
+33	10
 select * from t2;
 a	b
 1	21
@@ -121,22 +134,29 @@ a	b
 2	12
 select * from t12;
 a	b
-33	10
 0	11
 2	12
+33	10
 delete ignore t11.*, t12.* from t11,t12 where t11.a = t12.a and t11.b <> (select b from t2 where t11.a < t2.a);
-Warnings:
-Error	1242	Subquery returns more than 1 row
-Error	1242	Subquery returns more than 1 row
+analyze table t11,t12,t2;
+Table	Op	Msg_type	Msg_text
+test.t11	analyze	status	OK
+test.t12	analyze	status	OK
+test.t2	analyze	status	OK
 select * from t11;
 a	b
 0	10
 1	11
 select * from t12;
 a	b
-33	10
 0	11
+33	10
 insert into t11 values (2, 12);
+analyze table t11,t12,t2;
+Table	Op	Msg_type	Msg_text
+test.t11	analyze	status	OK
+test.t12	analyze	status	OK
+test.t2	analyze	status	OK
 delete from t11 where t11.b <> (select b from t2 where t11.a < t2.a);
 ERROR 21000: Subquery returns more than 1 row
 select * from t11;
@@ -146,13 +166,60 @@ a	b
 2	12
 delete ignore from t11 where t11.b <> (select b from t2 where t11.a < t2.a);
 Warnings:
-Error	1242	Subquery returns more than 1 row
-Error	1242	Subquery returns more than 1 row
+Warning	1242	Subquery returns more than 1 row
+Warning	1242	Subquery returns more than 1 row
+analyze table t11,t12,t2;
+Table	Op	Msg_type	Msg_text
+test.t11	analyze	status	OK
+test.t12	analyze	status	OK
+test.t2	analyze	status	OK
 select * from t11;
 a	b
 0	10
 1	11
 drop table t11, t12, t2;
+# sql_safe_updates mode with single-table DELETE.
+CREATE TABLE t (a INTEGER);
+INSERT INTO t VALUES (1), (2), (3), (4), (5), (6), (7);
+SET sql_safe_updates = ON;
+DELETE FROM t;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+DELETE FROM t ORDER BY a;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+DELETE FROM t WHERE a = 6;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+DELETE FROM t ORDER BY a LIMIT 1;
+ALTER TABLE t ADD KEY k (a);
+DELETE FROM t;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+DELETE FROM t ORDER BY a;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+DELETE FROM t WHERE a = 6;
+DELETE FROM t ORDER BY a LIMIT 1;
+SELECT * FROM t ORDER BY a;
+a
+3
+4
+5
+7
+SET sql_safe_updates = DEFAULT;
+DROP TABLE t;
+# sql_safe_updates mode with multi-table DELETE
+CREATE TABLE t1(a INTEGER PRIMARY KEY);
+INSERT INTO t1 VALUES(10),(20);
+CREATE TABLE t2(b INTEGER);
+INSERT INTO t2 VALUES(10),(20);
+SET SESSION sql_safe_updates=1;
+EXPLAIN DELETE t2 FROM t1 JOIN t2 WHERE t1.a = 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	DELETE	t2	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+Warnings:
+Note	1003	delete `test`.`t2` from `test`.`t1` join `test`.`t2` where true
+DELETE t2 FROM t1 JOIN t2 WHERE t1.a = 10;
+ERROR HY000: You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. 
+SET SESSION sql_safe_updates=default;
+DROP TABLE t1, t2;
 create table t1 (a int, b int, unique key (a), key (b));
 insert into t1 values (3, 3), (7, 7);
 delete t1 from t1 where a = 3;
@@ -179,6 +246,8 @@ drop table t1;
 create table t1(f1 int primary key);
 insert into t1 values (4),(3),(1),(2);
 delete from t1 where (@a:= f1) order by f1 limit 1;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 select @a;
 @a
 1
@@ -192,6 +261,8 @@ KEY `seq` (`seq`),
 KEY `time` (`time`),
 KEY `date` (`date`)
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 DELETE FROM t1 ORDER BY date ASC, time ASC LIMIT 1;
 drop table t1;
 End of 4.1 tests
@@ -201,22 +272,35 @@ CREATE TABLE t3 (a int not null, b int not null, primary key (a,b));
 insert into t1 values (1,1),(2,1),(1,3);
 insert into t2 values (1,1),(2,2),(3,3);
 insert into t3 values (1,1),(2,1),(1,3);
-select * from t1,t2,t3 where t1.a=t2.a AND t2.b=t3.a and t1.b=t3.b;
+select * from t1,t2,t3 where t1.a=t2.a AND t2.b=t3.a and t1.b=t3.b order by t1.a,t1.b;
 a	b	a	b	a	b
 1	1	1	1	1	1
-2	1	2	2	2	1
 1	3	1	1	1	3
+2	1	2	2	2	1
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+analyze table t2;
+Table	Op	Msg_type	Msg_text
+test.t2	analyze	status	OK
+analyze table t3;
+Table	Op	Msg_type	Msg_text
+test.t3	analyze	status	OK
 explain select * from t1,t2,t3 where t1.a=t2.a AND t2.b=t3.a and t1.b=t3.b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	NULL
-1	SIMPLE	t2	ref	PRIMARY	PRIMARY	4	test.t1.a	1	Using index
-1	SIMPLE	t3	eq_ref	PRIMARY	PRIMARY	8	test.t2.b,test.t1.b	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+1	SIMPLE	t2	NULL	ref	PRIMARY	PRIMARY	4	test.t1.a	1	100.00	Using index
+1	SIMPLE	t3	NULL	eq_ref	PRIMARY	PRIMARY	8	test.t2.b,test.t1.b	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b`,`test`.`t3`.`a` AS `a`,`test`.`t3`.`b` AS `b` from `test`.`t1` join `test`.`t2` join `test`.`t3` where ((`test`.`t3`.`b` = `test`.`t1`.`b`) and (`test`.`t3`.`a` = `test`.`t2`.`b`) and (`test`.`t2`.`a` = `test`.`t1`.`a`))
 delete t2.*,t3.* from t1,t2,t3 where t1.a=t2.a AND t2.b=t3.a and t1.b=t3.b;
 select * from t3;
 a	b
 drop table t1,t2,t3;
 create table t1(a date not null);
-insert into t1 values (0);
+insert ignore into t1 values (0);
+Warnings:
+Warning	1264	Out of range value for column 'a' at row 1
 select * from t1 where a is null;
 a
 0000-00-00
@@ -251,13 +335,13 @@ a INT
 );
 INSERT INTO db2.t1 (a) SELECT * FROM t2;
 DELETE FROM t1 alias USING t1, t2 alias WHERE t1.a = alias.a;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'alias USING t1, t2 alias WHERE t1.a = alias.a' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'USING t1, t2 alias WHERE t1.a = alias.a' at line 1
 DELETE FROM alias USING t1, t2 alias WHERE t1.a = alias.a;
 DELETE FROM t1, alias USING t1, t2 alias WHERE t1.a = alias.a;
 DELETE FROM t1, t2 USING t1, t2 alias WHERE t1.a = alias.a;
 ERROR 42S02: Unknown table 't2' in MULTI DELETE
 DELETE FROM db1.t1 alias USING db1.t1, db2.t1 alias WHERE db1.t1.a = alias.a;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'alias USING db1.t1, db2.t1 alias WHERE db1.t1.a = alias.a' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'USING db1.t1, db2.t1 alias WHERE db1.t1.a = alias.a' at line 1
 DELETE FROM alias USING db1.t1, db2.t1 alias WHERE db1.t1.a = alias.a;
 DELETE FROM db2.alias USING db1.t1, db2.t1 alias WHERE db1.t1.a = alias.a;
 ERROR 42S02: Unknown table 'alias' in MULTI DELETE
@@ -265,7 +349,7 @@ DELETE FROM t1 USING t1 WHERE a = 1;
 SELECT * FROM t1;
 a
 DELETE FROM t1 alias USING t1 alias WHERE a = 2;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'alias USING t1 alias WHERE a = 2' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'USING t1 alias WHERE a = 2' at line 1
 SELECT * FROM t1;
 a
 DROP TABLE t1, t2;
@@ -367,9 +451,9 @@ ERROR 42S02: Unknown table 'a2' in MULTI DELETE
 DELETE a1,a2 FROM db1.t1, db2.t2 AS a2;
 ERROR 42S02: Unknown table 'a1' in MULTI DELETE
 DELETE a1,a2 FROM db3.t1 AS a1, db4.t2 AS a2;
-ERROR 42S02: Table 'db3.t1' doesn't exist
+ERROR 42000: Unknown database 'db3'
 DELETE a1,a2 FROM db3.t1 AS a1, db4.t2 AS a2;
-ERROR 42S02: Table 'db3.t1' doesn't exist
+ERROR 42000: Unknown database 'db3'
 DELETE FROM a1,a2 USING db1.t1, db2.t2;
 ERROR 42S02: Unknown table 'a1' in MULTI DELETE
 DELETE FROM a1,a2 USING db1.t1, db2.t2;
@@ -379,9 +463,9 @@ ERROR 42S02: Unknown table 'a2' in MULTI DELETE
 DELETE FROM a1,a2 USING db1.t1, db2.t2 AS a2;
 ERROR 42S02: Unknown table 'a1' in MULTI DELETE
 DELETE FROM a1,a2 USING db3.t1 AS a1, db4.t2 AS a2;
-ERROR 42S02: Table 'db3.t1' doesn't exist
+ERROR 42000: Unknown database 'db3'
 DELETE FROM a1,a2 USING db3.t1 AS a1, db4.t2 AS a2;
-ERROR 42S02: Table 'db3.t1' doesn't exist
+ERROR 42000: Unknown database 'db3'
 DELETE a1 FROM db1.t1 AS a1, db2.t2 AS a1;
 ERROR 42000: Not unique table/alias: 'a1'
 DELETE a1 FROM db1.a1, db2.t2 AS a1;
@@ -448,6 +532,8 @@ DELETE t1, t2, t3 FROM t1, t2, t3;
 ERROR 42S02: Table 'test.no_such_table' doesn't exist
 SELECT * FROM t1;
 a
+1
+2
 SELECT * FROM t2;
 a
 1
@@ -469,8 +555,11 @@ DELETE t1, t2, t3 FROM t1, t2, t3;
 ERROR 42S02: Table 'test.no_such_table' doesn't exist
 SELECT * FROM t1;
 a
+1
+2
 SELECT * FROM t2;
 a
+1
 2
 SELECT * FROM t3;
 a
@@ -489,15 +578,6 @@ INSERT INTO t1 SELECT * FROM t1 AS A;
 END |
 DELETE IGNORE FROM t1;
 ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-DROP TABLE t1;
-#
-# Bug #53450: Crash/assertion
-#    "virtual int ha_myisam::index_first(uchar*)") at assert.c:81
-#
-CREATE TABLE t1 (a INT,    b INT,    c INT,
-INDEX(a), INDEX(b), INDEX(c));
-INSERT INTO t1 VALUES (1,2,3), (4,5,6), (7,8,9);
-DELETE FROM t1 WHERE a = 10 OR b = 20 ORDER BY c LIMIT 1;
 DROP TABLE t1;
 #
 # Bug #53034: Multiple-table DELETE statements not accepting
@@ -535,15 +615,383 @@ INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1);
 DELETE IGNORE FROM t1 WHERE i = 1;
 Warnings:
-Error	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`i`) REFERENCES `t1` (`i`) ON DELETE NO ACTION)
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`i`) REFERENCES `t1` (`i`))
 CREATE PROCEDURE p1() DELETE IGNORE FROM t1 WHERE i = 1;
 CALL p1();
 Warnings:
-Error	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`i`) REFERENCES `t1` (`i`) ON DELETE NO ACTION)
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`i`) REFERENCES `t1` (`i`))
 PREPARE stm FROM 'CALL p1()';
 EXECUTE stm;
 Warnings:
-Error	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`i`) REFERENCES `t1` (`i`) ON DELETE NO ACTION)
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`i`) REFERENCES `t1` (`i`))
 DEALLOCATE PREPARE stm;
 DROP TABLE t2, t1;
 DROP PROCEDURE p1;
+#
+# Bug#18345346 Assertion failed: table_ref->view && table_ref->table == 0
+#
+CREATE TABLE b(a INTEGER);
+CREATE VIEW y AS SELECT 1 FROM b, b AS e;
+CREATE VIEW x AS SELECT 1 FROM y;
+CREATE VIEW z AS SELECT 1 FROM x LIMIT 1;
+DELETE z FROM (SELECT 1) AS x, z;
+ERROR HY000: The target table z of the DELETE is not updatable
+DROP VIEW z, x, y;
+DROP TABLE b;
+# Bug#11752648 : MULTI-DELETE IGNORE DOES NOT REPORT WARNINGS
+#
+CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
+INSERT INTO t1 (a) VALUES (1);
+CREATE TABLE t2 (a INT PRIMARY KEY) ENGINE=InnoDB;
+INSERT INTO t2 (a) VALUES (1);
+CREATE TABLE t3 (a INT, b INT, CONSTRAINT c_a FOREIGN KEY (a)
+REFERENCES t1 (a), CONSTRAINT c_b FOREIGN KEY (b) REFERENCES t2 (a)) ENGINE=InnoDB;
+INSERT INTO t3 (a, b) VALUES (1, 1);
+DELETE IGNORE FROM t1;
+Warnings:
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t3`, CONSTRAINT `c_a` FOREIGN KEY (`a`) REFERENCES `t1` (`a`))
+DELETE IGNORE t1,t2 FROM t1,t2;
+Warnings:
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t3`, CONSTRAINT `c_a` FOREIGN KEY (`a`) REFERENCES `t1` (`a`))
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t3`, CONSTRAINT `c_b` FOREIGN KEY (`b`) REFERENCES `t2` (`a`))
+SELECT * FROM t1;
+a
+1
+SELECT * FROM t2;
+a
+1
+DROP TABLE t3,t2,t1;
+#
+# Bug#17550423 : DELETE IGNORE GIVES INCORRECT RESULT WITH FOREIGN KEY
+#                   FOR PARENT TABLE
+#
+CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE t2 (b INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1), (2), (5);
+INSERT INTO t2 VALUES (1), (5);
+ALTER TABLE t2 ADD CONSTRAINT FOREIGN KEY(b) REFERENCES t1(a);
+SELECT * FROM t2;
+b
+1
+5
+DELETE IGNORE FROM t1;
+Warnings:
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`a`))
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`a`))
+SELECT * FROM t1;
+a
+1
+5
+DROP TABLE t2,t1;
+#
+# Bug#20460208: !table || (!table->read_set || bitmap_is_set)
+#
+CREATE TABLE t1(a INTEGER) engine=innodb;
+CREATE TABLE t2(a BLOB) engine=innodb;
+INSERT INTO t1 SET z=1;
+ERROR 42S22: Unknown column 'z' in 'field list'
+INSERT INTO t2 VALUES('a');
+DELETE FROM t2 WHERE 1 = a;
+DROP TABLE t1, t2;
+#
+# Bug#20086791 ASSERT `! IS_SET()` IN DIAGNOSTICS_AREA::SET_OK_STATUS
+#              ON DELETE (ER_SUBQUERY..)
+#
+SET sql_mode='';
+CREATE TABLE t1 (
+col_int_key int,
+pk integer auto_increment,
+col_datetime_key datetime,
+/*Indices*/
+key (col_int_key ),
+primary key (pk),
+key (col_datetime_key )
+) ENGINE=memory;
+CREATE TABLE t2 (
+col_varchar_key varchar (1),
+col_date_key date,
+pk integer auto_increment,
+/*Indices*/
+key (col_varchar_key ),
+key (col_date_key ),
+primary key (pk)
+) ENGINE=memory;
+INSERT INTO t2 VALUES
+('v',  '2002-05-01', NULL) ,
+('d',  '2001-01-01', NULL) 
+;
+CREATE TABLE t3 (
+pk integer auto_increment,
+col_int_key int,
+col_varchar_key varchar (1),
+/*Indices*/
+primary key (pk),
+key (col_int_key ),
+key (col_varchar_key )) 
+ENGINE=memory;
+INSERT INTO t3 VALUES
+(NULL, 3, 'n') ,
+(NULL, 1, 'r') 
+;
+CREATE TABLE t4 (
+pk integer auto_increment,
+col_varchar_key varchar (1),
+col_int_key int,
+/*Indices*/
+primary key (pk),
+key (col_varchar_key ),
+key (col_int_key )
+) ENGINE=memory;
+CREATE TABLE t5 (
+col_datetime_key datetime,
+pk integer auto_increment,
+col_int_key int,
+/*Indices*/
+key (col_datetime_key ),
+primary key (pk),
+key (col_int_key )) 
+ENGINE=memory;
+INSERT INTO t5 VALUES
+('2007-10-01', NULL, 8) ,
+('2002-10-01', NULL, 3) 
+;
+DELETE OUTR1.* FROM t2 AS OUTR1 
+JOIN t3 AS OUTR2 
+ON ( OUTR1 . col_varchar_key = OUTR2 . col_varchar_key ) 
+WHERE OUTR1 . col_varchar_key NOT IN
+( SELECT  INNR1 . col_varchar_key AS y FROM t5 AS INNR2
+RIGHT JOIN t4 AS INNR1 ON ( INNR2 . pk < INNR1 . col_int_key )
+WHERE INNR1 . col_int_key <= INNR1 . col_int_key
+AND OUTR2 . col_int_key >= 3  );
+DELETE QUICK  
+FROM OUTR1.* USING t2 AS OUTR1 
+LEFT OUTER JOIN t1 AS OUTR2 
+ON ( OUTR1 . col_date_key = OUTR2 . col_datetime_key ) 
+WHERE OUTR1 . pk NOT IN ( SELECT 2 UNION  SELECT 7 );
+DELETE    OUTR1.* 
+FROM t2 AS OUTR1
+LEFT JOIN t1 AS OUTR2 
+ON ( OUTR1 . pk = OUTR2 . col_int_key )
+WHERE OUTR1 . pk <> (
+SELECT DISTINCT INNR1 . col_int_key AS y
+FROM t5 AS INNR1 WHERE OUTR1 . pk <= 5
+ORDER BY INNR1 . col_datetime_key
+);
+ERROR 21000: Subquery returns more than 1 row
+DROP TABLE t1, t2, t3, t4, t5;
+SET sql_mode=default;
+# Bug#20450013 assertion 'select_lex::having_cond() == __null ...
+CREATE TABLE t1(a TEXT, FULLTEXT (a));
+CREATE VIEW v1 AS SELECT a FROM t1 ORDER BY a;
+explain DELETE FROM t1 USING v1,t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+1	DELETE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	delete `test`.`t1` from `test`.`t1` join `test`.`t1`
+DELETE FROM t1 USING v1,t1;
+DROP VIEW v1;
+DROP TABLE t1;
+#
+# Bug#25320909 ASSERTION `THD->LEX->CURRENT_SELECT() == UNIT->FIRST_SELECT()' WITH DELETE
+#
+CREATE TABLE t1 (a INT, b CHAR(8), pk INT AUTO_INCREMENT PRIMARY KEY);
+INSERT INTO t1 (a,b) VALUES
+(10000,'foobar'),(1,'a'),(2,'b'),(3,'c'),(4,'d'),(5,'e');
+INSERT INTO t1 (a,b) SELECT a, b FROM t1;
+CREATE TABLE t2 (pk INT AUTO_INCREMENT PRIMARY KEY, c CHAR(8), d INT);
+INSERT INTO t2 (c,d) SELECT b, a FROM t1;
+DELETE IGNORE FROM t1 WHERE b IS NOT NULL ORDER BY a LIMIT 1;
+SELECT a,b FROM t1;
+a	b
+1	a
+10000	foobar
+10000	foobar
+2	b
+2	b
+3	c
+3	c
+4	d
+4	d
+5	e
+5	e
+DELETE IGNORE t1.*, t2.* FROM t1, t2
+WHERE c < b OR
+a != ( SELECT 1 UNION SELECT 2 );
+Warnings:
+Warning	1242	Subquery returns more than 1 row
+DROP TABLE t1, t2;
+#
+# Bug#29153485: ASSERTION IN JOIN_READ_CONST_TABLE()
+#
+CREATE TABLE d3 (
+pk int(11) NOT NULL AUTO_INCREMENT,
+col_int int(11) DEFAULT NULL,
+col_varchar varchar(1) DEFAULT NULL,
+PRIMARY KEY (pk)
+) ;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO d3 VALUES (96,9,'t'),(97,0,'x');
+CREATE TABLE e3 (
+col_varchar varchar(1) DEFAULT NULL,
+pk int(11) NOT NULL AUTO_INCREMENT,
+PRIMARY KEY (pk)
+) ;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO e3 VALUES ('v',986);
+DELETE OUTR1.* FROM e3 AS OUTR1 INNER JOIN d3 AS OUTR2 ON 
+( OUTR1.col_varchar = OUTR2.col_varchar )
+LEFT JOIN d3 AS OUTR3 ON ( OUTR1. pk = OUTR3.pk )
+WHERE OUTR1.pk =
+( SELECT DISTINCT INNR1.col_int FROM d3 AS INNR1 WHERE INNR1.pk <> 8) ;
+ERROR 21000: Subquery returns more than 1 row
+DROP TABLE d3,e3;
+#
+# Bug#27455809; DELETE FROM ...WHERE NOT EXISTS WITH TABLE ALIAS CREATES AN ERROR 1064 (42000
+#
+CREATE TABLE t1 (c1 INT);
+INSERT INTO t1 VALUES (1), (2);
+SELECT * FROM t1;
+c1
+1
+2
+DELETE FROM t1 AS a1 WHERE a1.c1 = 2;
+SELECT * FROM t1;
+c1
+1
+CREATE TABLE t2 (c2 INT);
+INSERT INTO t2 VALUES (1), (2);
+SELECT * FROM t2;
+c2
+1
+2
+DELETE FROM t2 a2 WHERE NOT EXISTS (SELECT * FROM t1 WHERE t1.c1 = a2.c2);
+SELECT * FROM t2;
+c2
+1
+DROP TABLE t1, t2;
+# Bug#31640267: Assertion `trans_safe || updated_rows == 0 || thd->get_transaction()
+CREATE TABLE t1(pk INTEGER PRIMARY KEY, a INTEGER);
+INSERT INTO t1 VALUES(1, 10), (2, 20);
+PREPARE s FROM 'DELETE t1 FROM t1, (SELECT 1 FROM DUAL) AS dt';
+EXECUTE s;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+INSERT INTO t1 VALUES(1, 10), (2, 20);
+EXECUTE s;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+DEALLOCATE PREPARE s;
+DROP TABLE t1;
+#
+# WL#14673: Enable the hypergraph optimizer for DELETE
+#
+CREATE TABLE t1 (a INTEGER);
+CREATE TABLE t2 (a INTEGER, b INTEGER);
+CREATE TABLE t3 (a INTEGER);
+CREATE TABLE t4 (a INTEGER, b INTEGER);
+INSERT INTO t1 VALUES (-1), (0), (1), (2), (2), (3), (100), (1000);
+INSERT INTO t2 VALUES (-2, 0), (2, 1), (3, 1), (3, 0), (101, 2), (1001, 0);
+INSERT INTO t3 VALUES (-1), (0), (1), (2), (2), (3), (100), (1000);
+INSERT INTO t4 VALUES (-2, -1), (2, 1), (3, 1), (3, -1), (101, 2), (1001, -1);
+DELETE t1, t2, t3, t4
+FROM (t1 INNER JOIN t2 USING (a)) LEFT JOIN (t3 INNER JOIN t4 USING (a)) ON t2.b = t4.b;
+SELECT * FROM t1;
+a
+-1
+0
+1
+100
+1000
+SELECT * FROM t2;
+a	b
+-2	0
+1001	0
+101	2
+SELECT * FROM t3;
+a
+-1
+0
+1
+100
+1000
+SELECT * FROM t4;
+a	b
+-2	-1
+1001	-1
+101	2
+3	-1
+DROP TABLE t1, t2, t3, t4;
+#
+# Bug#33722819: recent regression: crash/corruption with gcols
+#               and multitable delete...
+#
+CREATE TABLE t (
+a INT,
+b INT,
+c TIMESTAMP GENERATED ALWAYS AS (65),
+UNIQUE KEY (a, b),
+UNIQUE KEY (c, a)
+);
+INSERT IGNORE INTO t(a, b) VALUES (1, 1), (2, 2);
+Warnings:
+Warning	1265	Data truncated for column 'c' at row 1
+Warning	1265	Data truncated for column 'c' at row 2
+DELETE d2 FROM t AS d1, t AS d2 WHERE d1.a > d2.a;
+ERROR 22007: Incorrect datetime value: '65' for column 'c' at row 1
+SELECT * FROM t;
+a	b	c
+1	1	0000-00-00 00:00:00
+2	2	0000-00-00 00:00:00
+Warning	1292	Incorrect datetime value: '65' for column 'c' at row 1
+Warning	1292	Incorrect datetime value: '65' for column 'c' at row 2
+Warnings:
+DELETE IGNORE d2 FROM t AS d1, t AS d2 WHERE d1.a > d2.a;
+SELECT * FROM t;
+a	b	c
+2	2	0000-00-00 00:00:00
+Warnings:
+Warning	1292	Incorrect datetime value: '65' for column 'c' at row 1
+DROP TABLE t;
+# Bug#34603748: Assertion !thd->is_error() failed in sql_executor.cc
+CREATE TABLE t1 (
+c int,
+k int,
+v varchar(1),
+pk int NOT NULL PRIMARY KEY,
+KEY(k)
+);
+INSERT INTO t1 VALUES (737324598,-252214477,'k',1);
+CREATE TABLE t2 (
+c int,
+k int,
+v varchar(1),
+pk int NOT NULL PRIMARY KEY,
+KEY(k)
+);
+INSERT INTO t2 VALUES
+(855986294,-882338447,NULL,1), (232637232,731304773,'y',2),
+(1590168493,1015181107,'h',3), (-1009423426,-232667498,'r',4),
+(236379810,1802601033,'H',5), (551188244,-756499064,NULL,6),
+(-1719538815,-448490308,'N',7), (-2122356533,NULL,'y',8),
+(-687608898,199866688,'0',9), (-1901664078,NULL,'B',10),
+(-2108420295,-497498614,'M',11), (1407257546,191555131,'8',12),
+(88536399,-1988379833,'N',13), (351531198,1071194019,'r',14),
+(194539025,1671647783,'Y',15), (-1133948378,1947844472,'e',16),
+(-533037937,1007507258,'E',17), (1268272947,-1875925199,'w',18),
+(2002333920,-764155734,'0',19), (-2017216121,-1780822065,'w',20);
+DELETE FROM outr1, outr2
+USING t1 AS outr1 RIGHT OUTER JOIN t1 AS outr2
+ON outr1.c = outr2.c
+WHERE outr1.c >= (SELECT DISTINCT innr1.k AS y
+FROM t2 AS innr2 LEFT JOIN t2 AS innr1
+ON innr2.k = CAST(innr1.v AS DATETIME)
+WHERE innr1.pk = 3
+);
+ERROR 22007: Incorrect datetime value: 'h'
+DROP TABLE t1, t2;

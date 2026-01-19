@@ -1,0 +1,79 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Design Philosophy</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../mpi.html" title="Chapter 26. Boost.MPI">
+<link rel="prev" href="python.html" title="Python Bindings">
+<link rel="next" href="performance.html" title="Performance Evaluation">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="python.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../mpi.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="performance.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="mpi.design"></a><a class="link" href="design.html" title="Design Philosophy">Design Philosophy</a>
+</h2></div></div></div>
+<p>
+      The design philosophy of the Parallel MPI library is very simple: be both convenient
+      and efficient. MPI is a library built for high-performance applications, but
+      it's FORTRAN-centric, performance-minded design makes it rather inflexible
+      from the C++ point of view: passing a string from one process to another is
+      inconvenient, requiring several messages and explicit buffering; passing a
+      container of strings from one process to another requires an extra level of
+      manual bookkeeping; and passing a map from strings to containers of strings
+      is positively infuriating. The Parallel MPI library allows all of these data
+      types to be passed using the same simple <code class="computeroutput"><span class="identifier">send</span><span class="special">()</span></code> and <code class="computeroutput"><span class="identifier">recv</span><span class="special">()</span></code> primitives. Likewise, collective operations
+      such as <code class="computeroutput"><a class="link" href="../boost/mpi/reduce.html" title="Function reduce">reduce()</a></code> allow arbitrary data types
+      and function objects, much like the C++ Standard Library would.
+    </p>
+<p>
+      The higher-level abstractions provided for convenience must not have an impact
+      on the performance of the application. For instance, sending an integer via
+      <code class="computeroutput"><span class="identifier">send</span></code> must be as efficient as
+      a call to <code class="computeroutput"><span class="identifier">MPI_Send</span></code>, which means
+      that it must be implemented by a simple call to <code class="computeroutput"><span class="identifier">MPI_Send</span></code>;
+      likewise, an integer <code class="computeroutput"><a class="link" href="../boost/mpi/reduce.html" title="Function reduce">reduce()</a></code> using <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">plus</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;</span></code> must
+      be implemented with a call to <code class="computeroutput"><span class="identifier">MPI_Reduce</span></code>
+      on integers using the <code class="computeroutput"><span class="identifier">MPI_SUM</span></code>
+      operation: anything less will impact performance. In essence, this is the "don't
+      pay for what you don't use" principle: if the user is not transmitting
+      strings, s/he should not pay the overhead associated with strings.
+    </p>
+<p>
+      Sometimes, achieving maximal performance means foregoing convenient abstractions
+      and implementing certain functionality using lower-level primitives. For this
+      reason, it is always possible to extract enough information from the abstractions
+      in Boost.MPI to minimize the amount of effort required to interface between
+      Boost.MPI and the C MPI library.
+    </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2005-2007 Douglas Gregor,
+      Matthias Troyer, Trustees of Indiana University<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at &lt;ulink url="http://www.boost.org/LICENSE_1_0.txt"&gt;
+        http://www.boost.org/LICENSE_1_0.txt &lt;/ulink&gt;)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="python.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../mpi.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="performance.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

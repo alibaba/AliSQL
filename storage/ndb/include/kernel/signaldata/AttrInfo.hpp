@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,12 +28,14 @@
 
 #include "SignalData.hpp"
 
+#define JAM_FILE_ID 185
+
 class AttrInfo {
   /**
    * Sender(s)
    */
   friend class DbUtil;
-  
+
   /**
    * Receiver(s)
    */
@@ -42,14 +51,14 @@ class AttrInfo {
   friend class NdbOperation;
 
   friend bool printATTRINFO(FILE *, const Uint32 *, Uint32, Uint16);
-  
-public:
-  STATIC_CONST( HeaderLength = 3 );
-  STATIC_CONST( DataLength = 22 );
-  STATIC_CONST( MaxSignalLength = HeaderLength + DataLength );
-  STATIC_CONST( SectionSizeInfoLength = 5 );
 
-private:
+ public:
+  static constexpr Uint32 HeaderLength = 3;
+  static constexpr Uint32 DataLength = 22;
+  static constexpr Uint32 MaxSignalLength = HeaderLength + DataLength;
+  static constexpr Uint32 SectionSizeInfoLength = 5;
+
+ private:
   Uint32 connectPtr;
   Uint32 transId[2];
   Uint32 attrData[DataLength];
@@ -65,9 +74,9 @@ private:
   signal. For SCAN_TABREQ, all attribute info words are sent in ATTRINFO
   signals).
 
-  For SCAN_TABREQ, and TCKEYREQ for read or update with interpreted code, 
-  the attribute information can have up to five sections. The initial 
-  five words of the stream defines the length of the sections, followed 
+  For SCAN_TABREQ, and TCKEYREQ for read or update with interpreted code,
+  the attribute information can have up to five sections. The initial
+  five words of the stream defines the length of the sections, followed
   by the words of each section in sequence.
 
   The sections are:
@@ -87,5 +96,7 @@ private:
   refer to columns in the underlying table, not to columns being indexed, so
   all attributes in the underlying table being indexed are accessible.
 */
+
+#undef JAM_FILE_ID
 
 #endif

@@ -1,0 +1,86 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+create user test;
+include/sync_slave_sql_with_master.inc
+create table t1(a int) engine=InnoDB;
+insert into t1 values(1001);
+set global read_only=1;
+select @@read_only;
+@@read_only
+1
+select * from t1;
+a
+1001
+include/sync_slave_sql_with_master.inc
+select @@read_only;
+@@read_only
+0
+select * from t1;
+a
+1001
+set global read_only=0;
+BEGIN;
+BEGIN;
+select @@read_only;
+@@read_only
+0
+set global read_only=1;
+*** On SUPER USER connection ***
+insert into t1 values(1002);
+*** On regular USER connection ***
+insert into t1 values(1003);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+*** SUPER USER COMMIT (must succeed) *** 
+COMMIT;
+*** regular USER COMMIT (must succeed - nothing to commit) *** 
+COMMIT;
+select @@read_only;
+@@read_only
+1
+set global read_only=0;
+insert into t1 values(1004);
+select * from t1;
+a
+1001
+1002
+1004
+include/sync_slave_sql_with_master.inc
+select * from t1;
+a
+1001
+1002
+1004
+set global read_only=1;
+select @@read_only;
+@@read_only
+1
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1 values(1005);
+select * from t1;
+a
+1001
+1002
+1004
+1005
+include/sync_slave_sql_with_master.inc
+select * from t1;
+a
+1001
+1002
+1004
+1005
+insert into t1 values(1006);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+drop user test;
+drop table t1;
+include/sync_slave_sql_with_master.inc
+set global read_only=0;
+include/rpl_end.inc

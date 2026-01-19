@@ -1,8 +1,10 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 SET default_storage_engine=innodb;
---- Doing pre test cleanup --- 
-DROP TABLE IF EXISTS t1;
+supports_native_partitioning: 1
 --- Start test 1 Basic testing ---
 --- Create Table Section ---
 CREATE TABLE t1 (id MEDIUMINT NOT NULL, b1 BIT(8), vc VARCHAR(255), 
@@ -13,32 +15,32 @@ y YEAR, t DATE,PRIMARY KEY(id));
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 --- Show table on slave ---
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 --- Perform basic operation on master ---
 --- and ensure replicated correctly ---
 "--- Insert into t1 --" as "";
@@ -86,33 +88,33 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 --- Make sure that our tables on slave are still same engine ---
 --- and that the alter statements replicated correctly ---
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 --- Perform basic operation on master ---
 --- and ensure replicated correctly --- 
 "--- Insert into t1 --" as "";
@@ -173,18 +175,18 @@ PARTITION p5 VALUES LESS THAN MAXVALUE);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
-  `t` date NOT NULL DEFAULT '0000-00-00',
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
+  `t` date NOT NULL,
   PRIMARY KEY (`t`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (YEAR(t))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`t`))
 (PARTITION p0 VALUES LESS THAN (1901) ENGINE = InnoDB,
  PARTITION p1 VALUES LESS THAN (1946) ENGINE = InnoDB,
  PARTITION p2 VALUES LESS THAN (1966) ENGINE = InnoDB,
@@ -195,18 +197,18 @@ t1	CREATE TABLE `t1` (
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
-  `t` date NOT NULL DEFAULT '0000-00-00',
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
+  `t` date NOT NULL,
   PRIMARY KEY (`t`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (YEAR(t))
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`t`))
 (PARTITION p0 VALUES LESS THAN (1901) ENGINE = ndbcluster,
  PARTITION p1 VALUES LESS THAN (1946) ENGINE = ndbcluster,
  PARTITION p2 VALUES LESS THAN (1966) ENGINE = ndbcluster,
@@ -260,18 +262,18 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
-  `t` date NOT NULL DEFAULT '0000-00-00',
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
+  `t` date NOT NULL,
   PRIMARY KEY (`t`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (YEAR(t))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`t`))
 (PARTITION p0 VALUES LESS THAN (1901) ENGINE = InnoDB,
  PARTITION p1 VALUES LESS THAN (1946) ENGINE = InnoDB,
  PARTITION p2 VALUES LESS THAN (1966) ENGINE = InnoDB,
@@ -283,18 +285,18 @@ t1	CREATE TABLE `t1` (
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
-  `t` date NOT NULL DEFAULT '0000-00-00',
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
+  `t` date NOT NULL,
   PRIMARY KEY (`t`,`id`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (YEAR(t))
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`t`))
 (PARTITION p0 VALUES LESS THAN (1901) ENGINE = ndbcluster,
  PARTITION p1 VALUES LESS THAN (1946) ENGINE = ndbcluster,
  PARTITION p2 VALUES LESS THAN (1966) ENGINE = ndbcluster,
@@ -343,7 +345,7 @@ COUNT(*)
 DELETE FROM t1;
 --- End test 2 partition RANGE testing ---
 --- Do Cleanup ---
-DROP TABLE IF EXISTS t1;
+DROP TABLE t1;
 --- Start test 3 partition LIST testing ---
 --- Do setup ---
 CREATE TABLE t1 (id MEDIUMINT NOT NULL, b1 BIT(8), vc VARCHAR(255), 
@@ -359,18 +361,18 @@ ALTER TABLE t1 ADD PARTITION (PARTITION p2 VALUES IN (412));
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`id`)
 (PARTITION p0 VALUES IN (2,4) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (42,142) ENGINE = InnoDB,
  PARTITION p2 VALUES IN (412) ENGINE = InnoDB) */
@@ -378,18 +380,18 @@ t1	CREATE TABLE `t1` (
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (id)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`id`)
 (PARTITION p0 VALUES IN (2,4) ENGINE = ndbcluster,
  PARTITION p1 VALUES IN (42,142) ENGINE = ndbcluster,
  PARTITION p2 VALUES IN (412) ENGINE = ndbcluster) */
@@ -439,18 +441,18 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`id`)
 (PARTITION p0 VALUES IN (2,4) ENGINE = InnoDB,
  PARTITION p1 VALUES IN (42,142) ENGINE = InnoDB,
  PARTITION p2 VALUES IN (412) ENGINE = InnoDB) */
@@ -459,18 +461,18 @@ t1	CREATE TABLE `t1` (
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (id)
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`id`)
 (PARTITION p0 VALUES IN (2,4) ENGINE = ndbcluster,
  PARTITION p1 VALUES IN (42,142) ENGINE = ndbcluster,
  PARTITION p2 VALUES IN (412) ENGINE = ndbcluster) */
@@ -516,7 +518,7 @@ COUNT(*)
 DELETE FROM t1;
 --- End test 3 partition LIST testing ---
 --- Do Cleanup --
-DROP TABLE IF EXISTS t1;
+DROP TABLE t1;
 --- Start test 4 partition HASH testing ---
 --- Do setup ---
 CREATE TABLE t1 (id MEDIUMINT NOT NULL, b1 BIT(8), vc VARCHAR(255), 
@@ -529,34 +531,34 @@ PARTITIONS 4;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
-  `t` date NOT NULL DEFAULT '0000-00-00',
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
+  `t` date NOT NULL,
   PRIMARY KEY (`t`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH ( YEAR(t))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (year(`t`))
 PARTITIONS 4 */
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
-  `t` date NOT NULL DEFAULT '0000-00-00',
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
+  `t` date NOT NULL,
   PRIMARY KEY (`t`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH ( YEAR(t))
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (year(`t`))
 PARTITIONS 4 */
 --- Perform basic operation on master ---
 --- and ensure replicated correctly ---
@@ -605,36 +607,36 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
-  `t` date NOT NULL DEFAULT '0000-00-00',
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
+  `t` date NOT NULL,
   PRIMARY KEY (`t`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH ( YEAR(t))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (year(`t`))
 PARTITIONS 4 */
 --- Make sure that our tables on slave are still same engine ---
 --- and that the alter statements replicated correctly ---
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
-  `t` date NOT NULL DEFAULT '0000-00-00',
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
+  `t` date NOT NULL,
   PRIMARY KEY (`t`,`id`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH ( YEAR(t))
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (year(`t`))
 PARTITIONS 4 */
 --- Perform basic operation on master ---
 --- and ensure replicated correctly ---
@@ -678,7 +680,7 @@ COUNT(*)
 DELETE FROM t1;
 --- End test 4 partition HASH testing ---
 --- Do Cleanup --
-DROP TABLE IF EXISTS t1;
+DROP TABLE t1;
 --- Start test 5 partition by key testing ---
 --- Create Table Section ---
 CREATE TABLE t1 (id MEDIUMINT NOT NULL, b1 BIT(8), vc VARCHAR(255), 
@@ -691,34 +693,34 @@ PARTITIONS 4;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- Show that tables on slave ---
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- Perform basic operation on master ---
@@ -767,17 +769,17 @@ ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(id, total);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- Make sure that our tables on slave are still right type ---
@@ -785,17 +787,17 @@ PARTITIONS 4 */
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- Perform basic operation on master ---
@@ -844,17 +846,17 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- Make sure that our tables on slave are still same engine ---
@@ -862,17 +864,17 @@ PARTITIONS 4 */
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=ndbcluster DEFAULT CHARSET=latin1
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- Perform basic operation on master ---
@@ -917,5 +919,5 @@ COUNT(*)
 DELETE FROM t1;
 --- End test 5 key partition testing ---
 --- Do Cleanup ---
-DROP TABLE IF EXISTS t1;
+DROP TABLE t1;
 include/rpl_end.inc

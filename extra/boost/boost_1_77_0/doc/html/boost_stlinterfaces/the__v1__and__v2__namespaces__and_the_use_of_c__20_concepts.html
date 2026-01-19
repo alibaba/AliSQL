@@ -1,0 +1,76 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>The v1 and v2 Namespaces, and the Use of C++20 Concepts</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../stl_interfaces.html" title="Chapter 39. Boost.STLInterfaces">
+<link rel="prev" href="this_library_s_relationship_to_boost_iterator.html" title="This Library's Relationship to Boost.Iterator">
+<link rel="next" href="tutorial___iterator_interface_.html" title="Tutorial: iterator_interface">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="this_library_s_relationship_to_boost_iterator.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="tutorial___iterator_interface_.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_stlinterfaces.the__v1__and__v2__namespaces__and_the_use_of_c__20_concepts"></a><a class="link" href="the__v1__and__v2__namespaces__and_the_use_of_c__20_concepts.html" title="The v1 and v2 Namespaces, and the Use of C++20 Concepts">The
+    <code class="computeroutput"><span class="identifier">v1</span></code> and <code class="computeroutput"><span class="identifier">v2</span></code>
+    Namespaces, and the Use of C++20 Concepts</a>
+</h2></div></div></div>
+<p>
+      For much of this library, there are two interfaces: one in namespace <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">v1</span></code>, and
+      one in <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">v2</span></code>. The <code class="computeroutput"><span class="identifier">v1</span></code>
+      version uses SFINAE to constrain templates, and the <code class="computeroutput"><span class="identifier">v2</span></code>
+      version uses concepts, including the standard concepts from C++20.
+    </p>
+<p>
+      When you build with a conforming C++20 compiler, the compiler defines a macro
+      <code class="computeroutput"><span class="identifier">__cpp_lib_concepts</span></code> that indicates
+      that the compiler supports concepts, and provides the standard concepts in
+      <code class="computeroutput"><span class="identifier">std</span></code> and <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">ranges</span></code>.
+      When Boost.STLInterfaces sees the <code class="computeroutput"><span class="identifier">__cpp_lib_concepts</span></code>
+      macro defined, it inlines the <code class="computeroutput"><span class="identifier">v2</span></code>
+      namespace; otherwise, it inlines the <code class="computeroutput"><span class="identifier">v1</span></code>
+      namespace.
+    </p>
+<p>
+      The net result for you as a user is that, for some function or type <code class="computeroutput"><span class="identifier">foo</span></code> with <code class="computeroutput"><span class="identifier">v1</span></code>
+      and <code class="computeroutput"><span class="identifier">v2</span></code> versions, you can use
+      <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">foo</span></code>, and you will get <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">v1</span><span class="special">::</span><span class="identifier">foo</span></code> when building in C++14 or C++17 modes,
+      and <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">stl_interfaces</span><span class="special">::</span><span class="identifier">v2</span><span class="special">::</span><span class="identifier">foo</span></code>
+      when building in C++20 or later.
+    </p>
+<p>
+      If you are using an early C++20 implementation that claims to have concept
+      support, but that breaks when you build Boost.STLInterfaces's C++20 code, you
+      can disable the <code class="computeroutput"><span class="identifier">v2</span></code> namespace
+      by defining <code class="computeroutput">BOOST_STL_INTERFACES_DISABLE_CONCEPTS</code>.
+      ]
+    </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2019 T. Zachary Laine<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="this_library_s_relationship_to_boost_iterator.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="tutorial___iterator_interface_.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

@@ -1,3 +1,5 @@
+--source include/not_hypergraph.inc  # Does not support SQL_CALC_FOUND_ROWS.
+
 #
 # Testing of found_rows()
 #
@@ -21,6 +23,11 @@ select SQL_CALC_FOUND_ROWS b,count(*) as c from t1 group by b order by c desc li
 select found_rows();
 select SQL_CALC_FOUND_ROWS * from t1 left join t1 as t2 on (t1.b=t2.a) limit 2,1;
 select found_rows(); 
+# Demonstrate printing of SQL_CALC_FOUND_ROWS in EXPLAIN.
+ANALYZE TABLE t1;
+EXPLAIN FORMAT=tree select SQL_CALC_FOUND_ROWS * from t1 limit 10 offset 100;
+select SQL_CALC_FOUND_ROWS * from t1 limit 10 offset 100;
+select found_rows();
 drop table t1;
 
 #
@@ -44,7 +51,7 @@ CREATE TABLE t1 (
 `kid` smallint(5) unsigned NOT NULL default '0',
 PRIMARY KEY (`id`),
 KEY `kid` (`kid`)
-);
+) charset utf8mb4;
 
 CREATE TABLE t2 (
   id smallint(5) unsigned NOT NULL auto_increment,
@@ -52,7 +59,7 @@ CREATE TABLE t2 (
   email varchar(50) NOT NULL default '',
   PRIMARY KEY  (id),
   UNIQUE KEY e_n (email,name)
-);
+) charset utf8mb4;
 
 disable_query_log;
 let $1=200;
@@ -64,6 +71,8 @@ while ($1)
   dec $1;
 }
 enable_query_log;
+
+ANALYZE TABLE t1, t2;
 
 --let $query=SELECT SQL_CALC_FOUND_ROWS DISTINCT email FROM t2 LEFT JOIN t1  ON kid = t2.id WHERE t1.id IS NULL LIMIT 10
 --eval EXPLAIN $query
@@ -174,7 +183,7 @@ SELECT FOUND_ROWS();
 DROP TABLE t1;
 
 #
-# Bug #6089: queries which don't use any tables
+# Bug #6089: queries which do not use any tables
 #
 
 SELECT 'foo';
@@ -199,3 +208,32 @@ SELECT FOUND_ROWS();
 DROP TABLE t1;
 
 # End of 4.1 tests
+
+--echo #
+--echo # Bug #17833261 FOUND_ROWS(): DIFFERENT RESULTS FOR LOCAL LIMIT WITH AND
+--echo # WITHOUT OFFSET IN UNION
+--echo #
+
+CREATE TABLE t1 (i INT);
+INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
+
+(SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 2 OFFSET 2)
+UNION ALL
+(SELECT 1 FROM t1 WHERE FALSE);
+SELECT FOUND_ROWS();
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #22155786: GET NEGATIVE FOUND_ROWS() FOR UNION STMT
+--echo #
+
+CREATE TABLE t1 (c1 int) ;
+INSERT INTO t1 VALUES (1), (2), (3), (4);
+
+(SELECT SQL_CALC_FOUND_ROWS * FROM t1 WHERE false LIMIT 8, 1)
+UNION ALL
+(SELECT * FROM t1 LIMIT 4, 4);
+SELECT FOUND_ROWS();
+
+DROP TABLE t1;

@@ -2,7 +2,6 @@
 
 --source include/have_optimizer_trace.inc
 # InnoDB page size influences cost => makes trace vary.
---source include/have_innodb_16k.inc
 
 SET optimizer_trace_max_mem_size=1048576; # 1MB
 SET end_markers_in_json=on;
@@ -65,6 +64,8 @@ INSERT INTO t2 SELECT key1,key1,key1 div 10, key1 % 10, key1 % 10, key1 FROM t1;
 --echo
 EXPLAIN SELECT * FROM t1 WHERE key2 < 5 OR key2 > 1020;
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # multiple ranges on one key, turn off range_optimizer tracing
@@ -72,6 +73,8 @@ set @@optimizer_trace_features="range_optimizer=off";
 --echo
 EXPLAIN SELECT * FROM t1 WHERE key2 < 5 OR key2 > 1020;
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 set @@optimizer_trace_features="range_optimizer=on";
 
@@ -80,17 +83,23 @@ set @@optimizer_trace_features="range_optimizer=on";
 --echo
 EXPLAIN SELECT * FROM t1 WHERE key1 < 3 OR key2 > 1020;
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # group without range
 --echo
 EXPLAIN SELECT key2, MIN(key2_1) FROM t2 GROUP BY key2;
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # distinct - group quick select without grouping attribute
 EXPLAIN SELECT DISTINCT key2 FROM t2;
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # group with range
@@ -99,30 +108,40 @@ EXPLAIN SELECT key2, MIN(key2_1) FROM t2
 WHERE key2 = 5 or key2 = 4 or key2 = 3 or key2 = 2 or key2 = 1 
 GROUP BY key2;
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 #intersect
 --echo
 EXPLAIN SELECT * FROM t2 WHERE key2 = 1 AND (key2_1 = 1 OR key3 = 5);
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # union
 --echo 
 EXPLAIN SELECT * FROM t1 WHERE key2=10 OR key3=3 OR key4 <=> null;
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # range_scan_possible=false
 --echo
 EXPLAIN SELECT * FROM t2 WHERE key2_1 < 79 OR key2 = 2;    
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # Multiple key parts in same index
 --echo
 EXPLAIN SELECT * FROM t2 WHERE key1a = 5 and key1b < 10;    
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # Multiple ranges on key parts in same index
@@ -130,6 +149,8 @@ SELECT * FROM information_schema.OPTIMIZER_TRACE;
 EXPLAIN SELECT * FROM t2 WHERE (key1a = 5 and key1b < 10 and key1b > 2) or
                                (key1a = 4 and key1b < 7 and key1b > 3);    
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # Multiple ranges on key parts in same index
@@ -137,12 +158,16 @@ SELECT * FROM information_schema.OPTIMIZER_TRACE;
 EXPLAIN SELECT * FROM t2 WHERE (key1b < 10 and key1b > 7) and 
                                (key1a = 4 or key1a = 5);
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # more_expensive_than_table_scan
 --echo
 EXPLAIN SELECT * FROM t1 WHERE (key1 > 1 OR key2  > 2);
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 # Range analysis on straight join
@@ -150,6 +175,8 @@ SELECT * FROM information_schema.OPTIMIZER_TRACE;
 EXPLAIN SELECT STRAIGHT_JOIN * FROM t1, t2 
   WHERE t1.key1=t2.key1a AND t1.key2 > 1020;
 --echo
+--replace_numeric_round 2
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 DROP TABLE t1,t2;
@@ -160,7 +187,7 @@ CREATE TABLE t1 (
   filler char(200),
   key(cola), 
   key(colb)
-);
+) CHARSET utf8mb4;
 INSERT INTO t1 VALUES ('foo','bar', 'ZZ'),('fuz','baz', 'ZZ');
 
 --echo Inserting records
@@ -184,12 +211,14 @@ WHILE ($1)
 # Index roworder intersect
 EXPLAIN SELECT * FROM t1 WHERE cola = 'foo' AND colb = 'bar';
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 --echo
 # Range with escaped character should be printed escaped
 EXPLAIN SELECT * FROM t1 WHERE cola = 'f\no';
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 DROP TABLE t1;
@@ -206,6 +235,7 @@ SET optimizer_trace_features="greedy_search=off,dynamic_range=on";
 EXPLAIN SELECT 1 FROM 
  (SELECT 1 FROM t2,t1 WHERE b < c GROUP BY 1 LIMIT 1) AS d2;
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 --echo
 
@@ -214,6 +244,7 @@ SET optimizer_trace_features="greedy_search=off,dynamic_range=off";
 EXPLAIN SELECT 1 FROM 
  (SELECT 1 FROM t2,t1 WHERE b < c GROUP BY 1 LIMIT 1) AS d2;
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 --echo
 
@@ -229,16 +260,18 @@ CREATE TABLE t1 (
   c char(1),
   KEY k1 (i1),
   KEY k2 (i1, i2)
-);
+) CHARSET utf8mb4;
 INSERT INTO t1 VALUES (0,1,'2'),(3,2,'1');
 
 EXPLAIN SELECT * FROM t1 WHERE i1 > '2' ORDER BY i1, i2;
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 --echo
 
 EXPLAIN SELECT DISTINCT i1 FROM t1 WHERE i1 >= '1' ORDER BY i1 DESC;
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 --echo
 
@@ -252,7 +285,7 @@ CREATE TABLE t1 (
   v varchar(1),
   INDEX i1_idx (i1),
   INDEX v_idx (v,i1)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB, CHARSET utf8mb4;
 
 INSERT INTO t1 VALUES (1, 1, 9,'a'), (2, 2, 8,'b'), (3, 3, 7,'c'),
                       (4, 4, 6,'d'), (5, 5, 5,'e');
@@ -264,23 +297,18 @@ ANALYZE TABLE t1;
 -- enable_query_log
 
 --echo
---echo # Covering ROR intersect not chosen: only one scan used
+--echo # Covering ROR intersect not chosen: Index with more keyparts found.
 EXPLAIN SELECT v FROM t1 WHERE i1 = 1 AND v = 'a' AND pk < 3;
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
-DROP INDEX i1_idx ON t1;
-CREATE INDEX i1_i2_idx ON t1 (i2,i1);
-
-ANALYZE TABLE t1;
-
 --echo
---echo # Covering ROR intersect not chosen: cost
-EXPLAIN SELECT v FROM t1 WHERE i1 = 1 AND i2 = 1  AND v = 'a' AND pk < 3;
+--echo # Chooses ROR intersect
+EXPLAIN SELECT v FROM t1 WHERE i1 = 1 AND pk < 3;
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
-
-# Todo: make a test case that chooses ROR intersect
 
 --echo
 DROP TABLE t1;
@@ -296,9 +324,11 @@ INSERT INTO t1 VALUES (1,1),(1,2),(1,0),(1,3);
 # -- enable_query_log
 
 --echo
---echo # Test trace for "access_type_changed 'ref' to 'range'"
+--echo # Test trace for unreliable_ref_cost_and_range_uses_more_keyparts to
+--echo # ignore ref access on index with overly optimistic cost-estimate
 EXPLAIN SELECT MAX(b), a FROM t1 WHERE b < 2 AND a = 1 GROUP BY a; 
 --echo
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 --echo
@@ -316,12 +346,25 @@ CREATE TABLE t1 (
   c2 VARCHAR(2) NOT NULL,
   KEY k1 (c1),
   KEY k2 (c1, i1)
-);
+) CHARSET utf8mb4;
 
 INSERT INTO t1 VALUES ('0',3,'0'),('0',2,'1');
 
 EXPLAIN SELECT * FROM t1 WHERE c1 = '1' ORDER BY i1;
 
+--skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
+
+--echo #
+--echo # Bug#30266767 OPTIMIZER TRACE CONTAINS INVALID JSON FOR FORCE INDEX QUERIES
+--echo #
+
+# Validate that the "infinite cost" value present in the previous
+# trace is parsable; if not, JSON_TYPE returns an error; if the regex
+# is not matched, NULL.
+
+--skip_if_hypergraph  # Does not support the same optimizer trace.
+SELECT JSON_TYPE(REGEXP_SUBSTR(TRACE, "1.*e[+]?308")) AS json_type
+FROM information_schema.OPTIMIZER_TRACE;
 
 DROP TABLE t1;

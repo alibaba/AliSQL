@@ -13,11 +13,21 @@
 #
 # ==== Usage ====
 #
+# [--let $rpl_channel_name= 'NAME']
+# [--let $slave_sql_errno= NUMBER[, NUMBER...]]
 # [--let $slave_timeout= NUMBER]
 # [--let $rpl_debug= 1]
 # --source include/wait_for_slave_sql_to_stop.inc
 #
 # Parameters:
+#   $rpl_channel_name
+#     See include/wait_for_slave_param.inc
+#
+#   $slave_sql_errno
+#     By default, this script fails the test if there is an error in the
+#     applier thread. Set this to a comma-separated list of numeric error
+#     codes, to allow the given values.
+#
 #   $slave_timeout
 #     See include/wait_for_slave_param.inc
 #
@@ -26,6 +36,10 @@
 
 
 --let $include_filename= wait_for_slave_sql_to_stop.inc
+if ($rpl_channel_name)
+{
+  --let $include_filename= $include_filename [FOR CHANNEL $rpl_channel_name]
+}
 --source include/begin_include_file.inc
 
 
@@ -34,7 +48,7 @@
 --let $slave_param_comparison= =
 --let $slave_error_param= Last_SQL_Errno
 --source include/wait_for_slave_param.inc
---let $slave_error_param= 
+--let $slave_error_param=
 
 
 --let $include_filename= wait_for_slave_sql_to_stop.inc

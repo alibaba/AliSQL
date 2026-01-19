@@ -1,0 +1,53 @@
+--source setup.inc
+
+# Test RENAME TABLE with more than one table
+# - RENAME TABLE tbl_name TO new_tbl_name [, tbl_name2 TO new_tbl_name2] ...
+# - The MySQL Server will call ha_ndbcluster several times to
+#   rename the tables one by one
+let $sql = RENAME TABLE;
+
+# 1. Rename to <tabname>_new_name
+let $sql = $sql t1 to t1_new_name,;
+
+# 2. Rename to same name, skip since expected fail
+
+# 3. Rename to same name but different db
+let $sql = $sql t3 to ndb_ddl_test2.t3,;
+
+# 4. Rename to different name and different db
+let $sql = $sql t4 to ndb_ddl_test2.t4_new_name;
+
+eval $sql;
+
+--source verify_mysql_dd.inc
+
+# Check behaviour of multi RENAME to same name
+USE ndb_ddl_test;
+--error ER_TABLE_EXISTS_ERROR
+RENAME TABLE t5 to t50, t2 to t2;
+
+--source verify_mysql_dd.inc
+
+# Check behaviour of multi RENAME renaming same table multiple times
+USE ndb_ddl_test;
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t5;
+RENAME TABLE t2 to t2_temp_name, t5 to t2, t2_temp_name to t5;
+# The tables t2 and t5 should have swapped by now
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t5;
+
+--source verify_mysql_dd.inc
+
+# Check behaviour of multi RENAME renaming same table multiple times
+# and then renaming it into a existing table name
+USE ndb_ddl_test;
+--error ER_TABLE_EXISTS_ERROR
+RENAME TABLE t5 to t50, t50 to t500, t500 to t2;
+# The tables should remain the same as before
+SHOW CREATE TABLE t2;
+SHOW CREATE TABLE t5;
+
+--source verify_mysql_dd.inc
+
+--source cleanup.inc

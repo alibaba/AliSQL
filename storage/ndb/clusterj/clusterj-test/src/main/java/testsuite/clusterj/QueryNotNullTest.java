@@ -1,15 +1,22 @@
 /*
-Copyright 2010 Sun Microsystems, Inc.
-All rights reserved. Use is subject to license terms.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; version 2 of the License.
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
@@ -107,6 +114,38 @@ public class QueryNotNullTest extends AbstractQueryTest {
     public void testNoneNotEqualNull() {
         notEqualQuery("int_not_null_none", "none", null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
         notEqualQuery("int_null_none", "none", null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        failOnError();        
+    }
+
+    public void testExtraEqualIsNotNull() {
+        equalAnd1ExtraQuery("int_not_null_btree", 8, "int_null_none", extraIsNotNullPredicateProvider, "dummy unused value", "idx_int_not_null_btree", 8);
+        equalAnd1ExtraQuery("int_not_null_hash", 8, "int_null_none", extraIsNotNullPredicateProvider, "dummy unused value", "none", 8);
+        equalAnd1ExtraQuery("int_not_null_both", 8, "int_null_none", extraIsNotNullPredicateProvider, "dummy unused value", "idx_int_not_null_both", 8);
+        equalAnd1ExtraQuery("int_not_null_none", 8, "int_null_none", extraIsNotNullPredicateProvider, "dummy unused value", "none", 8);
+        failOnError();        
+    }
+
+    public void testBtreeIsNotNull() {
+        isNotNullQuery("int_not_null_btree", "none", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        isNotNullQuery("int_null_btree", "none", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        failOnError();        
+    }
+
+    public void testHashIsNotNull() {
+        isNotNullQuery("int_not_null_hash", "none", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        isNotNullQuery("int_null_hash", "none", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        failOnError();        
+    }
+
+    public void testBothIsNotNull() {
+        isNotNullQuery("int_not_null_both", "none", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        isNotNullQuery("int_null_both", "none", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        failOnError();        
+    }
+
+    public void testNoneIsNotNull() {
+        isNotNullQuery("int_not_null_none", "none", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        isNotNullQuery("int_null_none", "none", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
         failOnError();        
     }
 

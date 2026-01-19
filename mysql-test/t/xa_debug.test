@@ -1,0 +1,375 @@
+# Skipping the test when logbin is enabled due to Bug#22292900
+--source include/not_log_bin.inc
+
+# This file contains XA-related test cases that requires mysql server
+# built with debug.
+--source include/not_valgrind.inc
+--source include/have_debug.inc
+
+# Test requires --xa_detach_on_prepare
+--let $option_name = xa_detach_on_prepare
+--let $option_value = 1
+--source include/only_with_option.inc
+
+--disable_query_log
+call mtr.add_suppression("Found 1 prepared XA transactions");
+--enable_query_log
+
+--echo #
+--echo # WL#7155: Test 1: check that prepared transaction branch
+--echo # is recovered after abnormal server termination.
+--echo #
+
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+ 
+XA START 'xid1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1';
+XA PREPARE 'xid1';
+
+--disable_query_log
+set session debug="+d,crash_after_xa_recover";
+--enable_query_log
+
+# Write file to make mysql-test-run.pl wait for the server to stop
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error 2013
+XA RECOVER;
+
+# Call script that will poll the server waiting for it to disappear
+--source include/wait_until_disconnected.inc
+
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/start_mysqld.inc
+
+--disable_query_log
+set session debug="-d,crash_after_xa_recover";
+--enable_query_log
+
+XA RECOVER;
+SELECT * FROM t1;
+XA COMMIT 'xid1';
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # WL#7155: Test 2: check that in case of abnormal server termination
+--echo # the changes done by unprepared transaction branch will be rolled back
+--echo # after the server restart.
+--echo # 
+
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+ 
+XA START 'xid1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1';
+
+--disable_query_log
+set session debug="+d,crash_after_xa_recover";
+--enable_query_log
+
+# Write file to make mysql-test-run.pl wait for the server to stop
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error 2013
+XA RECOVER;
+
+# Call script that will poll the server waiting for it to disappear
+--source include/wait_until_disconnected.inc
+
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/start_mysqld.inc
+
+--disable_query_log
+set session debug="-d,crash_after_xa_recover";
+--enable_query_log
+
+XA RECOVER;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # WL#7155: Test 3: Check that escaped "'" symbol for xid value
+--echo # is handled correctly during recovering XA transaction. 
+--echo #
+
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+
+XA START 'xid1', 'br\'_1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1', 'br\'_1';
+XA PREPARE 'xid1', 'br\'_1';
+
+--disable_query_log
+set session debug="+d,crash_after_xa_recover";
+--enable_query_log
+
+# Write file to make mysql-test-run.pl wait for the server to stop
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error 2013
+XA RECOVER;
+
+# Call script that will poll the server waiting for it to disappear
+--source include/wait_until_disconnected.inc
+
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/start_mysqld.inc
+
+--disable_query_log
+set session debug="-d,crash_after_xa_recover";
+--enable_query_log
+
+XA RECOVER;
+XA ROLLBACK 'xid1', 'br\'_1';
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#18068253 - XA START WITH THE EXIST XID, AND THEN XA COMMIT WITH THE XID WILL FAILED
+--echo #
+
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+
+XA START 'xid1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1';
+XA PREPARE 'xid1';
+
+set session debug="+d,crash_after_xa_recover";
+
+# Write file to make mysql-test-run.pl wait for the server to stop
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error 2013
+XA RECOVER;
+
+# Call script that will poll the server waiting for it to disappear
+--source include/wait_until_disconnected.inc
+
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/start_mysqld.inc
+
+set session debug="-d,crash_after_xa_recover";
+
+XA RECOVER;
+
+--error ER_XAER_DUPID
+XA START 'xid1';
+
+XA COMMIT 'xid1';
+DROP TABLE t1;
+
+
+--echo #
+--echo # Bug#20538956 - XA PREPARE ERROR BRANCH LEAVES THE TRANSACTION IN SCREWED STATE
+--echo #
+--connect (con1, 127.0.0.1,root,,test,$MASTER_MYPORT,)
+CREATE TABLE t1 (a INT);
+
+XA START 'xid1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1';
+SET @@session.debug = '+d,simulate_xa_failure_prepare';
+--error ER_XA_RBROLLBACK
+XA PREPARE 'xid1';
+SET @@session.debug = '-d,simulate_xa_failure_prepare';
+
+--error ER_XAER_NOTA
+XA ROLLBACK 'xid1';
+
+#
+# The following query failed before patch applied.
+#
+
+XA START 'trx_another_one';
+--disconnect con1
+
+--connection default
+--echo #
+--echo # Bug#20488921 - ERROR PROPAGATION DOES NOT FULLY WORK IN XA
+--echo #
+--let $CURSESS_xa_detach_on_prepare = `SELECT @@SESSION.xa_detach_on_prepare`
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xid1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1';
+XA PREPARE 'xid1';
+SET @@session.debug= '+d,simulate_xa_commit_log_failure';
+--error ER_XAER_RMERR
+XA COMMIT 'xid1';
+# Without a patch for the bug#20488921 execution of the following SET statement
+# led to an assert firing.
+SET @@session.debug= '-d,simulate_xa_commit_log_failure';
+# The following statement is just to check that there isn't any XA transaction
+# independently from its state.
+INSERT INTO t1 VALUES (2);
+
+DROP TABLE t1;
+--replace_result $CURSESS_xa_detach_on_prepare OLD_VALUE_xa_detach_on_prepare
+--eval SET SESSION xa_detach_on_prepare = $CURSESS_xa_detach_on_prepare
+
+--echo #
+--echo # Bug#23264552 - XA: ASSERT `m_status == da_error' IN mysql_errno:sql_error.h:385
+--echo #
+--connect (con1, 127.0.0.1,root,,test,$MASTER_MYPORT,)
+CREATE TABLE t1 (a INT);
+
+XA START 'xid1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1';
+SET @@session.debug = '+d,simulate_xa_failure_prepare_in_engine';
+--error ER_XA_RBROLLBACK
+XA PREPARE 'xid1';
+SET @@session.debug = '-d,simulate_xa_failure_prepare_in_engine';
+
+--error ER_XAER_NOTA
+XA ROLLBACK 'xid1';
+
+#
+# Check that subsequent XA transaction can be initiated.
+#
+
+XA START 'trx_another_one';
+--disconnect con1
+--source include/wait_until_disconnected.inc
+--connection default
+
+DROP TABLE t1;
+
+--echo #
+--echo # BUG#29293279 -- XA COMMIT MAY LEAD REPLICATION BROKEN
+--echo #
+
+--echo Establish session con1
+connect (con1,localhost,root,,);
+CREATE TABLE t1(a INT);
+XA START 'xid1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1';
+XA PREPARE 'xid1';
+--echo Disconnect con1 to save the XA transaction with xid1 into the cache
+--disconnect con1
+--source include/wait_until_disconnected.inc
+
+--enable_connect_log
+connect (con2,localhost,root,,);
+
+set debug_sync='detached_xa_commit_after_acquire_commit_lock SIGNAL parked WAIT_FOR go';
+--send XA COMMIT 'xid1'
+
+--connection default
+set debug_sync='now WAIT_FOR parked';
+set debug_sync='detached_xa_commit_before_acquire_xa_lock SIGNAL go';
+--error ER_XAER_NOTA
+XA COMMIT 'xid1';
+
+DROP TABLE t1;
+--disable_connect_log
+
+
+--echo #
+--echo # Bug#32025408: MAIN.XA_PREPARED_BINLOG_OFF,BINLOG.BINLOG_XA_PREPARED_DISCON FAILS ON ASAN/UBSAN
+--echo #
+
+--source include/have_debug_sync.inc
+
+CREATE TABLE t1(i INT);
+
+--echo # Create a connection which as non-prepared XA trans.
+connect(conA,localhost,root,,);
+XA START 'trx1';
+INSERT INTO t1 set i=0;
+XA END 'trx1';
+
+--echo # Create new connection which will execute XA COMMIT and be blocked between search in transaction cache and
+--echo # accessing xid_state (to see if txn can be committed).
+connect(conB,localhost,root,,);
+SET DEBUG_SYNC="before_accessing_xid_state SIGNAL proceed_disconnect WAIT_FOR proceed_check_xid_state";
+--send XA COMMIT 'trx1'
+
+--echo # Terminate conA which will delete the Transaction_ctx and with it the XID_STATE
+--connection conA
+SET DEBUG_SYNC="now WAIT_FOR proceed_disconnect";
+--disconnect conA
+--source include/wait_until_disconnected.inc
+
+--connection default
+--echo # Unblock XA COMMIT. Without fix this will access the now freed memory, and trigger ASAN error.
+SET DEBUG_SYNC="now SIGNAL proceed_check_xid_state";
+
+--connection conB
+--error ER_XAER_NOTA
+--reap
+--disconnect conB
+
+--connection default
+DROP TABLE t1;
+
+# Uses DBUG_EVALUATE_IF to simulate errors in various functions called during
+# XA PREPARE, to verify that transaction handling works as expected.
+
+--echo # Test error handling in XA PREPARE.
+
+CREATE TABLE t1(d VARCHAR(128));
+
+XA START 'xid1';
+INSERT INTO t1 VALUES ('I: The first string'), ('I: The second string');
+
+--echo # Test errors which leave the XA transaction in place
+--error ER_XAER_RMFAIL
+XA PREPARE 'xid1';
+XA END 'xid1';
+--error ER_XAER_NOTA
+XA PREPARE 'xidX';
+XA ROLLBACK 'xid1';
+
+SELECT * FROM t1;
+XA START 'xid2';
+INSERT INTO t1 VALUES ('II: The first string'), ('II: The second string');
+XA END 'xid2';
+
+SET DEBUG = "+d,xaprep_mdl_fail";
+--error ER_XA_RBROLLBACK
+XA PREPARE 'xid2';
+SET DEBUG = "-d,xaprep_mdl_fail";
+SELECT * FROM t1;
+
+XA START 'xid3';
+INSERT INTO t1 VALUES ('III: The first string'), ('III: The second string');
+XA END 'xid3';
+
+SET DEBUG = "+d,xaprep_ha_xa_prepare_fail";
+--error ER_XA_RBROLLBACK
+XA PREPARE 'xid3';
+SET DEBUG = "-d,xaprep_ha_xa_prepare_fail";
+SELECT * FROM t1;
+
+XA START 'xid4';
+INSERT INTO t1 VALUES ('IV: The first string'), ('IV: The second string');
+XA END 'xid4';
+
+SET DEBUG = "+d,xaprep_create_mdl_backup_fail";
+--error ER_OUT_OF_RESOURCES
+XA PREPARE 'xid4';
+SHOW ERRORS;
+SET DEBUG = "-d,xaprep_create_mdl_backup_fail";
+SELECT * FROM t1;
+
+XA START 'xid5';
+INSERT INTO t1 VALUES ('V: The first string'), ('V: The second string');
+XA END 'xid5';
+
+SET DEBUG = "+d,xaprep_trans_detach_fail";
+--error ER_XA_RBROLLBACK
+XA PREPARE 'xid5';
+SET DEBUG = "-d,xaprep_trans_detach_fail";
+SELECT * FROM t1;
+
+--echo # Cleanup
+XA RECOVER;
+DROP TABLE t1;
+

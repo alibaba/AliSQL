@@ -1,0 +1,159 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+###########################################################################
+# 0. Prepare
+###########################################################################
+[connection master]
+CREATE TABLE t1 (
+id BIGINT NOT NULL,
+c0 INT,
+PRIMARY KEY(id)
+) ENGINE=InnoDB;
+include/rpl_sync.inc
+[connection slave]
+ALTER TABLE t1 ENGINE=DuckDB;
+SELECT * FROM t1;
+id	c0
+include/stop_slave_sql.inc
+###########################################################################
+# 1. The Master executes 4 transactions, make sure the Slave receives all.
+###########################################################################
+[connection master]
+BEGIN;
+INSERT INTO t1 VALUES (5, 5);
+INSERT INTO t1 VALUES (6, 6);
+COMMIT;
+SET GTID_NEXT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:2';
+BEGIN;
+INSERT INTO t1 VALUES (7, 7);
+COMMIT;
+SET GTID_NEXT = 'AUTOMATIC';
+BEGIN;
+INSERT INTO t1 VALUES (8, 8);
+UPDATE t1 SET id = 9 WHERE id = 5;
+COMMIT;
+BEGIN;
+UPDATE t1 SET id = 10 WHERE id = 6;
+UPDATE t1 SET id = 11 WHERE id = 8;
+INSERT INTO t1 VALUES (12, 12);
+COMMIT;
+include/rpl_sync.inc
+###########################################################################
+# 2. Let the Slave skip executes the 2nd transaction, and Crash when replay
+###########################################################################
+[connection slave]
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:2';
+BEGIN;
+INSERT INTO t1 VALUES (7, 7);
+COMMIT;
+SET GTID_NEXT = 'AUTOMATIC';
+SET GLOBAL debug="+d,crash_after_duckdb_commit";
+START REPLICA SQL_THREAD;
+include/rpl_start_server.inc [server_number=2 parameters: --debug=+d,duckdb_print_dml,duckdb_idempotent_2trx]
+START REPLICA;
+Warnings:
+Note	3083	Replication thread(s) for channel '' are already runnning.
+###########################################################################
+# 3. After Crash Recovery, check Data and SQLs send to DuckDB, the 1st and
+#    3rd transactions should be replayed idempotently, the 4th transaction
+#    should not be replayed idempotently.
+###########################################################################
+[connection master]
+SELECT * FROM t1;
+id	c0
+10	6
+11	8
+12	12
+7	7
+9	5
+[connection slave]
+include/rpl_sync.inc
+SELECT * FROM t1;
+id	c0
+10	6
+11	8
+12	12
+7	7
+9	5
+Matching lines are:
+int ha_duckdb::write_row: duckdb_print_dml: DELETE FROM `test`.`t1` WHERE `id` = 5
+int ha_duckdb::write_row: duckdb_print_dml: INSERT INTO `test`.`t1` (`id`, `c0`) VALUES (5, 5)
+int ha_duckdb::write_row: duckdb_print_dml: DELETE FROM `test`.`t1` WHERE `id` = 6
+int ha_duckdb::write_row: duckdb_print_dml: INSERT INTO `test`.`t1` (`id`, `c0`) VALUES (6, 6)
+int ha_duckdb::write_row: duckdb_print_dml: DELETE FROM `test`.`t1` WHERE `id` = 8
+int ha_duckdb::write_row: duckdb_print_dml: INSERT INTO `test`.`t1` (`id`, `c0`) VALUES (8, 8)
+int ha_duckdb::update_row: duckdb_print_dml: DELETE FROM `test`.`t1` WHERE `id` = 5
+int ha_duckdb::update_row: duckdb_print_dml: DELETE FROM `test`.`t1` WHERE `id` = 9
+int ha_duckdb::update_row: duckdb_print_dml: INSERT INTO `test`.`t1` (`id`, `c0`) VALUES (9, 5)
+int ha_duckdb::update_row: duckdb_print_dml: UPDATE `test`.`t1` SET `id` = 10 WHERE `id` = 6
+int ha_duckdb::update_row: duckdb_print_dml: UPDATE `test`.`t1` SET `id` = 11 WHERE `id` = 8
+int ha_duckdb::write_row: duckdb_print_dml: INSERT INTO `test`.`t1` (`id`, `c0`) VALUES (12, 12)
+Occurrences of 'duckdb_print_dml: .*' in the input file: 12
+###########################################################################
+# 4. The Master executes the 5th transaction, make sure the Slave receives
+#    the transaction and then restart the Slave. After restart, the Slave
+#    should replay it idempotently, but the Slave should not replay the 6th
+#    transaction idempotently.
+###########################################################################
+include/stop_slave_sql.inc
+[connection master]
+BEGIN;
+UPDATE t1 SET id = 13 WHERE id = 9;
+INSERT INTO t1 VALUES (14, 14);
+COMMIT;
+include/rpl_sync.inc
+include/rpl_stop_server.inc [server_number=2]
+include/rpl_start_server.inc [server_number=2 parameters: --debug=+d,duckdb_print_dml]
+###########################################################################
+# 5. After restart, the Slaved should replay the 5th transaction idempotently,
+#    but should not replay the 6th transaction idempotently.
+###########################################################################
+[connection slave]
+START REPLICA;
+Warnings:
+Note	3083	Replication thread(s) for channel '' are already runnning.
+include/rpl_sync.inc
+[connection master]
+BEGIN;
+UPDATE t1 SET id = 15 WHERE id = 11;
+INSERT INTO t1 VALUES (16, 16);
+COMMIT;
+SELECT * FROM t1;
+id	c0
+10	6
+12	12
+13	5
+14	14
+15	8
+16	16
+7	7
+include/rpl_sync.inc
+[connection slave]
+SELECT * FROM t1;
+id	c0
+10	6
+12	12
+13	5
+14	14
+15	8
+16	16
+7	7
+Matching lines are:
+int ha_duckdb::update_row: duckdb_print_dml: DELETE FROM `test`.`t1` WHERE `id` = 9
+int ha_duckdb::update_row: duckdb_print_dml: DELETE FROM `test`.`t1` WHERE `id` = 13
+int ha_duckdb::update_row: duckdb_print_dml: INSERT INTO `test`.`t1` (`id`, `c0`) VALUES (13, 5)
+int ha_duckdb::write_row: duckdb_print_dml: DELETE FROM `test`.`t1` WHERE `id` = 14
+int ha_duckdb::write_row: duckdb_print_dml: INSERT INTO `test`.`t1` (`id`, `c0`) VALUES (14, 14)
+int ha_duckdb::update_row: duckdb_print_dml: UPDATE `test`.`t1` SET `id` = 15 WHERE `id` = 11
+int ha_duckdb::write_row: duckdb_print_dml: INSERT INTO `test`.`t1` (`id`, `c0`) VALUES (16, 16)
+Occurrences of 'duckdb_print_dml: .*' in the input file: 7
+###########################################################################
+# Cleanup
+###########################################################################
+[connection master]
+DROP TABLE t1;
+include/rpl_sync.inc
+include/rpl_end.inc

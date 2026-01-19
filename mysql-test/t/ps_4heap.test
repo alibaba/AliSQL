@@ -1,3 +1,10 @@
+# Test requires: sp-protocol/ps-protocol/view-protocol/cursor-protocol disabled
+# because max_length in metadata is different in PS protocol.
+--source include/no_protocol.inc
+
+#Get default engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 ###############################################
 #                                             #
 #   Prepared Statements test on HEAP tables   #
@@ -23,7 +30,7 @@ eval create table t1
 --disable_warnings
 drop table if exists t9;
 --enable_warnings
-# The used table type doesn't support BLOB/TEXT columns.
+# The used table type does not support BLOB/TEXT columns.
 # (The server would send error 1163  .)
 # So we use char(100) instead.
 eval create table t9 

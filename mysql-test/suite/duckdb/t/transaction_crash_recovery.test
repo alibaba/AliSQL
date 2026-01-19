@@ -1,0 +1,141 @@
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+--echo ###########################################################################
+--echo # 0. Prepare
+--echo ###########################################################################
+--source include/rpl_connection_master.inc
+CREATE TABLE t_duckdb (
+    id BIGINT NOT NULL,
+    c0 INT,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE t_innodb (
+    id BIGINT NOT NULL,
+    c0 INT,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t_duckdb;
+SHOW CREATE TABLE t_innodb;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+ALTER TABLE t_duckdb ENGINE=DuckDB;
+SHOW CREATE TABLE t_duckdb;
+SHOW CREATE TABLE t_innodb;
+
+--source include/rpl_connection_master.inc
+DELIMITER |;
+CREATE PROCEDURE insert_duckdb_innodb(val INT)
+BEGIN
+    START TRANSACTION;
+    INSERT INTO t_duckdb VALUES (val, val);
+    INSERT INTO t_innodb VALUES (val, val);
+    COMMIT;
+END|
+
+CREATE PROCEDURE insert_innodb_duckdb(val INT)
+BEGIN
+    START TRANSACTION;
+    INSERT INTO t_innodb VALUES (val, val);
+    INSERT INTO t_duckdb VALUES (val, val);
+    COMMIT;
+END|
+
+CREATE PROCEDURE update_duckdb_pk(val INT)
+BEGIN
+    START TRANSACTION;
+    UPDATE t_duckdb SET id = val + 2 WHERE id = val + 1;
+    UPDATE t_duckdb SET id = val + 1 WHERE id = val;
+    COMMIT;
+END|
+
+CREATE PROCEDURE update_duckdb_nopk(val INT)
+BEGIN
+    UPDATE t_duckdb SET c0 = c0 + 1 WHERE id = val;
+END|
+
+CREATE PROCEDURE select_both()
+BEGIN
+    SELECT * FROM t_duckdb;
+    SELECT * FROM t_innodb;
+END|
+DELIMITER ;|
+--source include/rpl_sync.inc
+
+--echo ###########################################################################
+--echo # 1. Test transaction first INSERT DuckDB table, then INSERT InnoDB table
+--echo ###########################################################################
+--echo # 1.1 Crash Before DuckDB Commit
+--let $crash_point = "+d,crash_before_duckdb_commit"
+--let $dml_query = CALL insert_duckdb_innodb(1)
+--let $result_query = CALL select_both()
+--source transaction_crash_recovery.inc
+
+--echo # 1.2 Crash After DuckDB Commit
+--let $crash_point = "+d,crash_after_duckdb_commit"
+--let $dml_query = CALL insert_duckdb_innodb(2)
+--let $result_query = CALL select_both()
+--source transaction_crash_recovery.inc
+
+--echo ###########################################################################
+--echo # 2. Test transaction first INSERT InnoDB table, then INSERT DuckDB table
+--echo ###########################################################################
+--echo # 2.1 Crash Before DuckDB Commit
+--let $crash_point = "+d,crash_before_duckdb_commit"
+--let $dml_query = CALL insert_duckdb_innodb(3)
+--let $result_query = CALL select_both()
+--source transaction_crash_recovery.inc
+
+--echo # 2.2 Crash After DuckDB Commit
+--let $crash_point = "+d,crash_after_duckdb_commit"
+--let $dml_query = CALL insert_duckdb_innodb(4)
+--let $result_query = CALL select_both()
+--source transaction_crash_recovery.inc
+
+--echo ###########################################################################
+--echo # 3. Test transaction UPDATE DuckDB table's non-PK field
+--echo ###########################################################################
+--echo # 3.1 Crash Before DuckDB Commit
+--let $crash_point = "+d,crash_before_duckdb_commit"
+--let $dml_query = CALL update_duckdb_nopk(1)
+--let $result_query = SELECT * FROM t_duckdb
+--source transaction_crash_recovery.inc
+
+--echo # 3.2 Crash After DuckDB Commit
+--let $crash_point = "+d,crash_after_duckdb_commit"
+--let $dml_query = CALL update_duckdb_nopk(2)
+--let $result_query =SELECT * FROM t_duckdb
+--source transaction_crash_recovery.inc
+
+--echo ###########################################################################
+--echo # 4. Test transaction UPDATE DuckDB table's PK field
+--echo ###########################################################################
+--echo # 4.1 Crash Before DuckDB Commit
+--let $crash_point = "+d,crash_before_duckdb_commit"
+--let $dml_query = CALL update_duckdb_pk(3)
+--let $result_query = SELECT * FROM t_duckdb
+--source transaction_crash_recovery.inc
+
+--echo # 4.2 Crash After DuckDB Commit
+--let $crash_point = "+d,crash_after_duckdb_commit"
+--let $dml_query = CALL update_duckdb_pk(4)
+--let $result_query =SELECT * FROM t_duckdb
+--source transaction_crash_recovery.inc
+
+--echo ###########################################################################
+--echo # Cleanup
+--echo ###########################################################################
+--source include/rpl_connection_master.inc
+DROP PROCEDURE insert_duckdb_innodb;
+DROP PROCEDURE insert_innodb_duckdb;
+DROP PROCEDURE update_duckdb_pk;
+DROP PROCEDURE update_duckdb_nopk;
+DROP PROCEDURE select_both;
+DROP TABLE t_duckdb;
+DROP TABLE t_innodb;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

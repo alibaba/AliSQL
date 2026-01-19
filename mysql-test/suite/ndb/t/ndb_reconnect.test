@@ -1,5 +1,10 @@
 --source include/have_ndb.inc
---source include/not_windows.inc
+CALL mtr.add_suppression("Incorrect information in file");
+
+if (`select @@log_bin`)
+{
+  die This test is designed to run with --log-bin turned off;
+}
 
 CREATE TABLE t1(a int primary key, b varchar(255), c int) engine=ndb;
 
@@ -18,9 +23,27 @@ connection con3;
 select * from t1;
 
 # Restart cluster nodes "nostart"
---exec $NDB_MGM --no-defaults --ndb-connectstring="$NDB_CONNECTSTRING" -e "all restart -n" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_MGM -e "all restart -n" >> $NDB_TOOLS_OUTPUT
 # Wait for all nodes to enter "nostart"
---exec $NDB_WAITER --no-defaults --ndb-connectstring="$NDB_CONNECTSTRING" --not-started >> $NDB_TOOLS_OUTPUT
+--exec $NDB_WAITER --not-started
+
+let $counter = 500;
+--disable_query_log
+--disable_result_log
+while($mysql_errno != 1296)
+{
+  sleep 1;
+  --error 1296,1297
+  select * from t1;
+  if (!$counter)
+    {
+      die Timeout while waiting for MySQL Server to disconnect from cluster;
+    }
+    dec $counter;
+}
+--enable_query_log
+--enable_result_log
+
 
 connection con1;
 --error 1296
@@ -35,9 +58,9 @@ select * from t1;
 
 
 # Start cluster nodes again
---exec $NDB_MGM --no-defaults --ndb-connectstring="$NDB_CONNECTSTRING" -e "all start" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_MGM -e "all start" >> $NDB_TOOLS_OUTPUT
 # Wait for all nodes to enter "started"
---exec $NDB_WAITER --no-defaults --ndb-connectstring="$NDB_CONNECTSTRING" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_WAITER
 
 
 #
@@ -45,11 +68,7 @@ select * from t1;
 # cluster has been restored or timeout occurs
 #
 connection default;
---disable_result_log
---disable_query_log
 --source include/ndb_not_readonly.inc
---enable_result_log
---enable_query_log
 
 # Run selects to show that the cluster are back
 
@@ -65,14 +84,73 @@ select * from t1;
 #
 # Wait until mysqld has connected properly to cluster
 #
---disable_result_log
---disable_query_log
 source include/ndb_not_readonly.inc;
---enable_query_log
---enable_result_log
 
 # Do an insert to see table is writable
 insert into t1 values (2, "row 1", 37);
 
 # cleanup
 drop table t1;
+
+#
+#Bug #13824846 FRM FILES ARE CREATED FOR MYSQLD, BUT TABLE DOES NOT EXIST IN CLUSTER
+#
+
+connection default;
+create table t1(a int, b varchar(10), c date) engine=ndb;
+delimiter //;
+CREATE TRIGGER trg1 BEFORE UPDATE ON t1 FOR EACH ROW BEGIN
+   SET new.c = '1901-01-01 01:01:01';
+End //
+delimiter ;//
+
+insert into t1 values (1, "row 1", NULL),(2, "row 2", NULL);
+select * from t1 order by a;
+
+create table t2(a int, b varchar(10), c date) engine=myisam;
+delimiter //;
+CREATE TRIGGER trg2 BEFORE UPDATE ON t2 FOR EACH ROW BEGIN
+   SET new.c = '1901-01-01 01:01:01';
+End //
+delimiter ;//
+
+# drop the table from NDB only
+--exec $NDB_DROP_TABLE -d test t1 >> $NDB_TOOLS_OUTPUT 
+
+# Restart cluster nodes
+--exec $NDB_MGM -e "all restart" >> $NDB_TOOLS_OUTPUT
+# Wait for all nodes to enter "started"
+--exec $NDB_WAITER
+
+#
+# Wait until the connection to the
+# cluster has been restored or timeout occurs
+#
+connection default;
+--source include/ndb_not_readonly.inc
+
+# Create the table again to check there are no conflicts
+create table t1(a int, b varchar(10), c date) engine=ndb;
+delimiter //;
+CREATE TRIGGER trg1 BEFORE UPDATE ON t1 FOR EACH ROW BEGIN
+   SET new.c = '1902-02-02 02:02:02';
+End //
+delimiter ;//
+
+insert into t1 values (1, "row 1", NULL),(2, "row 2", NULL);
+select * from t1 order by a;
+
+# Check that the non NDB tables still exist
+--error ER_TABLE_EXISTS_ERROR
+create table t2(a int, b varchar(10), c date) engine=myisam;
+drop table t2;
+create table t2(a int, b varchar(10), c date) engine=myisam;
+delimiter //;
+CREATE TRIGGER trg2 BEFORE UPDATE ON t2 FOR EACH ROW BEGIN
+   SET new.c = '1901-01-01 01:01:01';
+End //
+delimiter ;//
+
+# cleanup
+drop table t1, t2;
+--remove_file $NDB_TOOLS_OUTPUT

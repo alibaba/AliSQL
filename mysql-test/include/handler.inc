@@ -9,7 +9,6 @@
 #                              time available storage engine
 #                              2006-08 MySQL 5.1 MyISAM and MEMORY only
 # have to be set before sourcing this script.
--- source include/not_embedded.inc
 #
 # test of HANDLER ...
 #
@@ -755,8 +754,7 @@ connection con1;
 --reap
 unlock tables;
 drop table t1;
---echo # Now test case which was reported originally but which no longer
---echo # triggers execution path which has caused the problem.
+--echo # Now test case which was reported originally.
 connection default;
 create table t1 (a int, key(a));
 insert into t1 values (1);
@@ -770,10 +768,7 @@ let $wait_condition=
         info = "alter table t1 engine=memory";
 --source include/wait_condition.inc
 connection default;
---echo # Since S metadata lock was already acquired at HANDLER OPEN time
---echo # and TL_READ lock requested by HANDLER READ is compatible with
---echo # ALTER's TL_WRITE_ALLOW_READ the below statement should succeed
---echo # without waiting. The old version of table should be used in it.
+--error ER_ILLEGAL_HA
 handler t1 read a next;
 handler t1 close;
 connection con1;
@@ -790,7 +785,8 @@ connection default;
 # Bug#44151 using handler commands on information_schema tables crashes server
 #
 USE information_schema;
---error ER_WRONG_USAGE
+--replace_result columns COLUMNS
+--error ER_WRONG_OBJECT
 HANDLER COLUMNS OPEN;
 USE test;
 
@@ -1036,7 +1032,9 @@ let $wait_condition=select count(*)=1 from information_schema.processlist
 --source include/wait_condition.inc
 --echo # --> connection default
 connection default;
-handler t1 read a prev;
+--echo # Attempt to upgrade metadata locks to SR from S will lead to
+--echo # deadlock which will result in table being automatically closed.
+--error ER_NO_SUCH_TABLE
 handler t1 read a prev;
 handler t1 close;
 --echo # --> connection con1
@@ -1075,15 +1073,23 @@ select * from t1;
 --echo # thus we can reopen it in the handler
 handler t1 open;
 --echo # We can commit the transaction, it doesn't close the handler
---echo # and doesn't let DROP to proceed.
+--echo # and doesn't let DROP to proceed immediately.
 commit;
-handler t1 read a prev;
-handler t1 read a prev;
+connection con2;
+--echo # Waiting for 'drop table t1' to get blocked...
+let $wait_condition=select count(*)=1 from information_schema.processlist
+                    where state='Waiting for table metadata lock' and
+                          info='drop table t1';
+--source include/wait_condition.inc
+--echo # --> connection default
+connection default;
+--echo # OTOH the first attempt to read from HANDLER will lead to metadata
+--echo # locks deadlock and thus to HANDLER being automatically closed.
+--error ER_NO_SUCH_TABLE
 handler t1 read a prev;
 handler t1 close;
 --echo # --> connection con1
 connection con1;
---echo # Now drop can proceed
 --echo # Reaping 'drop table t1'...
 --reap
 --echo # --> connection default
@@ -1224,12 +1230,19 @@ connection con2;
 --reap
 --echo # Demonstrate that ROLLBACK TO SAVEPOINT didn't release the handler
 --echo # lock.
+--echo # --> connection con3
+connection con3;
+--echo # Check if 'drop table t1' still blocked...
+let $wait_condition=select count(*)=1 from information_schema.processlist
+                    where state='Waiting for table metadata lock' and
+                          info='drop table t1';
+--source include/wait_condition.inc
 --echo # --> connection default
 connection default;
+--echo # Demonstrate that the drop will go through as soon as we close
+--echo # or will try to access HANDLER
+--error ER_NO_SUCH_TABLE
 handler t1 read a next;
-handler t1 read a next;
---echo # Demonstrate that the drop will go through as soon as we close the 
---echo # HANDLER
 handler t1 close;
 --echo # connection con1
 connection con1;
@@ -1293,12 +1306,19 @@ connection con2;
 --reap
 --echo # Demonstrate that ROLLBACK TO SAVEPOINT didn't release the handler
 --echo # lock.
+--echo # --> connection con3
+connection con3;
+--echo # Check if 'drop table t1' is still blocked...
+let $wait_condition=select count(*)=1 from information_schema.processlist
+                    where state='Waiting for table metadata lock' and
+                          info='drop table t1';
+--source include/wait_condition.inc
 --echo # --> connection default
 connection default;
+--echo # Demonstrate that the drop will go through as soon as we access or
+--echo # close the HANDLER
+--error ER_NO_SUCH_TABLE
 handler t1 read a next;
-handler t1 read a next;
---echo # Demonstrate that the drop will go through as soon as we close the 
---echo # HANDLER
 handler t1 close;
 --echo # connection con1
 connection con1;
@@ -1340,13 +1360,13 @@ let $wait_condition=select count(*)=1 from information_schema.processlist
                     where state='Waiting for table metadata lock' and
                           info='drop table t3';
 --source include/wait_condition.inc
---echo # Demonstrate that ROLLBACK TO SAVEPOINT didn't release the handler
---echo # lock.
+--echo # The fact that DROP TABLE is blocked means that ROLLBACK TO SAVEPOINT
+--echo # didn't release the handler lock.
 --echo # --> connection default
 connection default;
+--echo # Drop will go through as soon as we access or close the HANDLER
+--error ER_NO_SUCH_TABLE
 handler t3 read a next;
---echo # Demonstrate that the drop will go through as soon as we close the 
---echo # HANDLER
 handler t3 close;
 --echo # connection con1
 connection con1;
@@ -1454,7 +1474,7 @@ connection con1;
 --echo # Waiting for 'handler t1 read a next' to get blocked...
 let $wait_condition=
   select count(*) = 1 from information_schema.processlist
-  where state = "Waiting for table level lock" and
+  where state = "Waiting for table metadata lock" and
         info = "handler t1 read a next";
 --source include/wait_condition.inc
 
@@ -1879,3 +1899,46 @@ HANDLER t1 READ ab LAST;
 HANDLER t1 READ b PREV;
 HANDLER t1 CLOSE;
 DROP TABLE t1;
+
+--echo #
+--echo # Bug#21650603 ASSERT `0' FAILED AT THD::SEND_STATEMENT_STATUS() ON
+--echo #              HANDLER READ + INVALID DATE
+--echo #
+CREATE TABLE t (
+  col_date DATE
+  , col_datetime DATETIME
+  , col_time TIME
+  , col_year YEAR
+  , KEY col_date_key (col_date)
+  , KEY col_datetime_key (col_datetime)
+  , KEY col_year_key (col_year));
+
+HANDLER t OPEN;
+
+--error ER_WRONG_ARGUMENTS
+HANDLER t READ col_date_key <= ('p');
+
+--error ER_WRONG_ARGUMENTS
+HANDLER t READ col_datetime_key <= ('p');
+
+--error ER_WRONG_ARGUMENTS
+HANDLER t READ col_year_key <= ('p');
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#31977414: ASSERT `!TABLE || (!TABLE->READ_SET ||
+--echo #               BITMAP_IS_SET(TABLE->READ_SET, FIELD_IND
+--echo #
+
+CREATE TABLE t(x INT);
+INSERT INTO t VALUES (1);
+CREATE VIEW v AS SELECT MAX(x) AS x FROM t;
+HANDLER t OPEN;
+-- error ER_NON_UPDATABLE_TABLE
+UPDATE v v1, v v2 SET v1.x = v2.x;
+# The next statement used to hit an assert failure.
+HANDLER t READ NEXT;
+HANDLER t CLOSE;
+DROP VIEW v;
+DROP TABLE t;

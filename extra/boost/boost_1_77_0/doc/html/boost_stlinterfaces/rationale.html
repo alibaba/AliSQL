@@ -1,0 +1,177 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Rationale</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../stl_interfaces.html" title="Chapter 39. Boost.STLInterfaces">
+<link rel="prev" href="../boost/stl_interfaces/operat_1_3_40_12_2_7_1_1_5.html" title="Function template operator!=">
+<link rel="next" href="../thread.html" title="Chapter 40. Thread 4.8.0">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../boost/stl_interfaces/operat_1_3_40_12_2_7_1_1_5.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="../thread.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_stlinterfaces.rationale"></a><a class="link" href="rationale.html" title="Rationale">Rationale</a>
+</h2></div></div></div>
+<h4>
+<a name="boost_stlinterfaces.rationale.h0"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.rationale.there_are_minimal_derived_type_contraints"></a></span><a class="link" href="rationale.html#boost_stlinterfaces.rationale.there_are_minimal_derived_type_contraints">There
+      Are Minimal Derived-Type Contraints</a>
+    </h4>
+<p>
+      This is the constraint on the <code class="computeroutput"><span class="identifier">Derived</span></code>
+      template parameter to <code class="computeroutput">iterator_interface</code>, <code class="computeroutput">view_interface</code>
+      and <code class="computeroutput">sequence_container_interface</code>:
+    </p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">enable_if_t</span><span class="special">&lt;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">is_class</span><span class="special">&lt;</span><span class="identifier">Derived</span><span class="special">&gt;::</span><span class="identifier">value</span> <span class="special">&amp;&amp;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">is_same</span><span class="special">&lt;</span><span class="identifier">Derived</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">remove_cv_t</span><span class="special">&lt;</span><span class="identifier">Derived</span><span class="special">&gt;&gt;::</span><span class="identifier">value</span><span class="special">&gt;</span>
+</pre>
+<p>
+      This prevents instantiating an interface template with an <code class="computeroutput"><span class="keyword">int</span></code>,
+      a <code class="computeroutput"><span class="keyword">const</span></code> type, a reference type,
+      etc.
+    </p>
+<p>
+      Further constraints are not possible (for instance, that <code class="computeroutput">view_interface</code> is given a <code class="computeroutput"><span class="identifier">Derived</span></code> template parameter for a type that
+      has a <code class="computeroutput"><span class="identifier">begin</span><span class="special">()</span></code>
+      and <code class="computeroutput"><span class="identifier">end</span><span class="special">()</span></code>),
+      because <code class="computeroutput"><span class="identifier">Derived</span></code> is an incomplete
+      type within each *<code class="computeroutput"><span class="identifier">_interface</span></code>
+      template.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.rationale.h1"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.rationale.using_a_special_access_granting__code__phrase_role__keyword__struct__phrase___code_"></a></span><a class="link" href="rationale.html#boost_stlinterfaces.rationale.using_a_special_access_granting__code__phrase_role__keyword__struct__phrase___code_">Using
+      a Special Access-Granting <code class="computeroutput"><span class="keyword">struct</span></code></a>
+    </h4>
+<p>
+      The interface templates rely mostly on public members provided by their <code class="computeroutput"><span class="identifier">Derived</span></code> template parameter. However, <code class="computeroutput">iterator_interface</code>
+      requires you to supply <code class="computeroutput"><span class="identifier">base_reference</span><span class="special">()</span></code> functions if you want it to act like an adaptor.
+      Since at least the non-<code class="computeroutput"><span class="keyword">const</span></code> overload
+      provides a non-<code class="computeroutput"><span class="keyword">const</span></code> lvalue reference
+      to one of your types data members, it will break the encapsulation of many
+      types to leave <code class="computeroutput"><span class="identifier">base_reference</span><span class="special">()</span></code> a public member. To allow users to keep these
+      overloads private, <code class="computeroutput"><a class="link" href="../boost/stl_interfaces/access.html" title="Struct access">access</a></code> exists.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.rationale.h2"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__iterator_interface___code__phrase_role__identifier__iterator_interface__phrase___code___classname__can_act_like_an_adaptor__and_the_other_interface_templates_can_t"></a></span><a class="link" href="rationale.html#boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__iterator_interface___code__phrase_role__identifier__iterator_interface__phrase___code___classname__can_act_like_an_adaptor__and_the_other_interface_templates_can_t"><code class="computeroutput">iterator_interface</code>
+      Can Act Like an Adaptor, And the Other Interface Templates Can't</a>
+    </h4>
+<p>
+      There wouldn't be much point in adding this functionality to <code class="computeroutput">view_interface</code>, because it only
+      uses the <code class="computeroutput"><span class="identifier">begin</span><span class="special">()</span></code>
+      and <code class="computeroutput"><span class="identifier">end</span><span class="special">()</span></code>
+      of the <code class="computeroutput"><span class="identifier">Derived</span></code> type anyway.
+    </p>
+<p>
+      For <code class="computeroutput">sequence_container_interface</code>
+      it also does not make much sense. Consider how many container adaptors you've
+      written. That's a use case that does not come up often.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.rationale.h3"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__iterator_interface___code__phrase_role__identifier__iterator_interface__phrase___code___classname__takes_a_lot_of_template_parameters__and_the_other_interface_templates_don_t"></a></span><a class="link" href="rationale.html#boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__iterator_interface___code__phrase_role__identifier__iterator_interface__phrase___code___classname__takes_a_lot_of_template_parameters__and_the_other_interface_templates_don_t"><code class="computeroutput">iterator_interface</code>
+      Takes a Lot of Template Parameters, And the Other Interface Templates Don't</a>
+    </h4>
+<p>
+      <code class="computeroutput">iterator_interface</code> does in fact
+      take a lot of template parameters. However, it usually only takes three: the
+      <code class="computeroutput"><span class="identifier">Derived</span></code> type, the iterator
+      category, and the iterator's <code class="computeroutput"><span class="identifier">value_type</span></code>.
+    </p>
+<p>
+      When you make a proxy iterator, you typically use the <code class="computeroutput">proxy_iterator_interface</code> alias,
+      and you again only need the same three template parameters. Though you can
+      opt into more template parameters, the rest are seldom necessary.
+    </p>
+<p>
+      By contrast, the <code class="computeroutput">view_interface</code> and <code class="computeroutput">sequence_container_interface</code>
+      templates have very few template parameters. For <code class="computeroutput">view_interface</code>, this is because
+      there are no member typedefs in the <code class="computeroutput"><span class="identifier">view</span></code>
+      concept. For <code class="computeroutput">sequence_container_interface</code>,
+      it was deemed ridiculous to create a template whose purpose is to reduce code
+      size, which takes 14 template parameters.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.rationale.h4"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__sequence_container_interface___code__phrase_role__identifier__sequence_container_interface__phrase___code___classname__does_not_deduce_nested_types_like__code__phrase_role__identifier__iterator__phrase___code_"></a></span><a class="link" href="rationale.html#boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__sequence_container_interface___code__phrase_role__identifier__sequence_container_interface__phrase___code___classname__does_not_deduce_nested_types_like__code__phrase_role__identifier__iterator__phrase___code_"><code class="computeroutput">sequence_container_interface</code>
+      Does not Deduce Nested Types Like <code class="computeroutput"><span class="identifier">iterator</span></code></a>
+    </h4>
+<p>
+      <code class="computeroutput">sequence_container_interface</code>
+      could deduce some of the nested types required for a standard sequence container.
+      For instance, <code class="computeroutput"><span class="identifier">iterator</span></code> can
+      be deduced as <code class="computeroutput"><span class="keyword">decltype</span><span class="special">(*</span><span class="identifier">begin</span><span class="special">())</span></code>.
+      However, a type <code class="computeroutput"><span class="identifier">D</span></code> derived from
+      <code class="computeroutput">sequence_container_interface</code>
+      may need to use some of these nested types — like <code class="computeroutput"><span class="identifier">iterator</span></code>
+      — in its interface or implementation. If this is the case, those nested
+      types are not available early enough in the parse to be used in <code class="computeroutput"><span class="identifier">D</span></code>, if they come from deductions in <code class="computeroutput">sequence_container_interface</code>.
+      This leaves the user in the awkward position of defining the same nested type
+      with a different name that can be used within <code class="computeroutput"><span class="identifier">D</span></code>.
+      It seems better to leave these types for the user to define.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.rationale.h5"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__sequence_container_interface___code__phrase_role__identifier__sequence_container_interface__phrase___code___classname__does_not_support_associative_or_unordered_associative_containers"></a></span><a class="link" href="rationale.html#boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__sequence_container_interface___code__phrase_role__identifier__sequence_container_interface__phrase___code___classname__does_not_support_associative_or_unordered_associative_containers"><code class="computeroutput">sequence_container_interface</code>
+      Does not Support Associative or Unordered Associative Containers</a>
+    </h4>
+<p>
+      That's right. Associative containers have an interface that assumes that they
+      are node-based containers. On modern hardware, node-based containers are not
+      very efficient, and I don't want to encourage people to write more of them.
+      Unordered associative containers have an interface that precludes open addressing.
+      I don't want to encourage more of that either.
+    </p>
+<h4>
+<a name="boost_stlinterfaces.rationale.h6"></a>
+      <span class="phrase"><a name="boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__sequence_container_interface___code__phrase_role__identifier__sequence_container_interface__phrase___code___classname__does_not_satisfy_the_allocator_aware_container_requirements"></a></span><a class="link" href="rationale.html#boost_stlinterfaces.rationale._classname_alt__boost__stl_interfaces__v1__sequence_container_interface___code__phrase_role__identifier__sequence_container_interface__phrase___code___classname__does_not_satisfy_the_allocator_aware_container_requirements"><code class="computeroutput">sequence_container_interface</code>
+      Does not Satisfy the Allocator-Aware Container Requirements</a>
+    </h4>
+<p>
+      It may not be immediately obvious, but <code class="computeroutput">sequence_container_interface</code>
+      simply cannot help with the allocator-aware requirements. All of the allocator-aware
+      requirements but 3 are special members and constructors. A <a href="https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern" target="_top">CRTP</a>
+      base template is unable to provide those, based on the language rules. That
+      leaves the <code class="computeroutput"><span class="identifier">allocator_type</span></code> typedef,
+      which the user must provide; member <code class="computeroutput"><span class="identifier">swap</span><span class="special">()</span></code>, which is already a container requirement
+      (the allocator-aware table entry just specifies that member <code class="computeroutput"><span class="identifier">swap</span><span class="special">()</span></code> must be constant-time); and <code class="computeroutput"><span class="identifier">get_allocator</span><span class="special">()</span></code>,
+      which again is something the user must provide.
+    </p>
+<p>
+      Most of the difficulty of dealing with allocators has to do with the implementation
+      details of their use within your container. <code class="computeroutput">sequence_container_interface</code>
+      provides missing elements of a sequence container's interface, by calling user-provided
+      members of that same interface. It cannot help you with your container's implementation.
+    </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2019 T. Zachary Laine<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../boost/stl_interfaces/operat_1_3_40_12_2_7_1_1_5.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../stl_interfaces.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="../thread.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

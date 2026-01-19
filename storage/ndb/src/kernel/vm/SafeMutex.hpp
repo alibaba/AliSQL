@@ -1,31 +1,37 @@
-/* Copyright 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+/* Copyright (c) 2008, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #ifndef NDB_SAFE_MUTEX_HPP
 #define NDB_SAFE_MUTEX_HPP
 
-#ifdef __WIN__
-#include <ndb_global.h>
-#include <my_pthread.h>
-#else
-#include <pthread.h>
-#endif
 #include <assert.h>
+#include <ndb_global.h>
 #include <ndb_types.h>
 #include <NdbOut.hpp>
+#include "thr_cond.h"
+#include "thr_mutex.h"
+
+#define JAM_FILE_ID 220
 
 /*
  * Recursive mutex with recursion limit >= 1.  Intended for debugging.
@@ -41,56 +47,56 @@
  */
 
 class SafeMutex {
-  const char* const m_name;
-  const Uint32 m_limit; // error if usage exceeds this
-  const bool m_debug;   // use recursive implementation even for limit 1
+  const char *const m_name;
+  const Uint32 m_limit;  // error if usage exceeds this
+  const bool m_debug;    // use recursive implementation even for limit 1
   const bool m_simple;
-  pthread_mutex_t m_mutex;
-  pthread_cond_t m_cond;
-  pthread_t m_owner;
+  native_mutex_t m_mutex;
+  native_cond_t m_cond;
+  my_thread_t m_owner;
   bool m_initdone;
   Uint32 m_level;
-  Uint32 m_usage;       // max level used so far
+  Uint32 m_usage;  // max level used so far
   int m_errcode;
   int m_errline;
   int err(int errcode, int errline);
-  friend class NdbOut& operator<<(NdbOut&, const SafeMutex&);
+  friend class NdbOut &operator<<(NdbOut &, const SafeMutex &);
 
-public:
-  SafeMutex(const char* name, Uint32 limit, bool debug) :
-    m_name(name),
-    m_limit(limit),
-    m_debug(debug),
-    m_simple(!(limit > 1 || debug))
-  {
+ public:
+  SafeMutex(const char *name, Uint32 limit, bool debug)
+      : m_name(name),
+        m_limit(limit),
+        m_debug(debug),
+        m_simple(!(limit > 1 || debug)) {
     assert(m_limit >= 1),
-    m_owner = 0;        // wl4391_todo assuming numeric non-zero
+        m_owner = 0;  // wl4391_todo assuming numeric non-zero
     m_initdone = false;
     m_level = 0;
     m_usage = 0;
     m_errcode = 0;
     m_errline = 0;
-  };
+  }
   ~SafeMutex() {
-    if (m_initdone)
-      (void)destroy();
+    if (m_initdone) (void)destroy();
   }
 
   enum {
     // caller must crash on any error - recovery is not possible
-    ErrState = -101,    // user error
-    ErrLevel = -102,    // level exceeded limit
-    ErrOwner = -103,    // unlock when not owner
-    ErrNolock = -104    // unlock when no lock
+    ErrState = -101,  // user error
+    ErrLevel = -102,  // level exceeded limit
+    ErrOwner = -103,  // unlock when not owner
+    ErrNolock = -104  // unlock when no lock
   };
   int create();
   int destroy();
   int lock();
   int unlock();
 
-private:
+ private:
   int lock_impl();
   int unlock_impl();
 };
+
+#undef JAM_FILE_ID
 
 #endif

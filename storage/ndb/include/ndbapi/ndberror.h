@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2004-2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -25,18 +32,16 @@ extern "C" {
 
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
 
-typedef enum
-{
+typedef enum {
   ndberror_st_success = 0,
   ndberror_st_temporary = 1,
   ndberror_st_permanent = 2,
   ndberror_st_unknown = 3
 } ndberror_status_enum;
 
-typedef enum
-{
-  ndberror_cl_none = 0,  
-  ndberror_cl_application = 1,  
+typedef enum {
+  ndberror_cl_none = 0,
+  ndberror_cl_application = 1,
   ndberror_cl_no_data_found = 2,
   ndberror_cl_constraint_violation = 3,
   ndberror_cl_schema_error = 4,
@@ -56,11 +61,9 @@ typedef enum
   ndberror_cl_internal_temporary = 18
 } ndberror_classification_enum;
 
-
 typedef struct {
-
   /**
-   * Error status.  
+   * Error status.
    */
   ndberror_status_enum status;
 
@@ -68,7 +71,7 @@ typedef struct {
    * Error type
    */
   ndberror_classification_enum classification;
-  
+
   /**
    * Error code
    */
@@ -82,26 +85,28 @@ typedef struct {
   /**
    * Error message
    */
-  const char * message;
+  const char *message;
 
   /**
-   * The detailed description.  This is extra information regarding the 
+   * The detailed description.  This is extra information regarding the
    * error which is not included in the error message.
    *
    * @note Is NULL when no details specified
    */
-  char * details;
+  char *details;
 
 } ndberror_struct;
 
-
 typedef ndberror_status_enum ndberror_status;
-typedef  ndberror_classification_enum ndberror_classification;
+typedef ndberror_classification_enum ndberror_classification;
 
 const char *ndberror_status_message(ndberror_status);
 const char *ndberror_classification_message(ndberror_classification);
 void ndberror_update(ndberror_struct *);
 int ndb_error_string(int err_no, char *str, int size);
+
+int ndb_error_get_next(int index, int *err_no, const char **status_msg,
+                       const char **class_msg, const char **error_msg);
 
 #endif /* doxygen skip internal*/
 

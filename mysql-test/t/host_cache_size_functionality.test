@@ -21,10 +21,6 @@
 # For crash recovery test on default change please run the ibtest             #
 ###############################################################################
 
--- source include/have_innodb.inc
--- source include/not_embedded.inc
--- source include/have_innodb_16k.inc
---disable_warnings
 echo '#________________________VAR_06_Host_Cache_Size__________________#'
 echo '##'
 --echo '#---------------------WL6372_VAR_6_01----------------------#'
@@ -48,13 +44,11 @@ select @@global.Host_Cache_Size=@Default_host_cache_size;
 
 let $restart_file= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect;
 --exec echo "wait" > $restart_file
---shutdown_server 10
+--shutdown_server 
 --source include/wait_until_disconnected.inc
 -- exec echo "restart:--host_cache_size=1  " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 -- enable_reconnect
 -- source include/wait_until_connected_again.inc
-
---disable_warnings
 
 SELECT @@GLOBAL.Host_Cache_Size;
 --echo 1 Expected
@@ -91,7 +85,7 @@ select @@global.Host_Cache_Size=@Default_host_cache_size;
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 SELECT @@GLOBAL.Host_Cache_Size = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='Host_Cache_Size';
 --echo 1 Expected
 
@@ -99,7 +93,7 @@ SELECT COUNT(@@GLOBAL.Host_Cache_Size);
 --echo 1 Expected
 
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='Host_Cache_Size';
 --echo 1 Expected
 
@@ -122,7 +116,7 @@ SELECT COUNT(@@GLOBAL.Host_Cache_Size);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT Host_Cache_Size = @@SESSION.Host_Cache_Size;
+SELECT Host_Cache_Size;
 --echo Expected error 'Unknown column Host_Cache_Size in field list'
 
 #The below check has been commented out as the IP fetch is different in a P2P connection than BroadBand connection
@@ -146,7 +140,7 @@ SELECT Host_Cache_Size = @@SESSION.Host_Cache_Size;
 
 #let $restart_file= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect;
 #--exec echo "wait" > $restart_file
-#--shutdown_server 10
+#--shutdown_server 
 #--source include/wait_until_disconnected.inc
 #-- exec echo "restart:--bind-address=$bind_ip  " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 #-- enable_reconnect

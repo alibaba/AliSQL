@@ -1,50 +1,70 @@
-/* Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
-
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #ifndef OPT_EXPLAIN_FORMAT_JSON_INCLUDED
 #define OPT_EXPLAIN_FORMAT_JSON_INCLUDED
 
-#include "opt_explain_format.h"
+#include "sql/opt_explain_format.h"
+#include "sql/parse_tree_node_base.h"
 
-namespace opt_explain_json_namespace
-{
-  class context;
+class Query_result;
+class Query_expression;
+
+namespace opt_explain_json_namespace {
+class context;
 }
 
 /**
   Formatter class for EXPLAIN FORMAT=JSON output
 */
 
-class Explain_format_JSON : public Explain_format
-{
-private:
-  opt_explain_json_namespace::context *current_context; ///< current tree node
-  select_result *output;
+class Explain_format_JSON : public Explain_format {
+ public:
+  enum class FormatVersion { kLinear, kIteratorBased };
 
-public:
-  Explain_format_JSON() : current_context(NULL), output(NULL) {}
+  Explain_format_JSON(FormatVersion version)
+      : current_context(nullptr), m_version(version) {}
 
-  virtual bool is_hierarchical() const { return true; }
-  virtual bool send_headers(select_result *result);
-  virtual bool begin_context(Explain_context_enum context,
-                             SELECT_LEX_UNIT *subquery,
-                             const Explain_format_flags *flags);
-  virtual bool end_context(Explain_context_enum context);
-  virtual bool flush_entry() { return false; }
-  virtual qep_row *entry();
+  bool is_hierarchical() const override { return true; }
+
+  /// Format versions newer than Linear are always going to be iterator-based.
+  bool is_iterator_based() const override {
+    return m_version >= FormatVersion::kIteratorBased;
+  }
+
+  bool send_headers(Query_result *result) override;
+  bool begin_context(enum_parsing_context context, Query_expression *subquery,
+                     const Explain_format_flags *flags) override;
+  bool end_context(enum_parsing_context context) override;
+  bool flush_entry() override { return false; }
+  qep_row *entry() override;
+
+  /* Convert Json object to string */
+  std::string ExplainJsonToString(Json_object *json) override;
+
+ private:
+  opt_explain_json_namespace::context *current_context;  ///< current tree node
+  FormatVersion m_version;
 };
 
-#endif//OPT_EXPLAIN_FORMAT_JSON_INCLUDED
+#endif  // OPT_EXPLAIN_FORMAT_JSON_INCLUDED

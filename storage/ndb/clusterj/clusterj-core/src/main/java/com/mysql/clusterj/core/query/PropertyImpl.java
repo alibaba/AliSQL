@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -54,6 +62,11 @@ public class PropertyImpl implements PredicateOperand {
         this.fmd = fmd;
     }
 
+    @Override
+    public String toString() {
+        return fmd.getName();
+    }
+
     public void setComplexParameter() {
         complexParameter = true;
     }
@@ -83,7 +96,7 @@ public class PropertyImpl implements PredicateOperand {
             throw new ClusterJUserException(
                     local.message("ERR_Only_Parameters", "equal"));
         }
-        return (Predicate) new EqualPredicateImpl(dobj, this, (ParameterImpl)other);
+        return new EqualPredicateImpl(dobj, this, (ParameterImpl)other);
     }
 
     public Predicate between(PredicateOperand lower, PredicateOperand upper) {
@@ -91,7 +104,7 @@ public class PropertyImpl implements PredicateOperand {
             throw new ClusterJUserException(
                     local.message("ERR_Only_Parameters", "between"));
         }
-        return (Predicate) new BetweenPredicateImpl(dobj, this, (ParameterImpl)lower, (ParameterImpl)upper);
+        return new BetweenPredicateImpl(dobj, this, (ParameterImpl)lower, (ParameterImpl)upper);
     }
 
     public Predicate greaterThan(PredicateOperand other) {
@@ -99,7 +112,7 @@ public class PropertyImpl implements PredicateOperand {
             throw new ClusterJUserException(
                     local.message("ERR_Only_Parameters", "greaterThan"));
         }
-        return (Predicate) new GreaterThanPredicateImpl(dobj, this, (ParameterImpl)other);
+        return new GreaterThanPredicateImpl(dobj, this, (ParameterImpl)other);
     }
 
     public Predicate greaterEqual(PredicateOperand other) {
@@ -107,7 +120,7 @@ public class PropertyImpl implements PredicateOperand {
             throw new ClusterJUserException(
                     local.message("ERR_Only_Parameters", "greaterEqual"));
         }
-        return (Predicate) new GreaterEqualPredicateImpl(dobj, this, (ParameterImpl)other);
+        return new GreaterEqualPredicateImpl(dobj, this, (ParameterImpl)other);
     }
 
     public Predicate lessThan(PredicateOperand other) {
@@ -115,7 +128,7 @@ public class PropertyImpl implements PredicateOperand {
             throw new ClusterJUserException(
                     local.message("ERR_Only_Parameters", "lessThan"));
         }
-        return (Predicate) new LessThanPredicateImpl(dobj, this, (ParameterImpl)other);
+        return new LessThanPredicateImpl(dobj, this, (ParameterImpl)other);
     }
 
     public Predicate lessEqual(PredicateOperand other) {
@@ -123,7 +136,7 @@ public class PropertyImpl implements PredicateOperand {
             throw new ClusterJUserException(
                     local.message("ERR_Only_Parameters", "lessEqual"));
         }
-        return (Predicate) new LessEqualPredicateImpl(dobj, this, (ParameterImpl)other);
+        return new LessEqualPredicateImpl(dobj, this, (ParameterImpl)other);
     }
 
     public Predicate in(PredicateOperand other) {
@@ -131,7 +144,7 @@ public class PropertyImpl implements PredicateOperand {
             throw new ClusterJUserException(
                     local.message("ERR_Only_Parameters", "in"));
         }
-        return (Predicate) new InPredicateImpl(dobj, this, (ParameterImpl)other);
+        return new InPredicateImpl(dobj, this, (ParameterImpl)other);
     }
 
     public Predicate like(PredicateOperand other) {
@@ -139,7 +152,15 @@ public class PropertyImpl implements PredicateOperand {
             throw new ClusterJUserException(
                     local.message("ERR_Only_Parameters", "like"));
         }
-        return (Predicate) new LikePredicateImpl(dobj, this, (ParameterImpl)other);
+        return new LikePredicateImpl(dobj, this, (ParameterImpl)other);
+    }
+
+    public Predicate isNull() {
+        return new IsNullPredicateImpl(dobj, this);
+    }
+
+    public Predicate isNotNull() {
+        return new IsNotNullPredicateImpl(dobj, this);
     }
 
     void markLowerBound(CandidateIndexImpl[] candidateIndices, PredicateImpl predicate, boolean strict) {
@@ -165,6 +186,14 @@ public class PropertyImpl implements PredicateOperand {
         } else {
             return fmd.getValue(context, parameterName);
         }
+    }
+
+    public void filterIsNull(ScanFilter filter) {
+        fmd.filterIsNull(filter);
+    }
+
+    public void filterIsNotNull(ScanFilter filter) {
+        fmd.filterIsNotNull(filter);
     }
 
 }

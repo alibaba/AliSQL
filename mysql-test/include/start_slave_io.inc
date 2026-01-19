@@ -1,19 +1,23 @@
 # ==== Purpose ====
 #
-# Issues START SLAVE IO_THREAD on the current connection. Then waits
+# Issues START REPLICA IO_THREAD on the current connection. Then waits
 # until the IO thread has started, or until a timeout is reached.
 #
-# Please use this instead of 'START SLAVE IO_THREAD', to reduce the
+# Please use this instead of 'START REPLICA IO_THREAD', to reduce the
 # risk of races in test cases.
 #
 #
 # ==== Usage ====
 #
+# [--let $rpl_channel_name= 'NAME']
 # [--let $slave_timeout= NUMBER]
 # [--let $rpl_debug= 1]
 # --source include/start_slave_io.inc
 #
 # Parameters:
+#   $rpl_channel_name
+#     If set, a FOR CHANNEL $rpl_channel_name is added.
+#
 #   $slave_timeout
 #     See include/wait_for_slave_param.inc
 #
@@ -22,6 +26,12 @@
 
 
 --let $include_filename= start_slave_io.inc
+--let $_for_channel_clause=
+if ($rpl_channel_name)
+{
+  --let $_for_channel_clause= FOR CHANNEL $rpl_channel_name
+  --let $include_filename= $include_filename [FOR CHANNEL $rpl_channel_name]
+}
 --source include/begin_include_file.inc
 
 
@@ -31,7 +41,8 @@ if (!$rpl_debug)
 }
 
 
-START SLAVE IO_THREAD;
+--eval START REPLICA IO_THREAD $_for_channel_clause
+
 --source include/wait_for_slave_io_to_start.inc
 
 

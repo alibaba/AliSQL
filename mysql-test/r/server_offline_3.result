@@ -1,0 +1,36 @@
+SET @global_saved_tmp =  @@global.offline_mode;
+SET @global_autocommit =  @@global.autocommit;
+SET @@global.autocommit= OFF;
+CREATE USER 'user1'@'localhost';
+connect conu1,localhost,user1;
+START TRANSACTION;
+CREATE TABLE t2 (c1 int,c2 char(10));
+INSERT INTO t2 VALUES (1,'aaaaaaaaaa');
+COMMIT;
+INSERT INTO t2 VALUES (2,'bbbbbbbbbb');
+connection default;
+SET GLOBAL offline_mode = ON;
+SELECT COUNT(USER) FROM INFORMATION_SCHEMA.PROCESSLIST;
+COUNT(USER)
+2
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
+SET GLOBAL offline_mode = OFF;
+disconnect conu1;
+connect conu1,localhost,user1;
+SELECT * FROM t2 ORDER BY c1;
+c1	c2
+1	aaaaaaaaaa
+DROP TABLE t2;
+connection default;
+SET GLOBAL offline_mode = ON;
+SELECT COUNT(USER) FROM INFORMATION_SCHEMA.PROCESSLIST;
+COUNT(USER)
+2
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
+disconnect conu1;
+DROP USER 'user1'@'localhost';
+# Restoring the original values.
+SET @@global.offline_mode = @global_saved_tmp;
+SET @@global.autocommit= @global_autocommit;

@@ -1,144 +1,74 @@
-#include "dynamic_ids.h"
+/*
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
-int cmp_string(const void *id1, const void *id2)
-{
-  return strcmp((char *) id1, (char *) id2);
-}
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
 
-int cmp_ulong(const void *id1, const void *id2)
-{
-  return ((*(ulong *) id1) - (* (ulong *)id2));
-}
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
-Dynamic_ids::Dynamic_ids(size_t param_size): size(param_size)
-{
-  my_init_dynamic_array(&dynamic_ids, size, 16, 16);
-}
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
 
-Dynamic_ids::~Dynamic_ids()
-{
-  delete_dynamic(&dynamic_ids);
-}
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
-bool Server_ids::do_unpack_dynamic_ids(char *param_dynamic_ids)
-{
-  char *token= NULL, *last= NULL;
-  uint num_items= 0;
- 
-  DBUG_ENTER("Server_ids::unpack_dynamic_ids");
+#include "sql/dynamic_ids.h"
 
-  token= strtok_r((char *)const_cast<const char*>(param_dynamic_ids),
-                  " ", &last);
+#include <stdlib.h>
+#include <sys/types.h>
 
-  if (token == NULL)
-    DBUG_RETURN(TRUE);
+#include "m_ctype.h"
+#include "m_string.h"  // my_strtok_r
+#include "my_dbug.h"
+#include "my_inttypes.h"
+#include "mysql/components/services/bits/psi_bits.h"
+#include "sql_string.h"  // String
 
-  num_items= atoi(token);
-  for (uint i=0; i < num_items; i++)
-  {
-    token= strtok_r(NULL, " ", &last);
-    if (token == NULL)
-      DBUG_RETURN(TRUE);
-    else
-    {
-      ulong val= atol(token);
-      insert_dynamic(&dynamic_ids, (uchar *) &val);
+Server_ids::Server_ids() : dynamic_ids(PSI_NOT_INSTRUMENTED) {}
+
+bool Server_ids::unpack_dynamic_ids(char *param_dynamic_ids) {
+  char *token = nullptr, *last = nullptr;
+  uint num_items = 0;
+
+  DBUG_TRACE;
+
+  token = my_strtok_r(param_dynamic_ids, " ", &last);
+
+  if (token == nullptr) return true;
+
+  num_items = atoi(token);
+  for (uint i = 0; i < num_items; i++) {
+    token = my_strtok_r(nullptr, " ", &last);
+    if (token == nullptr)
+      return true;
+    else {
+      ulong val = atol(token);
+      dynamic_ids.insert_unique(val);
     }
   }
-  DBUG_RETURN(FALSE);
+  return false;
 }
 
-bool Server_ids::do_pack_dynamic_ids(String *buffer)
-{
-  DBUG_ENTER("Server_ids::pack_dynamic_ids");
+bool Server_ids::pack_dynamic_ids(String *buffer) {
+  DBUG_TRACE;
 
-  if (buffer->set_int(dynamic_ids.elements, FALSE, &my_charset_bin))
-    DBUG_RETURN(TRUE);
+  if (buffer->set_int(dynamic_ids.size(), false, &my_charset_bin)) return true;
 
-  for (ulong i= 0;
-       i < dynamic_ids.elements; i++)
-  {
-    ulong s_id;
-    get_dynamic(&dynamic_ids, (uchar*) &s_id, i);
-    if (buffer->append(" ") ||
-        buffer->append_ulonglong(s_id))
-      DBUG_RETURN(TRUE);
+  for (ulong i = 0; i < dynamic_ids.size(); i++) {
+    ulong s_id = dynamic_ids[i];
+    if (buffer->append(" ") || buffer->append_ulonglong(s_id)) return true;
   }
 
-  DBUG_RETURN(FALSE);
-}
-
-bool Server_ids::do_search_id(const void *id)
-{
-  return (bsearch((ulong *) id, dynamic_ids.buffer,
-          dynamic_ids.elements, size,
-          (int (*) (const void*, const void*))
-          cmp_ulong) != NULL);
-}
-
-
-bool Database_ids::do_unpack_dynamic_ids(char *param_dynamic_ids)
-{
-  char *token= NULL, *last= NULL;
-  uint num_items= 0;
- 
-  DBUG_ENTER("Server_ids::unpack_dynamic_ids");
-
-  token= strtok_r((char *)const_cast<const char*>(param_dynamic_ids),
-                  " ", &last);
-
-  if (token == NULL)
-    DBUG_RETURN(TRUE);
-
-  num_items= atoi(token);
-  for (uint i=0; i < num_items; i++)
-  {
-    token= strtok_r(NULL, " ", &last);
-    if (token == NULL)
-      DBUG_RETURN(TRUE);
-    else
-    {
-      size_t size= strlen(token);
-      if (token[size - 1] == '\n')
-      {
-        /*
-          Remove \n as there may be one when reading from file.
-          After improving init_dynarray_intvar_from_file we can
-          remove this.
-        */
-        token[size -1]= '\0';
-      }
-      insert_dynamic(&dynamic_ids, (uchar *) token);
-    }
-  }
-  DBUG_RETURN(FALSE);
-}
-
-bool Database_ids::do_pack_dynamic_ids(String *buffer)
-{
-  char token[2000];
-
-  DBUG_ENTER("Server_ids::pack_dynamic_ids");
-
-  if (buffer->set_int(dynamic_ids.elements, FALSE, &my_charset_bin))
-    DBUG_RETURN(TRUE);
-
-  for (ulong i= 0;
-       i < dynamic_ids.elements; i++)
-  {
-    get_dynamic(&dynamic_ids, (uchar*) token, i);
-    if (buffer->append(" ") ||
-        buffer->append(token))
-      DBUG_RETURN(TRUE);
-  }
-
-  DBUG_RETURN(FALSE);
-}
-
-bool Database_ids::do_search_id(const void *id)
-{
-  return (bsearch((const char *) id, dynamic_ids.buffer,
-          dynamic_ids.elements, size,
-          (int (*) (const void*, const void*))
-          cmp_string) != NULL);
+  return false;
 }

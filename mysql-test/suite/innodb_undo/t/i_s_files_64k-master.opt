@@ -1,0 +1,2 @@
+--innodb_rollback_segments=1
+--initialize --innodb_page_size=64k

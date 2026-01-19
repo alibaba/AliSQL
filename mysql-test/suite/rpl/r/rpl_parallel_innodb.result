@@ -1,13 +1,17 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
-call mtr.add_suppression('Slave: Error dropping database');
+call mtr.add_suppression('Replica: Error dropping database');
 include/stop_slave.inc
 start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 include/sync_slave_sql_with_master.inc
 stop slave sql_thread;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 insert into test0.benchmark set state='slave is processing load';
 start slave sql_thread;
 use test0;
@@ -20,7 +24,9 @@ select ts from test0.benchmark where state like 'slave takes on load' into @s_m0
 select ts from test0.benchmark where state like 'slave is supposed to finish with load' into @s_m1;
 select ts from test0.benchmark where state like 'slave ends load' into @s_1;
 select ts from test0.benchmark where state like 'slave is processing load' into @s_0;
-select time_to_sec(@m_1) - time_to_sec(@m_0) as 'delta.out';
+select time_to_sec(@m_1) - time_to_sec(@m_0) as 'delta_m', 
+time_to_sec(@s_1) - time_to_sec(@s_0) as 'delta_s',
+time_to_sec(@s_m1) - time_to_sec(@s_m0) as 'delta.out';
 include/sync_slave_sql_with_master.inc
 include/diff_tables.inc [master:test15.ti_nk, slave:test15.ti_nk]
 include/diff_tables.inc [master:test15.ti_wk, slave:test15.ti_wk]

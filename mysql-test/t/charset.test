@@ -1,0 +1,155 @@
+--echo #
+--echo #Bug#21958734: INNODB: FAILING ASSERTION: *MBMAXLEN < 5 IN
+--echo #              FILE HA_INNODB.CC LINE 1803
+--echo #
+SHOW CHARACTER SET LIKE '%filename%';
+SHOW COLLATION LIKE '%filename%';
+--error ER_BAD_FIELD_ERROR
+SELECT _filename'abcd';
+--error ER_UNKNOWN_CHARACTER_SET
+SELECT CONVERT(_latin1'abcd' USING filename);
+--error ER_UNKNOWN_CHARACTER_SET
+SELECT CAST(_latin1'abcd' AS CHAR CHARACTER SET filename);
+--error ER_UNKNOWN_CHARACTER_SET
+SET NAMES 'filename';
+SET NAMES 'utf8';
+--error ER_UNKNOWN_CHARACTER_SET
+SET CHARACTER_SET_CLIENT=17;
+SET CHARACTER_SET_CLIENT=33;
+
+--disable_warnings
+DROP DATABASE IF EXISTS db21958734;
+--enable_warnings
+
+--error ER_UNKNOWN_CHARACTER_SET
+CREATE DATABASE db21958734 CHARACTER SET filename;
+--error ER_UNKNOWN_COLLATION
+CREATE DATABASE db21958734 COLLATE filename;
+CREATE DATABASE db21958734 CHARACTER SET utf8;
+--error ER_UNKNOWN_CHARACTER_SET
+ALTER DATABASE db21958734 CHARACTER SET filename;
+--error ER_UNKNOWN_COLLATION
+ALTER DATABASE db21958734 COLLATE filename;
+ALTER DATABASE db21958734 CHARACTER SET latin1;
+USE db21958734;
+--error ER_UNKNOWN_CHARACTER_SET
+CREATE TABLE t1(a VARCHAR(10)) CHARACTER SET filename;
+--error ER_UNKNOWN_COLLATION
+CREATE TABLE t1(a VARCHAR(10)) COLLATE filename;
+--error ER_UNKNOWN_CHARACTER_SET
+CREATE TABLE t1(a VARCHAR(10) CHARACTER SET filename);
+--error ER_UNKNOWN_COLLATION
+CREATE TABLE t1(a VARCHAR(10) COLLATE filename);
+CREATE TABLE t1(a VARCHAR(10) CHARACTER SET utf8) CHARACTER SET latin1;
+--error ER_UNKNOWN_CHARACTER_SET
+ALTER TABLE t1 CHARACTER SET filename;
+--error ER_UNKNOWN_COLLATION
+ALTER TABLE t1 COLLATE filename;
+ALTER TABLE t1 CHARACTER SET gbk;
+--error ER_UNKNOWN_CHARACTER_SET
+ALTER TABLE t1 MODIFY a VARCHAR(10) CHARACTER SET filename;
+--error ER_UNKNOWN_COLLATION
+ALTER TABLE t1 MODIFY a VARCHAR(10) COLLATE filename;
+ALTER TABLE t1 MODIFY a VARCHAR(10) CHARACTER SET cp932;
+DROP DATABASE db21958734;
+
+--source include/not_valgrind.inc
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+--error 1
+--exec $MYSQLD --datadir=../data  --basedir=. --lc-messages-dir=$MYSQLTEST_VARDIR/../../share/english --character-set-server=filename >$MYSQLTEST_VARDIR/log/mysqld_out_err.log 2>&1
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+--echo #
+--echo # Bug#29110613: UNICODE STRING INCORRECTLY MARKED AS INVALID
+--echo #
+
+USE test;
+SET NAMES utf8mb4;
+--error ER_CANNOT_CONVERT_STRING
+SELECT 'x' AS '🐬';
+SELECT '🐬';
+CREATE TABLE 🐬(a INT);
+CREATE TABLE t1(🐬 INT);
+CREATE TABLE t2(a INT COMMENT "🐬");
+CREATE TABLE t3(a INT);
+--error ER_CANNOT_CONVERT_STRING
+CREATE VIEW v1 AS SELECT 'x' AS'🐬';
+DROP TABLE 🐬;
+DROP TABLE t1, t2, t3;
+PREPARE stmt FROM "SELECT 'x' AS '🐬'";
+EXECUTE stmt;
+
+SET NAMES utf8mb3;
+SELECT 'x' AS '🐬';
+SELECT '🐬';
+--error ER_INVALID_CHARACTER_STRING
+CREATE TABLE 🐬(a INT);
+--error ER_INVALID_CHARACTER_STRING
+CREATE TABLE t1(🐬 INT);
+--error ER_COMMENT_CONTAINS_INVALID_STRING
+CREATE TABLE t2(a INT COMMENT "🐬");
+CREATE TABLE t3(a INT);
+--error ER_WRONG_COLUMN_NAME
+CREATE VIEW v1 AS SELECT 'x' AS'🐬';
+DROP TABLE t3;
+PREPARE stmt FROM "SELECT 'x' AS '🐬'";
+EXECUTE stmt;
+
+SET NAMES default;
+
+--echo #
+--echo # Bug#29909573 SHOW CREATE TABLE OUTPUT CAN'T BE EXECUTED
+--echo # The following CREATE TABLE would fail without fix.
+--echo #
+
+CREATE TABLE t1 (f1 CHAR(20) COLLATE binary);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 (f1 ENUM('a') COLLATE binary);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+# Test the DDL from bug page.
+CREATE TABLE t1 (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `etype` enum('a','b','c') CHARACTER SET binary COLLATE binary DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+DROP TABLE t1;
+
+--echo # Bug#32244631: Illegal mix of collations (ascii_general_ci,implicit)
+
+SELECT member_role
+FROM performance_schema.replication_group_members
+WHERE member_host = @@hostname AND member_role='PRIMARY';
+
+--echo #
+--echo # Bug#34801210: Error Illegal mix of collations when using views and IN
+--echo #               statements
+--echo #
+set @old_collation = @@collation_connection;
+
+CREATE TABLE t1 ( id INT UNSIGNED PRIMARY KEY NOT NULL,
+                    val varchar(32) NOT NULL) collate utf8mb4_sv_0900_ai_ci;
+SET session collation_connection = 'utf8mb4_sv_0900_ai_ci';
+CREATE VIEW v1 AS SELECT * FROM t1 WHERE val = 'data';
+CREATE VIEW v2 AS SELECT * FROM t1 WHERE val IN ('data') ;
+SELECT * FROM v1 WHERE val = 'something';
+SELECT * FROM v2 WHERE val = 'something';
+SET session collation_connection = 'utf8mb4_general_ci';
+SELECT * FROM v1 WHERE val = 'something';
+SELECT * FROM v2 WHERE val = 'something';
+
+# Cleanup and restore
+DROP VIEW v1;
+DROP VIEW v2;
+DROP TABLE t1;
+SET session collation_connection = @old_collation;

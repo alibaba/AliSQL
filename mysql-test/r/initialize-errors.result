@@ -1,0 +1,42 @@
+# shut server down
+# Server is down
+#
+# Bug #21680457: REDUCE THE NEW PASSWORD PRINTED BY
+#   --INITIALIZE TO A NOTE, NOT A WARNING.
+#
+# Run the server with --initialize
+extract the root password
+password found
+# Restart the server against DDIR
+# connect as root
+# reset the password
+SET PASSWORD='';
+CREATE DATABASE test;
+# shut server down
+# Server is down
+# close the test connection
+# remove the password file
+# delete mysqld log
+# delete datadir
+#
+# Bug #27675647: INVALID INITIALIZATION COMMAND ALLOWED TO DO TOO MUCH WORK
+#
+# Run server with --initialize insecure
+# check for unusable directory log message
+Pattern found.
+# delete mysqld log
+# delete datadir
+# End of the test for bug #27675647
+#
+# Bug #29594082: INCORRECT AND DANGEROUS ERROR MESSAGE FROM MY-013236
+#
+# Run server with --initialize insecure on an existing empty directory
+# check for unusable existing directory log message
+Pattern found.
+# delete mysqld log
+# delete datadir
+# End of the test for bug #29594082
+#
+# Cleanup
+#
+# Restarting the server

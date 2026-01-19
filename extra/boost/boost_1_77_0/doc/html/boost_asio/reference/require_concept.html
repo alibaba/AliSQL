@@ -1,0 +1,93 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>require_concept</title>
+<link rel="stylesheet" href="../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../reference.html" title="Reference">
+<link rel="prev" href="require.html" title="require">
+<link rel="next" href="require_concept_result.html" title="require_concept_result">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../boost.png"></td>
+<td align="center"><a href="../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="require.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="require_concept_result.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="boost_asio.reference.require_concept"></a><a class="link" href="require_concept.html" title="require_concept">require_concept</a>
+</h3></div></div></div>
+<p>
+        <a class="indexterm" name="boost_asio.indexterm.require_concept"></a> 
+A customisation point
+        that applies a concept-enforcing property to an object.
+      </p>
+<pre class="programlisting">constexpr unspecified require_concept = unspecified;
+</pre>
+<p>
+        The name <code class="computeroutput">require_concept</code> denotes a customization point object.
+        The expression <code class="computeroutput">boost::asio::require_concept(E, P)</code> for some subexpressions
+        <code class="computeroutput">E</code> and <code class="computeroutput">P</code> (with types <code class="computeroutput">T = decay_t&lt;decltype(E)&gt;</code>
+        and <code class="computeroutput">Prop = decay_t&lt;decltype(P)&gt;</code>) is expression-equivalent
+        to:
+      </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+            If <code class="computeroutput">is_applicable_property_v&lt;T, Prop&gt; &amp;&amp; Prop::is_requirable_concept</code>
+            is not a well-formed constant expression with value <code class="computeroutput">true</code>,
+            <code class="computeroutput">boost::asio::require_concept(E, P)</code> is ill-formed.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">E</code> if the expression <code class="computeroutput">Prop::template static_query_v&lt;T&gt;
+            == Prop::value()</code> is a well-formed constant expression with value
+            <code class="computeroutput">true</code>.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">(E).require_concept(P)</code> if the expression <code class="computeroutput">(E).require_concept(P)</code>
+            is well-formed.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">require_concept(E, P)</code> if the expression <code class="computeroutput">require_concept(E,
+            P)</code> is a valid expression with overload resolution performed in
+            a context that does not include the declaration of the <code class="computeroutput">require_concept</code>
+            customization point object.
+          </li>
+<li class="listitem">
+            Otherwise, <code class="computeroutput">boost::asio::require_concept(E, P)</code> is ill-formed.
+          </li>
+</ul></div>
+<h5>
+<a name="boost_asio.reference.require_concept.h0"></a>
+        <span class="phrase"><a name="boost_asio.reference.require_concept.requirements"></a></span><a class="link" href="require_concept.html#boost_asio.reference.require_concept.requirements">Requirements</a>
+      </h5>
+<p>
+        <span class="emphasis"><em>Header: </em></span><code class="literal">boost/asio/require_concept.hpp</code>
+      </p>
+<p>
+        <span class="emphasis"><em>Convenience header: </em></span><code class="literal">boost/asio.hpp</code>
+      </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="require.html"><img src="../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../reference.html"><img src="../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../boost_asio.html"><img src="../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="require_concept_result.html"><img src="../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

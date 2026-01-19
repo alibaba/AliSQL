@@ -21,7 +21,7 @@ count(*)
 
 delete from t1 where a in (1,7, 90, 100, 130);
 affected rows: 5
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 # expected result 1 roundtrips
@@ -33,7 +33,7 @@ affected rows: 1
 
 delete from t1 where a=1000;
 affected rows: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 # expected result 1 roundtrips
@@ -45,7 +45,7 @@ affected rows: 1
 
 delete from t1 where a in (1000, 1001, 1002, 1003, 1004);
 affected rows: 0
-@ndb_execute_count:=VARIABLE_VALUE-@ndb_init_execute_count
+ndb_execute_count
 1
 affected rows: 1
 select count(*) as "0(was deleted)" from t1 where a in (1,7, 90, 100, 130);
@@ -65,7 +65,10 @@ select count(*) as "5(not deleted)" from t1 where a in (2, 3, 4, 5, 6);
 5(not deleted)
 5
 drop table t1;
-create table t2 (a int primary key, b varchar(256)) engine ndb;
+create table t2 (
+a int primary key,
+b varchar(256) character set latin1)
+engine ndb;
 Has loaded 2000 rows
 2000
 Should be 1500 rows left now

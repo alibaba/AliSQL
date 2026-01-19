@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,6 +27,8 @@
 #define DUMP_STATE_ORD_HPP
 
 #include "SignalData.hpp"
+
+#define JAM_FILE_ID 137
 
 /**
  * DumpStateOrd is sent by the mgmtsrvr to CMVMI.
@@ -37,7 +47,7 @@ class DumpStateOrd {
    * Sender(s)
    */
   friend class MgmtSrvr;
-  
+
   /**
    * Reciver(s)
    */
@@ -51,36 +61,64 @@ class DumpStateOrd {
   friend class Dbdict;
   friend class Ndbfs;
 
-public:
+ public:
   enum DumpStateType {
     /* any dumps above this value should go to one block only */
     OneBlockOnly = 100000,
 
-    _BackupMin   = 100000,
+    _BackupMin = 100000,
     BackupStatus = 100000,
-    _BackupMax   = 100999,
+    BackupMinWriteSpeed32 = 100001,
+    BackupMaxWriteSpeed32 = 100002,
+    BackupMaxWriteSpeedOtherNodeRestart32 = 100003,
+    BackupMinWriteSpeed64 = 100004,
+    BackupMaxWriteSpeed64 = 100005,
+    BackupMaxWriteSpeedOtherNodeRestart64 = 100006,
+    BackupEncryptionRequired = 100007,
+    BackupDumpLcpExtraDebug = 100008,
+    _BackupMax = 100999,
 
-    _TCMin       = 101000,
-    _TCMax       = 101999,
+    _TCMin = 101000,
+    TCSetSchedNumLqhKeyReqCount = 101000,
+    TCSetSchedNumScanFragReqCount = 101001,
+    TCSetLoadRefreshCount = 101002,
+    _TCMax = 101999,
 
     _LQHMin = 102000,
     LQHLogFileInitStatus = 102000,
     _LQHMax = 102999,
 
+    _CMVMIMin = 103000,
+    SetSchedulerResponsiveness = 103000,
+    EnableEventLoggerDebug = 103001,
+    DisableEventLoggerDebug = 103002,
+    CmvmiRelayDumpStateOrd = 103003,
+    CmvmiDummySignal = 103004,
+    CmvmiSendDummySignal = 103005,
+    _CMVMIMax = 103099,
+
+    _THRMANMin = 104000,
+    SetSchedulerSpinTimerAll = 104000,
+    SetSchedulerSpinTimerThread = 104001,
+    SetAllowedSpinOverhead = 104002,
+    SetSpintimePerCall = 104003,
+    EnableAdaptiveSpinning = 104004,
+    _THRMANMax = 104999,
     // 1 QMGR Dump information about phase 1 variables
     // 13 CMVMI Dump signal counter
     // 13 NDBCNTR Dump start phase information
     // 13 NDBCNTR_REF  Dump start phase information
-    CommitAckMarkersSize = 14, // TC+LQH Dump free size in commitAckMarkerP
-    CommitAckMarkersDump = 15, // TC+LQH Dump info in commitAckMarkerPool
-    DihDumpNodeRestartInfo = 16, // 16 DIH Dump node restart info
-    DihDumpNodeStatusInfo = 17,// 17 DIH Dump node status info
-    DihPrintFragmentation = 18,// 18 DIH Print fragmentation
+    CommitAckMarkersSize = 14,      // TC+LQH Dump free size in commitAckMarkerP
+    CommitAckMarkersDump = 15,      // TC+LQH Dump info in commitAckMarkerPool
+    DihDumpNodeRestartInfo = 16,    // 16 DIH Dump node restart info
+    DihDumpNodeStatusInfo = 17,     // 17 DIH Dump node status info
+    DihPrintFragmentation = 18,     // 18 DIH Print fragmentation
+    DihPrintOneFragmentation = 19,  // 18 DIH Print info about one fragmentation
     // 19 NDBFS Fipple with O_SYNC, O_CREATE etc.
     // 20-24 BACKUP
     NdbcntrTestStopOnError = 25,
     NdbcntrStopNodes = 70,
-    // 100-105 TUP and ACC  
+    // 100-105 TUP and ACC
     // 200-240 UTIL
     // 300-305 TRIX
     QmgrErr935 = 935,
@@ -88,19 +126,36 @@ public:
     NdbfsDumpAllFiles = 401,
     NdbfsDumpOpenFiles = 402,
     NdbfsDumpIdleFiles = 403,
+    NdbfsDumpRequests = 406,
     CmvmiSchedulerExecutionTimer = 502,
     CmvmiRealtimeScheduler = 503,
     CmvmiExecuteLockCPU = 504,
     CmvmiMaintLockCPU = 505,
     CmvmiSchedulerSpinTimer = 506,
+    TupSetTransientPoolMaxSize = 1214,
+    TupResetTransientPoolMaxSize = 1215,
     // 1222-1225 DICT
+    DictDumpLockQueue = 1228,
+    DictDumpGetTabInfoQueue = 1229,
     LqhDumpAllDefinedTabs = 1332,
     LqhDumpNoLogPages = 1333,
     LqhDumpOneScanRec = 2300,
     LqhDumpAllScanRec = 2301,
     LqhDumpAllActiveScanRec = 2302,
     LqhDumpLcpState = 2303,
+    LqhSystemError = 2304,
+    LqhFailedHandlingGCP_SAVEREQ = 2305,
+    LqhDumpAllTcRec = 2306,
+    LqhDumpOneTcRec = 2307,
+    // 2308 is used
+    LqhDumpOneCopyTcRec = 2310,
     LqhErrorInsert5042 = 2315,
+    LqhDumpPoolLevels = 2353,
+    LqhReportCopyInfo = 2354,
+    LqhKillAndSendToDead = 2355,
+    LqhSetTransientPoolMaxSize = 2356,
+    LqhResetTransientPoolMaxSize = 2357,
+    LqhDumpOpRecLookup = 2358,
 
     AccDumpOneScanRec = 2400,
     AccDumpAllScanRec = 2401,
@@ -109,28 +164,57 @@ public:
     AccDumpNumOpRecs = 2404,
     AccDumpFreeOpRecs = 2405,
     AccDumpNotFreeOpRecs = 2406,
-    DumpPageMemory = 1000, // Acc & TUP
-    TcDumpAllScanFragRec = 2500,
+    AccSetTransientPoolMaxSize = 2407,
+    AccResetTransientPoolMaxSize = 2408,
+    AccDumpOneOpRecLocal = 2409,
+    AccDumpOpPrecedingLocks = 2410,
+
+    DumpPageMemory = 1000,  // Acc & TUP
+    DumpPageMemoryOnFail = 1001,
+    TcDumpSetOfScanFragRec = 2500,
     TcDumpOneScanFragRec = 2501,
-    TcDumpAllScanRec = 2502,
-    TcDumpAllActiveScanRec = 2503,
+    TcDumpSetOfScanRec = 2502,
     TcDumpOneScanRec = 2504,
     TcDumpOneApiConnectRec = 2505,
-    TcDumpAllApiConnectRec = 2506,
     TcSetTransactionTimeout = 2507,
     TcSetApplTransactionTimeout = 2508,
     TcStartDumpIndexOpCount = 2512,
     TcDumpIndexOpCount = 2513,
+    TcDumpApiConnectRecSummary = 2514,
+    TcDumpSetOfApiConnectRec = 2515,
+    TcDumpOneTcConnectRec = 2516,
+    TcDumpSetOfTcConnectRec = 2517,
+    TcDumpPoolLevels = 2555,
+    TcSetTransientPoolMaxSize = 2556,
+    TcResetTransientPoolMaxSize = 2557,
+    TcSetTransErrorLogLevel = 2558,
+    TcNdbInfoApiConnectRecFull = 2559,
     CmvmiDumpConnections = 2600,
     CmvmiDumpLongSignalMemory = 2601,
+    /**
+     * Sets the type of restart when the child process crashes due to error
+     * insert (see NdbRestartType).
+     */
     CmvmiSetRestartOnErrorInsert = 2602,
     CmvmiTestLongSigWithDelay = 2603,
     CmvmiDumpSubscriptions = 2604, /* note: done to respective outfile
                                       to be able to debug if events
                                       for some reason does not end up
                                       in clusterlog */
-    CmvmiTestLongSig = 2605,  /* Long signal testing trigger */
+    CmvmiTestLongSig = 2605,       /* Long signal testing trigger */
     DumpEventLog = 2606,
+
+    CmvmiLongSignalMemorySnapshotStart = 2607,
+    CmvmiLongSignalMemorySnapshot = 2608,
+    CmvmiLongSignalMemorySnapshotCheck = 2609,
+    CmvmiSetKillerWatchdog = 2610,
+    CmvmiLongSignalMemorySnapshotCheck2 = 2611,
+
+    CmvmiShowLongSignalOwnership = 2612, /* Show owners of LSM */
+
+    CmvmiSetWatchdogInterval = 2613,   /* Set or reset interval */
+    CmvmiSetErrorHandlingError = 2614, /* Error insert for ErrorHandler */
+
     LCPContinue = 5900,
     // 7000 DIH
     // 7001 DIH
@@ -146,26 +230,55 @@ public:
     // 7010 DIH
     // 7011 DIH
     // 7012 DIH
-    DihDumpLCPState= 7013,
-    DihDumpLCPMasterTakeOver = 7014,    
+    DihDumpLCPState = 7013,
+    DihDumpLCPMasterTakeOver = 7014,
     // 7015 DIH
     DihAllAllowNodeStart = 7016,
     DihMinTimeBetweenLCP = 7017,
     DihMaxTimeBetweenLCP = 7018,
-    // 7019
+    // Check if blocks are done with handling the failure of another node.
+    DihTcSumaNodeFailCompleted = 7019,  // DIH+TC+SUMA
     // 7020
     // 7021
-    EnableUndoDelayDataWrite = 7080, // DIH+ACC+TUP
+    // 7022
+    // 7023
+    /*
+      Checks whether add frag failure was cleaned up.
+      Should NOT be used while commands involving addFragReq
+      are being performed.
+      NB: This value is only intended for use in test cases. If used
+      interactively, it is likely to crash the node. It should therefore
+      *not* be described in end-user documentation.
+    */
+    DihAddFragFailCleanedUp = 7024,
+    /**
+     * Allows GCP stop thresholds to be set
+     */
+    DihSetGcpStopVals = 7026,
+    DihStallLcpStart = 7027,
+    DihDumpPageRecInfo = 7032,
+    DihFragmentsPerNode = 7033,
+    DihDisplayPauseState = 7034,
+    EnableUndoDelayDataWrite = 7080,  // DIH+ACC+TUP
     DihSetTimeBetweenGcp = 7090,
     DihStartLcpImmediately = 7099,
+    DihSaveGcpCommitLag = 7100,
+    DihCheckGcpCommitLag = 7101,
     // 8000 Suma
     // 12000 Tux
     TuxLogToFile = 12001,
     TuxSetLogFlags = 12002,
     TuxMetaDataJunk = 12009,
-    
-    DumpTsman = 9800, 
+    TuxSetTransientPoolMaxSize = 12010,
+    TuxResetTransientPoolMaxSize = 12011,
+
+    DumpTsman = 9800,
+
     DumpLgman = 10000,
+    LgmanDumpUndoStateClusterLog = 10001,
+    LgmanDumpUndoStateLocalLog = 10002,
+    LgmanCheckCallbacksClear = 10003,
+
     DumpPgman = 11000,
     DumpBackup = 13000,
     DumpBackupSetCompressed = 13001,
@@ -177,12 +290,19 @@ public:
     DbinfoListColumns = 14002,
     DbinfoScanTable = 14003,
 
-    SchemaResourceSnapshot = 4000, // Save resource consumption
-    SchemaResourceCheckLeak = 4001 // check same as snapshot
+    SchemaResourceSnapshot = 4000,   // Save resource consumption
+    SchemaResourceCheckLeak = 4001,  // check same as snapshot
+
+    TcResourceSnapshot = 2553,
+    TcResourceCheckLeak = 2554,
+
+    RestoreRates = 30000
   };
-public:
-  
-  Uint32 args[25];          // Generic argument
+
+ public:
+  Uint32 args[25];  // Generic argument
 };
+
+#undef JAM_FILE_ID
 
 #endif

@@ -3,7 +3,7 @@
 # This file does the same as the built-in command sync_with_master,
 # but more flexible. In particular:
 #  - Can use a custom timeout.
-#  - Can use WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS instead of MASTER_POS_WAIT.
+#  - Can use WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS instead of SOURCE_POS_WAIT.
 #  - The position can be set by the user, it is not restricted to
 #    save_master_pos
 #
@@ -14,6 +14,8 @@
 # --connection slave
 # [--let $slave_timeout= X]
 # [--let $use_gtids= 1]
+# [--let $wait_for_executed_gtid_set= 1]
+# [--let $ignore_gtids_on_sync= 1]
 # --source include/sync_slave.inc
 #
 # Parameters:
@@ -27,6 +29,9 @@
 #     Forces the use of master file and position, even if $use_gtids is set.
 #     This might be used if the slave will not have all the GTIDs of the master
 #     but have to read and apply all master events to the end.
+#
+#   $wait_for_executed_gtid_set
+#     See include/sync_slave_sql_with_master.inc
 
 --let $include_filename= sync_slave_sql.inc
 --source include/begin_include_file.inc
@@ -35,6 +40,16 @@
 if (!$_sss_slave_timeout)
 {
   --let $_sss_slave_timeout= 300
+}
+
+if ($VALGRIND_TEST) {
+  let $_sss_slave_timeout= `select $_sss_slave_timeout * 6`;
+}
+
+--let $_sss_channel_param=
+if ($_saved_channel_name)
+{
+  --let $_sss_channel_param= , $_saved_channel_name
 }
 
 if ($rpl_debug)
@@ -53,8 +68,20 @@ if ($rpl_debug)
 #
 --let $_slave_master_file= query_get_value(SHOW SLAVE STATUS, Relay_Master_Log_File, 1)
 --let $_slave_master_pos= query_get_value(SHOW SLAVE STATUS, Exec_Master_Log_Pos, 1)
+
+if ($rpl_debug)
+{
+  --echo _saved_file='$_saved_file'
+  --echo _slave_master_file='$_slave_master_file'
+}
+
 if ($_slave_master_file == $_saved_file)
 {
+  if ($rpl_debug)
+  {
+    --echo _saved_pos='$_saved_pos'
+    --echo _slave_master_pos='$_slave_master_pos'
+  }
   if ($_slave_master_pos == $_saved_pos)
   {
     if ($rpl_debug)
@@ -74,19 +101,36 @@ if ($ignore_gtids_on_sync)
 
 if ($_sync_with_gtids)
 {
-  if ($rpl_debug)
+  --source include/assert_gtid_mode_on.inc
+  if ($wait_for_executed_gtid_set)
   {
-    --echo debug: WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('$_saved_gtids', $_sss_slave_timeout)
+    if ($rpl_debug)
+    {
+      --echo debug: WAIT_FOR_EXECUTED_GTID_SET('$_saved_gtids', $_sss_slave_timeout)
+    }
+    --let $_sss_result= `SELECT -WAIT_FOR_EXECUTED_GTID_SET('$_saved_gtids', $_sss_slave_timeout)`
   }
-  --let $_sss_result= `SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('$_saved_gtids', $_sss_slave_timeout)`
+  if (!$wait_for_executed_gtid_set)
+  {
+    if ($rpl_debug)
+    {
+      --echo debug: WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('$_saved_gtids', $_sss_slave_timeout$_sss_channel_param)
+    }
+    --let $_sss_result= `SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('$_saved_gtids', $_sss_slave_timeout$_sss_channel_param)`
+  }
 }
+
 if (!$_sync_with_gtids)
 {
   if ($rpl_debug)
   {
-    --echo debug: MASTER_POS_WAIT('$_saved_file', $_saved_pos, $_sss_slave_timeout)
+    --echo debug: SOURCE_POS_WAIT('$_saved_file', $_saved_pos, $_sss_slave_timeout$_sss_channel_param)
   }
-  --let $_sss_result= `SELECT MASTER_POS_WAIT('$_saved_file', $_saved_pos, $_sss_slave_timeout)`
+  --let $_sss_source_pos_wait_function = SOURCE_POS_WAIT
+  if ($use_source_pos_wait_alias) {
+    --let $_sss_source_pos_wait_function = MASTER_POS_WAIT
+  }
+  --let $_sss_result= `SELECT $_sss_source_pos_wait_function('$_saved_file', $_saved_pos, $_sss_slave_timeout$_sss_channel_param)`
 }
 
 if ($_sss_result == '')
@@ -107,6 +151,7 @@ if ($_sss_result < 0)
   --echo ERROR: _saved_gtids='$_saved_gtids'
   --echo ERROR: _saved_file='$_saved_file'
   --echo ERROR: _saved_pos='$_saved_pos'
+  --echo ERROR: _saved_channel_name=$_saved_channel_name
   --echo ERROR: timeout='$_sss_slave_timeout'
   --echo ERROR: result='$_sss_result'
   --echo ERROR: error type: $error_type

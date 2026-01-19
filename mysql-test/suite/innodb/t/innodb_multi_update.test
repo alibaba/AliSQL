@@ -1,4 +1,3 @@
--- source include/have_innodb.inc
 
 #
 # Test multi update with different join methods
@@ -11,19 +10,48 @@ INSERT INTO bug38999_2 values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9
 
 # Full join, without key
 update bug38999_1,bug38999_2 set bug38999_1.a=bug38999_1.a+100;
+--sorted_result
 select * from bug38999_1;
 
 # unique key
 update bug38999_1,bug38999_2 set bug38999_1.a=bug38999_1.a+100 where bug38999_1.a=101;
+--sorted_result
 select * from bug38999_1;
 
 # ref key
 update bug38999_1,bug38999_2 set bug38999_1.b=bug38999_1.b+10 where bug38999_1.b=2;
+--sorted_result
 select * from bug38999_1;
 
+# Run ANALYZE in order to increase the likelihood of getting the same
+# query plan on every run of the next update statement.
+# Note: With different query plans, the next update statement can produce
+# different results that are still valid.
+
+--disable_query_log
+--disable_result_log
+ANALYZE TABLE bug38999_1,bug38999_2;
+--enable_result_log
+--enable_query_log
+
 # Range key (in bug38999_1)
-update bug38999_1,bug38999_2 set bug38999_1.b=bug38999_1.b+2,bug38999_2.b=bug38999_1.b+10 where bug38999_1.b between 3 and 5 and bug38999_1.a=bug38999_2.a+100;
+# To ensure stable test case: The use of force index (b) is added in order
+# to ensure that this index is used. If this index is not used, the order
+# of the assigments can change and a different but still valid result can be
+# produced from this statement.
+update bug38999_1 force index (b) straight_join bug38999_2
+set bug38999_1.b=bug38999_1.b+2,
+    bug38999_2.b=bug38999_1.b+10
+where bug38999_1.b between 3 and 5 and bug38999_1.a=bug38999_2.a+100;
+--sorted_result
 select * from bug38999_1;
+# It is unspecified whether the assignment of bug38999_2.b sees the
+# modification of bug38999_1.b on the same row. The hypergraph optimizer
+# chooses a different plan (not using range scan on bug38999_1.b, as that
+# prevents immediate update) and does the assignments in a different
+# order.
+--skip_if_hypergraph
+--sorted_result
 select * from bug38999_2;
 
 drop table bug38999_1,bug38999_2;

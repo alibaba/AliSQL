@@ -42,29 +42,29 @@ handler t1 open as a2;
 handler t2 open;
 handler a1 read first limit 9;
 table_id
-test.t1
 
+test.t1
 handler a2 read first limit 9;
 table_id
-test.t1
 
+test.t1
 handler t2 read first limit 9;
 table_id
-test.t2
 
+test.t2
 flush tables;
 handler a1 read first limit 9;
 table_id
-test.t1
 
+test.t1
 handler a2 read first limit 9;
 table_id
-test.t1
 
+test.t1
 handler t2 read first limit 9;
 table_id
-test.t2
 
+test.t2
 handler t1 open as a1;
 ERROR 42000: Not unique table/alias: 'a1'
 handler t1 open as a2;
@@ -73,29 +73,29 @@ handler t2 open;
 ERROR 42000: Not unique table/alias: 't2'
 handler a1 read first limit 9;
 table_id
-test.t1
 
+test.t1
 handler a2 read first limit 9;
 table_id
-test.t1
 
+test.t1
 handler t2 read first limit 9;
 table_id
-test.t2
 
+test.t2
 flush table t1;
 handler a1 read first limit 9;
 table_id
-test.t1
 
+test.t1
 handler a2 read first limit 9;
 table_id
-test.t1
 
+test.t1
 handler t2 read first limit 9;
 table_id
-test.t2
 
+test.t2
 flush table t2;
 handler t2 close;
 drop table t1;
@@ -275,21 +275,17 @@ FLUSH TABLES WITH READ LOCK;
 # This should not block
 FLUSH TABLE t1 FOR EXPORT;
 UNLOCK TABLES;
+# Connection con1
 # Connection default
 UNLOCK TABLES;
 DROP TABLE t1;
-# Test 6: Unsupported storage engines.
-#
-CREATE TABLE t1(a INT) engine= MyISAM;
-FLUSH TABLE t1 FOR EXPORT;
-ERROR HY000: Table storage engine for 't1' doesn't have this option
-DROP TABLE t1;
-# Connection con1
-# Connection defalt
-# Test 7: Check privileges required.
+# Test 6: Check privileges required.
 #
 CREATE DATABASE db1;
 CREATE TABLE db1.t1 (a INT) engine= InnoDB;
+CREATE USER user1@localhost, user2@localhost,
+user3@localhost, user4@localhost,
+user5@localhost;
 GRANT RELOAD, SELECT, LOCK TABLES ON *.* TO user1@localhost;
 GRANT CREATE, DROP ON *.* TO user2@localhost;
 GRANT RELOAD, SELECT ON *.* TO user3@localhost;
@@ -301,7 +297,7 @@ UNLOCK TABLES;
 # Connection default
 # Connection con1 as user2
 FLUSH TABLE db1.t1 FOR EXPORT;
-ERROR 42000: Access denied; you need (at least one of) the RELOAD privilege(s) for this operation
+ERROR 42000: Access denied; you need (at least one of) the RELOAD or FLUSH_TABLES privilege(s) for this operation
 # Connection default
 # Connection con1 as user3
 FLUSH TABLE db1.t1 FOR EXPORT;
@@ -309,7 +305,7 @@ ERROR 42000: Access denied for user 'user3'@'localhost' to database 'db1'
 # Connection default
 # Connection con1 as user4
 FLUSH TABLE db1.t1 FOR EXPORT;
-ERROR 42000: Access denied; you need (at least one of) the RELOAD privilege(s) for this operation
+ERROR 42000: Access denied; you need (at least one of) the RELOAD or FLUSH_TABLES privilege(s) for this operation
 # Connection default
 # Connection con1 as user5
 FLUSH TABLE db1.t1 FOR EXPORT;
@@ -319,7 +315,7 @@ DROP USER user1@localhost, user2@localhost, user3@localhost,
 user4@localhost, user5@localhost;
 DROP TABLE db1.t1;
 DROP DATABASE db1;
-# Test 8: FLUSH TABLE <table_list> FOR EXPORT is incompatible
+# Test 7: FLUSH TABLE <table_list> FOR EXPORT is incompatible
 #         with itself (to avoid race conditions in metadata
 #         file handling).
 #
@@ -339,7 +335,7 @@ UNLOCK TABLES;
 # Connection default
 # Reaping: FLUSH TABLE t1 FOR EXPORT
 UNLOCK TABLES;
-# Test 9: LOCK TABLES ... READ is not affected
+# Test 8: LOCK TABLES ... READ is not affected
 #
 LOCK TABLE t1 READ;
 # Connection con1
@@ -358,7 +354,7 @@ UNLOCK TABLES;
 # Connection con1
 # Connection default
 DROP TABLE t1, t2;
-# Test 10: Lock is released if transaction is started after doing
+# Test 9: Lock is released if transaction is started after doing
 #          'flush table..' in same session
 CREATE TABLE t1 ( i INT ) ENGINE = Innodb;
 FLUSH TABLE t1 FOR EXPORT;
@@ -371,7 +367,7 @@ START TRANSACTION;
 FLUSH TABLE t1 FOR EXPORT;
 UNLOCK TABLES;
 DROP TABLE t1;
-# Test 11: Test 'flush table with fully qualified table names
+# Test 10: Test 'flush table with fully qualified table names
 #          and with syntax local/NO_WRITE_TO_BINLOG
 # Connection con1
 # Connection default
@@ -404,7 +400,7 @@ i
 200
 UNLOCK TABLE;
 DROP TABLE t1;
-# Test 12: Active transaction get committed if user execute
+# Test 11: Active transaction get committed if user execute
 #          "FLUSH TABLE ... FOR EXPORT" or "LOCK TABLE.."
 # Connection default
 CREATE TABLE t1 ( i INT ) ENGINE = Innodb;
@@ -432,7 +428,7 @@ i
 400
 UNLOCK TABLES;
 DROP TABLE t1;
-# Test 13: Verify "FLUSH TABLE ... FOR EXPORT" and "LOCK TABLE.."
+# Test 12: Verify "FLUSH TABLE ... FOR EXPORT" and "LOCK TABLE.."
 #          in same session   
 # Connection default
 CREATE TABLE t1 ( i INT ) ENGINE = Innodb;

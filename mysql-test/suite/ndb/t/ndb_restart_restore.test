@@ -1,0 +1,91 @@
+--source include/have_multi_ndb.inc
+--source include/have_binlog_format_mixed_or_row.inc
+--source suite/ndb/include/backup_restore_setup.inc
+
+##
+##  ndb_restart_restore
+##
+
+--connect(s1,127.0.0.1,root,,test,$MASTER_MYPORT,)
+--connect(s2,127.0.0.1,root,,test,$MASTER_MYPORT1,)
+
+--echo "[connection mysqld 1]"
+--connection s1
+
+CREATE USER 'user'@'host';
+GRANT NDB_STORED_USER ON *.* TO 'user'@'host';
+
+CREATE TABLE t1 (k INT PRIMARY KEY, str VARCHAR(255), bin VARBINARY(1024)) ENGINE = NDB;
+--save_master_pos
+
+--disable_query_log
+call mtr.add_suppression("mysqld startup An incident");
+call mtr.add_suppression("Detected an empty ndb_schema table in NDB");
+
+let $i=1024;
+while ($i > 0)
+{
+  eval SET @i = $i;
+  INSERT INTO t1 VALUES (@i, CONCAT("insert n=", @i), repeat(x'494E53455254', 128));
+  if (`SELECT ($i % 16) = 0`)
+  {
+    save_master_pos;
+  }
+  dec $i;
+}
+--enable_query_log
+
+# just to be sure
+SELECT COUNT(*) FROM t1;
+
+# just to check
+--exec $NDB_SELECT_COUNT -d mysql ndb_sql_metadata
+
+--source include/ndb_backup.inc
+
+# Check ids. should be 11,12,13,14,15,16
+# Only need to shut 11 and 12 (rest is on the conn pool)
+# --exec $NDB_MGM -e show >> $NDB_TOOLS_OUTPUT
+
+--connection s1
+--echo "[shutting down mysqld 1]"
+--let $mysqld_name=mysqld.1.1
+--source include/shutdown_mysqld.inc
+--let $expect_mysqld1_file_name= $_expect_file_name
+
+--connection s2
+--echo "[shutting down mysqld 2]"
+--let $mysqld_name=mysqld.2.1
+--source include/shutdown_mysqld.inc
+--let $expect_mysqld2_file_name= $_expect_file_name
+
+--connection default
+--exec $NDB_MGM -e "ALL RESTART -i"
+--exec $NDB_WAITER --wait-nodes="1-3" >> $NDB_TOOLS_OUTPUT
+
+# just to check
+# --exec $NDB_MGM -e show >> $NDB_TOOLS_OUTPUT
+
+--let $test_opts= --include-stored-grants --disable-indexes
+--exec $NDB_RESTORE $test_opts -b $the_backup_id -n 1 -m -r --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE --include-stored-grants --rebuild-indexes -b $the_backup_id -n 1 --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+--exec $NDB_RESTORE --include-stored-grants -b $the_backup_id -n 2 -r --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+--exec $NDB_INDEX_STAT --sys-create-if-not-exist >> $NDB_TOOLS_OUTPUT
+--exec $NDB_SELECT_COUNT -d mysql ndb_sql_metadata
+
+--let $_expect_file_name= $expect_mysqld1_file_name
+--let $mysqld_name=mysqld.1.1
+--source include/start_mysqld.inc
+
+--let $_expect_file_name= $expect_mysqld2_file_name
+--let $mysqld_name=mysqld.2.1
+--source include/start_mysqld.inc
+
+--exec $NDB_SELECT_COUNT -d mysql ndb_sql_metadata
+SELECT COUNT(*) FROM t1;
+DROP TABLE t1;
+DROP USER 'user'@'host';
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT

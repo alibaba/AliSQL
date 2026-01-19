@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,32 +27,28 @@
 #define NDBT_TABLE_HPP
 
 #include <ndb_global.h>
+#include "util/require.h"
 
 #include <NdbApi.hpp>
 #include <NdbOut.hpp>
 
 class NDBT_Attribute : public NdbDictionary::Column {
-public:
-  NDBT_Attribute(const char* _name,
-		 NdbDictionary::Column::Type _type,
-		 int _length = 1,
-		 bool _pk = false, 
-		 bool _nullable = false,
-		 CHARSET_INFO *cs= 0,
-		 NdbDictionary::Column::StorageType storage = NdbDictionary::Column::StorageTypeMemory,
-                 bool dynamic = false,
-                 const void* defaultVal = NULL,
-                 Uint32 defaultValBytes = 0):
-    NdbDictionary::Column(_name)
-  {
-    assert(_name != 0);
-    
+ public:
+  NDBT_Attribute(const char *_name, NdbDictionary::Column::Type _type,
+                 int _length = 1, bool _pk = false, bool _nullable = false,
+                 CHARSET_INFO *cs = 0,
+                 NdbDictionary::Column::StorageType storage =
+                     NdbDictionary::Column::StorageTypeMemory,
+                 bool dynamic = false, const void *defaultVal = NULL,
+                 Uint32 defaultValBytes = 0)
+      : NdbDictionary::Column(_name) {
+    require(_name != 0);
+
     setType(_type);
     setLength(_length);
     setNullable(_nullable);
     setPrimaryKey(_pk);
-    if (cs)
-    {
+    if (cs) {
       setCharset(cs);
     }
     setStorageType(storage);
@@ -55,64 +59,47 @@ public:
 
 class NDBT_Table : public NdbDictionary::Table {
   /**
-   * Print meta information about table 
-   * (information on how it is strored, what the attributes look like etc.)
+   * Print meta information about table
+   * (information on how it is stored, what the attributes look like etc.)
    */
-  friend class NdbOut& operator <<(class NdbOut&, const NDBT_Table &);
-public: 
-  
-  NDBT_Table(const char* name, 
-	     int noOfAttributes,
-	     const NdbDictionary::Column attributes[])
-    : NdbDictionary::Table(name)
-  {
-    assert(name != 0);
-    
-    //setStoredTable(stored);
-    for(int i = 0; i<noOfAttributes; i++)
-      addColumn(attributes[i]);
+ public:
+  NDBT_Table(const char *name, int noOfAttributes,
+             const NdbDictionary::Column attributes[])
+      : NdbDictionary::Table(name) {
+    require(name != 0);
+
+    // setStoredTable(stored);
+    for (int i = 0; i < noOfAttributes; i++) addColumn(attributes[i]);
 
     // validate() might cause initialization order problem with charset
     NdbError error;
     int ret = aggregate(error);
     (void)ret;
-    assert(ret == 0);
+    require(ret == 0);
   }
 
-  NDBT_Table(const char* name, 
-	     int noOfAttributes,
-	     NdbDictionary::Column* attributePtrs[])
-    : NdbDictionary::Table(name)
-  {
-    assert(name != 0);
-    
-    //setStoredTable(stored);
-    for(int i = 0; i<noOfAttributes; i++)
-      addColumn(*attributePtrs[i]);
-    
+  NDBT_Table(const char *name, int noOfAttributes,
+             NdbDictionary::Column *attributePtrs[])
+      : NdbDictionary::Table(name) {
+    require(name != 0);
+
+    // setStoredTable(stored);
+    for (int i = 0; i < noOfAttributes; i++) addColumn(*attributePtrs[i]);
+
     // validate() might cause initialization order problem with charset
     NdbError error;
     int ret = aggregate(error);
-    assert(ret == 0);
+    (void)ret;
+    require(ret == 0);
   }
-  
-  static const NdbDictionary::Table * discoverTableFromDb(Ndb* ndb,
-							  const char * name);
+
+  static const NdbDictionary::Table *discoverTableFromDb(Ndb *ndb,
+                                                         const char *name);
 };
 
-inline
-const NdbDictionary::Table * 
-NDBT_Table::discoverTableFromDb(Ndb* ndb, const char * name){
+inline const NdbDictionary::Table *NDBT_Table::discoverTableFromDb(
+    Ndb *ndb, const char *name) {
   return ndb->getDictionary()->getTable(name);
 }
-
-
-/**
- * Print meta information about index
- * (information on how it is strored, what the attributes look like etc.)
- */
-class NdbOut& operator <<(class NdbOut&, const NdbDictionary::Index &);
-
-
 
 #endif

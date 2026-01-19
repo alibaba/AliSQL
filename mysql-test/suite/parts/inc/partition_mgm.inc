@@ -68,6 +68,7 @@ ANALYZE TABLE TableA;
 --echo # Test of EXCHANGE PARTITION WITH TABLE
 if (!$native_partitioning)
 {
+--sorted_result
 SELECT PARTITION_NAME, TABLE_ROWS FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA ='MySQL_Test_DB' AND TABLE_NAME = 'TableA';
 CREATE TABLE TableB LIKE TableA;
 ALTER TABLE TableB REMOVE PARTITIONING;
@@ -78,6 +79,7 @@ SHOW CREATE TABLE TableA;
 --sorted_result
 SELECT * FROM TableB;
 SHOW CREATE TABLE TableB;
+--sorted_result
 SELECT PARTITION_NAME, IF(TABLE_ROWS, 'YES', 'NO') AS HAVE_TABLE_ROWS FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA ='MySQL_Test_DB' AND TABLE_NAME = 'TableA';
 ALTER TABLE TableA EXCHANGE PARTITION parta WITH TABLE TableB;
 INSERT INTO TableB VALUES (11);
@@ -123,7 +125,7 @@ SELECT * FROM TableA;
 
 --echo # Checking name comparision Upper vs Lower case
 --echo # Error if lower_case_table_names != 0
-let $lower_case_table_names= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'lower_case_table_names'`;
+let $lower_case_table_names= `SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'lower_case_table_names'`;
 --echo # lower_case_table_names: $lower_case_table_names
 if ($lower_case_table_names)
 {
@@ -256,7 +258,7 @@ SELECT * FROM TableA;
 
 --echo # Checking name comparision Upper vs Lower case
 --echo # Error if lower_case_table_names != 0
-let $lower_case_table_names= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'lower_case_table_names'`;
+let $lower_case_table_names= `SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'lower_case_table_names'`;
 --echo # lower_case_table_names: $lower_case_table_names
 if ($lower_case_table_names)
 {
@@ -376,7 +378,7 @@ SELECT * FROM TableA;
 
 --echo # Checking name comparision Upper vs Lower case
 --echo # Error if lower_case_table_names != 0
-let $lower_case_table_names= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'lower_case_table_names'`;
+let $lower_case_table_names= `SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'lower_case_table_names'`;
 --echo # lower_case_table_names: $lower_case_table_names
 if ($lower_case_table_names)
 {
@@ -498,7 +500,7 @@ SELECT * FROM TableA;
 
 --echo # Checking name comparision Upper vs Lower case
 --echo # Error if lower_case_table_names != 0
-let $lower_case_table_names= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'lower_case_table_names'`;
+let $lower_case_table_names= `SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'lower_case_table_names'`;
 --echo # lower_case_table_names: $lower_case_table_names
 if ($lower_case_table_names)
 {

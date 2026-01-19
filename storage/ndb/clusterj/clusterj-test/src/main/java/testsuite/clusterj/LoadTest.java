@@ -1,14 +1,22 @@
 /*
-   Copyright 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2011, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -88,7 +96,7 @@ public class LoadTest extends AbstractClusterJModelTest {
             // see if it is the right Employee
             errorIfNotEqual("load after flush employee id mismatch", i, e.getId());
             // make sure all fields were fetched
-            consistencyCheckDynamicEmployee(e);
+            consistencyCheckDynamicEmployee("load after flush", e);
         }
         tx.commit();
     }
@@ -113,17 +121,17 @@ public class LoadTest extends AbstractClusterJModelTest {
             // see if it is the right Employee
             errorIfNotEqual("loadFindNoFlush after find employee id mismatch", i, e.getId());
             // make sure all fields were fetched
-            consistencyCheckDynamicEmployee(e);
+            consistencyCheckDynamicEmployee("loadFindNoFlush", e);
         }
         tx.commit();
     }
 
-    private void consistencyCheckDynamicEmployee(DynamicEmployee e) {
+    private void consistencyCheckDynamicEmployee(String where, DynamicEmployee e) {
         int id = e.getId();
         String name = e.getName();
-        errorIfNotEqual("consistencyCheckDynamicEmployee name mismatch", "Employee number " + id, name);
-        errorIfNotEqual("consistencyCheckDynamicEmployee age mismatch", id, e.getAge());
-        errorIfNotEqual("consistencyCheckDynamicEmployee magic mismatch", id, e.getMagic());
+        errorIfNotEqual(where + " consistencyCheckDynamicEmployee name mismatch", "Employee number " + id, name);
+        errorIfNotEqual(where + " consistencyCheckDynamicEmployee age mismatch", id, e.getAge());
+        errorIfNotEqual(where + " consistencyCheckDynamicEmployee magic mismatch", id, e.getMagic());
     }
 
     private void loadNoFlush() {
@@ -131,11 +139,13 @@ public class LoadTest extends AbstractClusterJModelTest {
         loaded.clear();
         tx.begin();
         e = session.newInstance(DynamicEmployee.class, 0);
+        // default value is 0 for int
         errorIfNotEqual("loadNoFlush after newInstance employee id mismatch", 0, e.getId());
+        // default value is null for String
+        errorIfNotEqual("loadNoFlush after newInstance employee name mismatch", null, e.getName());
         session.load(e);
         errorIfNotEqual("loadNoFlush after load employee id mismatch", 0, e.getId());
-        errorIfNotEqual("loadNoFlush after load employee name mismatch",
-                null, e.getName());
+        errorIfNotEqual("loadNoFlush after load employee name mismatch", null, e.getName());
         tx.commit();
     }
 
@@ -160,10 +170,14 @@ public class LoadTest extends AbstractClusterJModelTest {
         // Employee 1000 does not exist
         DynamicEmployee e = session.newInstance(DynamicEmployee.class, 10000);
         session.load(e);
-        errorIfNotEqual("loadNotFound dynamic after load found mismatch", null, session.found(e));
+        errorIfNotEqual("loadNotFound dynamic after load session.found(e)", null, session.found(e));
+        errorIfNotEqual("loadNofFound dynamic after load mismatch in id", 10000, e.get(0));
         session.flush();
-        errorIfNotEqual("loadNotFound dynamic after flush found mismatch", false, session.found(e));
+        errorIfNotEqual("loadNotFound dynamic after load, flush session.found(e)", false, session.found(e));
+        errorIfNotEqual("loadNofFound dynamic after load mismatch in id", 10000, e.get(0));
         tx.commit();
+        errorIfNotEqual("loadNotFound dynamic after load, flush, commit session.found(e)", false, session.found(e));
+        errorIfNotEqual("loadNofFound dynamic after load, flush, commit mismatch in id", 10000, e.get(0));
     }
 
     /** Found should return true if row exists.

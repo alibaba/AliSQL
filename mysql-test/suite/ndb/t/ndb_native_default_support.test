@@ -3,17 +3,19 @@
 # Date: 2008-12
 # Purpose: ndb native default support test
 ##############################################################
---source include/ndb_have_online_alter.inc
--- source include/have_ndb.inc
--- source include/ndb_default_cluster.inc
+-- source include/have_multi_ndb.inc
+-- source suite/ndb/include/backup_restore_setup.inc
 
-# Directory containing the saved backup files
-let $backup_data_dir=$MYSQL_TEST_DIR/suite/ndb/backups;
+# Turn off ndb_read_backup to avoid result diffs from ndb_desc
+--source suite/ndb/include/turn_off_ndb_read_backup.inc
 
---disable_warnings
-DROP TABLE IF EXISTS t1,bit1;
-DROP DATABASE IF EXISTS mysqltest;
---enable_warnings
+# Turn off STRICT mode since test intentionally generate warnings
+# while inserting rows without default values.
+# NOTE! one test at the end turns STRICT back on for a while
+--source suite/ndb/include/turn_off_strict_sql_mode.inc
+# Also turn off NO_ZERO_DATE to allow table with
+# TIMSTAMP NO NULL to be created
+set sql_mode=(select replace(@@sql_mode,'NO_ZERO_DATE',''));
 
 CREATE DATABASE mysqltest;
 USE mysqltest;
@@ -54,7 +56,7 @@ CREATE TABLE t1(
   blob1 BLOB,
   text1 TEXT,
   timestamp_c TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)ENGINE=NDB;
+)ENGINE=NDB PARTITION BY KEY() PARTITIONS 8;
 
 --disable_warnings
 INSERT INTO t1 VALUES(),();
@@ -92,7 +94,7 @@ CREATE TABLE bit1(
   b3 BIT(23) DEFAULT B'110',
   b4 BIT(37) DEFAULT B'011',
   b5 BIT(63) DEFAULT B'101011'
-)ENGINE = NDB;
+)ENGINE=NDB PARTITION BY KEY() PARTITIONS 8;
 
 INSERT INTO bit1 VALUES();
 INSERT INTO bit1(b1,b4) VALUES(B'101',B'111');
@@ -125,9 +127,9 @@ SELECT i, j, f, d, d2, ch, vch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c,
 --echo * Alter table with default value can fail safely
 --echo ********************************************************
 --disable_warnings
---error 1060
+--error ER_DUP_FIELDNAME
 ALTER TABLE t1 ADD COLUMN ch2 CHAR(30) DEFAULT "alter table";
---error 1067
+--error ER_INVALID_DEFAULT
 ALTER TABLE t1 ADD COLUMN ch3 CHAR(3) DEFAULT "alter table";
 INSERT INTO t1 VALUES();
 --enable_warnings
@@ -143,20 +145,30 @@ SELECT i, j, f, d, d2, ch, vch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c,
 --echo * The tables with default values BACKUP and RESTORE test
 --echo ********************************************************
 --source include/ndb_backup.inc
-DROP TABLE IF EXISTS t1, bit1;
+DROP TABLE t1, bit1;
+
+# Turn off metadata check so it doesn't intefere with table discovery
+--connection server2
+SET @old_ndb_metadata_check_server2 = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
+--connection server1
+SET @old_ndb_metadata_check_server1 = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
 
 --echo ********************************************************
 --echo * Begin to restore data from backup 
 --echo ********************************************************
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -A -m  -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -A -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -A -m  -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -A -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
 
---sorted_result
-SHOW TABLES;
---let ndb_desc_opts= -d mysqltest t1
---source suite/ndb/include/ndb_desc_print.inc
---let ndb_desc_opts= -d mysqltest bit1
---source suite/ndb/include/ndb_desc_print.inc
+--let $ndb_describe_table= t1
+--let $ndb_describe_db= mysqltest
+--source suite/ndb/include/ndb_describe_table.inc
+
+--let $ndb_describe_table= bit1
+--let $ndb_describe_db= mysqltest
+--source suite/ndb/include/ndb_describe_table.inc
+
 SELECT pk,BIN(b1),BIN(b2),BIN(b3),BIN(b4),BIN(b5) FROM bit1 ORDER BY pk;
 --replace_column 12 CURRENT_TIMESTAMP
 SELECT i, j, f, d, d2, ch, vch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c, ch2 FROM t1 ORDER BY i;
@@ -168,17 +180,16 @@ INSERT INTO bit1(pk, b5) VALUES(99, B'11111111');
 SELECT pk,BIN(b1),BIN(b2),BIN(b3),BIN(b4),BIN(b5) FROM bit1 ORDER BY pk;
 --replace_column 12 CURRENT_TIMESTAMP
 SELECT i, j, f, d, d2, ch, vch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c, ch2 FROM t1 ORDER BY i;
-DROP TABLE IF EXISTS t1, bit1;
+DROP TABLE t1, bit1;
 
 
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -A -m  -r --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -A -r --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
---sorted_result
-SHOW TABLES;
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -A -m  -r --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -A -r --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
 --replace_column 1 MAX_VALUE 12 CURRENT_TIMESTAMP
 SELECT i, j, f, d, d2, ch, vch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c, ch2 FROM t1 WHERE i >= (SELECT MAX(i) FROM t1) ORDER BY i;
 
-DROP TABLE IF EXISTS t1, bit1;
+DROP TABLE t1, bit1;
 DROP DATABASE mysqltest;
 
 ###############################################################################
@@ -189,8 +200,8 @@ DROP DATABASE mysqltest;
 --echo * Restore the backup from 6.3 or 6.4, which don't support native default value
 --echo ******************************************************************************
 
---exec $NDB_RESTORE --no-defaults -b 1 -n 1 -m -r $backup_data_dir/before_native_default >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b 1 -n 2 -r $backup_data_dir/before_native_default >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 -m -r $NDB_SAVED_BACKUPS/before_native_default >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 2 -r $NDB_SAVED_BACKUPS/before_native_default >> $NDB_TOOLS_OUTPUT
 
 ####
 # Bug# 53539 Ndb : MySQLD default values in frm embedded in backup not endian-converted
@@ -202,41 +213,29 @@ DROP DATABASE mysqltest;
 #
 
 # Show that restored tables have no native defaults
---let ndb_desc_opts= -d test t1
---source suite/ndb/include/ndb_desc_print.inc
+--let $ndb_describe_table= t1
+--source suite/ndb/include/ndb_describe_table.inc
 
---let ndb_desc_opts= -d test bit1
---source suite/ndb/include/ndb_desc_print.inc
+--let $ndb_describe_table= bit1
+--source suite/ndb/include/ndb_describe_table.inc
 
 USE test;
---sorted_result
-SHOW TABLES;
+
 # SHOW CREATE TABLE t1; # Disabled til bug#53539 fixed as it show junk on big-endian
+--disable_warnings
 SHOW CREATE TABLE bit1;
 --replace_column 12 CURRENT_TIMESTAMP
-SELECT i, j, f, d, d2, ch, vch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c FROM t1 ORDER BY i;
-SELECT pk,BIN(b1),BIN(b2),BIN(b3),BIN(b4),BIN(b5) FROM bit1 ORDER BY pk;
-
-# bug#53539 workaround - overwrites bad default values from frm in 
-# opposite-byte-order case. 
-ALTER TABLE t1 CHANGE COLUMN j j INT DEFAULT 6,
-               CHANGE COLUMN f f FLOAT NOT NULL DEFAULT 6.6,
-               CHANGE COLUMN d d DOUBLE DEFAULT 8.8;
-
-# Show that the MySQL defaults are now ok.
-SHOW CREATE TABLE t1;
-
-# Show that the defaults are now native
---let ndb_desc_opts= -d test t1
---source suite/ndb/include/ndb_desc_print.inc
-
---disable_warnings
-INSERT INTO t1 VALUES();
-UPDATE t1 SET ch = "RESTORE FROM 6.3" WHERE i = 12;
-REPLACE INTO t1(i, j, ch) VALUES(20, 20, "RESTORE FROM 6.3");
 --enable_warnings
---replace_column 12 CURRENT_TIMESTAMP
+# The `t1` table is not expected to be usable. It contains old temporal
+# types which have been removed in 8.0. The upgrade of the table 
+# metadata is not supported
+--disable_query_log
+call mtr.add_suppression("Table upgrade required");
+--enable_query_log
+--error ER_NO_SUCH_TABLE
 SELECT i, j, f, d, d2, ch, vch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c FROM t1 ORDER BY i;
+SHOW WARNINGS;
+SELECT pk,BIN(b1),BIN(b2),BIN(b3),BIN(b4),BIN(b5) FROM bit1 ORDER BY pk;
 
 # Show that table with MySQL, but no native defaults is still handled
 # correctly.
@@ -246,29 +245,8 @@ UPDATE bit1 SET b5=b'1111111' WHERE pk = 1;
 REPLACE INTO bit1(pk, b3) VALUES(6, B'110011');
 SELECT pk,BIN(b1),BIN(b2),BIN(b3),BIN(b4),BIN(b5) FROM bit1 ORDER BY pk;
 
-# Following commented-out as it's done above due to bug#53539
-#########################################################################
-# OFFLINE ALTER OF 'OLD' TABLE WITH NO DEFAULTS TO 'NEW' TABLE 
-# WITH NATIVE DEFAULTS. (This is done above with bug#53539 workaround)
-#########################################################################
-#--echo ********************************************************************************
-#--echo * Alter table restoring from 6.3 backup to new table with native default support
-#--echo ********************************************************************************
-#--let ndb_desc_opts= -d test t1
-#--source suite/ndb/include/ndb_desc_print.inc
-#
-#ALTER TABLE t1 CHANGE COLUMN j j INT DEFAULT 6;
-#
-#--let ndb_desc_opts= -d test t1
-#--source suite/ndb/include/ndb_desc_print.inc
-
---disable_warnings
-INSERT INTO t1(i, ch) VALUES(99, "native default support");
---enable_warnings
---replace_column 12 CURRENT_TIMESTAMP
-SELECT i, j, f, d, d2, ch, vch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c FROM t1 ORDER BY i;
-
-DROP TABLE IF EXISTS t1, bit1;
+--exec $NDB_DROP_TABLE -d test t1 >> $NDB_TOOLS_OUTPUT
+DROP TABLE bit1;
 --echo *************************************************************
 --echo * Test adding a unique index to a column with a default value
 --echo *************************************************************
@@ -278,9 +256,9 @@ CREATE TABLE t2(
   f FLOAT NOT NULL DEFAULT 6.6,
   d DOUBLE DEFAULT 8.8,
   UNIQUE INDEX t2_unique_index(j) 
-)ENGINE =NDB;
+)ENGINE=NDB PARTITION BY KEY() PARTITIONS 8;
 INSERT INTO t2 VALUES();
---error 1062
+--error ER_DUP_ENTRY
 INSERT INTO t2 VALUES();
 INSERT INTO t2 VALUES(10, 10, 10.0, 10.0);
 SELECT * FROM t2 ORDER BY i;
@@ -290,26 +268,32 @@ SELECT * FROM t2 ORDER BY i;
 --echo *************************************************************
 ALTER TABLE t2 MODIFY COLUMN j INT DEFAULT 666;
 
---let ndb_desc_opts= -d test t2
---source suite/ndb/include/ndb_desc_print.inc
+--let $ndb_describe_table= t2
+--source suite/ndb/include/ndb_describe_table.inc
+
 INSERT INTO t2 VALUES();
 SELECT * FROM t2 ORDER BY i;
 
 --echo *************************************************************
 --echo * Test that online alter of default values fails
 --echo *************************************************************
---error 1235
-ALTER ONLINE TABLE t2 MODIFY COLUMN j INT DEFAULT 888;
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+ALTER TABLE t2 algorithm=inplace, MODIFY COLUMN j INT DEFAULT 888;
 
-DROP TABLE IF EXISTS t2;
+DROP TABLE t2;
 
 --echo **************************************************************
 --echo * Test not null-after-defaults example that failed previously
 --echo **************************************************************
 
-CREATE TABLE t1 (a int primary key, b int default 12, c char not null) engine=ndb;
---let ndb_desc_opts= -d test t1
---source suite/ndb/include/ndb_desc_print.inc
+CREATE TABLE t1 (
+  a int primary key, 
+  b int default 12,
+  c char not null
+)ENGINE=NDB PARTITION BY KEY() PARTITIONS 8;
+--let $ndb_describe_table=t1
+--source suite/ndb/include/ndb_describe_table.inc
+
 
 DROP TABLE t1;
 
@@ -325,9 +309,11 @@ CREATE TABLE t1 (a int primary key,
                  f enum('NBFry','Kebab') default 'NBFry',
                  g set('Chips','Pie','Fish') default 'Fish,Chips',
                  h enum('Pig','Lion') not null,
-                 i char(2) default '66') engine=ndb;
---let ndb_desc_opts= -d test t1
---source suite/ndb/include/ndb_desc_print.inc
+                 i char(2) default '66')
+                 engine = ndb
+                 partition by key() partitions 8;
+--let $ndb_describe_table=t1
+--source suite/ndb/include/ndb_describe_table.inc
 
 DROP TABLE t1;
 
@@ -337,12 +323,16 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (a int primary key,
                  b binary(10) default 0x4142430045464748494a,
-                 c varbinary(100) default 0x4142430045464748494a) engine=ndb;
+                 c varbinary(100) default 0x4142430045464748494a)
+                 engine = ndb
+                 partition by key() partitions 8;
 
+--disable_warnings
 SHOW CREATE TABLE t1;
+--enable_warnings
 
---let ndb_desc_opts= -d test t1
---source suite/ndb/include/ndb_desc_print.inc
+--let $ndb_describe_table=t1
+--source suite/ndb/include/ndb_describe_table.inc
 
 DROP TABLE t1;
 
@@ -353,10 +343,14 @@ DROP TABLE t1;
 
 --echo Timestamp updated on insert + update
 CREATE TABLE variant (a int primary key,
-                      b timestamp) engine =ndb;
+                      b timestamp)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 --replace_column 2 CURRENT_TIMESTAMP
 SELECT * from variant;
@@ -364,10 +358,14 @@ DROP TABLE variant;
 
 --echo Full syntax for update on insert + update
 CREATE TABLE variant (a int primary key,
-                      b timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) engine =ndb;
+                      b timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 --replace_column 2 CURRENT_TIMESTAMP
 SELECT * from variant;
@@ -375,10 +373,14 @@ DROP TABLE variant;
 
 --echo Default on insert only
 CREATE TABLE variant (a int primary key,
-                      b timestamp DEFAULT CURRENT_TIMESTAMP) engine = ndb;
+                      b timestamp DEFAULT CURRENT_TIMESTAMP)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 --replace_column 2 CURRENT_TIMESTAMP
 SELECT * from variant;
@@ -387,10 +389,14 @@ DROP TABLE variant;
 --echo Set on update only
 CREATE TABLE variant (a int primary key,
                       b timestamp DEFAULT 0 ON UPDATE CURRENT_TIMESTAMP,
-                      c int) engine = ndb;
+                      c int)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a,c) VALUES (1,1);
 SELECT * from variant;
 UPDATE variant SET c=2;
@@ -400,20 +406,28 @@ DROP TABLE variant;
 
 --echo No auto-set default 0
 CREATE TABLE variant (a int primary key,
-                      b timestamp DEFAULT 0) engine = ndb;
+                      b timestamp DEFAULT 0)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 SELECT * from variant;
 DROP TABLE variant;
 
 --echo No auto-set default non-zero
 CREATE TABLE variant (a int primary key,
-                      b timestamp DEFAULT 19770623000001) engine = ndb;
+                      b timestamp DEFAULT 19770623000001)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 SELECT * from variant;
 DROP TABLE variant;
@@ -421,10 +435,14 @@ DROP TABLE variant;
 --echo Non-first timestamp default insert value
 CREATE TABLE variant (a int primary key,
                       b timestamp DEFAULT 19770623000001,
-                      c timestamp DEFAULT CURRENT_TIMESTAMP) engine = ndb;
+                      c timestamp DEFAULT CURRENT_TIMESTAMP)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 --replace_column 3 CURRENT_TIMESTAMP
 SELECT * from variant;
@@ -433,10 +451,14 @@ DROP TABLE variant;
 --echo Non-first timestamp default update value
 CREATE TABLE variant (a int primary key,
                       b timestamp DEFAULT 19770623000001,
-                      c timestamp ON UPDATE CURRENT_TIMESTAMP) engine = ndb;
+                      c timestamp ON UPDATE CURRENT_TIMESTAMP)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 SELECT * from variant;
 UPDATE variant SET b=20100603000001;
@@ -447,10 +469,14 @@ DROP TABLE variant;
 --echo Non-first timestamp set on insert+update
 CREATE TABLE variant (a int primary key,
                       b timestamp DEFAULT 19770623000001,
-                      c timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) engine = ndb;
+                      c timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 --replace_column 3 CURRENT_TIMESTAMP
 SELECT * from variant;
@@ -458,40 +484,56 @@ DROP TABLE variant;
 
 --echo Nullable timestamp no default
 CREATE TABLE variant (a int primary key,
-                      b timestamp NULL) engine = ndb;
+                      b timestamp NULL)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 SELECT * from variant;
 DROP TABLE variant;
 
 --echo Nullable timestamp default zero
 CREATE TABLE variant (a int primary key,
-                      b timestamp NULL DEFAULT 0) engine = ndb;
+                      b timestamp NULL DEFAULT 0)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 SELECT * from variant;
 DROP TABLE variant;
 
 --echo Nullable timestamp default non-zero
 CREATE TABLE variant (a int primary key,
-                      b timestamp NULL DEFAULT 19770623000001) engine = ndb;
+                      b timestamp NULL DEFAULT 19770623000001)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 SELECT * from variant;
 DROP TABLE variant;
 
 --echo Nullable timestamp auto insert val
 CREATE TABLE variant (a int primary key,
-                      b timestamp NULL DEFAULT CURRENT_TIMESTAMP) engine = ndb;
+                      b timestamp NULL DEFAULT CURRENT_TIMESTAMP)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 --replace_column 2 CURRENT_TIMESTAMP
 SELECT * from variant;
@@ -500,10 +542,14 @@ DROP TABLE variant;
 --echo Nullable timestamp auto update val
 CREATE TABLE variant (a int primary key,
                       b timestamp NULL ON UPDATE CURRENT_TIMESTAMP,
-                      c int) engine = ndb;
+                      c int)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a,c) VALUES (1,1);
 SELECT * from variant;
 UPDATE variant SET c=2;
@@ -513,10 +559,14 @@ DROP TABLE variant;
 
 --echo Nullable timestamp auto insert+update val
 CREATE TABLE variant (a int primary key,
-                      b timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) engine = ndb;
+                      b timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+                      engine = ndb
+                      partition by key() partitions 8;
+--disable_warnings
 SHOW CREATE TABLE variant;
---let ndb_desc_opts= -d test variant
---source suite/ndb/include/ndb_desc_print.inc
+--enable_warnings
+--let $ndb_describe_table= variant
+--source suite/ndb/include/ndb_describe_table.inc
 INSERT INTO variant (a) VALUES (1);
 --replace_column 2 CURRENT_TIMESTAMP
 SELECT * from variant;
@@ -530,7 +580,7 @@ DROP TABLE variant;
 --echo Create schema manually with differences for ndb_restore to 
 --echo deal with.  See the backup (or above) for the original schema.
 --echo   - J changed from Int -> Bigint, and default changed from 6 to 6006
---echo       requires --promote-attribute AND default ignoring
+--echo       requires --promote-attributes AND default ignoring
 --echo   - ch default changed from 'aaa' to 'aaaAAA', requires default ignoring
 --echo   - vch missing in DB schema, requires --exclude-missing-columns
 --echo   - timestamp_c default changed from CURRENT_TIMESTAMP to a const default (native)
@@ -553,7 +603,8 @@ CREATE TABLE t1 (
   `newOne` varchar(255) DEFAULT 'Comment field default',
   `newTwo` bigint(20) DEFAULT NULL,
   PRIMARY KEY (`i`)
-) ENGINE=ndbcluster AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=latin1;
+) ENGINE=ndbcluster AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=latin1
+  PARTITION BY KEY() PARTITIONS 8;
 
 # Bit1 currently unchanged
 CREATE TABLE bit1 (
@@ -564,16 +615,19 @@ CREATE TABLE bit1 (
   `b4` bit(37) DEFAULT b'11',
   `b5` bit(63) DEFAULT b'101011',
   PRIMARY KEY (`pk`)
-) ENGINE=ndbcluster AUTO_INCREMENT=3 DEFAULT CHARSET=latin1;
+) ENGINE=ndbcluster AUTO_INCREMENT=3 DEFAULT CHARSET=latin1
+  PARTITION BY KEY() PARTITIONS 8;
 
 
+--disable_warnings
 SHOW CREATE TABLE t1;
+--enable_warnings
 
---let ndb_desc_opts= -d test t1
---source suite/ndb/include/ndb_desc_print.inc
+--let $ndb_describe_table= t1
+--source suite/ndb/include/ndb_describe_table.inc
 
---exec $NDB_RESTORE --no-defaults -b 1 -n 1 -r --promote-attribute --exclude-missing-columns $backup_data_dir/before_native_default >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b 1 -n 2 -r --promote-attribute --exclude-missing-columns $backup_data_dir/before_native_default >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 1 -r --promote-attributes --exclude-missing-columns $NDB_SAVED_BACKUPS/before_native_default >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE $NDB_RESTORE_NO_ENCR -b 1 -n 2 -r --promote-attributes --exclude-missing-columns $NDB_SAVED_BACKUPS/before_native_default >> $NDB_TOOLS_OUTPUT
 
 SELECT i, j, f, d, d2, ch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c, newOne, newTwo from t1 order by i;
 
@@ -600,8 +654,8 @@ CREATE TABLE t1 (
   PRIMARY KEY (`i`)
 ) ENGINE=ndbcluster AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=latin1;
 
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r --promote-attribute --exclude-missing-columns $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r --promote-attribute --exclude-missing-columns $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r --promote-attributes --exclude-missing-columns $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r --promote-attributes --exclude-missing-columns $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
 
 SELECT i, j, f, d, d2, ch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c, newOne from t1 order by i;
 
@@ -626,8 +680,8 @@ CREATE TABLE t1 (
   PRIMARY KEY (`i`)
 ) ENGINE=ndbcluster AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=latin1;
 
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 1 -r $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
---exec $NDB_RESTORE --no-defaults -b $the_backup_id -n 2 -r $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -r $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
 
 SELECT i, j, f, d, d2, ch, HEX(b), HEX(vb), HEX(blob1), text1, timestamp_c, newOne from t1 order by i;
 
@@ -665,3 +719,15 @@ insert into t1(fid) value(100);
 select fid, isnull(f01), isnull(f02), isnull(f03) from t1;
 
 drop table t1;
+
+--source suite/ndb/include/restore_sql_mode_after_turn_off_strict.inc
+
+--source suite/ndb/include/restore_ndb_read_backup.inc
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT
+
+# Reset metadata check value
+--connection server2
+SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_server2;
+--connection server1
+SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_server1;

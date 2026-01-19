@@ -3,7 +3,6 @@
 ##################################################
 
 # Some tests in here requre partitioning
--- source include/have_partition.inc
 
 #################################################
 ############ Different Table Def Test ###########
@@ -13,9 +12,9 @@
 #          should stop the slave.               #
 #################################################
 
-call mtr.add_suppression("Slave: Unknown table 'test.t6' Error_code: 1051");
-call mtr.add_suppression("Slave SQL.*Column [0-9] of table .test.t[0-9]*. cannot be converted from type.* Error_code: 1677");
-call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("Replica: Unknown table 'test.t6' Error_code: 1051");
+call mtr.add_suppression("Replica SQL.*Column [0-9] of table .test.t[0-9]*. cannot be converted from type.* Error_code: MY-013146");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 
 --echo **** Diff Table Def Start ****
 
@@ -28,8 +27,8 @@ call mtr.add_suppression("The slave coordinator and worker threads are stopped, 
 sync_slave_with_master;
 STOP SLAVE;
 
-SET @saved_slave_type_conversions = @@slave_type_conversions;
-SET GLOBAL SLAVE_TYPE_CONVERSIONS = 'ALL_NON_LOSSY';
+SET @saved_replica_type_conversions = @@replica_type_conversions;
+SET GLOBAL REPLICA_TYPE_CONVERSIONS = 'ALL_NON_LOSSY';
 
 eval CREATE TABLE t1 (a INT, b INT PRIMARY KEY, c CHAR(20),
                       d FLOAT DEFAULT '2.00', 
@@ -57,7 +56,7 @@ SELECT * FROM t1 ORDER BY a;
 sync_slave_with_master;
 SELECT * FROM t1 ORDER BY a;
 
-SET GLOBAL SLAVE_TYPE_CONVERSIONS = @saved_slave_type_conversions;
+SET GLOBAL REPLICA_TYPE_CONVERSIONS = @saved_replica_type_conversions;
 
 --echo *** Drop t1  ***
 connection master;
@@ -94,7 +93,7 @@ INSERT INTO t2 () VALUES(1,2,'Kyle, TEX'),(2,1,'JOE AUSTIN'),(3,4,'QA TESTING');
 SELECT * FROM t2 ORDER BY a;
 
 connection slave;
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error.inc
 STOP SLAVE;
 
@@ -140,11 +139,11 @@ set @b1 = concat(@b1,@b1);
 INSERT INTO t3 () VALUES(@b1,2,'Kyle, TEX'),(@b1,1,'JOE AUSTIN'),(@b1,4,'QA TESTING');
 
 --echo ******************************************************************
---echo *** Expect slave to fail with Error ER_SLAVE_CONVERSION_FAILED ***
+--echo *** Expect slave to fail with Error ER_REPLICA_CONVERSION_FAILED ***
 --echo ******************************************************************
 connection slave;
 --let $slave_skip_counter= 2
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 --echo *** Drop t3  ***
@@ -182,11 +181,11 @@ INSERT INTO t4 () VALUES(100.22,2,'Kyle, TEX'),(200.26,1,'JOE AUSTIN'),
                         (30000.22,4,'QA TESTING');
 
 --echo ******************************************************************
---echo *** Expect slave to fail with Error ER_SLAVE_CONVERSION_FAILED ***
+--echo *** Expect slave to fail with Error ER_REPLICA_CONVERSION_FAILED ***
 --echo ******************************************************************
 connection slave;
 --let $slave_skip_counter= 2
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 
@@ -225,11 +224,11 @@ INSERT INTO t5 () VALUES(1,'Kyle',200.23,1,'b1b1',23.00098),
                         (2,'JOE',300.01,0,'b2b2',1.0000009);
 
 --echo ******************************************************************
---echo *** Expect slave to fail with Error ER_SLAVE_CONVERSION_FAILED ***
+--echo *** Expect slave to fail with Error ER_REPLICA_CONVERSION_FAILED ***
 --echo ******************************************************************
 connection slave;
 --let $slave_skip_counter= 2
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 
@@ -269,10 +268,10 @@ INSERT INTO t6 () VALUES(1,'Kyle',200.23,1),
                         (2,'JOE',300.01,0);
 
 --echo ******************************************************************
---echo *** Expect slave to fail with Error ER_SLAVE_CONVERSION_FAILED ***
+--echo *** Expect slave to fail with Error ER_REPLICA_CONVERSION_FAILED ***
 --echo ******************************************************************
 connection slave;
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 
@@ -305,6 +304,7 @@ DROP TABLE t6;
 
 --echo *** Create t7 on slave  ***
 STOP SLAVE;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 eval CREATE TABLE t7 (a INT KEY, b BLOB, c CHAR(5),
                       d TIMESTAMP NULL DEFAULT '0000-00-00 00:00:00',
                       e CHAR(20) DEFAULT 'Extra Column Testing')
@@ -350,7 +350,7 @@ STOP SLAVE;
 eval CREATE TABLE t8 (a INT KEY, b BLOB, c CHAR(5),
                       d TIMESTAMP NULL DEFAULT '0000-00-00 00:00:00',
                       e INT)ENGINE=$engine_type;
-
+SET sql_mode = default;
 --echo *** Create t8 on Master ***
 connection master;
 eval CREATE TABLE t8 (a INT PRIMARY KEY, b BLOB, c CHAR(5)
@@ -410,11 +410,21 @@ if (`SELECT UPPER(LEFT($engine_type, 3)) != 'NDB'`)
   eval CREATE TABLE t9 (a INT PRIMARY KEY, b BLOB, c CHAR(5)
                        ) ENGINE=$engine_type;
 
+  SET @previous_sql_mode = @@sql_mode;
+  --disable_warnings
+  SET sql_mode = (select concat('ALLOW_INVALID_DATES,',
+    replace(replace(@@sql_mode,'NO_ZERO_DATE',''), 'NO_ZERO_IN_DATE','')));
+  --enable_warnings
   --echo *** Start Slave ***
   connection slave;
   # reset master and slave and start slave
   --let $rpl_only_running_threads= 1
   --source include/rpl_reset.inc
+  SET @previous_sql_mode = @@sql_mode;
+  --disable_warnings
+  SET sql_mode = (select concat('ALLOW_INVALID_DATES,',
+    replace(replace(@@sql_mode,'NO_ZERO_DATE',''), 'NO_ZERO_IN_DATE','')));
+  --enable_warnings
 
   --echo *** Master Data Insert ***
   connection master;
@@ -429,7 +439,15 @@ if (`SELECT UPPER(LEFT($engine_type, 3)) != 'NDB'`)
   # they are declared without DEFAULT clause.
 
   sync_slave_with_master;
+  --replace_column 4 CURRENT_TIMESTAMP
   select * from t9;
+
+  # Bug #22916743 RBR DOES NOT USE DEFAULT CURRENT_TIMESTAMP FOR EXTRA COLUMN
+  # ON SLAVE
+  --let $assert_text= The values of column 'd' should have non-zero timetsamp.
+  --let $assert_cond= [SELECT COUNT(*) AS Val FROM t9 WHERE d = "0000-00-00 00:00:00", Val, 1] = 0
+  --source include/assert.inc
+  # End of test for Bug #22916743
 
   # todo: fix Bug #43992 slave sql thread can't tune own sql_mode ...
   # and add/restore waiting for stop test
@@ -438,10 +456,12 @@ if (`SELECT UPPER(LEFT($engine_type, 3)) != 'NDB'`)
   #--let $slave_skip_counter= 2
   #--let $show_slave_sql_error= 1
   #--source include/wait_for_slave_sql_error_and_skip.inc
+  SET sql_mode = @previous_sql_mode;
 
   #--echo *** Drop t9  ***
   connection master;
   DROP TABLE t9;
+  SET sql_mode = @previous_sql_mode;
   sync_slave_with_master;
 
 }
@@ -473,11 +493,11 @@ set @b1 = concat(@b1,@b1);
 INSERT INTO t10 () VALUES(1,@b1,'Kyle'),(2,@b1,'JOE'),(3,@b1,'QA');
 
 --echo ******************************************************************
---echo *** Expect slave to fail with Error ER_SLAVE_CONVERSION_FAILED ***
+--echo *** Expect slave to fail with Error ER_REPLICA_CONVERSION_FAILED ***
 --echo ******************************************************************
 connection slave;
 --let $slave_skip_counter= 2
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 
@@ -515,11 +535,11 @@ set @b1 = concat(@b1,@b1);
 INSERT INTO t11 () VALUES(1,@b1,'Kyle'),(2,@b1,'JOE'),(3,@b1,'QA');
 
 --echo ******************************************************************
---echo *** Expect slave to fail with Error ER_SLAVE_CONVERSION_FAILED ***
+--echo *** Expect slave to fail with Error ER_REPLICA_CONVERSION_FAILED ***
 --echo ******************************************************************
 connection slave;
 --let $slave_skip_counter= 2
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 
@@ -770,8 +790,8 @@ connection slave;
 --source include/rpl_reset.inc
 
 call mtr.add_suppression("Error .Unknown table .t6.. on query.* Error_code: 1051");
-call mtr.add_suppression("Error .Duplicate column name .c6.. on query.* Error_code: 1060");
-call mtr.add_suppression("Table definition on master and slave does not match: Column . ...e mismatch.* Error_code: 1535");
+call mtr.add_suppression("Error .Duplicate column name .c6.. on query.* Error_code: MY-001060");
+call mtr.add_suppression("Table definition on source and replica does not match: Column . ...e mismatch.* Error_code: 1535");
 
 --echo *** Master Data Insert ***
 connection master;
@@ -856,9 +876,12 @@ sync_slave_with_master;
 --replace_column 7 CURRENT_TIMESTAMP
 SELECT * FROM t16 ORDER BY c1;
 
---echo *** Add Partition on master ***
+--echo *** Add Partition on master if native partitioning is supported ***
 connection master;
-ALTER TABLE t16 PARTITION BY KEY(c1) PARTITIONS 4;
+if (`SELECT UPPER($engine_type) IN ('INNODB','NDB')`)
+{
+  ALTER TABLE t16 PARTITION BY KEY(c1) PARTITIONS 4;
+}
 INSERT INTO t16 () VALUES(4,1.00,'Replication Rocks',@b1,'Omer');
 SHOW CREATE TABLE t16;
 
@@ -902,11 +925,11 @@ connection master;
 INSERT INTO t17 () VALUES(9223372036854775807,2,'Kyle, TEX');
 
 --echo ******************************************************************
---echo *** Expect slave to fail with Error ER_SLAVE_CONVERSION_FAILED ***
+--echo *** Expect slave to fail with Error ER_REPLICA_CONVERSION_FAILED ***
 --echo ******************************************************************
 connection slave;
 --let $slave_skip_counter= 2
---let $slave_sql_errno= convert_error(ER_SLAVE_CONVERSION_FAILED)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_CONVERSION_FAILED)
 --source include/wait_for_slave_sql_error_and_skip.inc
 
 --echo ** DROP table t17 ***

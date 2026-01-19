@@ -4,7 +4,7 @@
 # Scope: GLOBAL | SESSION                                                     #
 # Access Type: Dynamic                                                        #
 # Data Type: numeric                                                          #
-# Default Value:4194304                                                       #
+# Default Value:67108864                                                      #
 # Range:1024-1073741824                                                       #
 #                                                                             #
 #                                                                             #
@@ -67,7 +67,7 @@ SELECT @@session.max_allowed_packet;
 ##################################################################
 
 SET @@global.max_allowed_packet = DEFAULT;
-SELECT @@global.max_allowed_packet = 4194304;
+SELECT @@global.max_allowed_packet = 67108864;
 
 
 --echo '#--------------------FN_DYNVARS_070_03-------------------------#'
@@ -119,13 +119,18 @@ SET @@global.max_allowed_packet = 1023;
 SELECT @@global.max_allowed_packet;
 SET @@global.max_allowed_packet = 10737418241;
 SELECT @@global.max_allowed_packet;
+SET @@global.max_allowed_packet = 1073741826;
+SELECT @@global.max_allowed_packet;
+
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_allowed_packet = 65530.34;
 SELECT @@global.max_allowed_packet;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_allowed_packet = test;
 SELECT @@global.max_allowed_packet;
-
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.max_allowed_packet = ' ';
+SELECT @@global.max_allowed_packet;
 --Error ER_VARIABLE_IS_READONLY
 SET @@session.max_allowed_packet = 0;
 SELECT @@session.max_allowed_packet;
@@ -144,6 +149,9 @@ SELECT @@session.max_allowed_packet;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@session.max_allowed_packet = test;
 SELECT @@session.max_allowed_packet;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@session.max_allowed_packet = ' ';
+SELECT @@session.max_allowed_packet;
 
 
 --echo '#------------------FN_DYNVARS_070_06-----------------------#'
@@ -152,18 +160,22 @@ SELECT @@session.max_allowed_packet;
 ####################################################################
 
 
+--disable_warnings
 SELECT @@global.max_allowed_packet = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='max_allowed_packet';
+--enable_warnings
 
 --echo '#------------------FN_DYNVARS_070_07-----------------------#'
 ####################################################################
 #  Check if the value in SESSION Table matches value in variable   #
 ####################################################################
 
+--disable_warnings
 SELECT @@session.max_allowed_packet = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='max_allowed_packet';
+--enable_warnings
 
 
 --echo '#------------------FN_DYNVARS_070_08-----------------------#'

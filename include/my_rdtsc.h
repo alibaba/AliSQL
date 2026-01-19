@@ -1,33 +1,41 @@
-/* Copyright (c) 2008 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2008, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/*
-  rdtsc3 -- multi-platform timer code
-  pgulutzan@mysql.com, 2005-08-29
-  modified 2008-11-02
+/**
+  @file include/my_rdtsc.h
+  Multi-platform timer code.
 */
 
 #ifndef MY_RDTSC_H
 #define MY_RDTSC_H
 
+#include "my_inttypes.h"
+#include "my_macros.h"
+
 /**
   Characteristics of a timer.
 */
-struct my_timer_unit_info
-{
+struct my_timer_unit_info {
   /** Routine used for the timer. */
   ulonglong routine;
   /** Overhead of the timer. */
@@ -42,8 +50,7 @@ struct my_timer_unit_info
   Characteristics of all the supported timers.
   @sa my_timer_init().
 */
-struct my_timer_info
-{
+struct my_timer_info {
   /** Characteristics of the cycle timer. */
   struct my_timer_unit_info cycles;
   /** Characteristics of the nanosecond timer. */
@@ -54,11 +61,11 @@ struct my_timer_info
   struct my_timer_unit_info milliseconds;
   /** Characteristics of the tick timer. */
   struct my_timer_unit_info ticks;
+  /** Characteristics of the thread cpu timer. */
+  struct my_timer_unit_info thread_cpu;
 };
 
 typedef struct my_timer_info MY_TIMER_INFO;
-
-C_MODE_START
 
 /**
   A cycle timer.
@@ -91,40 +98,46 @@ ulonglong my_timer_milliseconds(void);
 ulonglong my_timer_ticks(void);
 
 /**
+  A THREAD CPU timer.
+  @return the current timer value, in thread cpu.
+*/
+ulonglong my_timer_thread_cpu(void);
+
+/**
   Timer initialization function.
   @param [out] mti the timer characteristics.
 */
 void my_timer_init(MY_TIMER_INFO *mti);
 
-C_MODE_END
-
-#define MY_TIMER_ROUTINE_ASM_X86                  1
-#define MY_TIMER_ROUTINE_ASM_X86_64               2
-#define MY_TIMER_ROUTINE_RDTSCLL                  3
-#define MY_TIMER_ROUTINE_ASM_X86_WIN              4
-#define MY_TIMER_ROUTINE_RDTSC                    5
-#define MY_TIMER_ROUTINE_ASM_IA64                 6
-#define MY_TIMER_ROUTINE_ASM_PPC                  7
-#define MY_TIMER_ROUTINE_SGI_CYCLE                8
-#define MY_TIMER_ROUTINE_GETHRTIME                9
-#define MY_TIMER_ROUTINE_READ_REAL_TIME          10
-#define MY_TIMER_ROUTINE_CLOCK_GETTIME           11
-#define MY_TIMER_ROUTINE_NXGETTIME               12
-#define MY_TIMER_ROUTINE_GETTIMEOFDAY            13
+#define MY_TIMER_ROUTINE_ASM_X86 1
+#define MY_TIMER_ROUTINE_ASM_X86_64 2
+/* #define MY_TIMER_ROUTINE_RDTSCLL                  3 - No longer used */
+/* #define MY_TIMER_ROUTINE_ASM_X86_WIN              4 - No longer used */
+#define MY_TIMER_ROUTINE_RDTSC 5
+#define MY_TIMER_ROUTINE_ASM_IA64 6
+#define MY_TIMER_ROUTINE_ASM_PPC 7
+/* #define MY_TIMER_ROUTINE_SGI_CYCLE                8  - No longer used */
+#define MY_TIMER_ROUTINE_GETHRTIME 9
+/* #define MY_TIMER_ROUTINE_READ_REAL_TIME          10  - No longer used */
+#define MY_TIMER_ROUTINE_CLOCK_GETTIME 11
+#define MY_TIMER_ROUTINE_NXGETTIME 12
+#define MY_TIMER_ROUTINE_GETTIMEOFDAY 13
 #define MY_TIMER_ROUTINE_QUERYPERFORMANCECOUNTER 14
-#define MY_TIMER_ROUTINE_GETTICKCOUNT            15
-#define MY_TIMER_ROUTINE_TIME                    16
-#define MY_TIMER_ROUTINE_TIMES                   17
-#define MY_TIMER_ROUTINE_FTIME                   18
-#define MY_TIMER_ROUTINE_ASM_PPC64               19
-#define MY_TIMER_ROUTINE_ASM_SUNPRO_SPARC64      20
-#define MY_TIMER_ROUTINE_ASM_SUNPRO_SPARC32      21
-#define MY_TIMER_ROUTINE_ASM_SUNPRO_I386         22
-#define MY_TIMER_ROUTINE_ASM_GCC_SPARC64         23
-#define MY_TIMER_ROUTINE_ASM_GCC_SPARC32         24
-#define MY_TIMER_ROUTINE_MACH_ABSOLUTE_TIME      25
+#define MY_TIMER_ROUTINE_GETTICKCOUNT 15
+/* #define MY_TIMER_ROUTINE_TIME                    16  - No longer used */
+#define MY_TIMER_ROUTINE_TIMES 17
+/* #define MY_TIMER_ROUTINE_FTIME                   18  - No longer used */
+#define MY_TIMER_ROUTINE_ASM_PPC64 19
+/* #define MY_TIMER_ROUTINE_ASM_SUNPRO_SPARC64      20  - No longer used */
+/* #define MY_TIMER_ROUTINE_ASM_SUNPRO_SPARC32      21  - No longer used */
+/* #define MY_TIMER_ROUTINE_ASM_SUNPRO_I386         22  - No longer used */
+#define MY_TIMER_ROUTINE_ASM_GCC_SPARC64 23
+/* #define MY_TIMER_ROUTINE_ASM_GCC_SPARC32         24  - No longer used */
+#define MY_TIMER_ROUTINE_MACH_ABSOLUTE_TIME 25
 #define MY_TIMER_ROUTINE_GETSYSTEMTIMEASFILETIME 26
-#define MY_TIMER_ROUTINE_ASM_SUNPRO_X86_64       27
+/* #define MY_TIMER_ROUTINE_ASM_SUNPRO_X86_64       27  - No longer used */
+#define MY_TIMER_ROUTINE_ASM_AARCH64 28
+#define MY_TIMER_ROUTINE_GET_THREAD_TIMES 29
+#define MY_TIMER_ROUTINE_ASM_S390X 30
 
 #endif
-

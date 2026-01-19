@@ -1,0 +1,89 @@
+--source include/have_ndb.inc
+
+# This test requires case sensitive file system as the database TEST_DB
+# is in upper case
+--source include/have_case_sensitive_file_system.inc
+
+--echo #
+--echo # BUG11758430 NDB_SHOW_TABLES SHOULD REQUIRE A DATABASE WHEN TABLE IS SUPPLIED
+--echo #
+CREATE TABLE test.t1 (
+  a int primary key,
+  b int
+)engine=ndbcluster;
+--echo # Table exists in user db and db specified in ndb_show_tables command
+--replace_regex /^[0-9]+ +/XX    /
+--exec $NDB_SHOW_TABLES -dtest t1
+--echo
+--echo # Table doesn't exist in TEST_DB and no db specified in ndb_show_tables command
+--error 1
+--exec $NDB_SHOW_TABLES t1
+--echo
+
+CREATE DATABASE TEST_DB;
+CREATE TABLE TEST_DB.t1 (
+  d int primary key,
+  e int
+)engine=ndbcluster;
+--echo # Table exists in TEST_DB and no db specified in ndb_show_tables command
+--replace_regex /^[0-9]+ +/XX    /
+--exec $NDB_SHOW_TABLES t1
+--echo
+
+DROP TABLE test.t1;
+--echo # Table doesn't exist in user db and db specified in ndb_show_tables command
+--error 1
+--exec $NDB_SHOW_TABLES -dtest t1
+--echo
+
+DROP TABLE TEST_DB.t1;
+--echo # Table doesn't exist in TEST_DB and no db specified in ndb_show_tables command
+--error 1
+--exec $NDB_SHOW_TABLES t1
+--echo
+DROP DATABASE TEST_DB;
+
+--echo #
+--echo # BUG #24383742 NDB : NDB_SHOW_TABLES MISSING TYPE NAME TEXT FOR SOME TYPES
+--echo #
+--echo #
+--echo # Create fully replicated table which will also create a fully replicated
+--echo # trigger
+--echo #
+create table t1 (
+ id1 int primary key
+)engine=ndb comment='NDB_TABLE=FULLY_REPLICATED=1,PARTITION_BALANCE=FOR_RA_BY_NODE';
+
+--echo # Check that "type" column shows 'HashMap'
+let $assert_file= $MYSQLTEST_VARDIR/tmp/ndb_show_tables_out.txt;
+# Dump command output to file
+--exec $NDB_SHOW_TABLES -t 24 > $assert_file 2>&1
+let $assert_text= Looking for 'HashMap' in lines starting with a number...;
+let $assert_select=^[0-9]+;
+let $assert_match=HashMap;
+--source include/assert_grep.inc
+--remove_file $assert_file
+
+--echo # Check that "type" column shows 'FullyRepTrigger'
+let $assert_file= $MYSQLTEST_VARDIR/tmp/ndb_show_tables_out.txt;
+# Dump command output to file
+--exec $NDB_SHOW_TABLES -t 28 > $assert_file 2>&1
+let $assert_text= Looking for 'FullyRepTrigger' in lines starting with a number...;
+let $assert_select=^[0-9]+;
+let $assert_match=FullyRepTrigger;
+--source include/assert_grep.inc
+--remove_file $assert_file
+
+drop table t1;
+
+--echo #
+--echo # Check working of --fully-qualified
+--echo #
+CREATE TABLE test.t1 (
+  a int primary key,
+  b int
+)engine=ndbcluster;
+--replace_regex /^[0-9]+ +/XX    / /\/[0-9]+/\/YY/
+--exec $NDB_SHOW_TABLES --fully-qualified -dtest t1
+--echo
+DROP TABLE test.t1;

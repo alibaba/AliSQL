@@ -1,6 +1,3 @@
---source include/have_innodb.inc
-# Embedded server does not support restarting.
---source include/not_embedded.inc
 
 CREATE TABLE t1 (a INT) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1);
@@ -10,15 +7,7 @@ connection default;
 
 call mtr.add_suppression("Found 1 prepared XA transactions");
 
-# Kill and restart the server.
--- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
--- shutdown_server 0
--- source include/wait_until_disconnected.inc
-
--- exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
--- enable_reconnect
--- source include/wait_until_connected_again.inc
--- disable_reconnect
+--source include/kill_and_restart_mysqld.inc
 
 disconnect con1;
 connect (con1,localhost,root);
@@ -27,7 +16,7 @@ connect (con1,localhost,root);
 connection default;
 let $wait_condition=
   select count(*) = 1 from information_schema.processlist
-  where state = 'Sending data' and
+  where state = 'executing' and
         info = 'SELECT * FROM t1 LOCK IN SHARE MODE';
 --source include/wait_condition.inc
 
@@ -40,4 +29,30 @@ SELECT * FROM t1;
 XA ROLLBACK 'x';
 SELECT * FROM t1;
 
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #31437127 - ERROR LOG REPORTS INVALID (OLD?) TABLE OR DATABASE NAME:
+--echo # ERROR] [MY-010520] [Server] Invalid (old?) table or database name 't1#p#p1'
+--echo #
+
+call mtr.add_suppression("Found .* prepared XA transactions");
+CREATE TABLE t1(a INT PRIMARY KEY, b INT) PARTITION BY HASH(a) PARTITIONS 4;
+connect (con1,localhost,root);
+
+--connection con1
+XA BEGIN '123';
+INSERT INTO t1 VALUES(1,2);
+XA END '123';
+XA PREPARE '123';
+
+--connection default
+#restart
+--source include/restart_mysqld.inc
+
+disconnect con1;
+
+--connection default
+XA RECOVER;
+XA COMMIT '123';
 DROP TABLE t1;

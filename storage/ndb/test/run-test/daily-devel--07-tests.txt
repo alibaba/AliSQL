@@ -1,0 +1,390 @@
+# Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+#
+# GENERATED FILE
+#
+cmd: test_event
+args: -n createDropEvent_NF T1
+max-time: 1200
+
+cmd: test_event
+args: -n Apiv2-check_event_received_after_restart T1
+max-time: 300
+
+cmd: test_event
+args: -n Apiv2-check_drop_event_op_after_restart T1
+max-time: 300
+
+cmd: test_event
+args: -n SubscribeUnsubscribe -l1000 T1
+max-time: 360
+
+cmd: test_event
+args: -n SubscribeUnsubscribeWithLoad -l1000 T1
+max-time: 600
+
+cmd: testFK
+args: -n DropTableWithFKDuringRestart T1
+max-time : 300
+
+cmd: test_event
+args: -n getEventBufferUsage3 T1
+max-time : 300
+
+cmd: testNdbApi
+args: -n GetNdbIndexOperationTest I3
+max-time : 180
+
+cmd: testNdbApi
+args: -n GetNdbIndexOperationBatchTest I3
+max-time : 180
+
+cmd: testNdbApi
+args: -n GetNdbIndexOperationParallelDroppingTest I3
+max-time : 300
+
+cmd: testNodeRestart
+args: -n ArbitrationWithApiNodeFailure T1
+
+cmd: testScan
+args: -n ScanDuringExpandAndShrinkBack T1
+max-time : 180
+
+cmd: testScan
+args: -n ScanDuringShrinkAndExpandBack T1
+max-time : 180
+
+cmd: testSystemRestart
+args: -n StaleNodeTakeoverDuringSR T1
+max-time : 300
+
+cmd: testFK
+args: -n AbortWithSlowChildScans T1
+max-time : 180
+
+cmd: testNodeRestart
+args: -n RestoreOlderLCP T1
+
+cmd: testNdbApi
+args: -n CheckTransId T1
+max-time : 180
+
+cmd: testNdbApi
+args: -n CheckTransIdMt T1
+max-time : 180
+
+cmd: testNdbApi
+args: -n OldApiScanFinalise T1
+max-time : 180
+
+cmd: testNdbApi
+args: -n CheckDisconnectCommit T1
+max-time : 180
+
+cmd: testNdbApi
+args: -n CheckDisconnectComplete T1
+max-time : 180
+
+cmd: testNdbApi
+args: -n CheckSlowCommit T1
+max-time : 720
+
+cmd: testNodeRestart
+args: -n StartDuringNodeRestart T1
+max-time : 300
+ 
+cmd: testRedo
+args: -n CheckLCPStartsAfterSR T1
+max-time: 1440
+ 
+cmd: testRedo
+args: -n CheckLCPStartsAfterNR T1
+max-time: 1440
+
+cmd: testDict
+args: -n StoreExtraMetadata T2
+max-time: 180
+
+cmd: testDict
+args: -n StoreExtraMetadataError T3
+max-time: 180
+
+cmd: testScan
+args: -n ScanReadError8095 T1
+max-time : 60
+
+cmd: testScan
+args: -n ScanDihError7240 T1
+max-time : 60
+
+cmd: testRedo
+args: -n CheckNextRedoFileOpened T1
+max-time: 1440
+
+cmd: testNodeRestart
+args: -n NR_Disk_data_undo_log_local_lcp D1 D2
+max-time : 2000
+
+cmd: testNodeRestart
+args: -n InitialNodeRestartTest D1 D2
+max-time : 1200
+
+cmd: testScan
+args: -n ScanReadError8115 T1 T6 I3
+max-time : 60
+
+cmd: testSpj
+args: -n MultiFrag_OOM T1 T6 I3
+max-time : 60
+
+cmd: testSpj
+args: -n MultiFrag_OOM_rand T1 T6 I3
+max-time : 60
+
+cmd: testBasic
+args: -n DeleteNdbInFlight T1
+max-time : 60
+
+cmd: testIndex
+args: -r 10 -n NF_Mixed T1 T6 T13
+max-time: 1200
+
+cmd: testNdbApi
+args: -n NdbClusterConnectNR_slow_nostart T1
+max-time: 1800
+
+cmd: testBackup
+args: -n ConsistencyUnderLoad T1
+max-time: 360
+
+cmd: testBackup
+args: -n ConsistencyUnderLoadStallGCP T1
+max-time: 1200
+
+cmd: testSystemRestart
+args : -n LaggardShutdown T1
+max-time : 240
+
+cmd: test_event
+args: -n checkParallelTriggerDropReqHandling T1
+max-time: 120
+
+cmd: testNodeRestart
+args: -n NodeFailLcpStall T1
+max-time: 360
+
+cmd: testBlobs
+args: -bug 28746560 -pk2cs utf8mb3 -skip p -loop 10
+max-time: 900
+
+cmd: testLimits
+args: -n NdbfsBulkOpen T1
+max-time: 360
+
+cmd: test_event
+args: -n ExhaustedSafeCounterPool T1
+max-time: 120
+
+cmd: testBasic
+args: -n AbortRace T1
+max-time: 180
+
+cmd: testDict
+args: -n CreateManyDataFiles T1
+max-time: 360
+
+cmd: testNdbApi
+args: -n PkLockingReadNoWait T1
+max-time:30
+
+cmd: testNodeRestart
+args: -n PostponeRecalculateGCPCommitLag T1
+max-time: 520
+
+cmd: testBackup
+args: -n CheckBackupCompletedPrintout T1
+max-time: 360
+
+cmd: testBasic
+args: -n CheckCompletedLCPStats T1
+max-time: 240
+
+cmd: testNodeRestart
+args: -n InplaceCharPkChangeCS T1
+max-time: 1200
+
+cmd: testNodeRestart
+args: -n InplaceCharPkChangeCI T1
+max-time: 1200
+
+cmd: testPartitioning
+args : -n startTransactionHint_orderedIndex_MaxKey T1
+max-time: 60
+
+cmd: testBlobs
+args : -bug 27772916 -skip p
+max-time: 120
+
+cmd: testNodeRestart
+args: -n pnr_lcp D2 D3
+max-time: 2000
+
+cmd: testRedo
+args: -n RedoStallRecover T1
+max-time : 180
+
+cmd: testInterpreter
+args: -n BranchNonZeroLabel T6 T16
+max-time: 180
+
+cmd: testBasic
+args : -n AbortIgnoreError T2 T3 D1
+max-time: 360
+
+cmd: testNodeRestart
+args: -n WatchdogSlowShutdown T1
+max-time: 180
+
+cmd: test_event
+args: -n DelayedEventDrop T1
+max-time: 120
+
+cmd: testScan
+args : -n ScanApiDisconnect T1
+max-time: 120
+
+cmd: testIndex
+args: -n ScanOrderedIndexWithChurn T1
+max-time: 120
+
+cmd: testScan
+args: -n ScanOnDMLLateUnlock T1
+max-time : 120
+
+cmd: testNodeRestart
+args: -n ApiDetectNoFirstHeartbeat T1
+max-time: 180
+
+cmd: testDict
+args: -n ManyNdbObjectsGetTable T1
+max-time: 60
+
+cmd: testNodeRestart
+args: -n CheckGcpStopTimerDistributed T1
+max-time: 2000
+
+cmd: testNdbApi
+args: -n TestSlowConnectEnable T1
+max-time: 600
+
+cmd: testDict
+args : -r 2500 -l 200 -n TableAddAttrsUpdateMaxRecSzForLCP T1
+max-time: 900
+
+cmd: testNodeRestart
+args: -n TransStallTimeout T1
+max-time: 180
+
+cmd: testNodeRestart
+args: -n TransStallTimeoutNF T1
+max-time: 180
+
+cmd: test_event
+args: -n StallingSubscriber T1
+max-time : 180
+
+cmd: test_event
+args: -n SubscribeEventsNR T1
+max-time: 240
+
+cmd: test_event
+args: -n SubscribeEventsNRAF T1
+max-time: 240
+
+cmd: testNodeRestart
+args: -n TransientStatesNF T1
+max-time: 360
+
+cmd: testSystemRestart
+args: -n SystemDownDuringSR T1 D1 --loops=1
+max-time: 720
+
+cmd: test_event
+args: -n EventConsumer_Graceful T1 --loops=3
+max-time: 480
+
+cmd: test_event
+args: -n MergeEventConsumer_Graceful T1 --loops=3
+max-time: 480
+
+cmd: testDict
+args: -n IndexStatNodeFailures T1
+max-time: 360
+
+cmd: testNdbApi
+args: -n SetVarbinaryWithSetValue WIDE_2COL
+max-time: 180
+
+cmd: test_event
+args: -n ExhaustedPreparedPoolsApiOps T1 -l 10000
+max-time: 240
+
+cmd: test_event
+args: -n ExhaustedPreparedPoolsInternalOps T1 -l 1000
+max-time: 240
+
+cmd: testScan
+args: -n ScanErrorCleanup T1
+max-time: 180
+
+cmd: testScan
+args: -n ScanErrorHandling T1
+max-time: 480
+
+cmd: testSystemRestart
+args: -n GCPSaveLagLcpSR T1
+max-time: 240
+
+cmd: testNdbinfo
+args: -n ScanFragOperationsDuringCreateDropTable -l 10000 T1
+max-time: 360
+
+cmd: testNdbinfo
+args: -n ScanFragMemUseDuringCreateDropTable -l 10000 T1
+max-time: 360
+
+cmd: test_event
+args: -n SumaOutOfBuffer T3
+max-time: 480
+
+cmd: testNodeRestart
+args: -n multi_apifail T1
+max-time: 360
+
+cmd: testNodeRestart
+args: -n timeout_apifail T1
+max-time: 240
+
+cmd: testBackup
+args: -n BackupDuringRestart T1
+max-time: 240

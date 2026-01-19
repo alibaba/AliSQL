@@ -1,3 +1,9 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
+
 --echo #
 --echo # BUG#12837084 - SEGFAULT IN ADD_FOUND_MATCH_TRIG_COND
 --echo #
@@ -10,7 +16,7 @@ CREATE TABLE t1 (
   PRIMARY KEY (pk),
   KEY col_varchar_1024_utf8_key (col_varchar_1024_utf8_key(333)),
   KEY col_int_key (col_int_key)
-);
+) charset latin1;
 
 INSERT INTO t1 VALUES
 ('pvg',1,5,773586944),('akl',2,NULL,NULL),('from',3,NULL,8),
@@ -29,7 +35,7 @@ CREATE TABLE t2 (
   PRIMARY KEY (pk),
   KEY col_varchar_1024_utf8_key (col_varchar_1024_utf8_key(255)),
   KEY col_int_key (col_int_key)
-);
+) charset latin1;
 
 INSERT INTO t2 VALUES
 ('he',1,NULL,1),('y',551288832,NULL,2),('uac',NULL,166789120,3),
@@ -51,7 +57,7 @@ CREATE TABLE t3 (
   PRIMARY KEY (pk),
   KEY col_varchar_1024_latin1_key (col_varchar_1024_latin1_key(1000)),
   KEY col_varchar_1024_utf8_key (col_varchar_1024_utf8_key(333))
-);
+) charset latin1;
 
 # Again for statistics reasons, long records are needed for t3:
 INSERT INTO t3 VALUES

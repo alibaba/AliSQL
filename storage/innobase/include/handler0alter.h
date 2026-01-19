@@ -1,114 +1,71 @@
 /*****************************************************************************
 
-Copyright (c) 2005, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2005, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/handler0alter.h
-Smart ALTER TABLE
-*******************************************************/
+/** @file include/handler0alter.h
+ Smart ALTER TABLE
+ *******************************************************/
 
-/*************************************************************//**
-Copies an InnoDB record to table->record[0]. */
-UNIV_INTERN
-void
-innobase_rec_to_mysql(
-/*==================*/
-	struct TABLE*		table,	/*!< in/out: MySQL table */
-	const rec_t*		rec,	/*!< in: record */
-	const dict_index_t*	index,	/*!< in: index */
-	const ulint*		offsets)/*!< in: rec_get_offsets(
-					rec, index, ...) */
-	MY_ATTRIBUTE((nonnull));
+#ifndef handler0alter_h
+#define handler0alter_h
 
-/*************************************************************//**
-Copies an InnoDB index entry to table->record[0]. */
-UNIV_INTERN
-void
-innobase_fields_to_mysql(
-/*=====================*/
-	struct TABLE*		table,	/*!< in/out: MySQL table */
-	const dict_index_t*	index,	/*!< in: InnoDB index */
-	const dfield_t*		fields)	/*!< in: InnoDB index fields */
-	MY_ATTRIBUTE((nonnull));
+constexpr uint32_t ERROR_STR_LENGTH = 1024;
 
-/*************************************************************//**
-Copies an InnoDB row to table->record[0]. */
-UNIV_INTERN
-void
-innobase_row_to_mysql(
-/*==================*/
-	struct TABLE*		table,	/*!< in/out: MySQL table */
-	const dict_table_t*	itab,	/*!< in: InnoDB table */
-	const dtuple_t*		row)	/*!< in: InnoDB row */
-	MY_ATTRIBUTE((nonnull));
+/** Adjust the persistent statistics after rebuilding ALTER TABLE.
+Remove statistics for dropped indexes, add statistics for created indexes
+and rename statistics for renamed indexes.
+@param table InnoDB table that was rebuilt by ALTER TABLE
+@param table_name Table name in MySQL
+@param thd MySQL connection
+*/
+void alter_stats_rebuild(dict_table_t *table, const char *table_name, THD *thd);
 
-/*************************************************************//**
-Resets table->record[0]. */
-UNIV_INTERN
-void
-innobase_rec_reset(
-/*===============*/
-	struct TABLE*		table)		/*!< in/out: MySQL table */
-	MY_ATTRIBUTE((nonnull));
+/** Copies an InnoDB record to table->record[0].
+@param[in,out] table Mysql table
+@param[in] rec Record
+@param[in] index Index
+@param[in] offsets rec_get_offsets( rec, index, ...) */
+void innobase_rec_to_mysql(struct TABLE *table, const rec_t *rec,
+                           const dict_index_t *index, const ulint *offsets);
 
-/** Generate the next autoinc based on a snapshot of the session
-auto_increment_increment and auto_increment_offset variables. */
-struct ib_sequence_t {
+/** Copies an InnoDB index entry to table->record[0].
+@param[in,out] table Mysql table
+@param[in] index Innodb index
+@param[in] fields Innodb index fields */
+void innobase_fields_to_mysql(struct TABLE *table, const dict_index_t *index,
+                              const dfield_t *fields);
 
-	/**
-	@param thd - the session
-	@param start_value - the lower bound
-	@param max_value - the upper bound (inclusive) */
-	ib_sequence_t(THD* thd, ulonglong start_value, ulonglong max_value);
+/** Copies an InnoDB row to table->record[0].
+@param[in,out] table Mysql table
+@param[in] itab Innodb table
+@param[in] row Innodb row */
+void innobase_row_to_mysql(struct TABLE *table, const dict_table_t *itab,
+                           const dtuple_t *row);
 
-	/**
-	Postfix increment
-	@return the value to insert */
-	ulonglong operator++(int) UNIV_NOTHROW;
+/** Resets table->record[0]. */
+void innobase_rec_reset(struct TABLE *table); /*!< in/out: MySQL table */
 
-	/** Check if the autoinc "sequence" is exhausted.
-	@return true if the sequence is exhausted */
-	bool eof() const UNIV_NOTHROW
-	{
-		return(m_eof);
-	}
-
-	/**
-	@return the next value in the sequence */
-	ulonglong last() const UNIV_NOTHROW
-	{
-		ut_ad(m_next_value > 0);
-
-		return(m_next_value);
-	}
-
-	/** Maximum calumn value if adding an AUTOINC column else 0. Once
-	we reach the end of the sequence it will be set to ~0. */
-	const ulonglong	m_max_value;
-
-	/** Value of auto_increment_increment */
-	ulong		m_increment;
-
-	/** Value of auto_increment_offset */
-	ulong		m_offset;
-
-	/** Next value in the sequence */
-	ulonglong	m_next_value;
-
-	/** true if no more values left in the sequence */
-	bool		m_eof;
-};
+#endif /* handler0alter_h */

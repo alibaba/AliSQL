@@ -260,11 +260,18 @@ prepare stmt1 from ' select a FROM t1 where a ? 1 ' ;
 
 ##### parameter used in group by clause
 set @arg00=1 ;
+
+--source include/turn_off_only_full_group_by.inc
+
 select a,b FROM t1 where a is not NULL
-AND b is not NULL group by a - @arg00 ;
+AND b is not NULL group by a - @arg00
+order by a;
+
 prepare stmt1 from ' select a,b FROM t1 where a is not NULL
-AND b is not NULL group by a - ? ' ;
+AND b is not NULL group by a - ? order by a ' ;
 execute stmt1 using @arg00 ;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 ##### parameter used in having clause
 set @arg00='two' ;
@@ -285,13 +292,23 @@ execute stmt1 using @arg00 ;
 #  after order by? column number or constant
 set @arg00=2 ;
 select a,b from t1 order by 2 ;
-prepare stmt1 from ' select a,b from t1
-order by ? ';
+prepare stmt1 from ' select a,b from t1 order by ? ';
+# WL#9384 Made the result order undefined.
+# Bug#31684243 will make query invalid.
+# Until then we sort result to get a deterministic test case.
+--sorted_result
 execute stmt1 using @arg00;
 set @arg00=1 ;
+# WL#9384 Made the result order undefined.
+# Bug#31684243 will make query invalid.
+# Until then we sort result to get a deterministic test case.
+--sorted_result
 execute stmt1 using @arg00;
 set @arg00=0 ;
---error 1054
+# WL#9384 Made the result order undefined.
+# Bug#31684243 will make query invalid.
+# Until then we sort result to get a deterministic test case.
+--sorted_result
 execute stmt1 using @arg00;
 
 ##### parameter used in limit clause
@@ -307,12 +324,13 @@ set @arg00='b' ;
 set @arg01=0 ;
 set @arg02=2 ;
 set @arg03=2 ;
-select sum(a), @arg00 from t1 where a > @arg01
+select sum(a) as the_sum, @arg00 from t1 where a > @arg01
 and b is not null group by substr(b,@arg02)
-having sum(a) <> @arg03 ;
-prepare stmt1 from ' select sum(a), ? from t1 where a > ?
+having sum(a) <> @arg03 order by the_sum ;
+prepare stmt1 from ' select sum(a) as the_sum, ? from t1 where a > ?
 and b is not null group by substr(b,?)
-having sum(a) <> ? ';
+having sum(a) <> ?
+order by the_sum ';
 execute stmt1 using @arg00, @arg01, @arg02, @arg03;
 
 
@@ -419,9 +437,13 @@ prepare stmt1 from ' select a, ?, b FROM t1 outer_table where
 execute stmt1 using @arg00, @arg01, @arg02, @arg03 ;
 
 # Bug#8807
+# Will give different warnings depending on the order the join conditions
+# are evaluated in.
+--disable_warnings
 prepare stmt1 from 'select c4 FROM t9 where
     c13 = (select MAX(b) from t1 where a = ?) and c22 = ? ' ;
 execute stmt1 using @arg01, @arg02;
+--enable_warnings
 
 ######## correlated subquery
 # no parameter
@@ -604,10 +626,9 @@ select 1 < (select a from t1) ;
 prepare stmt1 from ' select 1 < (select a from t1) ' ;
 --error 1242
 execute stmt1 ;
-# Bug#5066 embedded server, select after failed subquery provides wrong result
+# Bug#5066, select after failed subquery provides wrong result
 #          (two additional records, all column values NULL)
 select 1 as my_col ;
-
 ################ union tests ################
 --disable_query_log
 select '------ union tests ------' as test_sequence ;
@@ -690,10 +711,11 @@ execute stmt1 using @arg00, @arg01, @arg02, @arg03;
 
 set @arg00=1 ;
 # Bug#3686 the wrong server response was 1140 Mixing of GROUP columns ..
-prepare stmt1 from ' select sum(a) + 200, ? from t1
+prepare stmt1 from ' select sum(a) + 200 as the_sum, ? from t1
 union distinct
-select sum(a) + 200, 1 from t1
-group by b ' ;
+select sum(a) + 200 as the_sum, 1 from t1
+group by b
+order by the_sum ' ;
 execute stmt1 using @arg00;
 
 set @Oporto='Oporto' ;
@@ -710,13 +732,15 @@ select sum(a) + 200 as the_sum, @Oporto as the_town from t1
 group by b
 union distinct
 select sum(a) + 200, @Lisboa from t1
-group by b ;
+group by b
+order by the_town, the_sum ;
 
 prepare stmt1 from ' select sum(a) + 200 as the_sum, ? as the_town from t1
                      group by b
                      union distinct
                      select sum(a) + 200, ? from t1
-                     group by b ' ;
+                     group by b
+                     order by the_town, the_sum ' ;
 execute stmt1 using @Oporto, @Lisboa;
 
 
@@ -727,7 +751,8 @@ group by b
 union distinct
 select sum(a) + 200, @Lisboa from t1
 where a > @2
-group by b ;
+group by b
+order by the_town, the_sum ;
 
 prepare stmt1 from ' select sum(a) + 200 as the_sum, ? as the_town from t1
                      where a > ?
@@ -735,7 +760,8 @@ prepare stmt1 from ' select sum(a) + 200 as the_sum, ? as the_town from t1
                      union distinct
                      select sum(a) + 200, ? from t1
                      where a > ?
-                     group by b ' ;
+                     group by b
+                     order by the_town, the_sum' ;
 execute stmt1 using @Oporto, @1, @Lisboa, @2;
 
 ## union + where + group by + having
@@ -747,7 +773,8 @@ union distinct
 select sum(a) + 200, @Lisboa from t1
 where a > @2
 group by b 
-having avg(a) > @3;
+having avg(a) > @3
+order by the_town, the_sum;
 
 prepare stmt1 from ' select sum(a) + 200 as the_sum, ? as the_town from t1
                      where a > ?
@@ -757,19 +784,7 @@ prepare stmt1 from ' select sum(a) + 200 as the_sum, ? as the_town from t1
                      select sum(a) + 200, ? from t1
                      where a > ?
                      group by b
-                     having avg(a) > ? ';
+                     having avg(a) > ?
+                     order by the_town, the_sum ' ;
 execute stmt1 using @Oporto, @1, @2, @Lisboa, @2, @3;
-
-
-################ explain select tests ################
---disable_query_log
-select '------ explain select tests ------' as test_sequence ;
---enable_query_log
---disable_metadata
-# table with many column types
-prepare stmt1 from ' explain select * from t9 ' ;
---enable_metadata
-execute stmt1;
---disable_metadata
-
 

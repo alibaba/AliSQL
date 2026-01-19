@@ -1,52 +1,61 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
-
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
   @file
 
   @brief
-  Init and dummy functions for interface with unireg
+  Sets up a few global variables.
 */
 
-#include "sql_priv.h"
-#include "init.h"
-#include "my_sys.h"
-#include "mysqld.h"                             // abort_loop, ...
-#include "my_time.h"                            // my_init_time
-#include "unireg.h"                             // SPECIAL_SAME_DB_NAME
-#include <m_ctype.h>
+#include "sql/init.h"
 
-void unireg_init(ulong options)
-{
-  DBUG_ENTER("unireg_init");
+#include "my_config.h"
 
-  error_handler_hook = my_message_stderr;
-  abort_loop=0;
-
-  my_disable_async_io=1;		/* aioread is only in shared library */
-  wild_many='%'; wild_one='_'; wild_prefix='\\'; /* Change to sql syntax */
-
-  current_pid=(ulong) getpid();		/* Save for later ref */
-  my_init_time();			/* Init time-functions (read zone) */
-#ifndef EMBEDDED_LIBRARY
-  my_abort_hook=unireg_abort;		/* Abort with close of databases */
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 
-  (void) strmov(reg_ext,".frm");
-  reg_ext_length= 4;
-  specialflag=SPECIAL_SAME_DB_NAME | options;  /* Set options from argv */
-  DBUG_VOID_RETURN;
+#include "m_string.h"  // my_stpcpy
+#include "my_dbug.h"
+#include "my_sys.h"
+#include "my_time.h"     // my_init_time
+#include "sql/mysqld.h"  // connection_events_loop_aborted(), ...
+
+#ifdef _WIN32
+#include <process.h>  // getpid
+#endif
+
+void unireg_init(ulong options) {
+  DBUG_TRACE;
+
+  error_handler_hook = my_message_stderr;
+  set_connection_events_loop_aborted(false);
+
+  current_pid = (ulong)getpid(); /* Save for later ref */
+  my_init_time();                /* Init time-functions (read zone) */
+
+  (void)my_stpcpy(reg_ext, ".frm");
+  reg_ext_length = 4;
+  specialflag = options; /* Set options from argv */
 }

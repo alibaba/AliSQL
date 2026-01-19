@@ -1,0 +1,301 @@
+CREATE TABLE t1(a DATETIME NOT NULL);
+INSERT INTO t1 VALUES (TIMESTAMP'2006-06-06 15:55:55');
+ALTER TABLE t1 SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+EXPLAIN SELECT max(a) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select max(`test`.`t1`.`a`) AS `max(a)` from `test`.`t1`
+# Check how the two transforms {scalar,table}-subquery-to-derived
+# behave in PREPARE-<change conditions>-EXECUTE--<change conditions>-EXECUTE
+
+# Transform is not active for InnoDB while we the do initial PREPARE
+PREPARE s FROM "EXPLAIN SELECT a FROM t1 WHERE a=(SELECT MAX(a) FROM t1) AND (a=TIMESTAMP'2006-06-06 15:55:55')";
+PREPARE s2 FROM "EXPLAIN SELECT a FROM t1 WHERE a NOT IN (SELECT a FROM t1 AS t2)";
+SET secondary_engine_cost_threshold = 0;
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=on";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=off";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET secondary_engine_cost_threshold = 10000;
+EXECUTE s;
+
+EXECUTE s2;
+SET optimizer_switch="subquery_to_derived=on";
+EXECUTE s;
+
+EXECUTE s2;
+SET optimizer_switch="subquery_to_derived=off";
+EXECUTE s;
+
+EXECUTE s2;
+SET secondary_engine_cost_threshold = 0;
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=on";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=off";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=on";
+# Let transform be active for InnoDB while we the initial PREPARE
+PREPARE s FROM "EXPLAIN SELECT a FROM t1 WHERE a=(SELECT MAX(a) FROM t1) AND (a=TIMESTAMP'2006-06-06 15:55:55')";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET secondary_engine_cost_threshold = 0;
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=on";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=off";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET secondary_engine_cost_threshold = 10000;
+EXECUTE s;
+
+EXECUTE s2;
+SET optimizer_switch="subquery_to_derived=on";
+EXECUTE s;
+
+EXECUTE s2;
+SET optimizer_switch="subquery_to_derived=off";
+EXECUTE s;
+
+EXECUTE s2;
+SET secondary_engine_cost_threshold = 0;
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=on";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+SET optimizer_switch="subquery_to_derived=off";
+EXECUTE s;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` join (/* select#2 */ select max(`test`.`t1`.`a`) AS `MAX(a)` from `test`.`t1`) `derived_1_2` where multiple equal(TIMESTAMP'2006-06-06 15:55:55', `test`.`t1`.`a`, `derived_1_2`.`MAX(a)`)
+
+EXECUTE s2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	NONE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Using secondary engine MOCK. Use EXPLAIN FORMAT=TREE to show the plan.
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` left join (/* select#2 */ select distinct `test`.`t2`.`a` AS `Name_exp_1` from `test`.`t1` `t2`) `derived_1_2` on(multiple equal(`test`.`t1`.`a`, `derived_1_2`.`Name_exp_1`)) where (`derived_1_2`.`Name_exp_1` is null)
+DROP PREPARE s;
+DROP PREPARE s2;
+DROP TABLE t1;
+SET secondary_engine_cost_threshold = default;
+SET optimizer_switch="subquery_to_derived=default";
+#
+# Bug#34445328 (Hypergraph) Optimizer degenerate join
+# conditions when encountering semi join + outer join
+#
+CREATE TABLE t (a INT) SECONDARY_ENGINE MOCK;
+INSERT INTO t VALUES (), (), ();
+ALTER TABLE t SECONDARY_LOAD;
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+EXPLAIN FORMAT=TREE
+SELECT 1
+FROM t AS t1 LEFT JOIN t AS t2
+ON 1 IN (
+SELECT 1 FROM t AS t3 WHERE a <=>
+(SELECT a FROM t AS t4)
+);
+EXPLAIN
+-> Left hash join (no condition)  (rows=3)
+    -> Table scan on t1 in secondary engine MOCK  (rows=3)
+    -> Hash
+        -> Filter: (t3.a <=> derived_2_3.a)  (rows=0.3)
+            -> Inner hash join (no condition)  (rows=3)
+                -> Limit: 1 row(s)  (rows=1)
+                    -> Left hash join (no condition)  (rows=9)
+                        -> Table scan on t3 in secondary engine MOCK  (rows=3)
+                        -> Hash
+                            -> Table scan on derived_2_3  (rows=3)
+                                -> Materialize  (rows=3)
+                                    -> Table scan on t4 in secondary engine MOCK  (rows=3)
+                -> Hash
+                    -> Table scan on t2 in secondary engine MOCK  (rows=3)
+
+Warnings:
+Note	1003	Query is executed in secondary engine; the actual query plan may diverge from the printed one
+DROP TABLE t;
+#
+# Bug#34534373: Heatwave offload issue - Sees inner tables
+#               of a semijoin when it should not
+#
+CREATE TABLE t1(f1 INTEGER, f2 INTEGER) SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+set optimizer_switch="subquery_to_derived=on";
+EXPLAIN FORMAT=TREE
+SELECT 1
+FROM (t1 JOIN t1 AS t2
+ON t2.f1 = t1.f2 AND t1.f1 IN (SELECT f1 FROM t1 AS t3))
+WHERE (SELECT SUM(f2) FROM t1 AS t4) IS NULL
+AND t1.f1 = t2.f1 OR t2.f2 <= 0;
+EXPLAIN
+-> Filter: (((derived_1_3.`SUM(f2)` is null) and ((t1.f1 = t1.f2) and (t1.f1 = t2.f1))) or (t2.f2 <= 0))  (rows=0.01)
+    -> Left hash join (no condition)  (rows=0.01)
+        -> Hash semijoin (t1.f1 = t3.f1), extra conditions: (((t1.f1 = t1.f2) and ((t1.f1 = t3.f1) and (t3.f1 = t2.f1))) or (t2.f2 <= 0))  (rows=0.01)
+            -> Inner hash join (t2.f1 = t1.f2), extra conditions: ((t1.f1 = t1.f2) or (t2.f2 <= 0))  (rows=0.1)
+                -> Table scan on t1 in secondary engine MOCK  (rows=1)
+                -> Hash
+                    -> Table scan on t2 in secondary engine MOCK  (rows=1)
+            -> Hash
+                -> Table scan on t3 in secondary engine MOCK  (rows=1)
+        -> Hash
+            -> Table scan on derived_1_3  (rows=1)
+                -> Materialize  (rows=1)
+                    -> Aggregate: sum(t4.f2)  (rows=1)
+                        -> Table scan on t4 in secondary engine MOCK  (rows=1)
+
+Warnings:
+Note	1003	Query is executed in secondary engine; the actual query plan may diverge from the printed one
+DROP TABLE t1;
+set optimizer_switch="subquery_to_derived=off";
+#
+# Bug#34828328: Assertion `right != nullptr' failed in
+#               make_join_hypergraph.cc
+CREATE TABLE t1(f1 INTEGER, f2 INTEGER) SECONDARY_ENGINE MOCK;
+ALTER TABLE t1 SECONDARY_LOAD;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+set optimizer_switch="subquery_to_derived=on";
+EXPLAIN FORMAT=tree SELECT 1
+FROM t1 JOIN t1 AS t2 ON (t2.f1 = t1.f1)
+LEFT JOIN t1 AS t3 ON (t2.f2 = t1.f2 AND t2.f2 IN (SELECT f1 FROM t1 AS t4));
+EXPLAIN
+-> Left hash join (no condition), extra conditions: (t2.f2 = t1.f2) and <in_optimizer>(t2.f2,<exists>(select #2))  (rows=0.1)
+    -> Nested loop inner join  (rows=0.1)
+        -> Table scan on t1  (rows=1)
+        -> Filter: (t2.f1 = t1.f1)  (rows=0.1)
+            -> Table scan on t2  (rows=1)
+    -> Hash
+        -> Table scan on t3  (rows=1)
+
+SELECT 1
+FROM t1 JOIN t1 AS t2 ON (t2.f1 = t1.f1)
+LEFT JOIN t1 AS t3 ON (t2.f2 = t1.f2 AND t2.f2 IN (SELECT f1 FROM t1 AS t4));
+1
+DROP TABLE t1;
+set optimizer_switch="subquery_to_derived=off";

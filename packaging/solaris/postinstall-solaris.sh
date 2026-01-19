@@ -1,19 +1,27 @@
 #!/bin/sh
 #
-# Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2008, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
-# 
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
+# GNU General Public License, version 2.0, for more details.
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #
 # Solaris post install script
 #
@@ -26,6 +34,8 @@ mygroup=mysql
 myuser=mysql
 mydatadir=/var/lib/mysql
 basedir=@@basedir@@
+mysecurefiledir=/var/lib/mysql-files
+mykeyringdir=/var/lib/mysql-keyring
 
 if [ -n "$BASEDIR" ] ; then
   basedir="$BASEDIR"
@@ -37,7 +47,6 @@ fi
 
 mybasedir="$basedir/@@instdir@@"
 mystart1="$mybasedir/support-files/mysql.server"
-myinstdb="$mybasedir/scripts/mysql_install_db"
 mystart=/etc/init.d/mysql
 
 # Check: Is this a first installation, or an upgrade ?
@@ -50,17 +59,23 @@ fi
 
 # Create data directory if needed
 
-[ -d "$mydatadir"       ] || mkdir -p -m 755 "$mydatadir" || exit 1
-[ -d "$mydatadir/mysql" ] || mkdir "$mydatadir/mysql"     || exit 1
-[ -d "$mydatadir/test"  ] || mkdir "$mydatadir/test"      || exit 1
+[ -d "$mydatadir"       ] || mkdir -p -m 750 "$mydatadir" || exit 1
 
 # Set the data directory to the right user/group
 
 chown -R $myuser:$mygroup $mydatadir
 
+# Create securefile directory
+[ -d "$mysecurefiledir"  ] || mkdir -p -m 770 "$mysecurefiledir"      || exit 1
+chown -R $myuser:$mygroup $mysecurefiledir
+
+# Create Keyring directory
+[ -d "$mykeyringdir"  ] || mkdir -p -m 750 "$mykeyringdir"      || exit 1
+chown -R $myuser:$mygroup $mykeyringdir
+
 # Solaris patch 119255 (somewhere around revision 42) changes the behaviour
 # of pkgadd to set TMPDIR internally to a root-owned install directory.  This
-# has the unfortunate side effect of breaking running mysql_install_db with
+# has the unfortunate side effect of breaking running mysqld --initialize with
 # the --user=mysql argument as mysqld uses TMPDIR if set, and is unable to
 # write temporary tables to that directory.  To work around this issue, we
 # create a subdirectory inside TMPDIR (if set) for mysqld to write to.
@@ -79,9 +94,7 @@ if [ -n "$INSTALL" ] ; then
   # We install/update the system tables
   (
     cd "$mybasedir"
-    scripts/mysql_install_db \
-	  --rpm \
-	  --random-passwords \
+    bin/mysqld --initialize \
 	  --user=mysql \
 	  --basedir="$mybasedir" \
 	  --datadir=$mydatadir
@@ -111,7 +124,7 @@ cp -f "$mystart1.in" "$mystart.in" || exit 1
 
 # We rewrite some scripts
 
-for script in "$mystart" "$mystart1" "$myinstdb" ; do
+for script in "$mystart" "$mystart1"; do
   script_in="$script.in"
   sed -e "s,@basedir@,$mybasedir,g" \
       -e "s,@datadir@,$mydatadir,g" "$script_in" > "$script"

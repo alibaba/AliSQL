@@ -1,0 +1,107 @@
+--source include/big_test.inc
+--source include/not_have_innodb_4k.inc
+
+--echo ##############################################
+--echo # Test instant ADD COLUMN for REDUNDANT format
+--echo ##############################################
+let $row_format = REDUNDANT;
+--source suite/innodb/include/instant_add_column_basic.inc
+
+--echo ############################################
+--echo # Test instant ADD COLUMN for DYNAMIC format
+--echo ############################################
+let $row_format = DYNAMIC;
+--source suite/innodb/include/instant_add_column_basic.inc
+
+--echo ############################################
+--echo # Test instant ADD COLUMN for COMPACT format
+--echo ############################################
+let $row_format = COMPACT;
+--source suite/innodb/include/instant_add_column_basic.inc
+
+--echo #
+--echo # Test cases which don't care about row format start here
+--echo #
+
+--echo #
+--echo # Bug #28040201	ADDING A NEW COLUMN TO A TABLE HAVING A GENRATED COLUMN
+--echo # CRASHES THE SERVER
+--echo #
+
+CREATE TABLE t1 (a TEXT GENERATED ALWAYS AS (lpad(1, 1, 1)) VIRTUAL);
+
+ALTER TABLE t1 ADD COLUMN (b INT);
+
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+
+--echo #
+--echo # BUG#27784462 - DD::COLUMN::SE_PRIVATE_DATA[TABLE_ID] IS NOT MAINTAINED PROPERLY
+--echo #
+
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL DEFAULT 5, e INT GENERATED ALWAYS AS ((c + 2)) VIRTUAL) PARTITION BY RANGE (a) (PARTITION p1 VALUES LESS THAN (10), PARTITION p2 VALUES LESS THAN (20), PARTITION p3 VALUES LESS THAN (30));
+
+ALTER TABLE t1 REORGANIZE PARTITION p1 INTO (PARTITION p1_a VALUES LESS THAN (5), PARTITION p1_b VALUES LESS THAN (10));
+
+ALTER TABLE t1 ADD COLUMN d INT GENERATED ALWAYS AS ((b * 2)) VIRTUAL, ALGORITHM = INSTANT;
+
+DROP TABLE t1;
+
+
+--echo #
+--echo # Check adding a stored columns(along with virtual columns)
+--echo # after the last stored column of a table with functional index
+--echo # should be fine
+--echo #
+
+CREATE TABLE t1 (col1 INT, col2 INT AS (col1 + col1), INDEX (col2));
+
+INSERT INTO t1(col1) VALUES(10), (20), (30), (40);
+
+ALTER TABLE t1 ADD COLUMN new_col INT AFTER col1, ALGORITHM=INSTANT;
+
+--sorted_result
+SELECT * FROM t1;
+
+ALTER TABLE t1 ADD COLUMN new_col_1 INT AFTER new_col, ADD COLUMN new_col_2 INT GENERATED ALWAYS AS (new_col * 3), ALGORITHM=INSTANT;
+
+INSERT INTO t1(col1, new_col, new_col_1) VALUES(100, 200, 300);
+--sorted_result
+SELECT * FROM t1;
+
+SHOW CREATE TABLE t1;
+
+CHECK TABLE t1;
+
+DROP TABLE t1;
+
+
+--echo # Bug #33673961: data is incorrect after instant add column
+
+# VALUE FOR CHECKSUM USING ALGORITHM=INSTANT SHOULD BE CONSISTENT WITH ALGORITHM=COPY FOR IDENTICAL TABLES
+
+--let $use_copy=0
+while($use_copy<=1){
+  CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, a char(10));
+  INSERT INTO t1 VALUES(1, 'aa');
+  INSERT INTO t1 VALUES(2, 'bb');
+  if ($use_copy == 0) {
+    ALTER TABLE t1 ADD b VARCHAR(20), ALGORITHM=INSTANT;
+  }
+  if ($use_copy == 1) {
+    ALTER TABLE t1 ADD b VARCHAR(20), ALGORITHM=COPY;
+  }
+  INSERT INTO t1 VALUES(3, 'cc', 'dd');
+  let $cs = `CHECKSUM TABLE t1`;
+  if ($use_copy == 1) {
+    if ($cs == $prev_cs) {
+      echo CHECKSUM is same;
+    }
+  }
+  DROP TABLE t1;
+
+  --let $prev_cs=$cs
+  --inc $use_copy
+}

@@ -1,0 +1,13 @@
+RESET MASTER;
+CREATE TABLE t1(a INT) ENGINE=InnoDB;
+CREATE TEMPORARY TABLE tmp1 ENGINE=InnoDB SELECT * FROM t1;
+CREATE TEMPORARY TABLE tmp5 (a INT) ENGINE=InnoDB;
+CREATE TEMPORARY TABLE tmp7 LIKE t1;
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+binlog.000001	#	Query	#	#	use `test`; CREATE TABLE t1(a INT) ENGINE=InnoDB
+binlog.000001	#	Query	#	#	use `test`; CREATE TEMPORARY TABLE tmp1 ENGINE=InnoDB SELECT * FROM t1
+binlog.000001	#	Query	#	#	use `test`; CREATE TEMPORARY TABLE tmp5 (a INT) ENGINE=InnoDB
+binlog.000001	#	Query	#	#	use `test`; CREATE TEMPORARY TABLE tmp7 LIKE t1
+binlog.000001	#	Query	#	#	use `test`; DROP /*!40005 TEMPORARY */ TABLE IF EXISTS `tmp7`,`tmp5`,`tmp1`
+DROP TABLE t1;

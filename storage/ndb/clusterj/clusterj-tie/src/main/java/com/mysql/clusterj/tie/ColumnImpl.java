@@ -1,14 +1,22 @@
 /*
- *  Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ *  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
+ *  it under the terms of the GNU General Public License, version 2.0,
+ *  as published by the Free Software Foundation.
+ *
+ *  This program is designed to work with certain software (including
+ *  but not limited to OpenSSL) that is licensed under separate terms,
+ *  as designated in a particular file or component or in included license
+ *  documentation.  The authors of MySQL hereby grant you an additional
+ *  permission to link the program and your derivative works with the
+ *  separately licensed software that they have either included with
+ *  the program or referenced in the documentation.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  GNU General Public License, version 2.0, for more details.
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
@@ -92,6 +100,8 @@ class ColumnImpl implements Column {
 
     private boolean nullable;
 
+    private boolean lob = false;
+
     public ColumnImpl(String tableName, ColumnConst ndbColumn) {
         this.columnName = ndbColumn.getName();
         this.columnId = ndbColumn.getColumnNo();
@@ -106,6 +116,7 @@ class ColumnImpl implements Column {
         this.precision = ndbColumn.getPrecision();
         this.scale = ndbColumn.getScale();
         this.size = ndbColumn.getSize();
+        if (logger.isDetailEnabled()) logger.detail("ColumnImpl column type: " + this.columnType);
         switch(ndbColumn.getType()) {
             case ColumnConst.Type.Tinyint:
             case ColumnConst.Type.Tinyunsigned:
@@ -177,12 +188,16 @@ class ColumnImpl implements Column {
                 break;
             case ColumnConst.Type.Blob:
                 this.prefixLength = 0;
-                this.columnSpace = inlineSize;
+                // space is reserved for a pointer to the blob header, 8 bytes for today's architecture
+                this.columnSpace = 8; // only the blob header has space in the record
+                this.lob = true;
                 break;
             case ColumnConst.Type.Text:
                 this.prefixLength = 0;
-                this.columnSpace = inlineSize;
+                // space is reserved for a pointer to the blob header, 8 bytes for today's architecture
+                this.columnSpace = 8; // only the blob header has space in the record
                 this.charsetNumber = ndbColumn.getCharsetNumber();
+                this.lob = true;
                 mapCharsetName();
                 break;
             case ColumnConst.Type.Bit:
@@ -209,11 +224,26 @@ class ColumnImpl implements Column {
                 break;
             case ColumnConst.Type.Timestamp:
                 this.prefixLength = 0;
-                this.columnSpace = 4;
+                this.columnSpace = 0;
                 break;
-            default: throw new ClusterJFatalInternalException(
+            case 31: // Time2
+                this.prefixLength = 0;
+                this.columnSpace = 0;
+                break;
+            case 32: // DateTime2
+                this.prefixLength = 0;
+                this.columnSpace = 0;
+                break;
+            case 33: // Timestamp2
+                this.prefixLength = 0;
+                this.columnSpace = 0;
+                break;
+            default:
+                String message = 
                     local.message("ERR_Unknown_Column_Type",
-                    tableName, ndbColumn.getName(), ndbType));
+                    tableName, ndbColumn.getName(), ndbType);
+                logger.warn(message);
+                throw new ClusterJFatalInternalException(message);
         }
         if (logger.isDetailEnabled()) logger.detail("Column " + columnName
                 + " columnSpace: " + columnSpace + " prefixLength: " + prefixLength
@@ -275,9 +305,15 @@ class ColumnImpl implements Column {
             case ColumnConst.Type.Varbinary: return ColumnType.Varbinary;
             case ColumnConst.Type.Varchar: return ColumnType.Varchar;
             case ColumnConst.Type.Year: return ColumnType.Year;
-            default: throw new ClusterJFatalInternalException(
+            case 31: return ColumnType.Time2; // ColumnConst.Type.Time2: 
+            case 32: return ColumnType.Datetime2; // ColumnConst.Type.Datetime2
+            case 33: return ColumnType.Timestamp2; // ColumnConst.Type.Timestamp2
+            default: 
+                String message = 
                     local.message("ERR_Unknown_Column_Type",
-                    tableName, columnName, type));
+                    tableName, columnName, type);
+                logger.warn(message);
+                throw new ClusterJFatalInternalException(message);
         }
     }
 
@@ -308,6 +344,10 @@ class ColumnImpl implements Column {
             throw new ClusterJFatalInternalException(local.message(
                     "ERR_Prefix_Length_Not_Defined", tableName, columnName));
         }
+    }
+
+    public int getSize() {
+        return size;
     }
 
     public int getColumnId() {
@@ -345,6 +385,10 @@ class ColumnImpl implements Column {
 
     public boolean getNullable() {
         return nullable;
+    }
+
+    public boolean isLob() {
+        return lob;
     }
 
 }

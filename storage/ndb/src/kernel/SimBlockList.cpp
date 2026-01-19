@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,94 +24,78 @@
 */
 
 #include "SimBlockList.hpp"
-#include <Emulator.hpp>
-#include <SimulatedBlock.hpp>
+#include <NdbEnv.h>
+#include <Backup.hpp>
+#include <BackupProxy.hpp>
 #include <Cmvmi.hpp>
-#include <Ndbfs.hpp>
+#include <DbUtil.hpp>
 #include <Dbacc.hpp>
+#include <DbaccProxy.hpp>
 #include <Dbdict.hpp>
 #include <Dbdih.hpp>
+#include <Dbinfo.hpp>
 #include <Dblqh.hpp>
+#include <DblqhProxy.hpp>
+#include <Dbqacc.hpp>
+#include <DbqaccProxy.hpp>
+#include <Dbqlqh.hpp>
+#include <DbqlqhProxy.hpp>
+#include <Dbqtup.hpp>
+#include <DbqtupProxy.hpp>
+#include <Dbqtux.hpp>
+#include <DbqtuxProxy.hpp>
 #include <Dbspj.hpp>
+#include <DbspjProxy.hpp>
 #include <Dbtc.hpp>
+#include <DbtcProxy.hpp>
 #include <Dbtup.hpp>
-#include <Ndbcntr.hpp>
-#include <Qmgr.hpp>
-#include <Trix.hpp>
-#include <Backup.hpp>
-#include <DbUtil.hpp>
-#include <Suma.hpp>
+#include <DbtupProxy.hpp>
 #include <Dbtux.hpp>
-#include <tsman.hpp>
+#include <DbtuxProxy.hpp>
+#include <Emulator.hpp>
+#include <LocalProxy.hpp>
+#include <Ndbcntr.hpp>
+#include <Ndbfs.hpp>
+#include <PgmanProxy.hpp>
+#include <QBackup.hpp>
+#include <QBackupProxy.hpp>
+#include <QRestore.hpp>
+#include <QRestoreProxy.hpp>
+#include <Qmgr.hpp>
+#include <RestoreProxy.hpp>
+#include <SimulatedBlock.hpp>
+#include <Suma.hpp>
+#include <Trix.hpp>
 #include <lgman.hpp>
+#include <mt.hpp>
 #include <pgman.hpp>
 #include <restore.hpp>
-#include <Dbinfo.hpp>
-#include <NdbEnv.h>
-#include <LocalProxy.hpp>
-#include <DblqhProxy.hpp>
-#include <DbspjProxy.hpp>
-#include <DbaccProxy.hpp>
-#include <DbtupProxy.hpp>
-#include <DbtuxProxy.hpp>
-#include <BackupProxy.hpp>
-#include <RestoreProxy.hpp>
-#include <PgmanProxy.hpp>
-#include <mt.hpp>
+#include <thrman.hpp>
+#include <trpman.hpp>
+#include <tsman.hpp>
+#include "portlib/NdbMem.h"
 
-#ifndef VM_TRACE
+#define JAM_FILE_ID 492
+
 #define NEW_BLOCK(B) new B
-#else
-enum SIMBLOCKLIST_DUMMY { A_VALUE = 0 };
 
-void * operator new (size_t sz, SIMBLOCKLIST_DUMMY dummy){
-  char * tmp = (char *)malloc(sz);
-  if (!tmp)
-    abort();
-
-#ifndef NDB_PURIFY
-#ifdef VM_TRACE
-  const int initValue = 0xf3;
-#else
-  const int initValue = 0x0;
-#endif
-  
-  const int p = (sz / 4096);
-  const int r = (sz % 4096);
-  
-  for(int i = 0; i<p; i++)
-    memset(tmp+(i*4096), initValue, 4096);
-  
-  if(r > 0)
-    memset(tmp+p*4096, initValue, r);
-
-#endif
-  
-  return tmp;
-}
-#define NEW_BLOCK(B) new(A_VALUE) B
-#endif
-
-void
-SimBlockList::load(EmulatorData& data){
+void SimBlockList::load(EmulatorData &data) {
   noOfBlocks = NO_OF_BLOCKS;
-  theList = new SimulatedBlock * [noOfBlocks];
-  if (!theList)
-  {
-    ERROR_SET(fatal, NDBD_EXIT_MEMALLOC,
-              "Failed to create the block list", "");
+  theList = new SimulatedBlock *[noOfBlocks];
+  if (!theList) {
+    ERROR_SET(fatal, NDBD_EXIT_MEMALLOC, "Failed to create the block list", "");
   }
 
   Block_context ctx(*data.theConfiguration, *data.m_mem_manager);
-  
-  SimulatedBlock * fs = 0;
+
+  SimulatedBlock *fs = 0;
   {
     Uint32 dl;
-    const ndb_mgm_configuration_iterator * p = 
-      ctx.m_config.getOwnConfigIterator();
-    if(p && !ndb_mgm_get_int_parameter(p, CFG_DB_DISCLESS, &dl) && dl){
+    const ndb_mgm_configuration_iterator *p =
+        ctx.m_config.getOwnConfigIterator();
+    if (p && !ndb_mgm_get_int_parameter(p, CFG_DB_DISCLESS, &dl) && dl) {
       fs = NEW_BLOCK(VoidFs)(ctx);
-    } else { 
+    } else {
       fs = NEW_BLOCK(Ndbfs)(ctx);
     }
   }
@@ -114,21 +106,24 @@ SimBlockList::load(EmulatorData& data){
     theList[0] = NEW_BLOCK(Pgman)(ctx);
   else
     theList[0] = NEW_BLOCK(PgmanProxy)(ctx);
-  theList[1]  = NEW_BLOCK(Lgman)(ctx);
-  theList[2]  = NEW_BLOCK(Tsman)(ctx);
+  theList[1] = NEW_BLOCK(Lgman)(ctx);
+  theList[2] = NEW_BLOCK(Tsman)(ctx);
   if (!mtLqh)
-    theList[3]  = NEW_BLOCK(Dbacc)(ctx);
+    theList[3] = NEW_BLOCK(Dbacc)(ctx);
   else
-    theList[3]  = NEW_BLOCK(DbaccProxy)(ctx);
-  theList[4]  = NEW_BLOCK(Cmvmi)(ctx);
-  theList[5]  = fs;
-  theList[6]  = NEW_BLOCK(Dbdict)(ctx);
-  theList[7]  = NEW_BLOCK(Dbdih)(ctx);
+    theList[3] = NEW_BLOCK(DbaccProxy)(ctx);
+  theList[4] = NEW_BLOCK(Cmvmi)(ctx);
+  theList[5] = fs;
+  theList[6] = NEW_BLOCK(Dbdict)(ctx);
+  theList[7] = NEW_BLOCK(Dbdih)(ctx);
   if (!mtLqh)
-    theList[8]  = NEW_BLOCK(Dblqh)(ctx);
+    theList[8] = NEW_BLOCK(Dblqh)(ctx);
   else
-    theList[8]  = NEW_BLOCK(DblqhProxy)(ctx);
-  theList[9]  = NEW_BLOCK(Dbtc)(ctx);
+    theList[8] = NEW_BLOCK(DblqhProxy)(ctx);
+  if (globalData.ndbMtTcWorkers == 0)
+    theList[9] = NEW_BLOCK(Dbtc)(ctx);
+  else
+    theList[9] = NEW_BLOCK(DbtcProxy)(ctx);
   if (!mtLqh)
     theList[10] = NEW_BLOCK(Dbtup)(ctx);
   else
@@ -151,45 +146,93 @@ SimBlockList::load(EmulatorData& data){
   else
     theList[18] = NEW_BLOCK(RestoreProxy)(ctx);
   theList[19] = NEW_BLOCK(Dbinfo)(ctx);
-  theList[20]  = NEW_BLOCK(Dbspj)(ctx);
-  assert(NO_OF_BLOCKS == 21);
+  if (globalData.ndbMtTcWorkers == 0)
+    theList[20] = NEW_BLOCK(Dbspj)(ctx);
+  else
+    theList[20] = NEW_BLOCK(DbspjProxy)(ctx);
+  if (NdbIsMultiThreaded() == false)
+    theList[21] = NEW_BLOCK(Thrman)(ctx);
+  else
+    theList[21] = NEW_BLOCK(ThrmanProxy)(ctx);
+  if (NdbIsMultiThreaded() == false)
+    theList[22] = NEW_BLOCK(Trpman)(ctx);
+  else
+    theList[22] = NEW_BLOCK(TrpmanProxy)(ctx);
 
-  if (globalData.isNdbMt) {
-    add_main_thr_map();
-    if (globalData.isNdbMtLqh) {
-      for (int i = 0; i < noOfBlocks; i++)
-        theList[i]->loadWorkers();
-    }
-    finalize_thr_map();
-  }
+  /* Create Query/Recover Blocks */
+  theList[23] = NEW_BLOCK(DbqlqhProxy)(ctx);
+  theList[24] = NEW_BLOCK(DbqaccProxy)(ctx);
+  theList[25] = NEW_BLOCK(DbqtupProxy)(ctx);
+  theList[26] = NEW_BLOCK(DbqtuxProxy)(ctx);
+  theList[27] = NEW_BLOCK(QBackupProxy)(ctx);
+  theList[28] = NEW_BLOCK(QRestoreProxy)(ctx);
+  assert(NO_OF_BLOCKS == 29);
 
   // Check that all blocks could be created
-  for (int i = 0; i < noOfBlocks; i++)
-  {
-    if (!theList[i])
-    {
-      ERROR_SET(fatal, NDBD_EXIT_MEMALLOC,
-                "Failed to create block", "");
+  for (int i = 0; i < noOfBlocks; i++) {
+    if (!theList[i]) {
+      ERROR_SET(fatal, NDBD_EXIT_MEMALLOC, "Failed to create block", "");
     }
+  }
+
+  if (globalData.isNdbMt) {
+    /**
+      This is where we bind blocks to their respective threads.
+      mt_init_thr_map binds the blocks to the two main threads,
+      the thread for Global blocks (thr = 0), and the thread
+      for Local blocks (thr = 1) and it puts CMVMI into the receiver
+      thread.
+
+      For those blocks where we created proxies above the loadWorkers
+      function will map the instances of the block into the right
+      thread. mt_add_thr_map will be called for each of the block
+      instances.
+    */
+    mt_init_thr_map();
+    for (int i = 0; i < noOfBlocks; i++) {
+      if (theList[i]) theList[i]->loadWorkers();
+    }
+    mt_finalize_thr_map();
   }
 }
 
-void
-SimBlockList::unload(){
-  if(theList != 0){
-    for(int i = 0; i<noOfBlocks; i++){
-      if(theList[i] != 0){
+void SimBlockList::unload() {
+  if (theList != 0) {
+    for (int i = 0; i < noOfBlocks; i++) {
+      if (theList[i] != 0) {
 #ifdef VM_TRACE
-	theList[i]->~SimulatedBlock();
-	free(theList[i]);
+        theList[i]->~SimulatedBlock();
+        free(theList[i]);
 #else
-        delete(theList[i]);
+        delete (theList[i]);
 #endif
-	theList[i] = 0;
+        theList[i] = 0;
       }
     }
-    delete [] theList;
-    theList    = 0;
+    delete[] theList;
+    theList = 0;
     noOfBlocks = 0;
   }
+}
+
+Uint64 SimBlockList::getTransactionMemoryNeed(
+    const Uint32 dbtc_instance_count, const Uint32 ldm_instance_count,
+    const ndb_mgm_configuration_iterator *mgm_cfg,
+    const bool use_reserved) const {
+  Uint64 byte_count = Dbtc::getTransactionMemoryNeed(dbtc_instance_count,
+                                                     mgm_cfg, use_reserved);
+  byte_count += Dbacc::getTransactionMemoryNeed(ldm_instance_count, mgm_cfg,
+                                                use_reserved);
+  byte_count += Dblqh::getTransactionMemoryNeed(ldm_instance_count, mgm_cfg,
+                                                use_reserved);
+  byte_count += Dbtup::getTransactionMemoryNeed(ldm_instance_count, mgm_cfg,
+                                                use_reserved);
+  byte_count += Dbtux::getTransactionMemoryNeed(ldm_instance_count, mgm_cfg,
+                                                use_reserved);
+
+  byte_count += Dbqacc::getTransactionMemoryNeed();
+  byte_count += Dbqlqh::getTransactionMemoryNeed();
+  byte_count += Dbqtup::getTransactionMemoryNeed();
+  byte_count += Dbqtux::getTransactionMemoryNeed();
+  return byte_count;
 }

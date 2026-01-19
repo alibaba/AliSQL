@@ -51,8 +51,6 @@ f219 time,
 f220 datetime,
 f221 timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 f222 year,
-f223 year(3),
-f224 year(4),
 f225 enum("1enum","2enum"),
 f226 set("1set","2set"),
 f235 char(0),
@@ -62,9 +60,9 @@ f238 varchar(0),
 f239 varchar(20000) binary,
 f240 varchar(2000),
 f241 char(100)
-) engine = innodb;
+) charset latin1 engine = innodb;
 
 --replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
 eval
 load data infile '$MYSQLTEST_VARDIR/std_data/funcs_1/innodb_tb4.txt'
-into table tb4;
+into table tb4 CHARACTER SET latin1;

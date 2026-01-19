@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2004, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,19 +25,29 @@
 
 #include <pc.hpp>
 #define DBSPJ_C
-#include "Dbspj.hpp"
 #include <ndb_limits.h>
+#include "Dbspj.hpp"
 
-#define DEBUG(x) { ndbout << "SPJ::" << x << endl; }
+#define JAM_FILE_ID 482
 
+#define DEBUG(x) \
+  { ndbout << "SPJ::" << x << endl; }
 
-Dbspj::Dbspj(Block_context& ctx, Uint32 instanceNumber):
-  SimulatedBlock(DBSPJ, ctx, instanceNumber),
-  m_scan_request_hash(m_request_pool),
-  m_lookup_request_hash(m_request_pool)
-{
+Dbspj::Dbspj(Block_context &ctx, Uint32 instanceNumber)
+    : SimulatedBlock(DBSPJ, ctx, instanceNumber),
+      m_scan_request_hash(m_request_pool),
+      m_lookup_request_hash(m_request_pool),
+      m_treenode_hash(m_treenode_pool),
+      m_scanfraghandle_hash(m_scanfraghandle_pool),
+      m_tableRecord(NULL),
+      c_tabrecFilesize(0),
+      m_allocedPages(0),
+      m_maxUsedPages(0),
+      m_usedPagesStat(5),  // Sample over 5 observations
+      m_load_balancer_location(0) {
   BLOCK_CONSTRUCTOR(Dbspj);
 
+  addRecSignal(GSN_SIGNAL_DROPPED_REP, &Dbspj::execSIGNAL_DROPPED_REP, true);
   addRecSignal(GSN_DUMP_STATE_ORD, &Dbspj::execDUMP_STATE_ORD);
   addRecSignal(GSN_READ_NODESCONF, &Dbspj::execREAD_NODESCONF);
   addRecSignal(GSN_READ_CONFIG_REQ, &Dbspj::execREAD_CONFIG_REQ);
@@ -40,13 +58,17 @@ Dbspj::Dbspj(Block_context& ctx, Uint32 instanceNumber):
   addRecSignal(GSN_INCL_NODEREQ, &Dbspj::execINCL_NODEREQ);
   addRecSignal(GSN_API_FAILREQ, &Dbspj::execAPI_FAILREQ);
 
-  /**
-   * Signals from DIH
-   */
-  addRecSignal(GSN_DIH_SCAN_TAB_REF, &Dbspj::execDIH_SCAN_TAB_REF);
   addRecSignal(GSN_DIH_SCAN_TAB_CONF, &Dbspj::execDIH_SCAN_TAB_CONF);
-  addRecSignal(GSN_DIH_SCAN_GET_NODES_REF, &Dbspj::execDIH_SCAN_GET_NODES_REF);
-  addRecSignal(GSN_DIH_SCAN_GET_NODES_CONF,&Dbspj::execDIH_SCAN_GET_NODES_CONF);
+  addRecSignal(GSN_DIH_SCAN_TAB_REF, &Dbspj::execDIH_SCAN_TAB_REF);
+
+  /**
+   * Signals from DICT
+   */
+  addRecSignal(GSN_TC_SCHVERREQ, &Dbspj::execTC_SCHVERREQ);
+  addRecSignal(GSN_TAB_COMMITREQ, &Dbspj::execTAB_COMMITREQ);
+  addRecSignal(GSN_PREP_DROP_TAB_REQ, &Dbspj::execPREP_DROP_TAB_REQ);
+  addRecSignal(GSN_DROP_TAB_REQ, &Dbspj::execDROP_TAB_REQ);
+  addRecSignal(GSN_ALTER_TAB_REQ, &Dbspj::execALTER_TAB_REQ);
 
   /**
    * Signals from TC
@@ -65,14 +87,13 @@ Dbspj::Dbspj(Block_context& ctx, Uint32 instanceNumber):
   addRecSignal(GSN_TRANSID_AI, &Dbspj::execTRANSID_AI);
   addRecSignal(GSN_SCAN_HBREP, &Dbspj::execSCAN_HBREP);
 
-  ndbout << "Instantiating DBSPJ instanceNo=" << instanceNumber << endl;
-}//Dbspj::Dbspj()
+}  // Dbspj::Dbspj()
 
-Dbspj::~Dbspj()
-{
+Dbspj::~Dbspj() {
   m_page_pool.clear();
-}//Dbspj::~Dbspj()
 
+  deallocRecord((void **)&m_tableRecord, "TableRecord", sizeof(TableRecord),
+                c_tabrecFilesize);
+}  // Dbspj::~Dbspj()
 
 BLOCK_FUNCTIONS(Dbspj)
-

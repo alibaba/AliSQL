@@ -1,15 +1,23 @@
 /*
-  Copyright 2010 Sun Microsystems, Inc.
-  All rights reserved. Use is subject to license terms.
+  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+  Use is subject to license terms.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -30,7 +38,7 @@ public class NdbInterpretedCode extends Wrapper implements NdbInterpretedCodeCon
     public final native NdbDictionary.TableConst/*_const NdbDictionary.Table *_*/ getTable() /*_const_*/;
     public final native NdbErrorConst/*_const NdbError &_*/ getNdbError() /*_const_*/;
     public final native int/*_Uint32_*/ getWordsUsed() /*_const_*/;
-    static public final native NdbInterpretedCode create(NdbDictionary.TableConst/*_const NdbDictionary.Table *_*/ table /*_= 0_*/, int[]/*_Uint32 *_*/ buffer /*_= 0_*/, int/*_Uint32_*/ buffer_word_size /*_= 0_*/);
+    static public final native NdbInterpretedCode create(NdbDictionary.TableConst/*_const NdbDictionary.Table *_*/ table /*_= 0_*/, ByteBuffer/*_Uint32 *_*/ buffer /*_= 0_*/, int/*_Uint32_*/ buffer_word_size /*_= 0_*/);
     static public final native void delete(NdbInterpretedCode p0);
     public final native int load_const_null(int/*_Uint32_*/ RegDest);
     public final native int load_const_u16(int/*_Uint32_*/ RegDest, int/*_Uint32_*/ Constant);

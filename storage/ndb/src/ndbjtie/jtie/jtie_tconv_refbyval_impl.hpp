@@ -1,15 +1,23 @@
 /*
- Copyright 2010 Sun Microsystems, Inc.
- All rights reserved. Use is subject to license terms.
+ Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+ Use is subject to license terms.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is designed to work with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have either included with
+ the program or referenced in the documentation.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -22,14 +30,14 @@
 #ifndef jtie_tconv_refbyval_impl_hpp
 #define jtie_tconv_refbyval_impl_hpp
 
-#include <assert.h> // not using namespaces yet
+#include <assert.h>  // not using namespaces yet
 #include <jni.h>
 
-#include "jtie_tconv_refbyval.hpp"
+#include "helpers.hpp"
 #include "jtie_tconv_impl.hpp"
 #include "jtie_tconv_ptrbyval_impl.hpp"
+#include "jtie_tconv_refbyval.hpp"
 #include "jtie_tconv_utils_impl.hpp"
-#include "helpers.hpp"
 
 // ---------------------------------------------------------------------------
 // ArrayRefParam, ArrayRefResult
@@ -38,70 +46,68 @@
 // XXX document, cleanup
 
 // implements the mapping of (1-elem) arrays to reference parameters
-template< typename J, typename C > struct ArrayRefParam;
+template <typename J, typename C>
+struct ArrayRefParam;
 
 // implements the mapping of (1-elem) arrays to reference results
-template< typename J, typename C > struct ArrayRefResult;
+template <typename J, typename C>
+struct ArrayRefResult;
 
-inline cstatus
-ensureNonNullArray(jarray ja, JNIEnv * env) {
-    // init return value to error
-    cstatus s = -1;
+inline cstatus ensureNonNullArray(jarray ja, JNIEnv *env) {
+  // init return value to error
+  cstatus s = -1;
 
-    if (ja == NULL) {
-        const char * c = "java/lang/IllegalArgumentException";
-        const char * m = ("JNI wrapper: Java array cannot be null"
-                          " when mapped to an object reference type"
-                          " (file: " __FILE__ ")");
-        registerException(env, c, m);
-    } else {
-        // ok
-        s = 0;
-    }
-    return s;
+  if (ja == NULL) {
+    const char *c = "java/lang/IllegalArgumentException";
+    const char *m =
+        ("JNI wrapper: Java array cannot be null"
+         " when mapped to an object reference type"
+         " (file: " __FILE__ ")");
+    registerException(env, c, m);
+  } else {
+    // ok
+    s = 0;
+  }
+  return s;
 }
 
-template< typename J, typename C >
+template <typename J, typename C>
 struct ArrayRefParam {
+  static C &convert(cstatus &s, typename J::JA_t *j, JNIEnv *env) {
+    TRACE("C & ArrayRefParam.convert(cstatus &, typename J::JA_t *, JNIEnv *)");
 
-    static C &
-    convert(cstatus & s, typename J::JA_t * j, JNIEnv * env) {
-        TRACE("C & ArrayRefParam.convert(cstatus &, typename J::JA_t *, JNIEnv *)");
+    // init return value and status to error
+    s = -1;
+    C *c = NULL;
 
-        // init return value and status to error
-        s = -1;
-        C * c = NULL;
-
-        if (ensureNonNullArray(j, env) != 0) {
-            // exception pending
-        } else {
-            c = ArrayPtrParam< J, C >::convert(s, j, env);
-            assert(s != 0 || c != NULL);
-        }
-        return *c;
+    if (ensureNonNullArray(j, env) != 0) {
+      // exception pending
+    } else {
+      c = ArrayPtrParam<J, C>::convert(s, j, env);
+      assert(s != 0 || c != NULL);
     }
+    return *c;
+  }
 
-    static void
-    release(C & c, typename J::JA_t * j, JNIEnv * env) {
-        TRACE("void ArrayRefParam.release(C &, typename J::JA_t *, JNIEnv *)");
-        ArrayPtrParam< J, C >::release(&c, j, env);
-    }
+  static void release(C &c, typename J::JA_t *j, JNIEnv *env) {
+    TRACE("void ArrayRefParam.release(C &, typename J::JA_t *, JNIEnv *)");
+    ArrayPtrParam<J, C>::release(&c, j, env);
+  }
 };
 
 // actually, there's not much of a point to map a result reference to an
 // 1-element array as a value-copy holder, for we can return the value
 // directly, instead; hence, this class is defined for completeness only
-template< typename J, typename C >
+template <typename J, typename C>
 struct ArrayRefResult {
-    static J *
-    convert(C & c, JNIEnv * env) {
-        TRACE("J * ArrayRefResult.convert(C &, JNIEnv *)");
-        // technically, C++ references can be null, hence, no asserts here
-        //assert(&c != NULL);
-        J * j = ArrayPtrResult< J, C >::convert(&c, env);
-        //assert(j != NULL);
-        return j;
-    }
+  static J *convert(C &c, JNIEnv *env) {
+    TRACE("J * ArrayRefResult.convert(C &, JNIEnv *)");
+    // technically, C++ references can be null, hence, no asserts here
+    // assert(&c != NULL);
+    J *j = ArrayPtrResult<J, C>::convert(&c, env);
+    // assert(j != NULL);
+    return j;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -117,19 +123,15 @@ struct ArrayRefResult {
 // - const results: map as value copy
 // - non-const params: map as value holder (array of length 1)
 // - non-const results:  map as value copy (no use as value holders)
-#define JTIE_SPECIALIZE_REFERENCE_TYPE_MAPPING( JA, J, C )              \
-    template<>                                                          \
-    struct Param< J, const C & >                                        \
-        : Param< J, C > {};                                             \
-    template<>                                                          \
-    struct Result< J, const C & >                                       \
-        : Result< J, C > {};                                            \
-    template<>                                                          \
-    struct Param< JA *, C & >                                           \
-        : ArrayRefParam< _jtie_j_BoundedArray< JA, 1 >, C > {};         \
-    template<>                                                          \
-    struct Result< J, C & >                                             \
-        : Result< J, C > {};                                            \
+#define JTIE_SPECIALIZE_REFERENCE_TYPE_MAPPING(JA, J, C)                      \
+  template <>                                                                 \
+  struct Param<J, const C &> : Param<J, C> {};                                \
+  template <>                                                                 \
+  struct Result<J, const C &> : Result<J, C> {};                              \
+  template <>                                                                 \
+  struct Param<JA *, C &> : ArrayRefParam<_jtie_j_BoundedArray<JA, 1>, C> {}; \
+  template <>                                                                 \
+  struct Result<J, C &> : Result<J, C> {};
 
 // ---------------------------------------------------------------------------
 // Specializations for reference to exact-width primitive type conversions
@@ -181,5 +183,4 @@ JTIE_SPECIALIZE_REFERENCE_TYPE_MAPPING(_jdoubleArray, jdouble, long double)
 
 // ---------------------------------------------------------------------------
 
-#endif // jtie_tconv_refbyval_impl_hpp
-
+#endif  // jtie_tconv_refbyval_impl_hpp

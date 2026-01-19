@@ -13,8 +13,8 @@ T1
 SHOW CREATE TABLE T1;
 Table	Create Table
 T1	CREATE TABLE `T1` (
-  `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `a` int DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 RENAME TABLE T1 TO T2;
 SHOW TABLES LIKE "T2";
 Tables_in_test (T2)
@@ -55,8 +55,8 @@ DROP TABLE T1;
 CREATE DATABASE `TEST_$1`;
 SHOW DATABASES LIKE "TEST%";
 Database (TEST%)
-TEST_$1
 test
+TEST_$1
 DROP DATABASE `test_$1`;
 CREATE TABLE T1 (a int) engine=innodb;
 INSERT INTO T1 VALUES (1);
@@ -69,8 +69,8 @@ T1
 SHOW CREATE TABLE T1;
 Table	Create Table
 T1	CREATE TABLE `T1` (
-  `a` int(11) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 RENAME TABLE T1 TO T2;
 SHOW TABLES LIKE "T2";
 Tables_in_test (T2)
@@ -130,12 +130,14 @@ Tables_in_test (T1%)
 T1
 alter table t1 add index (A);
 Warnings:
-Note	1831	Duplicate index 'A_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'A_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 show tables like 't1%';
 Tables_in_test (t1%)
 t1
 drop table t1;
 create temporary table T1(a int(11), b varchar(8));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into T1 values (1, 'abc');
 select * from T1;
 a	b
@@ -174,7 +176,7 @@ create table myUC (i int);
 select TABLE_SCHEMA,TABLE_NAME FROM information_schema.TABLES
 where TABLE_SCHEMA ='mysqltest_LC2';
 TABLE_SCHEMA	TABLE_NAME
-mysqltest_lc2	myUC
+mysqltest_LC2	myUC
 use test;
 drop database mysqltest_LC2;
 #
@@ -201,7 +203,7 @@ SELECT trigger_schema, trigger_name, event_object_table FROM
 INFORMATION_SCHEMA.TRIGGERS
 WHERE trigger_schema COLLATE utf8_bin = 'BUP_XPFM_COMPAT_DB2'
   ORDER BY trigger_schema, trigger_name;
-trigger_schema	trigger_name	event_object_table
+TRIGGER_SCHEMA	TRIGGER_NAME	EVENT_OBJECT_TABLE
 BUP_XPFM_COMPAT_DB2	trigger1	table1
 BUP_XPFM_COMPAT_DB2	TRIGGER2	TABLE2
 BUP_XPFM_COMPAT_DB2	TrigGer3	table3
@@ -229,7 +231,7 @@ create table t_bug44738_lowercase (i int) comment='Old comment';
 select table_schema, table_name, table_comment from information_schema.tables
 where table_schema like 'mysqltest_%' and table_name like 't_bug44738_%'
   order by table_name;
-table_schema	table_name	table_comment
+TABLE_SCHEMA	TABLE_NAME	TABLE_COMMENT
 mysqltest_UPPERCASE	t_bug44738_lowercase	Old comment
 mysqltest_UPPERCASE	t_bug44738_UPPERCASE	Old comment
 alter table t_bug44738_UPPERCASE comment='New comment';
@@ -240,7 +242,7 @@ alter table t_bug44738_lowercase comment='New comment';
 select table_schema, table_name, table_comment from information_schema.tables
 where table_schema like 'mysqltest_%' and table_name like 't_bug44738_%'
   order by table_name;
-table_schema	table_name	table_comment
+TABLE_SCHEMA	TABLE_NAME	TABLE_COMMENT
 mysqltest_UPPERCASE	t_bug44738_lowercase	New comment
 mysqltest_UPPERCASE	t_bug44738_UPPERCASE	New comment
 drop database mysqltest_UPPERCASE;
@@ -250,33 +252,11 @@ use test;
 create table t_bug44738_UPPERCASE (i int);
 select table_schema, table_name, table_comment from information_schema.tables
 where table_schema = 'test' and table_name like 't_bug44738_%';
-table_schema	table_name	table_comment
+TABLE_SCHEMA	TABLE_NAME	TABLE_COMMENT
 test	t_bug44738_UPPERCASE	
 drop table t_bug44738_UPPERCASE;
 # After the above DROP TABLE there are no entries in TDC which correspond
 # to our table and therefore the below statement should succeed.
-create table t_bug44738_UPPERCASE (i int);
-drop table t_bug44738_UPPERCASE;
-# Finally, let us check that another issue which was exposed by
-# the original test case is solved. I.e. that the table is not 
-# created if there is an entry for it in TDC even though it was 
-# removed from disk.
-create table t_bug44738_UPPERCASE (i int) engine = myisam;
-# Load table definition in TDC.
-select table_schema, table_name, table_comment from information_schema.tables
-where table_schema = 'test' and table_name like 't_bug44738_%';
-table_schema	table_name	table_comment
-test	t_bug44738_UPPERCASE	
-# Simulate manual removal of the table.
-# Check that still there is an entry for table in TDC.
-show open tables like 't_bug44738_%';
-Database	Table	In_use	Name_locked
-test	t_bug44738_uppercase	0	0
-# So attempt to create table with the same name should fail.
-create table t_bug44738_UPPERCASE (i int);
-ERROR HY000: Can't find file: 't_bug44738_uppercase' (errno: 2 - No such file or directory)
-# And should succeed after FLUSH TABLES.
-flush tables;
 create table t_bug44738_UPPERCASE (i int);
 drop table t_bug44738_UPPERCASE;
 # BUG#13702397 - 64211: 'CREATE TABLE ... LIKE ...'
@@ -292,3 +272,105 @@ Tables_in_test
 TestTable1
 TestTable2
 DROP TABLE TestTable1, TestTable2;
+#
+# Bug #19894615: CRASH WHEN CREATING A TABLE IN A SCHEMA THAT
+#                WAS DROPPED AND CREATED AGAIN
+#
+CREATE SCHEMA S1;
+DROP SCHEMA S1;
+CREATE SCHEMA S1;
+CREATE TABLE S1.t1(i INT);
+DROP TABLE S1.t1;
+DROP SCHEMA S1;
+#
+# Bug #18895960: ASSERT IN OBJECT_CACHE.H LOADING_COMPLETED()
+#                IN MYSQL-TRUNK-WL6378
+#
+CREATE TABLE T1 (i INT);
+RENAME TABLE T1 to T2;
+RENAME TABLE T2 to T1;
+SELECT * FROM T1;
+i
+DROP TABLE T1;
+CREATE TABLE T1 (i INT) ENGINE= MyISAM;
+CREATE TABLE T2 LIKE T1;
+ALTER TABLE T2 ENGINE= InnoDB;
+DROP TABLE T2;
+RENAME TABLE T1 to T2;
+SELECT * FROM T2;
+i
+DROP TABLE T2;
+#
+# Bug#24666169: I_S.TABLE_CONSTRAINTS.CONSTRAINT_NAME IS NOT UPDATED
+#               AFTER RENAME TABLE
+#
+CREATE TABLE t1(a INT PRIMARY KEY);
+CREATE TABLE T2(a INT, FOREIGN KEY(a) REFERENCES t1(a));
+SELECT constraint_name FROM information_schema.referential_constraints
+WHERE table_name = 'T2' ORDER BY constraint_name;
+CONSTRAINT_NAME
+t2_ibfk_1
+SELECT constraint_name FROM information_schema.table_constraints
+WHERE table_name = 'T2' ORDER BY constraint_name;
+CONSTRAINT_NAME
+t2_ibfk_1
+RENAME TABLE T2 TO T3;
+SELECT constraint_name FROM information_schema.referential_constraints
+WHERE table_name = 'T3' ORDER BY constraint_name;
+CONSTRAINT_NAME
+t3_ibfk_1
+SELECT constraint_name FROM information_schema.table_constraints
+WHERE table_name = 'T3' ORDER BY constraint_name;
+CONSTRAINT_NAME
+t3_ibfk_1
+RENAME TABLE t3 TO T4;
+SELECT constraint_name FROM information_schema.referential_constraints
+WHERE table_name = 'T4' ORDER BY constraint_name;
+CONSTRAINT_NAME
+t4_ibfk_1
+SELECT constraint_name FROM information_schema.table_constraints
+WHERE table_name = 'T4' ORDER BY constraint_name;
+CONSTRAINT_NAME
+t4_ibfk_1
+DROP TABLE T4;
+CREATE TABLE T2(a INT, CONSTRAINT T2_ibfk_1 FOREIGN KEY(a) REFERENCES t1(a));
+SELECT constraint_name FROM information_schema.referential_constraints
+WHERE table_name = 'T2' ORDER BY constraint_name;
+CONSTRAINT_NAME
+T2_ibfk_1
+SELECT constraint_name FROM information_schema.table_constraints
+WHERE table_name = 'T2' ORDER BY constraint_name;
+CONSTRAINT_NAME
+T2_ibfk_1
+RENAME TABLE T2 TO T3;
+SELECT constraint_name FROM information_schema.referential_constraints
+WHERE table_name = 'T3' ORDER BY constraint_name;
+CONSTRAINT_NAME
+T2_ibfk_1
+SELECT constraint_name FROM information_schema.table_constraints
+WHERE table_name = 'T3' ORDER BY constraint_name;
+CONSTRAINT_NAME
+T2_ibfk_1
+ALTER TABLE T3 DROP FOREIGN KEY t2_ibfk_1;
+DROP TABLE T3, t1;
+#
+# BUG#28351038 - MYSQL WORKBENCH ERROR GETTING DDL FOR OBJECT ON TABLES
+# WITH AN UPPERCASE LETTER.
+#
+CREATE TABLE `T1` (
+`id` INT NOT NULL AUTO_INCREMENT,
+`creation_utc` DATETIME NOT NULL,
+PRIMARY KEY (`id`));
+CREATE TRIGGER `test`.`test_table_t1_before_insert` BEFORE INSERT ON `T1`
+FOR EACH ROW
+BEGIN
+SET NEW.creation_utc = UTC_TIMESTAMP();
+END
+$$
+# The SHOW CREATE TRIGGER command fails without the fix.
+SHOW CREATE TRIGGER `test`.`test_table_t1_before_insert`;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
+test_table_t1_before_insert	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `test_table_t1_before_insert` BEFORE INSERT ON `t1` FOR EACH ROW BEGIN
+SET NEW.creation_utc = UTC_TIMESTAMP();
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	#
+DROP TABLE `T1`;

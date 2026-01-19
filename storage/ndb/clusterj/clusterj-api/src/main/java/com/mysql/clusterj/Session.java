@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,9 +29,14 @@ import com.mysql.clusterj.query.QueryBuilder;
 import com.mysql.clusterj.query.QueryDefinition;
 
 /** Session is the primary user interface to the cluster.
- *
+ * Session extends AutoCloseable so it can be used in the try-with-resources
+ * pattern. This pattern allows the application to create a session in the try
+ * declaration and regardless of the outcome of the try/catch/finally block,
+ * clusterj will clean up and close the session. If the try block exits with
+ * an open transaction, the transaction will be rolled back before the session
+ * is closed.
  */
-public interface Session {
+public interface Session  extends AutoCloseable {
 
     /** Get a QueryBuilder. 
      * @return the query builder
@@ -229,4 +242,22 @@ public interface Session {
      */
     void markModified(Object instance, String fieldName);
 
+    /** Unload the schema definition for a class. This must be done after the schema
+     * definition has changed in the database due to an alter table command.
+     * The next time the class is used the schema will be reloaded.
+     * @param cls the class for which the schema is unloaded
+     * @return the name of the schema that was unloaded
+     */
+    String unloadSchema(Class<?> cls);
+
+    /** Release resources associated with an instance. The instance must be a domain object obtained via
+     * session.newInstance(T.class), find(T.class), or query; or Iterable<T>, or array T[].
+     * Resources released can include direct buffers used to hold instance data.
+     * Released resources may be returned to a pool.
+     * @param obj a domain object of type T, an Iterable<T>, or array T[]
+     * @return the input parameter
+     * @throws ClusterJUserException if the instance is not a domain object T, Iterable<T>, or array T[],
+     * or if the object is used after calling this method.
+     */
+    <T> T release(T obj);
 }

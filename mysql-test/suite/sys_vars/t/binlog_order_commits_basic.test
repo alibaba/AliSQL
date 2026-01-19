@@ -23,7 +23,6 @@
 #                                                                              #
 ################################################################################
 
---source include/have_innodb.inc
 --source include/load_sysvars.inc
 
 ###########################################################
@@ -105,9 +104,11 @@ SELECT @@session.binlog_order_commits;
 # Check if the value in GLOBAL Tables matches values in variable             #
 ##############################################################################
 
+--disable_warnings
 SELECT IF(@@global.binlog_order_commits, "ON", "OFF") = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='binlog_order_commits';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_004_06----------------------#'
@@ -154,7 +155,9 @@ SET global.binlog_order_commits = ON;
 --Error ER_UNKNOWN_TABLE
 SELECT global.binlog_order_commits;
 --Error ER_BAD_FIELD_ERROR
-SELECT binlog_order_commits = @@session.binlog_order_commits;
+SELECT binlog_order_commits;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.binlog_order_commits;
 
 
 

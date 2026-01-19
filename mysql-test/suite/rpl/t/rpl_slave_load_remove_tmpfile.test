@@ -7,29 +7,29 @@
 # ==== Implementation ====
 #
 # Steps:
-#    0 - Set debug variable remove_slave_load_file_before_write. This
+#    0 - Set debug variable remove_replica_load_file_before_write. This
 #        causes the slave to remove the file.
 #    1 - Creates a table and populates it through "LOAD DATA INFILE".
 #    2 - Catches error.
 #
 # ==== References ====
 #
-# BUG#42861: Assigning invalid directories to --slave-load-tmpdir crashes the slave
+# BUG#42861: Assigning invalid directories to --replica-load-tmpdir crashes the slave
 # BUG#11872422: rpl_slave_load_remove_tmpfile fails sporadically in pb2
 
+--source include/not_group_replication_plugin.inc
 --source include/have_binlog_format_statement.inc
---source include/have_innodb.inc
 --source include/have_debug.inc
 --source include/master-slave.inc
---source include/not_embedded.inc
 
 ##########################################################################
 #                            Loading data
 ##########################################################################
 
 connection slave;
---let $old_debug= `SELECT @@GLOBAL.DEBUG`
-SET @@GLOBAL.DEBUG = '+d,remove_slave_load_file_before_write';
+
+--let $debug_point= remove_replica_load_file_before_write
+--source include/add_debug_point.inc
 
 connection master;
 
@@ -55,8 +55,8 @@ connection slave;
 #                         data file is removed the server won't be able to 
 #                         resolve the realpath, ending up stating that we 
 #                         have a mismatch)
-call mtr.add_suppression("LOAD DATA INFILE in the slave SQL Thread can only read from --slave-load-tmpdir");
-call mtr.add_suppression("The MySQL server is running with the --slave-load-tmpdir option so it cannot execute this statement.*Error_code: 1290");
+call mtr.add_suppression("LOAD DATA INFILE in the replica SQL Thread can only read from --replica-load-tmpdir");
+call mtr.add_suppression("The MySQL server is running with the --replica-load-tmpdir option so it cannot execute this statement.*Error_code: MY-001290");
 --let $slave_sql_errno= 29, 13, 1290
 --source include/wait_for_slave_sql_error.inc
 
@@ -73,15 +73,16 @@ RESET SLAVE;
 
 drop table t1;
 
-call mtr.add_suppression("Slave: Can't get stat of .*");
-call mtr.add_suppression("Slave SQL: .*Error .Can.t get stat of.* Error_code: 13");
-call mtr.add_suppression("Slave: File.* not found.*");
-call mtr.add_suppression("Slave SQL: .*Error .File.* not found.* Error_code: 29");
-call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("Replica: Can't get stat of .*");
+call mtr.add_suppression("Replica SQL for channel '': .*Error .Can.t get stat of.* Error_code: MY-000013");
+call mtr.add_suppression("Replica.*: File.* not found.*");
+call mtr.add_suppression("Replica.*: .*Error .File.* not found.* Error_code: MY-000029");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 
 --let $rpl_only_running_threads= 1
 
-eval SET @@GLOBAL.DEBUG = '$old_debug';
+--let $debug_point= remove_replica_load_file_before_write
+--source include/remove_debug_point.inc
 
 --source include/rpl_end.inc
 

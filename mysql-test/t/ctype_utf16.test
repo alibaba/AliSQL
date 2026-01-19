@@ -1,12 +1,3 @@
--- source include/have_ucs2.inc
--- source include/have_utf16.inc
--- source include/have_utf8mb4.inc
-
-
---disable_warnings
-DROP TABLE IF EXISTS t1;
---enable_warnings
-
 --echo #
 --echo # Start of 5.5 tests
 --echo #
@@ -100,7 +91,7 @@ SELECT * FROM t1 WHERE a LIKE 'фЫва%' COLLATE utf16_bin ORDER BY BINARY a;
 DROP TABLE t1;
 
 CREATE TABLE t1 (word varchar(64) NOT NULL, PRIMARY KEY (word))
-ENGINE=MyISAM CHARACTER SET utf16;
+CHARACTER SET utf16;
 INSERT INTO t1 (word) VALUES ("cat");
 SELECT * FROM t1 WHERE word LIKE "c%";
 SELECT * FROM t1 WHERE word LIKE "ca_";
@@ -115,106 +106,6 @@ DROP TABLE t1;
 # This invokes charpos() function.
 select insert(_utf16 0x006100620063,10,2,_utf16 0x006400650066);
 select insert(_utf16 0x006100620063,1,2,_utf16 0x006400650066);
-
-########################################################
-#
-# Bug 1264
-#
-# Description: 
-#
-# When using a ucs2 table in MySQL, 
-# either with ucs2_general_ci or ucs2_bin collation,
-# words are returned in an incorrect order when using ORDER BY
-# on an _indexed_ CHAR or VARCHAR column. They are sorted with
-# the longest word *first* instead of last. I.E. The word "aardvark"
-# is in the results before the word "a".
-#
-# If there is no index for the column, the problem does not occur.
-#
-# Interestingly, if there is no second column, the words are returned
-# in the correct order. 
-#
-# According to EXPLAIN, it looks like when the output includes columns that
-# are not part of the index sorted on, it does a filesort, which fails. 
-# Using a straight index yields correct results.
-
-SET NAMES latin1;
-
-#
-# Two fields, index
-#
-
-CREATE TABLE t1 (
-   word VARCHAR(64),
-   bar INT(11) default 0,
-   PRIMARY KEY (word))
-   ENGINE=MyISAM
-   CHARSET utf16
-   COLLATE utf16_general_ci ;
-
-INSERT INTO t1 (word) VALUES ("aar");
-INSERT INTO t1 (word) VALUES ("a");
-INSERT INTO t1 (word) VALUES ("aardvar");
-INSERT INTO t1 (word) VALUES ("aardvark");
-INSERT INTO t1 (word) VALUES ("aardvara");
-INSERT INTO t1 (word) VALUES ("aardvarz");
-EXPLAIN SELECT * FROM t1 ORDER BY word;
-SELECT * FROM t1 ORDER BY word;
-EXPLAIN SELECT word FROM t1 ORDER BY word;
-SELECT word FROM t1 ORDER by word;
-DROP TABLE t1;
-
-
-#
-# One field, index
-# 
-
-CREATE TABLE t1 (
-   word VARCHAR(64) ,
-   PRIMARY KEY (word))
-   ENGINE=MyISAM
-   CHARSET utf16
-   COLLATE utf16_general_ci;
-
-INSERT INTO t1 (word) VALUES ("aar");
-INSERT INTO t1 (word) VALUES ("a");
-INSERT INTO t1 (word) VALUES ("aardvar");
-INSERT INTO t1 (word) VALUES ("aardvark");
-INSERT INTO t1 (word) VALUES ("aardvara");
-INSERT INTO t1 (word) VALUES ("aardvarz");
-EXPLAIN SELECT * FROM t1 ORDER BY WORD;
-SELECT * FROM t1 ORDER BY word;
-DROP TABLE t1;
-
-
-#
-# Two fields, no index
-#
-
-CREATE TABLE t1 (
-   word TEXT,
-   bar INT(11) AUTO_INCREMENT,
-   PRIMARY KEY (bar))
-   ENGINE=MyISAM
-   CHARSET utf16
-   COLLATE utf16_general_ci ;
-INSERT INTO t1 (word) VALUES ("aar");
-INSERT INTO t1 (word) VALUES ("a" );
-INSERT INTO t1 (word) VALUES ("aardvar");
-INSERT INTO t1 (word) VALUES ("aardvark");
-INSERT INTO t1 (word) VALUES ("aardvara");
-INSERT INTO t1 (word) VALUES ("aardvarz");
-EXPLAIN SELECT * FROM t1 ORDER BY word;
-SELECT * FROM t1 ORDER BY word;
-EXPLAIN SELECT word FROM t1 ORDER BY word;
-SELECT word FROM t1 ORDER BY word;
-DROP TABLE t1;
-
-#
-# END OF Bug 1264 test
-#
-########################################################
-
 
 #
 # Check alignment for from-binary-conversion with CAST and CONVERT
@@ -274,6 +165,7 @@ drop table t1;
 #
 # Check prepare statement from an UTF16 string
 #
+set names latin1;
 set @ivar= 1234;
 set @str1 = 'select ?';
 set @str2 = convert(@str1 using utf16);
@@ -393,23 +285,6 @@ select utext from t1 where utext like '%%';
 drop table t1;
 deallocate prepare stmt;
 
-#
-# Bug#22052 Trailing spaces are not removed from UNICODE fields in an index
-#
-create table t1 (
-  a char(10) character set utf16 not null, 
-  index a (a)
-) engine=myisam;
-insert into t1 values (repeat(0x201f, 10));
-insert into t1 values (repeat(0x2020, 10));
-insert into t1 values (repeat(0x2021, 10));
-# make sure "index read" is used
-explain select hex(a) from t1 order by a;
-select hex(a) from t1 order by a;
-alter table t1 drop index a;
-select hex(a) from t1 order by a;
-drop table t1;
-
 ##
 ## Bug #20076: server crashes for a query with GROUP BY if MIN/MAX aggregation
 ##             over a 'ucs2' field uses a temporary table 
@@ -502,6 +377,7 @@ set names latin1;
 # Bug #14290: character_maximum_length for text fields
 #
 create table t1(a blob, b text charset utf16);
+--sorted_result
 select data_type, character_octet_length, character_maximum_length
   from information_schema.columns where table_name='t1';
 drop table t1;
@@ -557,6 +433,7 @@ insert into t1 values (_utf16 0xD800DC00);
 insert into t1 values (_utf16 0xD800DCFF);
 insert into t1 values (_utf16 0xDBFFDC00);
 insert into t1 values (_utf16 0xDBFFDCFF);
+--sorted_result
 select hex(a) from t1;
 drop table t1;
 
@@ -567,17 +444,19 @@ drop table t1;
 #
 # via alter
 #
+SET sql_mode = '';
 create table t1 (s1 varchar(50) character set ucs2);
 insert into t1 values (0xdf84);
 alter table t1 modify column s1 varchar(50) character set utf16;
 select hex(s1) from t1;
 drop table t1;
+SET sql_mode = default;
 #
 # via update
 #
 create table t1 (s1 varchar(5) character set ucs2, s2 varchar(5) character set utf16);
 insert into t1 (s1) values (0xdf84);
-update t1 set s2 = s1;
+update ignore t1 set s2 = s1;
 select hex(s2) from t1;
 drop table t1;
 
@@ -658,7 +537,7 @@ select left('aaa','1');
 #
 create table t1 (a int);
 insert into t1 values ('-1234.1e2');
-insert into t1 values ('-1234.1e2xxxx');
+insert ignore into t1 values ('-1234.1e2xxxx');
 insert into t1 values ('-1234.1e2    ');
 select * from t1;
 drop table t1;
@@ -668,25 +547,28 @@ drop table t1;
 #
 create table t1 (a int);
 insert into t1 values ('1 ');
-insert into t1 values ('1 x');
+insert ignore into t1 values ('1 x');
 select * from t1;
 drop table t1;
 
 #
 # Testing auto-conversion to TEXT
 #
+SET sql_mode = '';
 create table t1 (a varchar(17000) character set utf16);
 show create table t1;
 drop table t1;
+SET sql_mode = default;
 
 #
-# Testing that maximim possible key length is 1000 bytes
+# Testing that maximim possible key length is 767 bytes for InnoDB
 #
-create table t1 (a varchar(250) character set utf16 primary key);
+#Minimized the varchar length for InnoDB so that it does not throw max keylength exceeded error
+create table t1 (a varchar(150) character set utf16 primary key);
 show create table t1;
 drop table t1;
 --error ER_TOO_LONG_KEY
-create table t1 (a varchar(334) character set utf16 primary key);
+create table t1 (a varchar(334) character set utf16 primary key) ROW_FORMAT=COMPACT;
 
 #
 # Conversion to utf8
@@ -694,6 +576,7 @@ create table t1 (a varchar(334) character set utf16 primary key);
 create table t1 (a char(1) character set utf16);
 insert into t1 values (0xD800DC00),(0xD800DCFF),(0xDB7FDC00),(0xDB7FDCFF);
 insert into t1 values (0x00C0), (0x00FF),(0xE000), (0xFFFF);
+--sorted_result
 select hex(a), hex(@a:=convert(a using utf8mb4)), hex(convert(@a using utf16)) from t1;
 drop table t1;
 
@@ -799,14 +682,11 @@ set collation_connection=utf16_general_ci;
 --source include/weight_string_euro.inc
 select hex(weight_string(_utf16 0xD800DC00));
 select hex(weight_string(_utf16 0xD800DC01));
---source include/weight_string_l1.inc
 
 set collation_connection=utf16_bin;
 --source include/weight_string.inc
 --source include/weight_string_euro.inc
---source include/weight_string_l1.inc
 
 --echo #
 --echo # End of 5.6 tests
 --echo #
-

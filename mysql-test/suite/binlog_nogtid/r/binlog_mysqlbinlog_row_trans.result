@@ -1,0 +1,26 @@
+#
+# Preparatory cleanup.
+#
+DROP TABLE IF EXISTS t1;
+#
+# We need a fixed timestamp to avoid varying results.
+#
+SET timestamp=1000000000;
+#
+# Delete all existing binary logs.
+#
+RESET MASTER;
+#
+# Bug#22350047: IF CLIENT KILLED AFTER ROLLBACK TO SAVEPOINT PREVIOUS
+#               STMTS COMMITTED
+#
+CREATE TABLE t1(a INT) ENGINE=InnoDB;
+BEGIN;
+INSERT INTO t1 VALUES(1);
+SAVEPOINT tx_0;
+ROLLBACK TO SAVEPOINT tx_0;
+KILL CONNECTION CONN_ID;
+# Without the patch, field 'a' contained the value 1
+SELECT * FROM t1;
+a
+DROP TABLE t1;

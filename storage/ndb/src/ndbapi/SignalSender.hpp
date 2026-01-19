@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2005, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,36 +27,38 @@
 #define SIGNAL_SENDER_HPP
 
 #include <ndb_global.h>
+#include <Vector.hpp>
+#include "NdbApiSignal.hpp"
 #include "TransporterFacade.hpp"
 #include "trp_client.hpp"
-#include "NdbApiSignal.hpp"
-#include <Vector.hpp>
 
-#include <signaldata/TestOrd.hpp>
-#include <signaldata/TamperOrd.hpp>
-#include <signaldata/StartOrd.hpp>
+#include <signaldata/AllocNodeId.hpp>
 #include <signaldata/ApiVersion.hpp>
+#include <signaldata/BackupSignalData.hpp>
+#include <signaldata/DumpStateOrd.hpp>
+#include <signaldata/EventReport.hpp>
+#include <signaldata/EventSubscribeReq.hpp>
 #include <signaldata/ResumeReq.hpp>
 #include <signaldata/SetLogLevelOrd.hpp>
-#include <signaldata/EventSubscribeReq.hpp>
-#include <signaldata/EventReport.hpp>
-#include <signaldata/DumpStateOrd.hpp>
-#include <signaldata/BackupSignalData.hpp>
-#include <signaldata/AllocNodeId.hpp>
+#include <signaldata/StartOrd.hpp>
+#include <signaldata/TamperOrd.hpp>
+#include <signaldata/TestOrd.hpp>
+
+struct trp_node;
 
 struct SimpleSignal {
-public:
+ public:
   SimpleSignal(bool dealloc = false);
-  SimpleSignal(const SimpleSignal& src);
+  SimpleSignal(const SimpleSignal &src);
   ~SimpleSignal();
-  
-  void set(class SignalSender&,
-	   Uint8  trace, Uint16 recBlock, Uint16 gsn, Uint32 len);
-  
+
+  void set(class SignalSender &, Uint8 trace, Uint16 recBlock, Uint16 gsn,
+           Uint32 len);
+
   NdbApiSignal header;
   LinearSectionPtr ptr[3];
 
-  int readSignalNumber() const { return header.readSignalNumber(); };
+  int readSignalNumber() const { return header.readSignalNumber(); }
   Uint32 *getDataPtrSend() { return header.getDataPtrSend(); }
   const Uint32 *getDataPtr() const { return header.getDataPtr(); }
   Uint32 getLength() const { return header.getLength(); }
@@ -58,63 +68,72 @@ public:
    */
   bool isFragmented() const { return header.isFragmented(); }
   bool isFirstFragment() const { return header.isFirstFragment(); }
-  bool isLastFragment() const { return header.isLastFragment(); };
-  Uint32 getFragmentId() const { return header.getFragmentId(); };
+  bool isLastFragment() const { return header.isLastFragment(); }
+  Uint32 getFragmentId() const { return header.getFragmentId(); }
 
-  void print(FILE * out = stdout) const;
-  SimpleSignal& operator=(const SimpleSignal&);
-private:
+  void print(FILE *out = stdout) const;
+  SimpleSignal &operator=(const SimpleSignal &);
+
+ private:
   bool deallocSections;
 };
 
-class SignalSender  : public trp_client {
-public:
-  SignalSender(TransporterFacade *facade, int blockNo = -1);
-  SignalSender(Ndb_cluster_connection* connection);
-  virtual ~SignalSender();
-  
+class SignalSender : public trp_client {
+ public:
+  /**
+   * deliverAll option set to true also delivers signals which may be
+   * frequent.
+   * Care should be taken to ensure that these are handled promptly to
+   * avoid excessive buffering
+   */
+  SignalSender(TransporterFacade *facade, int blockNo = -1,
+               bool deliverAll = false);
+  SignalSender(Ndb_cluster_connection *connection, bool deliverAll = false);
+  ~SignalSender() override;
+
   int lock();
   int unlock();
 
   Uint32 getOwnRef() const;
 
-  NodeId find_confirmed_node(const NodeBitmask& mask);
-  NodeId find_connected_node(const NodeBitmask& mask);
-  NodeId find_alive_node(const NodeBitmask& mask);
+  NodeId find_confirmed_node(const NodeBitmask &mask);
+  NodeId find_connected_node(const NodeBitmask &mask);
+  NodeId find_alive_node(const NodeBitmask &mask);
 
   SendStatus sendSignal(Uint16 nodeId, const SimpleSignal *);
-  SendStatus sendSignal(Uint16 nodeId, SimpleSignal& sig,
-                        Uint16 recBlock, Uint16 gsn, Uint32 len);
-  int sendFragmentedSignal(Uint16 nodeId, SimpleSignal& sig,
-                           Uint16 recBlock, Uint16 gsn, Uint32 len);
-  NodeBitmask broadcastSignal(NodeBitmask mask, SimpleSignal& sig,
+  SendStatus sendSignal(Uint16 nodeId, SimpleSignal &sig, Uint16 recBlock,
+                        Uint16 gsn, Uint32 len);
+  int sendFragmentedSignal(Uint16 nodeId, SimpleSignal &sig, Uint16 recBlock,
+                           Uint16 gsn, Uint32 len);
+  NodeBitmask broadcastSignal(NodeBitmask mask, SimpleSignal &sig,
                               Uint16 recBlock, Uint16 gsn, Uint32 len);
 
-  SimpleSignal * waitFor(Uint32 timeOutMillis = 0);
+  SimpleSignal *waitFor(Uint32 timeOutMillis = 0);
 
   Uint32 get_an_alive_node() const { return theFacade->get_an_alive_node(); }
   Uint32 getAliveNode() const { return get_an_alive_node(); }
   bool get_node_alive(Uint32 n) const { return getNodeInfo(n).m_alive; }
 
-private:
+ private:
   int m_blockNo;
-  TransporterFacade * theFacade;
-  
-public:
+  TransporterFacade *theFacade;
+  bool m_locked;
+  bool m_deliverAll;
+
+  NodeId find_node(const NodeBitmask &mask, bool (*cond)(const trp_node &));
+
+ public:
   /**
    * trp_client interface
    */
-  virtual void trp_deliver_signal(const NdbApiSignal* signal,
-                                  const struct LinearSectionPtr ptr[3]);
-  
+  void trp_deliver_signal(const NdbApiSignal *signal,
+                          const struct LinearSectionPtr ptr[3]) override;
+
   Vector<SimpleSignal *> m_jobBuffer;
   Vector<SimpleSignal *> m_usedBuffer;
 
-  template<class T>
-  SimpleSignal * waitFor(Uint32 timeOutMillis, T & t);
-
-  template<class T>
-  NodeId find_node(const NodeBitmask& mask, T & t);
+  template <class T>
+  SimpleSignal *waitFor(Uint32 timeOutMillis, T &t);
 };
 
 #endif

@@ -3,8 +3,6 @@
 #
 do lcase(ltrim(from_unixtime(0,' %T ')));
 do _cp852 "" <= lcase(trim(leading 1 from 12222)) not between '1' and '2';
-do decode(substring(sha1('1'),'11'),25);
-do encode(mid(sysdate(),"5",1),'11');
 do upper(substring(1.111111111111111111 from '2n'));
 Warnings:
 Warning	1292	Truncated incorrect INTEGER value: '2n'
@@ -20,5 +18,7 @@ do replace(ltrim(from_unixtime(0,' %T ')), '0', '1');
 do insert(ltrim(from_unixtime(0,' %T ')), 2, 1, 'hi');
 set @old_collation_connection=@@collation_connection;
 set collation_connection="utf8_general_ci";
+Warnings:
+Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 do replace(ltrim(from_unixtime(0,' %T ')), '0', '1');
 set collation_connection=@old_collation_connection;

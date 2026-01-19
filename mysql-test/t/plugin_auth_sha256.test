@@ -1,20 +1,17 @@
---source include/not_embedded.inc
---source include/have_ssl.inc
---source include/have_sha256_rsa_auth.inc
 --source include/mysql_upgrade_preparation.inc
+--source include/allowed_ciphers.inc
 
 # This test will intentionally generate errors in the server error log
 # when a broken password is inserted into the mysql.user table.
 # The below suppression is to clear those errors.
 --disable_query_log
 call mtr.add_suppression(".*Password salt for user.*");
+call mtr.add_suppression("Found invalid password for user:*");
 --enable_query_log
 
 CREATE USER 'kristofer' IDENTIFIED WITH 'sha256_password';
-SET GLOBAL old_passwords= 2;
-SET SESSION old_passwords= 2;
-SET PASSWORD FOR 'kristofer'=PASSWORD('secret');
-SELECT user, plugin FROM mysql.user;
+ALTER USER 'kristofer' IDENTIFIED BY 'secret';
+SELECT user, plugin FROM mysql.user ORDER BY user;
 connect(con1,localhost,kristofer,secret,,);
 connection con1;
 SELECT USER(),CURRENT_USER();
@@ -24,10 +21,10 @@ disconnect con1;
 # it possible to select a local public key fil using client options.
 DROP USER 'kristofer';
 
-GRANT ALL ON *.* TO 'kristofer'@'localhost' IDENTIFIED WITH 'sha256_password';
-GRANT ALL ON *.* TO 'kristofer2'@'localhost' IDENTIFIED WITH 'sha256_password';
-SET PASSWORD FOR 'kristofer'@'localhost'=PASSWORD('secret2');
-SET PASSWORD FOR 'kristofer2'@'localhost'=PASSWORD('secret2');
+CREATE USER 'kristofer'@'localhost' IDENTIFIED WITH 'sha256_password' BY '123';
+CREATE USER 'kristofer2'@'localhost' IDENTIFIED WITH 'sha256_password' BY '123';
+ALTER USER 'kristofer'@'localhost' IDENTIFIED BY 'secret2';
+ALTER USER 'kristofer2'@'localhost' IDENTIFIED BY 'secret2';
 --disable_query_log
 --error ER_ACCESS_DENIED_ERROR
 connect(con2,localhost,kristofer,badpassword,,);
@@ -35,8 +32,8 @@ connect(con2,localhost,kristofer,badpassword,,);
 connect(con2,localhost,kristofer,secret2,,);
 connection con2;
 SELECT USER(),CURRENT_USER();
---replace_regex /PASSWORD .*$/PASSWORD '<non-deterministic-password-hash>'/
-SHOW GRANTS FOR 'kristofer'@'localhost';
+--replace_regex /AS .*$/AS '<non-deterministic-password-hash>'/
+SHOW CREATE USER 'kristofer'@'localhost';
 
 --echo Change user (should succeed)
 change_user kristofer2,secret2;
@@ -53,8 +50,8 @@ disconnect con2;
 DROP USER 'kristofer'@'localhost';
 DROP USER 'kristofer2'@'localhost';
 
-GRANT ALL ON *.* TO 'kristofer'@'localhost' IDENTIFIED WITH 'sha256_password';
-SET PASSWORD FOR 'kristofer'@'localhost'=PASSWORD('');
+CREATE USER 'kristofer'@'localhost' IDENTIFIED WITH 'sha256_password' BY '123';
+ALTER USER 'kristofer'@'localhost' IDENTIFIED BY '';
 --disable_query_log
 --error ER_ACCESS_DENIED_ERROR
 connect(con3,localhost,kristofer,wrongpass,,);
@@ -62,14 +59,14 @@ connect(con3,localhost,kristofer,wrongpass,,);
 connect(con3,localhost,kristofer,,,);
 connection con3;
 SELECT USER(),CURRENT_USER();
---replace_regex /PASSWORD .*$/PASSWORD '<non-deterministic-password-hash>'/
-SHOW GRANTS FOR 'kristofer'@'localhost';
+--replace_regex /AS .*$/AS '<non-deterministic-password-hash>'/
+SHOW CREATE USER 'kristofer'@'localhost';
 connection default;
 disconnect con3;
 DROP USER 'kristofer'@'localhost';
 
-GRANT ALL ON *.* TO 'kristofer'@'33.33.33.33' IDENTIFIED WITH 'sha256_password';
-SET PASSWORD FOR 'kristofer'@'33.33.33.33'=PASSWORD('');
+CREATE USER 'kristofer'@'33.33.33.33' IDENTIFIED WITH 'sha256_password' BY '123';
+ALTER USER 'kristofer'@'33.33.33.33' IDENTIFIED BY '';
 --echo Connection should fail for localhost
 --replace_result $MASTER_MYSOCK MASTER_MYSOCK
 --disable_query_log
@@ -79,34 +76,11 @@ connect(con4,127.0.0.1,kristofer,,,);
 DROP USER 'kristofer'@'33.33.33.33';
 
 #
-# Test with non const arguments
-#
-SET GLOBAL old_passwords= 2;
-SET SESSION old_passwords= 2;
-CREATE TABLE t1 (c1 VARCHAR(10) );
-INSERT INTO t1 VALUES ('secret');
---replace_regex /2435.*00/success/
-SELECT HEX(PASSWORD(c1)) FROM t1;
-DROP TABLE t1;
-
-#
-# Test null argument
-# PASSWORD(NULL) should produce empty "" values.
-#
-SELECT PASSWORD(NULL), PASSWORD('');
-CREATE TABLE t1( c1 text, c2 varchar (2));
-INSERT INTO t1 VALUES (NULL,''),(NULL,''),(NULL,'');
-SELECT PASSWORD(c1), PASSWORD(c2) FROM t1;
-DROP TABLE t1;
-
-#
 # test bad password formats
 #
 CREATE USER 'kristofer' IDENTIFIED WITH 'sha256_password';
-SET GLOBAL old_passwords= 2;
-SET SESSION old_passwords= 2;
-SET PASSWORD FOR 'kristofer'=PASSWORD('secret');
-SELECT user, plugin FROM mysql.user;
+ALTER USER 'kristofer' IDENTIFIED BY 'secret';
+SELECT user, plugin FROM mysql.user ORDER BY user;
 --disable_query_log
 connect(con1,localhost,kristofer,secret);
 --enable_query_log
@@ -116,7 +90,7 @@ connection default;
 disconnect con1;
 UPDATE mysql.user SET authentication_string= '$' WHERE user='kristofer';
 FLUSH PRIVILEGES;
-SELECT user,authentication_string,password,plugin FROM mysql.user WHERE user='kristofer';
+SELECT user,authentication_string,plugin FROM mysql.user WHERE user='kristofer';
 --disable_query_log
 --error ER_ACCESS_DENIED_ERROR
 connect(con1,localhost,kristofer,secret);
@@ -124,13 +98,9 @@ connect(con1,localhost,kristofer,secret);
 
 UPDATE mysql.user SET authentication_string= '$5$asd' WHERE user='kristofer';
 FLUSH PRIVILEGES;
-SELECT user,authentication_string,password,plugin FROM mysql.user WHERE user='kristofer';
+SELECT user,authentication_string,plugin FROM mysql.user WHERE user='kristofer';
 --disable_query_log
 --error ER_ACCESS_DENIED_ERROR
 connect(con1,localhost,kristofer,secret);
 --enable_query_log
 DROP USER kristofer;
-
-# Restore default value for old_passwords
-SET GLOBAL old_passwords= default;
-

@@ -70,7 +70,7 @@ if ($wait_for_all != 1)
   while (`SELECT UNIX_TIMESTAMP() <= $max_end_time AND $found = 0`)
   {
      # Sleep a bit to avoid too heavy load.
-     real_sleep 0.2;
+     sleep 0.2;
      let $rowno= 1;
      let $process_result= 1;
      let $do_loop= 1;
@@ -103,7 +103,7 @@ if ($wait_for_all == 1)
   while (`SELECT UNIX_TIMESTAMP() <= $max_end_time AND $found = 0`)
   {
      # Sleep a bit to avoid too heavy load.
-     real_sleep 0.2;
+     sleep 0.2;
      let $rowno= 1;
      let $process_result= 1;
      let $do_loop= 1;
@@ -127,10 +127,18 @@ if ($wait_for_all == 1)
 
 if (!$found)
 {
+  if ($show_rpl_debug_info)
+  {
+    --source include/show_rpl_debug_info.inc
+  }
   echo # Timeout in include/wait_show_condition.inc for $condition;
   echo #         show_statement : $show_statement;
   echo #         field          : $field;
   echo #         condition      : $condition;
   echo #         max_run_time   : $max_run_time;
+  if ($show_rpl_debug_info)
+  {
+    --die Timeout in wait_show_condition.inc for $condition
+  }
 }
 

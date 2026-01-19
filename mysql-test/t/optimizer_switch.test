@@ -1,16 +1,13 @@
+
 # This test checks that setting of optimizer_switch works correctly.
 # Test cases for bugs related to changing the setting of optimizer_switch,
 # should go here.
-
---source include/have_semijoin.inc
---source include/have_materialization.inc
---source include/have_firstmatch.inc
---source include/have_loosescan.inc
 
 --echo
 --echo BUG#37120 optimizer_switch allowable values not according to specification
 --echo
 
+--replace_result hypergraph_optimizer=on hypergraph_optimizer=off
 select @@optimizer_switch; 
 
 set optimizer_switch='default';
@@ -255,6 +252,10 @@ WHERE ta.a IN (SELECT c FROM t2 AS tb
                WHERE tb.d >= SOME(SELECT e FROM t3 as tc
                                   WHERE ta.b=tc.e));
 
+analyze table t1;
+analyze table t2;
+analyze table t3;
+analyze table t4;
 eval EXPLAIN $query;
 eval $query;
 
@@ -314,11 +315,13 @@ WHERE ta.a IN (SELECT c FROM t2 AS tb
                                   WHERE tb.d=tc.e));
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 set @@optimizer_switch='materialization=off,semijoin=on';
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 --echo # Reference above the parent query block (should not be affected)
@@ -356,6 +359,7 @@ eval $query;
 set @@optimizer_switch='materialization=off,semijoin=on';
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 --echo # Scalar subquery with reference to the parent query block

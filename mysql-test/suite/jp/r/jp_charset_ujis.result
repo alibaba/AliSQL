@@ -9,6 +9,8 @@ drop table if exists `£Ô£¸`;
 drop table if exists `£Ô£¹`;
 SET NAMES ujis;
 SET character_set_database = ujis;
+Warnings:
+Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
 CREATE TABLE `£Ô£±` (`£Ã£±` char(20)) DEFAULT CHARSET = ujis engine = innodb;
 CREATE TABLE `£Ô£²` (`£Ã£±` char(20)) DEFAULT CHARSET = ujis engine = innodb;
 CREATE TABLE `£Ô£³` (`£Ã£±` char(20)) DEFAULT CHARSET = ujis engine = innodb;
@@ -38,10 +40,14 @@ CHARSET(`£Ã£±`)
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£±`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£±`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£±`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis
@@ -50,10 +56,14 @@ CHARSET(CONVERT(`£Ã£±` USING ujis))
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£²`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£²`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£²`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis
@@ -62,10 +72,14 @@ CHARSET(CONVERT(`£Ã£±` USING ujis))
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£³`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£³`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£³`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis
@@ -83,10 +97,14 @@ CHARSET(`£Ã£±`)
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£´`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£´`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£´`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis
@@ -95,10 +113,14 @@ CHARSET(CONVERT(`£Ã£±` USING ujis))
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£µ`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£µ`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£µ`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis
@@ -107,10 +129,14 @@ CHARSET(CONVERT(`£Ã£±` USING ujis))
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£¶`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£¶`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£¶`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis
@@ -128,10 +154,14 @@ CHARSET(`£Ã£±`)
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£·`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£·`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£·`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis
@@ -140,10 +170,14 @@ CHARSET(CONVERT(`£Ã£±` USING ujis))
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£¸`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£¸`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£¸`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis
@@ -152,10 +186,14 @@ CHARSET(CONVERT(`£Ã£±` USING ujis))
 ujis
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING utf8)) FROM `£Ô£¹`;
 CHARSET(CONVERT(`£Ã£±` USING utf8))
-utf8
+utf8mb3
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING ucs2)) FROM `£Ô£¹`;
 CHARSET(CONVERT(`£Ã£±` USING ucs2))
 ucs2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT DISTINCT CHARSET(CONVERT(`£Ã£±` USING sjis)) FROM `£Ô£¹`;
 CHARSET(CONVERT(`£Ã£±` USING sjis))
 sjis

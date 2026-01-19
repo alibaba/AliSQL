@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,8 +30,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.Date;
-
-import org.junit.Ignore;
 
 import testsuite.clusterj.model.IdBase;
 import testsuite.clusterj.model.TimestampAsUtilDateTypes;
@@ -49,18 +55,7 @@ create index idx_timestamp_not_null_btree on timestamptypes(timestamp_not_null_b
 create unique index idx_timestamp_not_null_both on timestamptypes(timestamp_not_null_both);
 
  */
-@Ignore
 public class TimestampAsUtilDateTypesTest extends AbstractClusterJModelTest {
-
-    @Override
-    public void localSetUp() {
-        super.localSetUp();
-        getConnection();
-        resetLocalSystemDefaultTimeZone(connection);
-        connection = null;
-        getConnection();
-        setAutoCommit(connection, false);
-    }
 
     static int NUMBER_OF_INSTANCES = 10;
 
@@ -99,7 +94,7 @@ public class TimestampAsUtilDateTypesTest extends AbstractClusterJModelTest {
     public void testWriteNDBReadJDBC() {
         writeNDBreadJDBC();
         failOnError();
-   }
+    }
 
     public void testWriteJDBCReadJDBC() {
         writeJDBCreadJDBC();
@@ -109,9 +104,9 @@ public class TimestampAsUtilDateTypesTest extends AbstractClusterJModelTest {
     public void testWriteNDBReadNDB() {
         writeNDBreadNDB();
         failOnError();
-   }
+    }
 
-   static ColumnDescriptor not_null_hash = new ColumnDescriptor
+    static ColumnDescriptor not_null_hash = new ColumnDescriptor
             ("timestamp_not_null_hash", new InstanceHandler() {
         public void setFieldValue(IdBase instance, Object value) {
             ((TimestampAsUtilDateTypes)instance).setTimestamp_not_null_hash((Date)value);

@@ -2,8 +2,6 @@
 # Make sure http://bugs.mysql.com/34053 remains fixed.
 #
 
--- source include/not_embedded.inc
--- source include/have_innodb.inc
 
 SET default_storage_engine=InnoDB;
 
@@ -13,15 +11,19 @@ SET default_storage_engine=InnoDB;
 -- disable_query_log
 -- disable_result_log
 
-GRANT USAGE ON *.* TO 'shane'@'localhost' IDENTIFIED BY '12345';
+CREATE USER 'shane'@'localhost' IDENTIFIED BY '12345';
 FLUSH PRIVILEGES;
 
 -- connect (con1,localhost,shane,12345,)
 
 -- connection con1
 -- error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET GLOBAL innodb_status_output=ON;
+-- error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET GLOBAL innodb_status_output_locks=ON;
+
 CREATE TABLE innodb_monitor (a INT) ENGINE=INNODB;
-# this should only fail with UNIV_MEM_DEBUG
+DROP TABLE innodb_monitor;
 CREATE TABLE innodb_mem_validate (a INT) ENGINE=INNODB;
 DROP TABLE innodb_mem_validate;
 CREATE TABLE innodb_sql (a INT) ENGINE=INNODB;
@@ -36,16 +38,18 @@ CREATE TABLE nnodb_monitor (a INT) ENGINE=INNODB;
 DROP TABLE nnodb_monitor;
 
 -- connection default
-CREATE TABLE innodb_monitor (a INT) ENGINE=INNODB;
-CREATE TABLE innodb_mem_validate (a INT) ENGINE=INNODB;
+SET GLOBAL innodb_status_output=ON;
+SET GLOBAL innodb_status_output_locks=ON;
 
 -- connection con1
 -- error ER_SPECIFIC_ACCESS_DENIED_ERROR
-DROP TABLE innodb_monitor;
-DROP TABLE innodb_mem_validate;
+SET GLOBAL innodb_status_output=OFF;
+-- error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET GLOBAL innodb_status_output_locks=OFF;
 
 -- connection default
-DROP TABLE innodb_monitor;
+SET GLOBAL innodb_status_output=OFF;
+SET GLOBAL innodb_status_output_locks=OFF;
 DROP USER 'shane'@'localhost';
 
 -- disconnect con1

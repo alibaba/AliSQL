@@ -67,13 +67,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`f_int1`)
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -507,12 +507,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1)
 PARTITIONS 5 */
 
@@ -955,13 +955,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST ((`f_int1` % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -1408,13 +1408,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -1855,14 +1855,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1 DIV 2)
-SUBPARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE ((`f_int1` DIV 2))
+SUBPARTITION BY HASH (`f_int1`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -2308,13 +2308,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int1)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -2766,14 +2766,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int1 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int1` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -3222,13 +3222,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int1)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -3667,13 +3667,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`f_int1`)
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -4107,12 +4107,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1)
 PARTITIONS 5 */
 
@@ -4555,13 +4555,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST ((`f_int1` % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -5008,13 +5008,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -5455,14 +5455,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1 DIV 2)
-SUBPARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE ((`f_int1` DIV 2))
+SUBPARTITION BY HASH (`f_int1`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -5908,13 +5908,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int1)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -6366,14 +6366,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int1 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int1` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -6822,13 +6822,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int1)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -7267,13 +7267,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`f_int1`)
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -7723,12 +7723,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1)
 PARTITIONS 5 */
 
@@ -8187,13 +8187,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST ((`f_int1` % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -8656,13 +8656,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -9119,14 +9119,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1 DIV 2)
-SUBPARTITION BY HASH (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE ((`f_int1` DIV 2))
+SUBPARTITION BY HASH (`f_int1`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -9588,13 +9588,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int1)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -10062,14 +10062,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int1 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int1` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -10534,13 +10534,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int1)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -10999,13 +10999,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1 + f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH ((`f_int1` + `f_int2`))
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -11439,12 +11439,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1,f_int2)
 PARTITIONS 5 */
 
@@ -11887,13 +11887,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1 + f_int2,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (((`f_int1` + `f_int2`) % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -12340,13 +12340,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE ((f_int1 + f_int2) DIV 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (((`f_int1` + `f_int2`) DIV 2))
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -12787,14 +12787,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
-SUBPARTITION BY HASH (f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
+SUBPARTITION BY HASH (`f_int2`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -13238,13 +13238,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int2)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -13696,14 +13696,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int2 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int2` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -14152,13 +14152,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int2)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -14597,13 +14597,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1 + f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH ((`f_int1` + `f_int2`))
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -15037,12 +15037,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1,f_int2)
 PARTITIONS 5 */
 
@@ -15485,13 +15485,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1 + f_int2,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (((`f_int1` + `f_int2`) % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -15938,13 +15938,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE ((f_int1 + f_int2) DIV 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (((`f_int1` + `f_int2`) DIV 2))
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -16385,14 +16385,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
-SUBPARTITION BY HASH (f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
+SUBPARTITION BY HASH (`f_int2`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -16836,13 +16836,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int2)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -17294,14 +17294,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int2 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int2` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -17750,13 +17750,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int2)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -18196,13 +18196,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1 + f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH ((`f_int1` + `f_int2`))
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -18652,12 +18652,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1,f_int2)
 PARTITIONS 5 */
 
@@ -19116,13 +19116,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1 + f_int2,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (((`f_int1` + `f_int2`) % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -19585,13 +19585,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE ((f_int1 + f_int2) DIV 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (((`f_int1` + `f_int2`) DIV 2))
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -20048,14 +20048,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
-SUBPARTITION BY HASH (f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
+SUBPARTITION BY HASH (`f_int2`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -20515,13 +20515,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int2)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -20989,14 +20989,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int2 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int2` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -21461,13 +21461,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int2)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -21922,13 +21922,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1 + f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH ((`f_int1` + `f_int2`))
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -22378,12 +22378,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1,f_int2)
 PARTITIONS 5 */
 
@@ -22842,13 +22842,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1 + f_int2,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (((`f_int1` + `f_int2`) % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -23311,13 +23311,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE ((f_int1 + f_int2) DIV 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (((`f_int1` + `f_int2`) DIV 2))
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -23774,14 +23774,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
-SUBPARTITION BY HASH (f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
+SUBPARTITION BY HASH (`f_int2`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -24241,13 +24241,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int2)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -24715,14 +24715,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int2 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int2` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -25187,13 +25187,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int2)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -25649,13 +25649,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1 + f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH ((`f_int1` + `f_int2`))
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -26089,12 +26089,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1,f_int2)
 PARTITIONS 5 */
 
@@ -26537,13 +26537,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1 + f_int2,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (((`f_int1` + `f_int2`) % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -26990,13 +26990,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE ((f_int1 + f_int2) DIV 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (((`f_int1` + `f_int2`) DIV 2))
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -27437,14 +27437,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
-SUBPARTITION BY HASH (f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
+SUBPARTITION BY HASH (`f_int2`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -27888,13 +27888,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int2)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -28346,14 +28346,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int2 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int2` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -28802,13 +28802,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int2)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -29247,13 +29247,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1 + f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH ((`f_int1` + `f_int2`))
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -29687,12 +29687,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1,f_int2)
 PARTITIONS 5 */
 
@@ -30135,13 +30135,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1 + f_int2,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (((`f_int1` + `f_int2`) % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -30588,13 +30588,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE ((f_int1 + f_int2) DIV 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (((`f_int1` + `f_int2`) DIV 2))
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -31035,14 +31035,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
-SUBPARTITION BY HASH (f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
+SUBPARTITION BY HASH (`f_int2`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -31486,13 +31486,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int2)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -31944,14 +31944,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int2 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int2` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -32400,13 +32400,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) NOT NULL DEFAULT '0',
-  `f_int2` int(11) NOT NULL DEFAULT '0',
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int2)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -32845,13 +32845,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH (f_int1 + f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH ((`f_int1` + `f_int2`))
 PARTITIONS 2 */
 
 # check prerequisites-1 success:    1
@@ -33301,12 +33301,12 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY (f_int1,f_int2)
 PARTITIONS 5 */
 
@@ -33765,13 +33765,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (MOD(f_int1 + f_int2,4))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (((`f_int1` + `f_int2`) % 4))
 (PARTITION part_3 VALUES IN (-3) ENGINE = InnoDB,
  PARTITION part_2 VALUES IN (-2) ENGINE = InnoDB,
  PARTITION part_1 VALUES IN (-1) ENGINE = InnoDB,
@@ -34234,13 +34234,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE ((f_int1 + f_int2) DIV 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (((`f_int1` + `f_int2`) DIV 2))
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
  PARTITION partc VALUES LESS THAN (10) ENGINE = InnoDB,
@@ -34697,14 +34697,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
-SUBPARTITION BY HASH (f_int2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
+SUBPARTITION BY HASH (`f_int2`)
 SUBPARTITIONS 2
 (PARTITION parta VALUES LESS THAN (0) ENGINE = InnoDB,
  PARTITION partb VALUES LESS THAN (5) ENGINE = InnoDB,
@@ -35164,13 +35164,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (f_int1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`f_int1`)
 SUBPARTITION BY KEY (f_int2)
 (PARTITION part1 VALUES LESS THAN (0)
  (SUBPARTITION subpart11 ENGINE = InnoDB,
@@ -35638,14 +35638,14 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,3)))
-SUBPARTITION BY HASH (f_int2 + 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 3)))
+SUBPARTITION BY HASH ((`f_int2` + 1))
 (PARTITION part1 VALUES IN (0)
  (SUBPARTITION sp11 ENGINE = InnoDB,
   SUBPARTITION sp12 ENGINE = InnoDB),
@@ -36110,13 +36110,13 @@ create_command
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `f_int1` int(11) DEFAULT NULL,
-  `f_int2` int(11) DEFAULT NULL,
+  `f_int1` int DEFAULT NULL,
+  `f_int2` int DEFAULT NULL,
   `f_char1` char(20) DEFAULT NULL,
   `f_char2` char(20) DEFAULT NULL,
   `f_charbig` varchar(1000) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (ABS(MOD(f_int1,2)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (abs((`f_int1` % 2)))
 SUBPARTITION BY KEY (f_int2)
 SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0) ENGINE = InnoDB,
@@ -36548,6 +36548,176 @@ TRUNCATE t1;
 # check TRUNCATE success: 	1
 # check layout success:    1
 # End usability test (inc/partition_check.inc)
+DROP TABLE t1;
+
+#========================================================================
+#  3.    ALTER TABLE "ALTER"(DROP + ADD) PRIMARY KEY
+#        mleich: I think that an ALTER TABLE statement where a PRIMARY
+#            KEY is dropped and recreated (with different layout) might
+#            be of interest, if the tree containing the table data has
+#            to be reorganized during this operation.
+#========================================================================
+#------------------------------------------------------------------------
+#  3.1   Partitioning function uses the PRIMARY/UNIQUE KEY
+#------------------------------------------------------------------------
+#  3.1.1 DROP and CREATE PRIMARY KEY on different column
+DROP TABLE IF EXISTS t1;
+#----------- PARTITION BY KEY
+CREATE TABLE t1 (
+f_int1 INTEGER NOT NULL,
+f_int2 INTEGER NOT NULL,
+f_char1 CHAR(20),
+f_char2 CHAR(20),
+f_charbig VARCHAR(1000)
+, PRIMARY KEY(f_int1)
+)
+PARTITION BY KEY() PARTITIONS 5;
+INSERT INTO t1(f_int1, f_int2) values(100, 200);
+INSERT INTO t1(f_int1, f_int2) values(200, 300);
+INSERT INTO t1(f_int1, f_int2) values(300, 400);
+INSERT INTO t1(f_int1, f_int2) values(400, 500);
+INSERT INTO t1(f_int1, f_int2) values(500, 100);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+Execute ALTER: Expect Success
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(f_int2, f_int1);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
+  `f_char1` char(20) DEFAULT NULL,
+  `f_char2` char(20) DEFAULT NULL,
+  `f_charbig` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`f_int2`,`f_int1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY KEY ()
+PARTITIONS 5 */
+DROP TABLE t1;
+#  3.1.2 Negative test: Try DROP and CREATE PRIMARY KEY INPLACE
+# Expect error for INPLACE ALTER
+DROP TABLE IF EXISTS t1;
+#----------- PARTITION BY KEY
+CREATE TABLE t1 (
+f_int1 INTEGER NOT NULL,
+f_int2 INTEGER NOT NULL,
+f_char1 CHAR(20),
+f_char2 CHAR(20),
+f_charbig VARCHAR(1000)
+, PRIMARY KEY(f_int1)
+)
+PARTITION BY KEY() PARTITIONS 5;
+INSERT INTO t1(f_int1, f_int2) values(100, 200);
+INSERT INTO t1(f_int1, f_int2) values(200, 300);
+INSERT INTO t1(f_int1, f_int2) values(300, 400);
+INSERT INTO t1(f_int1, f_int2) values(400, 500);
+INSERT INTO t1(f_int1, f_int2) values(500, 100);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+Execute ALTER: Expect Error 1845
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(f_int2, f_int1),
+ALGORITHM = INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
+  `f_char1` char(20) DEFAULT NULL,
+  `f_char2` char(20) DEFAULT NULL,
+  `f_charbig` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`f_int1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY KEY ()
+PARTITIONS 5 */
+DROP TABLE t1;
+#  3.1.3 DROP and CREATE UNIQUE KEY on different column
+DROP TABLE IF EXISTS t1;
+#----------- PARTITION BY KEY
+CREATE TABLE t1 (
+f_int1 INTEGER NOT NULL,
+f_int2 INTEGER NOT NULL,
+f_char1 CHAR(20),
+f_char2 CHAR(20),
+f_charbig VARCHAR(1000)
+, UNIQUE KEY ukey1(f_int1)
+)
+PARTITION BY KEY() PARTITIONS 5;
+INSERT INTO t1(f_int1, f_int2) values(100, 200);
+INSERT INTO t1(f_int1, f_int2) values(200, 300);
+INSERT INTO t1(f_int1, f_int2) values(300, 400);
+INSERT INTO t1(f_int1, f_int2) values(400, 500);
+INSERT INTO t1(f_int1, f_int2) values(500, 100);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+Execute ALTER: Expect Success
+ALTER TABLE t1 DROP KEY ukey1, ADD UNIQUE KEY
+ukey2(f_int2, f_int1);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
+  `f_char1` char(20) DEFAULT NULL,
+  `f_char2` char(20) DEFAULT NULL,
+  `f_charbig` varchar(1000) DEFAULT NULL,
+  UNIQUE KEY `ukey2` (`f_int2`,`f_int1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY KEY ()
+PARTITIONS 5 */
+DROP TABLE t1;
+#  3.1.4 Negative test: Try DROP and CREATE UNIQUE KEY INPLACE
+# Expect error for INPLACE ALTER
+DROP TABLE IF EXISTS t1;
+#----------- PARTITION BY KEY
+CREATE TABLE t1 (
+f_int1 INTEGER NOT NULL,
+f_int2 INTEGER NOT NULL,
+f_char1 CHAR(20),
+f_char2 CHAR(20),
+f_charbig VARCHAR(1000)
+, UNIQUE KEY ukey1(f_int1)
+)
+PARTITION BY KEY() PARTITIONS 5;
+INSERT INTO t1(f_int1, f_int2) values(100, 200);
+INSERT INTO t1(f_int1, f_int2) values(200, 300);
+INSERT INTO t1(f_int1, f_int2) values(300, 400);
+INSERT INTO t1(f_int1, f_int2) values(400, 500);
+INSERT INTO t1(f_int1, f_int2) values(500, 100);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+Execute ALTER: Expect Error 1845
+ALTER TABLE t1 DROP KEY ukey1, ADD UNIQUE KEY
+ukey2(f_int2, f_int1), ALGORITHM = INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `f_int1` int NOT NULL,
+  `f_int2` int NOT NULL,
+  `f_char1` char(20) DEFAULT NULL,
+  `f_char2` char(20) DEFAULT NULL,
+  `f_charbig` varchar(1000) DEFAULT NULL,
+  UNIQUE KEY `ukey1` (`f_int1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY KEY ()
+PARTITIONS 5 */
 DROP TABLE t1;
 DROP VIEW  IF EXISTS v1;
 DROP TABLE IF EXISTS t1;

@@ -1,0 +1,271 @@
+## generated
+## Doc: Find a document with projection
+
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+create schema xtest default charset 'utf8mb4';
+
+## Test starts here
+--write_file $MYSQL_TMP_DIR/find_doc_proj.xpl
+## Test data
+
+-->stmtadmin create_collection	{"schema":"xtest","name":"mycoll"}
+-->recvresult
+-->stmtadmin create_collection	{"schema":"xtest","name":"funkycoll"}
+-->recvresult
+
+-->sql
+use xtest;
+insert into mycoll (doc) values ('{"_id": "1", "name": "Joe1"}');
+insert into mycoll (doc) values ('{"_id": "2", "name": "Joe2", "last_name": "Smith"}');
+insert into mycoll (doc) values ('{"_id": "3", "name": "Joe2", "last_name": "Shmo"}');
+insert into mycoll (doc) values ('{"_id": "4", "name": "小島", "last_name": "Bla"}');
+
+insert into funkycoll (doc) values ('{"_id": "1", "I love \\\"\'quotes\'\\\"\\n": "I love \\\"\'quotes\'\\\"\\n"}');
+insert into funkycoll (doc) values ('{"_id": "2", "I love \\\"\'quotes\'\\\"\\n": "\\\",$.array[2]\\\\\\\""}');
+insert into funkycoll (doc) values ('{"_id": "3", "\\\",$.array[2]\\\\\\\"": "I love \\\"\'quotes\'\\\"\\n"}');
+insert into funkycoll (doc) values ('{"_id": "4", "\\\",$.array[2]\\\\\\\"": "\\\",$.array[2]\\\\\\\""}');
+-->endsql
+
+Mysqlx.Crud.Find {
+  collection {
+    name: "mycoll"
+    schema: "xtest"
+  }
+  data_model: DOCUMENT
+  projection {
+    source {
+      type: IDENT
+      identifier {
+        document_path {
+          type: MEMBER
+          value: "name"
+        }
+      }
+    }
+    alias: "Name"
+  }
+}
+
+## expect Mysqlx.Resultset.ColumnMetaData
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.FetchDone
+-->recv
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recv
+
+## Bad projection
+Mysqlx.Crud.Find {
+  collection {
+    name: "funkycoll"
+    schema: "xtest"
+  }
+  data_model: DOCUMENT
+  projection {
+    source {
+      type: IDENT
+      identifier {
+        document_path {
+          type: MEMBER
+          value: "I love \"\'quotes\'\"\n"
+        }
+      }
+    }
+    alias: "key"
+  }
+  projection {
+    source {
+      type: IDENT
+      identifier {
+        document_path {
+          type: MEMBER
+          value: "_id"
+        }
+      }
+    }
+    alias: "\"\'"
+  }
+}
+
+## expect Mysqlx.Resultset.ColumnMetaData
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Sql.CursorFetchDone
+-->recv
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recv
+
+## Doc: Find document with projection, attempt to break
+
+Mysqlx.Crud.Find {
+  collection {
+    name: "funkycoll"
+    schema: "xtest"
+  }
+  data_model: DOCUMENT
+  projection {
+    source {
+      type: IDENT
+      identifier {
+        document_path {
+          type: MEMBER
+          value: "I love \"\'quotes\'\"\n\\/\b\f\r\t"
+        }
+      }
+    }
+    alias: "I love \"\'quotes\'\"\n"
+  }
+  projection {
+    source {
+      type: IDENT
+      identifier {
+        document_path {
+          type: MEMBER
+          value: "_id"
+        }
+      }
+    }
+    alias: "\"\'"
+  }
+  limit {
+    row_count: 1
+    offset: 2
+  }
+}
+
+## expect Mysqlx.Resultset.ColumnMetaData
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Sql.CursorFetchDone
+-->recv
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recv
+
+## Doc: Find a document with projection with missing key in some rows
+
+Mysqlx.Crud.Find {
+  collection {
+    name: "mycoll"
+    schema: "xtest"
+  }
+  data_model: DOCUMENT
+  projection {
+    source {
+      type: IDENT
+      identifier {
+        document_path {
+          type: MEMBER
+          value: "name"
+        }
+      }
+    }
+    alias: "name"
+  }
+  projection {
+    source {
+      type: IDENT
+      identifier {
+        document_path {
+          type: MEMBER
+          value: "last_name"
+        }
+      }
+    }
+    alias: "last_name"
+  }
+}
+
+## expect Mysqlx.Resultset.ColumnMetaData
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.FetchDone
+-->recv
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recv
+
+## ERROR sceanrio
+## Doc: Find causing an error
+
+Mysqlx.Crud.Find {
+    collection {
+      name: "mycoll"
+      schema: "xtest"
+    }
+    data_model: DOCUMENT
+    projection {
+      source {
+        type: OBJECT
+        object {
+          fld {
+            key: "X"
+            value {
+              type: OPERATOR
+              operator {
+                name: "-"
+                param {
+                  type: OPERATOR
+                  operator {
+                    name: "cast"
+                    param {
+                    	type: LITERAL
+                  		literal {
+                    		type: V_SINT
+                    		v_signed_int: 0
+                  		}
+                  	}
+                  	param {
+                      type: LITERAL
+                      literal {
+                        type: V_OCTETS
+                        v_octets {value:"UNSIGNED"}
+                      }
+                    }
+                  }
+                }
+                param {
+                  type: LITERAL
+                  literal {
+	        		type: V_SINT
+	        		v_signed_int: 1
+                  }                
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+}
+
+-->expecterror 1690
+-->recvresult
+EOF
+
+--exec $MYSQLXTEST -ux_root --password='' --file=$MYSQL_TMP_DIR/find_doc_proj.xpl 2>&1
+
+## Cleanup
+--source ../include/xplugin_cleanup.inc

@@ -1,7 +1,7 @@
 drop table if exists t1, t2;
 CREATE TABLE t1 (
-id           VARCHAR(255) NOT NULL PRIMARY KEY,
-sujet        VARCHAR(255),
+id           VARCHAR(80) NOT NULL PRIMARY KEY,
+sujet        VARCHAR(80),
 motsclefs    TEXT,
 texte        MEDIUMTEXT,
 FULLTEXT(sujet, motsclefs, texte)
@@ -19,10 +19,10 @@ INSERT INTO t2 VALUES('456', 'lui');
 select round(match(t1.texte,t1.sujet,t1.motsclefs) against('droit'),5)
 from t1 left join t2 on t2.id=t1.id;
 round(match(t1.texte,t1.sujet,t1.motsclefs) against('droit'),5)
-0.00000
-0.00000
+0
+0
 0.67003
-0.00000
+0
 select match(t1.texte,t1.sujet,t1.motsclefs) against('droit' IN BOOLEAN MODE)
 from t1 left join t2 on t2.id=t1.id;
 match(t1.texte,t1.sujet,t1.motsclefs) against('droit' IN BOOLEAN MODE)
@@ -32,8 +32,12 @@ match(t1.texte,t1.sujet,t1.motsclefs) against('droit' IN BOOLEAN MODE)
 0
 drop table t1, t2;
 create table t1 (venue_id int(11) default null, venue_text varchar(255) default null, dt datetime default null) engine=myisam;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t1 (venue_id, venue_text, dt) values (1, 'a1', '2003-05-23 19:30:00'),(null, 'a2', '2003-05-23 19:30:00');
 create table t2 (name varchar(255) not null default '', entity_id int(11) not null auto_increment, primary key  (entity_id), fulltext key name (name)) engine=myisam;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 insert into t2 (name, entity_id) values ('aberdeen town hall', 1), ('glasgow royal concert hall', 2), ('queen\'s hall, edinburgh', 3);
 select * from t1 left join t2 on venue_id = entity_id where match(name) against('aberdeen' in boolean mode) and dt = '2003-05-23 19:30:00';
 venue_id	venue_text	dt	name	entity_id
@@ -74,6 +78,9 @@ name mediumtext default NULL,
 PRIMARY KEY (id),
 FULLTEXT (name)
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1, 1, 'string');
 INSERT INTO t1 VALUES (2, 0, 'string');
 CREATE TABLE t2 (
@@ -82,6 +89,8 @@ name mediumtext default NULL,
 PRIMARY KEY (id),
 FULLTEXT (name)
 );
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t2 VALUES (1, 'string');
 SELECT t1.*, MATCH(t1.name) AGAINST('string') AS relevance 
 FROM t1 LEFT JOIN t2 ON t1.link = t2.id

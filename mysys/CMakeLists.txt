@@ -1,86 +1,254 @@
-# Copyright (c) 2006, 2015, Oracle and/or its affiliates. All rights reserved.
-# 
+# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
+#
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
-# 
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
+# GNU General Public License, version 2.0, for more details.
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIR} ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/mysys)
+ADD_WSHADOW_WARNING()
 
-SET(MYSYS_SOURCES  array.c charset-def.c charset.c checksum.c
-				errors.c hash.c list.c mf_cache.c mf_dirname.c mf_fn_ext.c
-				mf_format.c mf_getdate.c mf_iocache.c mf_iocache2.c mf_keycache.c 
-				mf_keycaches.c mf_loadpath.c mf_pack.c mf_path.c mf_qsort.c mf_qsort2.c
-				mf_radix.c mf_same.c mf_sort.c mf_soundex.c mf_arr_appstr.c mf_tempdir.c
-				mf_tempfile.c mf_unixpath.c mf_wcomp.c mulalloc.c my_access.c
-				my_alloc.c my_bit.c my_bitmap.c my_chsize.c
-				my_compress.c my_copy.c  my_create.c my_delete.c
-				my_div.c my_error.c my_file.c my_fopen.c my_fstream.c 
-				my_gethwaddr.c my_getsystime.c my_getwd.c my_compare.c my_init.c
-				my_lib.c my_lock.c my_malloc.c my_mess.c
-				my_mkdir.c my_mmap.c my_once.c my_open.c my_pread.c my_pthread.c
-				my_quick.c my_read.c my_redel.c my_rename.c my_seek.c my_sleep.c
-				my_static.c my_symlink.c my_symlink2.c my_sync.c my_thr_init.c 
-				my_write.c ptr_cmp.c queues.c stacktrace.c
-				string.c thr_alarm.c thr_lock.c thr_mutex.c
-				thr_rwlock.c tree.c typelib.c base64.c my_memmem.c my_getpagesize.c
-				lf_alloc-pin.c lf_dynarray.c lf_hash.c
-				my_atomic.c my_getncpus.c
-				my_rdtsc.c waiting_threads.c psi_noop.c)
+SET(MY_TIME_SOURCES my_time.cc my_systime.cc)
+
+ADD_CONVENIENCE_LIBRARY(mytime ${MY_TIME_SOURCES})
+
+SET(MYSYS_SOURCES
+  array.cc
+  charset.cc
+  charset-def.cc
+  dbug.cc
+  errors.cc
+  lf_alloc-pin.cc
+  lf_dynarray.cc
+  lf_hash.cc
+  list.cc
+  mf_arr_appstr.cc
+  mf_cache.cc
+  mf_dirname.cc
+  mf_fn_ext.cc
+  mf_format.cc
+  mf_iocache2.cc
+  mf_iocache.cc
+  mf_keycache.cc
+  mf_keycaches.cc
+  mf_loadpath.cc
+  mf_pack.cc
+  mf_path.cc
+  mf_same.cc
+  mf_tempdir.cc
+  mf_tempfile.cc
+  mf_unixpath.cc
+  mf_wcomp.cc
+  mulalloc.cc
+  my_access.cc
+  my_aligned_malloc.cc
+  my_alloc.cc
+  my_bit.cc
+  my_bitmap.cc
+  my_chmod.cc
+  my_chsize.cc
+  my_compare.cc
+  my_compress.cc
+  my_copy.cc
+  my_create.cc
+  my_delete.cc
+  my_error.cc
+  my_fallocator.cc
+  my_file.cc
+  my_fopen.cc
+  my_fstream.cc
+  my_gethwaddr.cc
+  my_getwd.cc
+  my_init.cc
+  my_lib.cc
+  my_malloc.cc
+  my_mess.cc
+  my_mkdir.cc
+  my_mmap.cc
+  my_murmur3.cc
+  my_once.cc
+  my_open.cc
+  my_pread.cc
+  my_rdtsc.cc
+  my_read.cc
+  my_rename.cc
+  my_seek.cc
+  my_static.cc
+  my_string.cc
+  my_symlink2.cc
+  my_symlink.cc
+  my_sync.cc
+  my_syslog.cc
+  my_thread.cc
+  my_thr_init.cc
+  my_user.cc
+  my_write.cc
+  pack.cc
+  print_version.cc
+  psi_noop.cc
+  ptr_cmp.cc
+  sql_chars.cc
+  stacktrace.cc
+  thr_cond.cc
+  thr_lock.cc
+  thr_mutex.cc
+  thr_rwlock.cc
+  tree.cc
+  typelib.cc
+  unhex.cc
+  keyring_operations_helper.cc
+  # From deleted mysys_ssl library
+  crypt_genhash_impl.cc
+  my_default.cc
+  my_getopt.cc
+  my_kdf.cc
+  my_aes.cc
+  my_sha1.cc
+  my_sha2.cc
+  my_md5.cc
+  my_rnd.cc
+  my_openssl_fips.cc
+)
+LIST(APPEND MYSYS_SOURCES my_aes_openssl.cc)
+
+IF(BUILD_IS_SINGLE_CONFIG)
+  GET_PROPERTY(CWD_DEFINITIONS DIRECTORY PROPERTY COMPILE_DEFINITIONS)
+  IF(NOT CMAKE_CXX_FLAGS MATCHES "DSAFE_MUTEX" AND
+      NOT CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER} MATCHES "DSAFE_MUTEX" AND
+      NOT CWD_DEFINITIONS MATCHES "SAFE_MUTEX")
+    # Both have ifdef SAFE_MUTEX
+    LIST(REMOVE_ITEM MYSYS_SOURCES
+      thr_cond.cc
+      thr_mutex.cc
+      )
+  ENDIF()
+  IF(CMAKE_CXX_FLAGS MATCHES "DNDEBUG" OR
+      CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER} MATCHES "DNDEBUG" OR
+      CWD_DEFINITIONS MATCHES "NDEBUG")
+    # ifndef NDEBUG
+    LIST(REMOVE_ITEM MYSYS_SOURCES
+      dbug.cc
+      )
+  ENDIF()
+ENDIF()
 
 IF (WIN32)
- SET (MYSYS_SOURCES ${MYSYS_SOURCES} my_winthread.c my_wincond.c my_winerr.c my_winfile.c my_windac.c my_conio.c)
+  LIST(APPEND MYSYS_SOURCES
+    my_conio.cc
+    my_windac.cc
+    my_winerr.cc
+    my_winfile.cc
+    win_timers.cc
+    my_nojemalloc.cc
+  )
 ENDIF()
 
-IF(HAVE_ALARM)
- SET(MYSYS_SOURCES ${MYSYS_SOURCES} my_alarm.c)
+IF(HAVE_BUILD_ID_SUPPORT)
+  LIST(APPEND MYSYS_SOURCES build_id.cc)
 ENDIF()
 
-IF(CMAKE_SYSTEM_NAME MATCHES "SunOS" AND CMAKE_C_COMPILER_ID MATCHES "SunPro")
-  # Inline assembly template for rdtsc
-  SET_SOURCE_FILES_PROPERTIES(my_rdtsc.c
-   PROPERTIES COMPILE_FLAGS "${CMAKE_CURRENT_SOURCE_DIR}/my_timer_cycles.il")
+IF(HAVE_POSIX_TIMERS)
+  LIST(APPEND MYSYS_SOURCES posix_timers.cc)
 ENDIF()
 
-IF(HAVE_LARGE_PAGES)
- SET(MYSYS_SOURCES ${MYSYS_SOURCES} my_largepage.c)
+IF(HAVE_KQUEUE_TIMERS)
+  LIST(APPEND MYSYS_SOURCES kqueue_timers.cc)
 ENDIF()
 
-IF(HAVE_MLOCK)
- SET(MYSYS_SOURCES ${MYSYS_SOURCES} my_lockmem.c)
+IF(HAVE_GETPWNAM)
+  SET(MYSYS_SOURCES ${MYSYS_SOURCES} my_getpwnam.cc)
 ENDIF()
 
-ADD_CONVENIENCE_LIBRARY(mysys ${MYSYS_SOURCES})
-TARGET_LINK_LIBRARIES(mysys dbug strings ${ZLIB_LIBRARY} 
- ${LIBNSL} ${LIBM} ${LIBRT})
-DTRACE_INSTRUMENT(mysys)
+IF(HAVE_LINUX_LARGE_PAGES)
+  LIST(APPEND MYSYS_SOURCES my_largepage.cc)
+ENDIF()
+
+IF(FREEBSD)
+  ADD_COMPILE_FLAGS(stacktrace.cc COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+ENDIF()
+
+ADD_CONVENIENCE_LIBRARY(mysys ${MYSYS_SOURCES}
+  LINK_LIBRARIES
+  mytime
+  strings
+  ext::zlib
+  ext::zstd
+  ${LIBNSL}
+  ${LIBM}
+  ${LIBRT}
+  ${LIBEXECINFO}
+  ${LIBUNWIND_LDFLAGS}
+  ${SSL_LIBRARIES}
+  )
+
+IF(WITH_EXT_BACKTRACE)
+  TARGET_LINK_LIBRARIES(mysys ext::backtrace)
+  TARGET_LINK_LIBRARIES(mysys_objlib ext::backtrace)
+ENDIF()
+
+# For targets that link with mysys, and are independent of other targets.
+IF(TARGET copy_openssl_dlls)
+  ADD_DEPENDENCIES(mysys copy_openssl_dlls)
+ENDIF()
 
 # Need explicit pthread for gcc -fsanitize=address
 IF(CMAKE_USE_PTHREADS_INIT AND CMAKE_C_FLAGS MATCHES "-fsanitize=")
   TARGET_LINK_LIBRARIES(mysys pthread)
 ENDIF()
-
-ADD_EXECUTABLE(thr_lock thr_lock.c)
-TARGET_LINK_LIBRARIES(thr_lock mysys)
-SET_TARGET_PROPERTIES(thr_lock PROPERTIES COMPILE_FLAGS "-DMAIN")
-ADD_EXECUTABLE(queues queues.c)
-TARGET_LINK_LIBRARIES(queues mysys)
-SET_TARGET_PROPERTIES(queues PROPERTIES COMPILE_FLAGS "-DMAIN")
-ADD_TEST(queues_test queues)
-
-ADD_EXECUTABLE(base64_test base64.c)
-SET_TARGET_PROPERTIES(base64_test PROPERTIES COMPILE_FLAGS "-DMAIN")
-TARGET_LINK_LIBRARIES(base64_test mysys)
-
-IF(MSVC)
-   INSTALL_DEBUG_TARGET(mysys DESTINATION ${INSTALL_LIBDIR}/debug)
+# Needed to resolve OpenSSL dependency on Windows
+IF(WIN32)
+  TARGET_LINK_LIBRARIES(mysys crypt32)
 ENDIF()
 
+# MD5_Init() and others are deprecated.
+IF(SOLARIS AND MY_COMPILER_IS_GNU_OR_CLANG)
+  ADD_COMPILE_FLAGS(my_md5.cc COMPILE_FLAGS "-Wno-deprecated-declarations")
+ENDIF()
+
+# We are not interesting in profiling tests.
+DISABLE_MISSING_PROFILE_WARNING()
+
+MYSQL_ADD_EXECUTABLE(thr_lock
+  thr_lock.cc
+  LINK_LIBRARIES mysys
+  SKIP_INSTALL
+  )
+SET_TARGET_PROPERTIES(thr_lock PROPERTIES COMPILE_FLAGS "-DMAIN")
+
+MYSQL_ADD_EXECUTABLE(mf_iocache_test
+  mf_iocache.cc
+  LINK_LIBRARIES mysys
+  SKIP_INSTALL
+  )
+SET_TARGET_PROPERTIES(mf_iocache_test PROPERTIES COMPILE_FLAGS "-DMAIN")
+
+IF(HAVE_BUILD_ID_SUPPORT)
+  MYSQL_ADD_EXECUTABLE(build_id_test
+    build_id_test.cc build_id.cc
+    SKIP_INSTALL
+    )
+  # Verify that we can read our own build-id:
+  ADD_CUSTOM_COMMAND(TARGET build_id_test POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+    -DREADELF_EXECUTABLE=${READELF_EXECUTABLE}
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_build_id.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/runtime_output_directory
+    COMMENT "Verifying build-id"
+    VERBATIM
+    )
+ENDIF()

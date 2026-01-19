@@ -1,0 +1,258 @@
+# Save the initial number of concurrent sessions
+--source include/count_sessions.inc
+
+--echo #
+--echo # Bug #24843257: CURRENT_ROLE(), ROLES_GRAPHML() RETURN VALUE
+--echo #   HAS INCORRECT CHARACTER SET
+
+--echo # Expect system charset for empty
+SELECT CHARSET(CURRENT_ROLE()) = @@character_set_system;
+SELECT CHARSET(ROLES_GRAPHML()) = @@character_set_system;
+
+--echo # Expect blobs
+CREATE TABLE t1 AS
+  SELECT CURRENT_ROLE() AS CURRENT_ROLE, ROLES_GRAPHML() AS ROLES_GRAPHML;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # create some roles
+CREATE ROLE r1;
+GRANT r1 TO root@localhost;
+SET ROLE r1;
+
+--echo # Expect system charset for actual content
+SELECT CHARSET(CURRENT_ROLE()) = @@character_set_system;
+SELECT CHARSET(ROLES_GRAPHML()) = @@character_set_system;
+
+--echo # cleanup
+SET ROLE DEFAULT;
+REVOKE r1 FROM root@localhost;
+DROP ROLE r1;
+
+
+--echo #
+--echo # Bug #28953158: DROP ROLE USERNAME SHOULD BE REJECTED
+--echo #
+
+CREATE USER uu@localhost, u1@localhost;
+CREATE ROLE r1;
+GRANT CREATE ROLE, DROP ROLE ON *.* TO uu@localhost;
+connect(con1,localhost,uu,,);
+SHOW GRANTS;
+--echo # connected as uu
+--echo # test result: must fail
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+DROP USER u1@localhost;
+--echo # test result: must fail
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+DROP ROLE u1@localhost;
+--echo # test result: must pass
+DROP ROLE r1;
+--echo # Cleanup
+connection default;
+DROP USER uu@localhost, u1@localhost;
+disconnect con1;
+
+--echo #
+--echo # Bug#28395115: permission denied if grants are given through role
+--echo #
+
+# Setup
+CREATE DATABASE my_db;
+CREATE table my_db.t1 (id int primary key);
+CREATE ROLE my_role;
+CREATE USER my_user, foo@localhost, baz@localhost;
+# Grant all privileges to a user and a role
+GRANT ALL ON *.* to my_role, foo@localhost;
+GRANT EXECUTE ON *.* TO my_user, baz@localhost;
+GRANT my_role TO my_user, baz@localhost;
+SET DEFAULT ROLE my_role TO my_user;
+
+# Stored procedure with the definer who has ALL of global privilege granted
+# directly.
+DELIMITER $$;
+CREATE DEFINER=foo@localhost PROCEDURE my_db.foo_proc()
+BEGIN
+INSERT into my_db.t1 values(2) on duplicate key UPDATE id = values(id) + 200;
+END $$
+DELIMITER ;$$
+
+# Stored procedure with the definer who is granted a role to which all global
+# privileges are granted.
+DELIMITER $$;
+CREATE DEFINER=baz@localhost PROCEDURE my_db.baz_proc()
+BEGIN
+set ROLE all;
+INSERT into my_db.t1 values(4) on duplicate key UPDATE id = values(id) + 400;
+END $$
+DELIMITER ;$$
+
+--connect(my_user_con, localhost, my_user,,,)
+INSERT into my_db.t1 values(5);
+--echo # Inserts are now allowed if grants are given through role
+INSERT into my_db.t1 values(8) on duplicate key UPDATE id = values(id) + 800;
+CALL my_db.foo_proc();
+CALL my_db.baz_proc();
+
+connection default;
+--echo # Now revoke all privileges from the roles and user
+REVOKE ALL ON *.* FROM my_role;
+REVOKE ALL ON *.* FROM foo@localhost;
+GRANT EXECUTE ON *.* TO foo@localhost;
+
+--echo # The SQL opperations must fail with existing connection.
+connection my_user_con;
+--error ER_TABLEACCESS_DENIED_ERROR
+INSERT into my_db.t1 values(10);
+--error ER_TABLEACCESS_DENIED_ERROR
+CALL my_db.baz_proc();
+--error ER_TABLEACCESS_DENIED_ERROR
+CALL my_db.foo_proc();
+--echo # Cleanup
+connection default;
+disconnect my_user_con;
+DROP DATABASE my_db;
+DROP USER my_user;
+DROP USER foo@localhost, baz@localhost;
+DROP ROLE my_role;
+
+--echo #
+--echo # Bug#31237368: WITH ADMIN OPTION DOES NOT WORK AS EXPECTED
+--echo #
+CREATE USER u1, u2;
+CREATE ROLE r1, r2;
+GRANT r2 TO r1 WITH ADMIN OPTION;
+GRANT r1 TO u1 WITH ADMIN OPTION;
+connect(conn_u1,localhost, u1,,,,);
+GRANT r1 TO u2;
+REVOKE r1 FROM u2;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+GRANT r2 TO u2;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+REVOKE r2 FROM u2;
+SET ROLE r1;
+GRANT r1 TO u2;
+REVOKE r1 FROM u2;
+GRANT r2 TO u2;
+REVOKE r2 FROM u2;
+connection default;
+disconnect conn_u1;
+DROP ROLE r1, r2;
+DROP USER u1, u2;
+
+CREATE USER u1;
+CREATE ROLE r1, r2;
+GRANT CREATE USER ON *.* TO u1;
+GRANT r1 TO u1 WITH ADMIN OPTION;
+connect(conn_u1, localhost, u1,,,,);
+CREATE USER u2 DEFAULT ROLE r1;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+CREATE USER u3 DEFAULT ROLE r2;
+connection default;
+disconnect conn_u1;
+DROP ROLE r1, r2;
+DROP USER u1, u2;
+
+--echo #
+--echo # Bug#30660403 ROLES NOT HANDLING COLUMN LEVEL PRIVILEGES CORRECTLY;
+--echo #              CAN SELECT, BUT NOT UPDATE
+--echo #
+
+--echo # Create sample database/table
+CREATE DATABASE bug_test;
+CREATE TABLE bug_test.test_table (test_id int, test_data varchar(50),
+row_is_verified bool);
+INSERT INTO bug_test.test_table VALUES(1, 'valueA', FALSE);
+
+--echo # Create role and two users
+CREATE ROLE `r_verifier`@`localhost`;
+CREATE USER `TestUserFails`@`localhost` IDENTIFIED BY 'test';
+CREATE USER `TestUserWorks`@`localhost` IDENTIFIED BY 'test';
+
+--echo # Grant privileges to ROLE
+GRANT SELECT ON bug_test.* TO `r_verifier`@`localhost`;
+GRANT UPDATE (row_is_verified) ON bug_test.test_table TO `r_verifier`@`localhost`;
+
+--echo # GRANT same privileges to USER
+GRANT SELECT ON bug_test.* TO `TestUserWorks`@`localhost`;
+GRANT UPDATE (row_is_verified) ON bug_test.test_table TO `TestUserWorks`@`localhost`;
+
+--echo # Grant role to TestUserFails and make it a default role
+GRANT `r_verifier`@`localhost` TO `TestUserFails`@`localhost`;
+SET DEFAULT ROLE `r_verifier`@`localhost` TO `TestUserFails`@`localhost`;
+
+SHOW GRANTS FOR `r_verifier`@`localhost`;
+SHOW GRANTS FOR `TestUserFails`@`localhost`;
+
+connect(con1, localhost, TestUserWorks, test, bug_test);
+SELECT CURRENT_USER(), CURRENT_ROLE();
+SELECT test_id, test_data, row_is_verified FROM bug_test.test_table;
+UPDATE bug_test.test_table SET row_is_verified = TRUE WHERE test_id=1;
+SELECT test_id, test_data, row_is_verified FROM bug_test.test_table;
+
+--echo # After fix the below update statement should not throw error.
+connect(con2, localhost, TestUserFails, test, bug_test);
+SELECT CURRENT_USER(), CURRENT_ROLE();
+SELECT test_id, test_data, row_is_verified FROM bug_test.test_table;
+UPDATE bug_test.test_table SET row_is_verified = TRUE WHERE test_id=1;
+
+--echo # cleanup
+connection default;
+disconnect con1;
+disconnect con2;
+
+DROP USER `TestUserFails`@`localhost`, `TestUserWorks`@`localhost`;
+DROP ROLE `r_verifier`@`localhost`;
+DROP DATABASE bug_test;
+
+
+--echo #
+--echo # Bug #31222230: A USER CAN GRANT ITSELF TO ITSELF AS A ROLE
+--echo #
+CREATE ROLE r1,r2,r3,r4;
+GRANT r1 TO r2;
+GRANT r2 TO r3;
+GRANT r4 TO r3;
+
+--error ER_ROLE_GRANTED_TO_ITSELF
+GRANT r1 TO r1;
+--error ER_ROLE_GRANTED_TO_ITSELF
+GRANT r2 TO r1;
+--error ER_ROLE_GRANTED_TO_ITSELF
+GRANT r3 TO r1;
+
+SET @save_mandatory_roles = @@global.mandatory_roles;
+SET GLOBAL mandatory_roles = 'r4';
+--error ER_ROLE_GRANTED_TO_ITSELF
+GRANT r3 TO r4;
+
+SET GLOBAL mandatory_roles = @save_mandatory_roles;
+DROP ROLE r1,r2,r3,r4;
+
+
+--echo #
+--echo # Bug #33159353: SHOW CREATE DATABASE fails with a role that has global
+--echo #                level privilege
+--echo #
+CREATE ROLE test_role;
+GRANT SELECT ON *.* TO test_role;
+CREATE USER test_user DEFAULT ROLE test_role;
+
+--echo # connect with test_user
+connect(con1,localhost,test_user,,);
+SELECT current_role(), current_user();
+SHOW GRANTS FOR test_role;
+SHOW GRANTS FOR test_user;
+SHOW CREATE DATABASE mysql;
+--echo # Cleanup
+connection default;
+DROP ROLE test_role;
+DROP USER test_user;
+disconnect con1;
+
+--echo
+--echo # End of 8.0 tests
+--echo
+
+# Wait till we reached the initial number of concurrent sessions
+--source include/wait_until_count_sessions.inc

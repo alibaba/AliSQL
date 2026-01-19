@@ -6,8 +6,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` tinyint(3) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` tinyint unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 TINYINT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -15,8 +15,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` tinyint(4) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` tinyint DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -27,8 +27,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` smallint(5) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` smallint unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 SMALLINT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -36,8 +36,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` smallint(6) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` smallint DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -48,8 +48,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` mediumint(8) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` mediumint unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 MEDIUMINT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -57,8 +57,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` mediumint(9) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` mediumint DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -69,8 +69,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(10) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 INT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -78,8 +78,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(11) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -90,8 +90,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(10) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 INTEGER NULL;
 SHOW TABLES;
 Tables_in_test
@@ -99,8 +99,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(11) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -111,8 +111,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` bigint(20) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` bigint unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 BIGINT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -120,12 +120,14 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` bigint(20) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` bigint DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 REAL UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -133,7 +135,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 REAL NULL;
 SHOW TABLES;
 Tables_in_test
@@ -142,11 +144,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 DOUBLE UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -154,7 +158,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 DOUBLE NULL;
 SHOW TABLES;
 Tables_in_test
@@ -163,11 +167,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 FLOAT UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -175,7 +181,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` float unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 FLOAT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -184,11 +190,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` float DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 DECIMAL UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -196,7 +204,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 DECIMAL NULL;
 SHOW TABLES;
 Tables_in_test
@@ -205,11 +213,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 NUMERIC UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -217,7 +227,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 NUMERIC NULL;
 SHOW TABLES;
 Tables_in_test
@@ -226,7 +236,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -237,8 +247,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` tinyint(3) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` tinyint unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 TINYINT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -246,8 +256,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` tinyint(4) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` tinyint DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -258,8 +268,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` smallint(5) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` smallint unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 SMALLINT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -267,8 +277,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` smallint(6) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` smallint DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -279,8 +289,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` mediumint(8) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` mediumint unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 MEDIUMINT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -288,8 +298,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` mediumint(9) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` mediumint DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -300,8 +310,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(10) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 INT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -309,8 +319,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(11) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -321,8 +331,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(10) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 INTEGER NULL;
 SHOW TABLES;
 Tables_in_test
@@ -330,8 +340,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(11) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -342,8 +352,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` bigint(20) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` bigint unsigned DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 BIGINT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -351,12 +361,14 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` bigint(20) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` bigint DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 REAL UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -364,7 +376,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 REAL NULL;
 SHOW TABLES;
 Tables_in_test
@@ -373,11 +385,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 DOUBLE UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -385,7 +399,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 DOUBLE NULL;
 SHOW TABLES;
 Tables_in_test
@@ -394,11 +408,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 FLOAT UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -406,7 +422,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` float unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 FLOAT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -415,11 +431,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` float DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 DECIMAL UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -427,7 +445,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 DECIMAL NULL;
 SHOW TABLES;
 Tables_in_test
@@ -436,11 +454,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 NUMERIC UNSIGNED NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -448,7 +468,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) unsigned DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 NUMERIC NULL;
 SHOW TABLES;
 Tables_in_test
@@ -457,7 +477,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) DEFAULT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -468,8 +488,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` tinyint(3) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` tinyint unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 TINYINT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -477,8 +497,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` tinyint(4) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` tinyint NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -489,8 +509,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` smallint(5) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` smallint unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 SMALLINT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -498,8 +518,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` smallint(6) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` smallint NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -510,8 +530,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` mediumint(8) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` mediumint unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 MEDIUMINT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -519,8 +539,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` mediumint(9) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` mediumint NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -531,8 +551,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(10) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 INT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -540,8 +560,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(11) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -552,8 +572,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(10) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 INTEGER NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -561,8 +581,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(11) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -573,8 +593,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` bigint(20) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` bigint unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 BIGINT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -582,12 +602,14 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` bigint(20) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` bigint NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 REAL UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -595,7 +617,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 REAL NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -604,11 +626,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 DOUBLE UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -616,7 +640,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 DOUBLE NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -625,11 +649,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 FLOAT UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -637,7 +663,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` float unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 FLOAT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -646,11 +672,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` float NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 DECIMAL UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -658,7 +686,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 DECIMAL NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -667,11 +695,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 NUMERIC UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -679,7 +709,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 MODIFY c1 NUMERIC NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -688,7 +718,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -699,8 +729,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` tinyint(3) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` tinyint unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 TINYINT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -708,8 +738,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` tinyint(4) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` tinyint NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -720,8 +750,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` smallint(5) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` smallint unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 SMALLINT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -729,8 +759,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` smallint(6) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` smallint NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -741,8 +771,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` mediumint(8) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` mediumint unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 MEDIUMINT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -750,8 +780,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` mediumint(9) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` mediumint NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -762,8 +792,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(10) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 INT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -771,8 +801,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(11) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -783,8 +813,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(10) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 INTEGER NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -792,8 +822,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` int(11) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` int NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
@@ -804,8 +834,8 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` bigint(20) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` bigint unsigned NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 BIGINT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -813,12 +843,14 @@ t3
 SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
-  `c1` bigint(20) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+  `c1` bigint NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 REAL UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -826,7 +858,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 REAL NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -835,11 +867,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 DOUBLE UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -847,7 +881,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 DOUBLE NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -856,11 +890,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` double NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 FLOAT UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -868,7 +904,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` float unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 FLOAT NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -877,11 +913,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` float NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 DECIMAL UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -889,7 +927,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 DECIMAL NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -898,11 +936,13 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test
 CREATE TABLE t3(c1 NUMERIC UNSIGNED NOT NULL);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 SHOW TABLES;
 Tables_in_test
 t3
@@ -910,7 +950,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) unsigned NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t3 CHANGE c1 c1 NUMERIC NOT NULL;
 SHOW TABLES;
 Tables_in_test
@@ -919,7 +959,7 @@ SHOW CREATE TABLE t3;
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `c1` decimal(10,0) NOT NULL
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t3;
 SHOW TABLES;
 Tables_in_test

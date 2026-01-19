@@ -1,46 +1,51 @@
 /*
-   Copyright (C) 2003-2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
+    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include <ndbapi_limits.h>
+#include <HugoTransactions.hpp>
 #include <NDBT.hpp>
 #include <NDBT_Test.hpp>
-#include <HugoTransactions.hpp>
-#include <UtilTransactions.hpp>
 #include <NdbRestarter.hpp>
+#include <UtilTransactions.hpp>
 #include <Vector.hpp>
-#include <ndbapi_limits.h>
+#include "util/require.h"
 
 const unsigned MaxTableAttrs = NDB_MAX_ATTRIBUTES_IN_TABLE;
 const unsigned MaxIndexAttrs = NDB_MAX_ATTRIBUTES_IN_INDEX;
 const unsigned MaxIndexes = 20;
 
-static unsigned
-urandom(unsigned n)
-{
+static unsigned urandom(unsigned n) {
   unsigned i = random();
   return i % n;
 }
 
-static int
-runDropIndex(NDBT_Context* ctx, NDBT_Step* step)
-{
-  const NdbDictionary::Table* pTab = ctx->getTab();
-  Ndb* pNdb = GETNDB(step);
-  NdbDictionary::Dictionary* pDic = pNdb->getDictionary();
+static int runDropIndex(NDBT_Context *ctx, NDBT_Step *step) {
+  const NdbDictionary::Table *pTab = ctx->getTab();
+  Ndb *pNdb = GETNDB(step);
+  NdbDictionary::Dictionary *pDic = pNdb->getDictionary();
   NdbDictionary::Dictionary::List list;
   if (pDic->listIndexes(list, pTab->getName()) != 0) {
     g_err << pTab->getName() << ": listIndexes failed" << endl;
@@ -48,7 +53,7 @@ runDropIndex(NDBT_Context* ctx, NDBT_Step* step)
     return NDBT_FAILED;
   }
   for (unsigned i = 0; i < list.count; i++) {
-    NDBT_Index* pInd = new NDBT_Index(list.elements[i].name);
+    NDBT_Index *pInd = new NDBT_Index(list.elements[i].name);
     pInd->setTable(pTab->getName());
     g_info << "Drop index:" << endl << *pInd;
     if (pInd->dropIndexInDb(pNdb) != 0) {
@@ -60,64 +65,56 @@ runDropIndex(NDBT_Context* ctx, NDBT_Step* step)
 
 static Uint32 workaround[1000];
 
-static void
-setTableProperty(NDBT_Context* ctx, NDBT_Table* pTab, const char* name, Uint32 num)
-{
+static void setTableProperty(NDBT_Context *ctx, NDBT_Table *pTab,
+                             const char *name, Uint32 num) {
   char key[200];
   sprintf(key, "%s-%s", name, pTab->getName());
-  //ctx->setProperty(key, num);
+  // ctx->setProperty(key, num);
   workaround[pTab->getTableId()] = num;
 }
 
-static Uint32
-getTableProperty(NDBT_Context* ctx, NDBT_Table* pTab, const char* name)
-{
+static Uint32 getTableProperty(NDBT_Context *ctx, NDBT_Table *pTab,
+                               const char *name) {
   char key[200];
   sprintf(key, "%s-%s", name, pTab->getName());
-  //Uint32 num = ctx->getProperty(key, (Uint32)-1);
+  // Uint32 num = ctx->getProperty(key, (Uint32)-1);
   Uint32 num = workaround[pTab->getTableId()];
-  assert(num != (Uint32)-1);
+  require(num != (Uint32)-1);
   return num;
 }
 
-static int
-runCreateIndex(NDBT_Context* ctx, NDBT_Step* step)
-{
+static int runCreateIndex(NDBT_Context *ctx, NDBT_Step *step) {
   srandom(1);
-  NDBT_Table* pTab = ctx->getTab();
-  Ndb* pNdb = GETNDB(step);
+  NDBT_Table *pTab = ctx->getTab();
+  Ndb *pNdb = GETNDB(step);
   unsigned numTabAttrs = pTab->getNumAttributes();
   unsigned numIndex = 0;
   while (numIndex < MaxIndexes) {
-    if (numIndex != 0 && urandom(10) == 0)
-      break;
+    if (numIndex != 0 && urandom(10) == 0) break;
     char buf[200];
     sprintf(buf, "%s_X%03d", pTab->getName(), numIndex);
-    NDBT_Index* pInd = new NDBT_Index(buf);
+    NDBT_Index *pInd = new NDBT_Index(buf);
     pInd->setTable(pTab->getName());
     pInd->setType(NdbDictionary::Index::OrderedIndex);
     pInd->setLogging(false);
     unsigned numAttrs = 0;
     while (numAttrs < MaxIndexAttrs) {
-      if (numAttrs != 0 && urandom(5) == 0)
-	break;
+      if (numAttrs != 0 && urandom(5) == 0) break;
       unsigned i = urandom(numTabAttrs);
-      const NDBT_Attribute* pAttr = pTab->getAttribute(i);
+      const NDBT_Attribute *pAttr = pTab->getAttribute(i);
       bool found = false;
       for (unsigned j = 0; j < numAttrs; j++) {
-	if (strcmp(pAttr->getName(), pInd->getAttribute(j)->getName()) == 0) {
-	  found = true;
-	  break;
-	}
+        if (strcmp(pAttr->getName(), pInd->getAttribute(j)->getName()) == 0) {
+          found = true;
+          break;
+        }
       }
-      if (found)
-	continue;
+      if (found) continue;
       pInd->addAttribute(*pAttr);
       numAttrs++;
     }
     g_info << "Create index:" << endl << *pInd;
-    if (pInd->createIndexInDb(pNdb, false) != 0)
-      continue;
+    if (pInd->createIndexInDb(pNdb, false) != 0) continue;
     numIndex++;
   }
   setTableProperty(ctx, pTab, "numIndex", numIndex);
@@ -125,11 +122,9 @@ runCreateIndex(NDBT_Context* ctx, NDBT_Step* step)
   return NDBT_OK;
 }
 
-static int
-runInsertUpdate(NDBT_Context* ctx, NDBT_Step* step)
-{
-  NDBT_Table* pTab = ctx->getTab();
-  Ndb* pNdb = GETNDB(step);
+static int runInsertUpdate(NDBT_Context *ctx, NDBT_Step *step) {
+  NDBT_Table *pTab = ctx->getTab();
+  Ndb *pNdb = GETNDB(step);
   int ret;
   g_info << "Insert: " << pTab->getName() << endl;
   HugoTransactions hugoTrans(*pTab);
@@ -141,25 +136,23 @@ runInsertUpdate(NDBT_Context* ctx, NDBT_Step* step)
   return NDBT_OK;
 }
 
-static int
-runFullScan(NDBT_Context* ctx, NDBT_Step* step)
-{
-  NDBT_Table* pTab = ctx->getTab();
-  Ndb* pNdb = GETNDB(step);
+static int runFullScan(NDBT_Context *ctx, NDBT_Step *step) {
+  NDBT_Table *pTab = ctx->getTab();
+  Ndb *pNdb = GETNDB(step);
   unsigned cntIndex = getTableProperty(ctx, pTab, "numIndex");
   for (unsigned numIndex = 0; numIndex < cntIndex; numIndex++) {
     char buf[200];
     sprintf(buf, "%s_X%03d", pTab->getName(), numIndex);
-    NDBT_Index* pInd = NDBT_Index::discoverIndexFromDb(pNdb, buf, pTab->getName());
-    assert(pInd != 0);
+    NDBT_Index *pInd =
+        NDBT_Index::discoverIndexFromDb(pNdb, buf, pTab->getName());
+    require(pInd != 0);
     g_info << "Scan index:" << pInd->getName() << endl << *pInd;
-    NdbConnection* pCon = pNdb->startTransaction();
+    NdbConnection *pCon = pNdb->startTransaction();
     if (pCon == 0) {
       ERR(pNdb->getNdbError());
       return NDBT_FAILED;
     }
-    NdbOperation* pOp = pCon->getNdbOperation(pInd->getName(),
-					      pTab->getName());
+    NdbOperation *pOp = pCon->getNdbOperation(pInd->getName(), pTab->getName());
     if (pOp == 0) {
       ERR(pCon->getNdbError());
       pNdb->closeTransaction(pCon);
@@ -195,31 +188,19 @@ runFullScan(NDBT_Context* ctx, NDBT_Step* step)
 }
 
 NDBT_TESTSUITE(testOrderedIndex);
-TESTCASE(
-    "DropIndex",
-    "Drop any old indexes") {
-  INITIALIZER(runDropIndex);
-}
-TESTCASE(
-    "CreateIndex",
-    "Create ordered indexes") {
+TESTCASE("DropIndex", "Drop any old indexes") { INITIALIZER(runDropIndex); }
+TESTCASE("CreateIndex", "Create ordered indexes") {
   INITIALIZER(runCreateIndex);
 }
-TESTCASE(
-    "InsertUpdate",
-    "Run inserts and updates") {
+TESTCASE("InsertUpdate", "Run inserts and updates") {
   INITIALIZER(runInsertUpdate);
 }
-TESTCASE(
-    "FullScan",
-    "Full scan on each ordered index") {
+TESTCASE("FullScan", "Full scan on each ordered index") {
   INITIALIZER(runFullScan);
 }
 NDBT_TESTSUITE_END(testOrderedIndex);
 
-int
-main(int argc, const char** argv)
-{
+int main(int argc, const char **argv) {
   ndb_init();
   return testOrderedIndex.execute(argc, argv);
 }

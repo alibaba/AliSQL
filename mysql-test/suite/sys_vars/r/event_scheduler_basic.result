@@ -1,12 +1,12 @@
 SET @start_value = @@global.event_scheduler;
 SELECT @start_value;
 @start_value
-OFF
+ON
 '#---------------------FN_DYNVARS_004_01-------------------------#'
 SET @@global.event_scheduler = DEFAULT;
 SELECT @@global.event_scheduler;
 @@global.event_scheduler
-OFF
+ON
 '#--------------------FN_DYNVARS_004_02------------------------#'
 SET @@global.event_scheduler = ON;
 SELECT @@global.event_scheduler;
@@ -53,7 +53,7 @@ SELECT @@session.event_scheduler;
 ERROR HY000: Variable 'event_scheduler' is a GLOBAL variable
 '#----------------------FN_DYNVARS_004_05------------------------#'
 SELECT @@global.event_scheduler = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='event_scheduler';
 @@global.event_scheduler = VARIABLE_VALUE
 1
@@ -84,16 +84,19 @@ SELECT @@event_scheduler = @@global.event_scheduler;
 SET event_scheduler = ON;
 ERROR HY000: Variable 'event_scheduler' is a GLOBAL variable and should be set with SET GLOBAL
 SET local.event_scheduler = OFF;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'event_scheduler = OFF' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'local.event_scheduler = OFF' at line 1
 SELECT local.event_scheduler;
 ERROR 42S02: Unknown table 'local' in field list
 SET global.event_scheduler = ON;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'event_scheduler = ON' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'global.event_scheduler = ON' at line 1
 SELECT global.event_scheduler;
 ERROR 42S02: Unknown table 'global' in field list
-SELECT event_scheduler = @@session.event_scheduler;
+SELECT event_scheduler;
 ERROR 42S22: Unknown column 'event_scheduler' in 'field list'
+SELECT @@session.event_scheduler;
+ERROR HY000: Variable 'event_scheduler' is a GLOBAL variable
 SET @@global.event_scheduler = @start_value;
 SELECT @@global.event_scheduler;
 @@global.event_scheduler
-OFF
+ON
+# restart

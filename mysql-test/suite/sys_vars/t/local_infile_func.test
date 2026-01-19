@@ -19,7 +19,6 @@
 #                                                                              #
 ################################################################################
 
---source include/not_embedded.inc
 
 --echo '#--------------------FN_DYNVARS_037_01-------------------------#'
 ####################################################################
@@ -79,7 +78,7 @@ DROP TABLE IF EXISTS t1;
 create table t1(a int);
 
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---Error ER_NOT_ALLOWED_COMMAND
+--Error ER_CLIENT_LOCAL_FILES_DISABLED
 eval LOAD DATA LOCAL INFILE
 '$MYSQLTEST_VARDIR/std_data/numbers.txt' INTO TABLE test.t1;
 
@@ -87,7 +86,7 @@ SELECT count(*) from t1;
 
 # clean up and restore
 DROP TABLE t1;
-SET @@global.local_infile = 1;
+SET @@global.local_infile = 0;
 ######################################################
 # Endo of functionality Testing for local_infile     #
 ######################################################

@@ -1,0 +1,26 @@
+# Test creation of FTS index with innodb_disable_sort_file_cache=ON
+
+# Disabled for filesystems with no O_DIRECT mode support -
+# innodb_disable_sort_file_cache will attempt to use direct mode and warn
+# if it's not available
+--source include/have_odirect.inc
+--source include/not_solaris.inc
+
+CREATE TABLE test (
+  num INTEGER,
+  content varchar(255)
+) ENGINE = InnoDB;
+
+
+INSERT INTO test (num, content) VALUES
+ (1, 'What would I do without your snarky comments?');
+
+SELECT * FROM test;
+
+ALTER TABLE test ADD INDEX idx_num(num);
+ALTER TABLE test ADD FULLTEXT INDEX idx_content(content);
+
+SELECT * FROM test WHERE num = 1;
+SELECT * FROM test WHERE MATCH(content) AGAINST('without');
+
+DROP TABLE test;

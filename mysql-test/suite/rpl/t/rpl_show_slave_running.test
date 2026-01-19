@@ -3,26 +3,24 @@
 # The test verifies that  SHOW STATUS LIKE 'Slave_running' displays ON
 # if and only if `SHOW SLAVE STATUS' displays YES for Slave_IO_Running and  Slave_SQL_Running
 #
-source include/master-slave.inc;
+--source include/not_group_replication_plugin.inc
 source include/have_debug.inc;
 source include/have_debug_sync.inc;
+source include/master-slave.inc;
 
 connection slave;
 
 SET DEBUG_SYNC= 'RESET';
 source include/stop_slave.inc;
-let $debug_saved= `select @@global.debug`;
-set global debug= 'd,dbug.before_get_running_status_yes'; # to block due-started IO
+
+--let $debug_point= dbug.before_get_running_status_yes
+--source include/add_debug_point.inc
 
 # Test 1. Slave is stopped
 
 --echo Slave_running, Slave_IO_Running, Slave_SQL_Running, must be OFF, NO, NO in three following queries
 
-SHOW STATUS LIKE 'Slave_running';
-let $status= query_get_value("show slave status", Slave_IO_Running, 1);
-echo Slave_IO_Running= $status;
-let $status= query_get_value("show slave status", Slave_SQL_Running, 1);
-echo Slave_SQL_Running= $status;
+select rcs.SERVICE_STATE as Slave_IO_Running, ras.SERVICE_STATE as Slave_SQL_Running from performance_schema.replication_applier_status ras, performance_schema.replication_connection_status rcs;
 
 #  Test 2. The slave IO thread is started but not yet got connected to master
 #          and SQL thread is not started
@@ -38,11 +36,7 @@ start slave io_thread;
 #
 --echo Slave_running, Slave_IO_Running, Slave_SQL_Running must be OFF Connecting NO in three following queries
 
-SHOW STATUS LIKE 'Slave_running';
-let $status= query_get_value("show slave status", Slave_IO_Running, 1);
-echo Slave_IO_Running= $status;
-let $status= query_get_value("show slave status", Slave_SQL_Running, 1);
-echo Slave_SQL_Running= $status;
+select rcs.SERVICE_STATE as Slave_IO_Running, ras.SERVICE_STATE as Slave_SQL_Running from performance_schema.replication_applier_status ras, performance_schema.replication_connection_status rcs;
 
 # Test 3. The slave IO thread is started and got connected to master
 #         and SQL thread is still not started
@@ -54,11 +48,7 @@ source include/wait_for_slave_param.inc;
 
 --echo Slave_running, Slave_IO_Running, Slave_SQL_Running must be OFF YES NO in three following queries
 
-SHOW STATUS LIKE 'Slave_running';
-let $status= query_get_value("show slave status", Slave_IO_Running, 1);
-echo Slave_IO_Running= $status;
-let $status= query_get_value("show slave status", Slave_SQL_Running, 1);
-echo Slave_SQL_Running= $status;
+select rcs.SERVICE_STATE as Slave_IO_Running, ras.SERVICE_STATE as Slave_SQL_Running from performance_schema.replication_applier_status ras, performance_schema.replication_connection_status rcs;
 
 # Test 4. The slave IO thread is started and got connected to master
 #         and SQL thread is started
@@ -68,11 +58,7 @@ source include/wait_for_slave_sql_to_start.inc;
 
 --echo Slave_running, Slave_IO_Running, Slave_SQL_Running must be ON, YES, YES in three following queries
 
-SHOW STATUS LIKE 'Slave_running';
-let $status= query_get_value("show slave status", Slave_IO_Running, 1);
-echo Slave_IO_Running= $status;
-let $status= query_get_value("show slave status", Slave_SQL_Running, 1);
-echo Slave_SQL_Running= $status;
+select rcs.SERVICE_STATE as Slave_IO_Running, ras.SERVICE_STATE as Slave_SQL_Running from performance_schema.replication_applier_status ras, performance_schema.replication_connection_status rcs;
 
 # cleanup
 
@@ -85,7 +71,8 @@ connection master;
 # sync and waiting.
 --source include/sync_slave_sql_with_master.inc
 
-eval set global debug= '$debug_saved';
+--let $debug_point= dbug.before_get_running_status_yes
+--source include/remove_debug_point.inc
 
 SET DEBUG_SYNC= 'RESET';
 --echo End of tests

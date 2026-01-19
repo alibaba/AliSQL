@@ -1,74 +1,70 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-
+#include <NdbTCP.h>
 #include <ndb_global.h>
+#include <NdbBlob.hpp>
 #include <NdbOut.hpp>
 #include <NdbRecAttr.hpp>
-#include <NdbBlob.hpp>
 #include "NdbDictionaryImpl.hpp"
-#include <NdbTCP.h>
 
-NdbRecAttr::NdbRecAttr(Ndb*)
-{
-  theStorageX = 0;
+NdbRecAttr::NdbRecAttr(Ndb *) {
+  theStorageX = nullptr;
   init();
 }
 
-NdbRecAttr::~NdbRecAttr()
-{
-  release();
-}
+NdbRecAttr::~NdbRecAttr() { release(); }
 
-int
-NdbRecAttr::setup(const class NdbDictionary::Column* col, char* aValue)
-{
+int NdbRecAttr::setup(const class NdbDictionary::Column *col, char *aValue) {
   return setup(&(col->m_impl), aValue);
 }
 
-int
-NdbRecAttr::setup(const NdbColumnImpl* anAttrInfo, char* aValue)
-{
+int NdbRecAttr::setup(const NdbColumnImpl *anAttrInfo, char *aValue) {
   Uint32 tAttrSize = anAttrInfo->m_attrSize;
   Uint32 tArraySize = anAttrInfo->m_arraySize;
   Uint32 tAttrByteSize = tAttrSize * tArraySize;
-  
+
   m_column = anAttrInfo;
 
   theAttrId = anAttrInfo->m_attrId;
-  m_size_in_bytes = tAttrByteSize;
+  m_size_in_bytes = -1;  // UNDEFINED
 
   return setup(tAttrByteSize, aValue);
 }
 
-int 
-NdbRecAttr::setup(Uint32 byteSize, char* aValue)
-{
+int NdbRecAttr::setup(Uint32 byteSize, char *aValue) {
   theValue = aValue;
-  m_getVarValue = NULL; // set in getVarValue() only
+  m_getVarValue = nullptr;  // set in getVarValue() only
 
-  if (theStorageX)
-    delete[] theStorageX;
-  theStorageX = NULL; // "safety first"
-  
-  // check alignment to signal data
-  // a future version could check alignment per data type as well
-  
-  if (aValue != NULL && (UintPtr(aValue)&3) == 0 && (byteSize&3) == 0) {
+  delete[] theStorageX;
+  theStorageX = nullptr;
+
+  // Check if application provided pointer should be used
+  // NOTE! Neither pointers alignment or length of attribute matters since
+  // memcpy() will be used to copy received data there.
+  if (aValue != nullptr) {
     theRef = aValue;
     return 0;
   }
@@ -82,8 +78,8 @@ NdbRecAttr::setup(Uint32 byteSize, char* aValue)
     return 0;
   }
   Uint32 tSize = (byteSize + 7) >> 3;
-  Uint64* tRef = new Uint64[tSize];
-  if (tRef != NULL) {
+  Uint64 *tRef = new Uint64[tSize];
+  if (tRef != nullptr) {
     for (Uint32 i = 0; i < tSize; i++) {
       tRef[i] = 0;
     }
@@ -91,63 +87,43 @@ NdbRecAttr::setup(Uint32 byteSize, char* aValue)
     theRef = tRef;
     return 0;
   }
-  errno= ENOMEM;
+  errno = ENOMEM;
   return -1;
 }
 
-
-void
-NdbRecAttr::copyout()
-{
-  char* tRef = (char*)theRef;
-  char* tValue = theValue;
-  if (tRef != tValue && tRef != NULL && tValue != NULL) {
-    Uint32 n = m_size_in_bytes;
-    while (n-- > 0) {
-      *tValue++ = *tRef++;
-    }
-  }
-}
-
-NdbRecAttr *
-NdbRecAttr::clone() const {
-  NdbRecAttr * ret = new NdbRecAttr(0);
-  if (ret == NULL)
-  {
+NdbRecAttr *NdbRecAttr::clone() const {
+  NdbRecAttr *ret = new NdbRecAttr(nullptr);
+  if (ret == nullptr) {
     errno = ENOMEM;
-    return NULL;
+    return nullptr;
   }
   ret->theAttrId = theAttrId;
   ret->m_size_in_bytes = m_size_in_bytes;
   ret->m_column = m_column;
-  
+
   Uint32 n = m_size_in_bytes;
-  if(n <= 32){
-    ret->theRef = (char*)&ret->theStorage[0];
-    ret->theStorageX = 0;
-    ret->theValue = 0;
+  if (n <= 32) {
+    ret->theRef = (char *)&ret->theStorage[0];
+    ret->theStorageX = nullptr;
+    ret->theValue = nullptr;
   } else {
     ret->theStorageX = new Uint64[((n + 7) >> 3)];
-    if (ret->theStorageX == NULL)
-    {
+    if (ret->theStorageX == nullptr) {
       delete ret;
       errno = ENOMEM;
-      return NULL;
+      return nullptr;
     }
-    ret->theRef = (char*)ret->theStorageX;    
-    ret->theValue = 0;
+    ret->theRef = (char *)ret->theStorageX;
+    ret->theValue = nullptr;
   }
   memcpy(ret->theRef, theRef, n);
   return ret;
 }
 
-bool
-NdbRecAttr::receive_data(const Uint32 * data32, Uint32 sz)
-{
-  const unsigned char* data = (const unsigned char*)data32;
-  if(sz)
-  {
-    if (unlikely(m_getVarValue != NULL)) {
+bool NdbRecAttr::receive_data(const Uint32 *data32, Uint32 sz) {
+  const unsigned char *data = (const unsigned char *)data32;
+  if (sz) {
+    if (unlikely(m_getVarValue != nullptr)) {
       // ONLY for blob V2 implementation
       assert(m_column->getType() == NdbDictionary::Column::Longvarchar ||
              m_column->getType() == NdbDictionary::Column::Longvarbinary);
@@ -159,77 +135,57 @@ NdbRecAttr::receive_data(const Uint32 * data32, Uint32 sz)
       data += 2;
       sz -= 2;
     }
-    if(!copyoutRequired())
-      memcpy(theRef, data, sz);
-    else
-      memcpy(theValue, data, sz);
-    m_size_in_bytes= sz;
+
+    // Copy received data to destination pointer
+    memcpy(theRef, data, sz);
+
+    m_size_in_bytes = sz;
     return true;
-  } 
-  else 
-  {
-    return setNULL();
   }
-  return false;
+
+  return setNULL();
 }
 
 static const NdbRecordPrintFormat default_print_format;
 
-NdbOut&
-ndbrecattr_print_formatted(NdbOut& out, const NdbRecAttr &r,
-                           const NdbRecordPrintFormat &f)
-{
-  return NdbDictionary::printFormattedValue(out,
-                                            f,
-                                            r.getColumn(),
-                                            r.isNULL()==0 ? r.aRef() : 0);
+NdbOut &ndbrecattr_print_formatted(NdbOut &out, const NdbRecAttr &r,
+                                   const NdbRecordPrintFormat &f) {
+  return NdbDictionary::printFormattedValue(
+      out, f, r.getColumn(), r.isNULL() == 0 ? r.aRef() : nullptr);
 }
 
-NdbOut& operator<<(NdbOut& out, const NdbRecAttr &r)
-{
+NdbOut &operator<<(NdbOut &out, const NdbRecAttr &r) {
   return ndbrecattr_print_formatted(out, r, default_print_format);
 }
 
-Int64
-NdbRecAttr::int64_value() const 
-{
+Int64 NdbRecAttr::int64_value() const {
   Int64 val;
-  memcpy(&val,theRef,8);
+  memcpy(&val, theRef, 8);
   return val;
 }
 
-Uint64
-NdbRecAttr::u_64_value() const
-{
+Uint64 NdbRecAttr::u_64_value() const {
   Uint64 val;
-  memcpy(&val,theRef,8);
+  memcpy(&val, theRef, 8);
   return val;
 }
 
-float
-NdbRecAttr::float_value() const
-{
+float NdbRecAttr::float_value() const {
   float val;
-  memcpy(&val,theRef,sizeof(val));
+  memcpy(&val, theRef, sizeof(val));
   return val;
 }
 
-double
-NdbRecAttr::double_value() const
-{
+double NdbRecAttr::double_value() const {
   double val;
-  memcpy(&val,theRef,sizeof(val));
+  memcpy(&val, theRef, sizeof(val));
   return val;
 }
 
-Int32
-NdbRecAttr::medium_value() const
-{
+Int32 NdbRecAttr::medium_value() const {
   return sint3korr((unsigned char *)theRef);
 }
 
-Uint32
-NdbRecAttr::u_medium_value() const
-{
-  return uint3korr((unsigned char*)theRef);
+Uint32 NdbRecAttr::u_medium_value() const {
+  return uint3korr((unsigned char *)theRef);
 }

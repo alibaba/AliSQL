@@ -1,2 +1,0 @@
---gtid-mode=on --enforce-gtid-consistency --log-slave-updates --log-bin --binlog-format=row --rds_allow_unsafe_stmt_with_gtid=on
-

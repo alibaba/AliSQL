@@ -1,107 +1,47 @@
-/* Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2009, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
-  @file Representation of an SQL command.
+  @file sql/sql_cmd.h
+  Representation of an SQL command.
 */
 
 #ifndef SQL_CMD_INCLUDED
 #define SQL_CMD_INCLUDED
 
-/*
-  When a command is added here, be sure it's also added in mysqld.cc
-  in "struct show_var_st status_vars[]= {" ...
+#include <assert.h>
 
-  If the command returns a result set or is not allowed in stored
-  functions or triggers, please also make sure that
-  sp_get_flags_for_command (sp_head.cc) returns proper flags for the
-  added SQLCOM_.
-*/
+#include "my_sqlcommand.h"
+#include "sql/select_lex_visitor.h"
 
-enum enum_sql_command {
-  SQLCOM_SELECT, SQLCOM_CREATE_TABLE, SQLCOM_CREATE_INDEX, SQLCOM_ALTER_TABLE,
-  SQLCOM_UPDATE, SQLCOM_INSERT, SQLCOM_INSERT_SELECT,
-  SQLCOM_DELETE, SQLCOM_TRUNCATE, SQLCOM_DROP_TABLE, SQLCOM_DROP_INDEX,
-
-  SQLCOM_SHOW_DATABASES, SQLCOM_SHOW_TABLES, SQLCOM_SHOW_FIELDS,
-  SQLCOM_SHOW_KEYS, SQLCOM_SHOW_VARIABLES, SQLCOM_SHOW_STATUS,
-  SQLCOM_SHOW_ENGINE_LOGS, SQLCOM_SHOW_ENGINE_STATUS, SQLCOM_SHOW_ENGINE_MUTEX,
-  SQLCOM_SHOW_PROCESSLIST, SQLCOM_SHOW_MASTER_STAT, SQLCOM_SHOW_SLAVE_STAT,
-  SQLCOM_SHOW_GRANTS, SQLCOM_SHOW_CREATE, SQLCOM_SHOW_CHARSETS,
-  SQLCOM_SHOW_COLLATIONS, SQLCOM_SHOW_CREATE_DB, SQLCOM_SHOW_TABLE_STATUS,
-  SQLCOM_SHOW_TRIGGERS,
-
-  SQLCOM_LOAD,SQLCOM_SET_OPTION,SQLCOM_LOCK_TABLES,SQLCOM_UNLOCK_TABLES,
-  SQLCOM_GRANT,
-  SQLCOM_CHANGE_DB, SQLCOM_CREATE_DB, SQLCOM_DROP_DB, SQLCOM_ALTER_DB,
-  SQLCOM_REPAIR, SQLCOM_REPLACE, SQLCOM_REPLACE_SELECT,
-  SQLCOM_CREATE_FUNCTION, SQLCOM_DROP_FUNCTION,
-  SQLCOM_REVOKE,SQLCOM_OPTIMIZE, SQLCOM_CHECK,
-  SQLCOM_ASSIGN_TO_KEYCACHE, SQLCOM_PRELOAD_KEYS,
-  SQLCOM_FLUSH, SQLCOM_KILL, SQLCOM_ANALYZE,
-  SQLCOM_ROLLBACK, SQLCOM_ROLLBACK_TO_SAVEPOINT,
-  SQLCOM_COMMIT, SQLCOM_SAVEPOINT, SQLCOM_RELEASE_SAVEPOINT,
-  SQLCOM_SLAVE_START, SQLCOM_SLAVE_STOP,
-  SQLCOM_BEGIN, SQLCOM_CHANGE_MASTER,
-  SQLCOM_RENAME_TABLE,  
-  SQLCOM_RESET, SQLCOM_PURGE, SQLCOM_PURGE_BEFORE, SQLCOM_SHOW_BINLOGS,
-  SQLCOM_SHOW_OPEN_TABLES,
-  SQLCOM_HA_OPEN, SQLCOM_HA_CLOSE, SQLCOM_HA_READ,
-  SQLCOM_SHOW_SLAVE_HOSTS, SQLCOM_DELETE_MULTI, SQLCOM_UPDATE_MULTI,
-  SQLCOM_SHOW_BINLOG_EVENTS, SQLCOM_DO,
-  SQLCOM_SHOW_WARNS, SQLCOM_EMPTY_QUERY, SQLCOM_SHOW_ERRORS,
-  SQLCOM_SHOW_STORAGE_ENGINES, SQLCOM_SHOW_PRIVILEGES,
-  SQLCOM_HELP, SQLCOM_CREATE_USER, SQLCOM_DROP_USER, SQLCOM_RENAME_USER,
-  SQLCOM_REVOKE_ALL, SQLCOM_CHECKSUM,
-  SQLCOM_CREATE_PROCEDURE, SQLCOM_CREATE_SPFUNCTION, SQLCOM_CALL,
-  SQLCOM_DROP_PROCEDURE, SQLCOM_ALTER_PROCEDURE,SQLCOM_ALTER_FUNCTION,
-  SQLCOM_SHOW_CREATE_PROC, SQLCOM_SHOW_CREATE_FUNC,
-  SQLCOM_SHOW_STATUS_PROC, SQLCOM_SHOW_STATUS_FUNC,
-  SQLCOM_PREPARE, SQLCOM_EXECUTE, SQLCOM_DEALLOCATE_PREPARE,
-  SQLCOM_CREATE_VIEW, SQLCOM_DROP_VIEW,
-  SQLCOM_CREATE_TRIGGER, SQLCOM_DROP_TRIGGER,
-  SQLCOM_XA_START, SQLCOM_XA_END, SQLCOM_XA_PREPARE,
-  SQLCOM_XA_COMMIT, SQLCOM_XA_ROLLBACK, SQLCOM_XA_RECOVER,
-  SQLCOM_SHOW_PROC_CODE, SQLCOM_SHOW_FUNC_CODE,
-  SQLCOM_ALTER_TABLESPACE,
-  SQLCOM_INSTALL_PLUGIN, SQLCOM_UNINSTALL_PLUGIN,
-  SQLCOM_BINLOG_BASE64_EVENT,
-  SQLCOM_SHOW_PLUGINS,
-  SQLCOM_CREATE_SERVER, SQLCOM_DROP_SERVER, SQLCOM_ALTER_SERVER,
-  SQLCOM_CREATE_EVENT, SQLCOM_ALTER_EVENT, SQLCOM_DROP_EVENT,
-  SQLCOM_SHOW_CREATE_EVENT, SQLCOM_SHOW_EVENTS,
-  SQLCOM_SHOW_CREATE_TRIGGER,
-  SQLCOM_ALTER_DB_UPGRADE,
-  SQLCOM_SHOW_PROFILE, SQLCOM_SHOW_PROFILES,
-  SQLCOM_SIGNAL, SQLCOM_RESIGNAL,
-  SQLCOM_SHOW_RELAYLOG_EVENTS,
-  SQLCOM_GET_DIAGNOSTICS,
-  SQLCOM_ALTER_USER,
-  SQLCOM_SHOW_SQL_FILTERS,
-
-  SQLCOM_SET_EXECUTED_GTID_SET,
-  /*
-    When a command is added here, be sure it's also added in mysqld.cc
-    in "struct show_var_st status_vars[]= {" ...
-  */
-  /* This should be the last !!! */
-  SQLCOM_END
-};
+class THD;
+class Prepared_statement;
+struct handlerton;
+struct MYSQL_LEX_STRING;
+struct MYSQL_LEX_CSTRING;
 
 /**
-  @class Sql_cmd - Representation of an SQL command.
+  Representation of an SQL command.
 
   This class is an interface between the parser and the runtime.
   The parser builds the appropriate derived classes of Sql_cmd
@@ -118,44 +58,217 @@ enum enum_sql_command {
   The recommended name of a derived class of Sql_cmd is Sql_cmd_<derived>.
 
   Notice that the Sql_cmd class should not be confused with the Statement class.
-  Statement is a class that is used to manage an SQL command or a set 
+  Statement is a class that is used to manage an SQL command or a set
   of SQL commands. When the SQL statement text is analyzed, the parser will
   create one or more Sql_cmd objects to represent the actual SQL commands.
 */
-class Sql_cmd : public Sql_alloc
-{
-private:
-  Sql_cmd(const Sql_cmd &);         // No copy constructor wanted
-  void operator=(Sql_cmd &);        // No assignment operator wanted
+class Sql_cmd {
+ private:
+  Sql_cmd(const Sql_cmd &);   // No copy constructor wanted
+  void operator=(Sql_cmd &);  // No assignment operator wanted
 
-public:
+ public:
   /**
     @brief Return the command code for this statement
   */
   virtual enum_sql_command sql_command_code() const = 0;
 
   /**
+    @return true if object represents a preparable statement, ie. a query
+    that is prepared with a PREPARE statement and executed with an EXECUTE
+    statement. False is returned for regular statements (non-preparable
+    statements) that are executed directly. Also false if statement is part
+    of a stored procedure.
+  */
+  bool needs_explicit_preparation() const {
+    return m_owner != nullptr && !m_part_of_sp;
+  }
+  /**
+    @return true if statement is regular, ie not prepared statement and not
+    part of stored procedure.
+  */
+  bool is_regular() const { return m_owner == nullptr && !m_part_of_sp; }
+
+  /// @return true if this statement is prepared
+  bool is_prepared() const { return m_prepared; }
+
+  /**
+    Prepare this SQL statement.
+
+    param thd the current thread
+
+    @returns false if success, true if error
+  */
+  virtual bool prepare(THD *) {
+    // Default behavior for a statement is to have no preparation code.
+    /* purecov: begin inspected */
+    assert(!is_prepared());
+    set_prepared();
+    return false;
+    /* purecov: end */
+  }
+
+  /**
     Execute this SQL statement.
     @param thd the current thread.
-    @retval false on success.
-    @retval true on error
+    @returns false if success, true if error
   */
   virtual bool execute(THD *thd) = 0;
 
-protected:
-  Sql_cmd()
-  {}
+  /**
+    Some SQL commands currently require re-preparation on re-execution of a
+    prepared statement or stored procedure. For example, a CREATE TABLE command
+    containing an index expression.
+    @return true if re-preparation is required, false otherwise.
+  */
+  virtual bool reprepare_on_execute_required() const { return false; }
 
-  virtual ~Sql_cmd()
-  {
+  /**
+    Command-specific reinitialization before execution of prepared statement
+
+    param thd  Current THD.
+  */
+  virtual void cleanup(THD *) { m_secondary_engine = nullptr; }
+
+  /// Set the owning prepared statement
+  void set_owner(Prepared_statement *stmt) {
+    assert(!m_part_of_sp);
+    m_owner = stmt;
+  }
+
+  /// Get the owning prepared statement
+  Prepared_statement *owner() const { return m_owner; }
+
+  /**
+    Mark statement as part of procedure. Such statements can be executed
+    multiple times, the first execute() call will also prepare it.
+  */
+  void set_as_part_of_sp() {
+    assert(!m_part_of_sp && m_owner == nullptr);
+    m_part_of_sp = true;
+  }
+  /// @returns true if statement is part of a stored procedure
+  bool is_part_of_sp() const { return m_part_of_sp; }
+
+  /// @return true if SQL command is a DML statement
+  virtual bool is_dml() const { return false; }
+
+  /// @return true if implemented as single table plan, DML statement only
+  virtual bool is_single_table_plan() const {
+    /* purecov: begin inspected */
+    assert(is_dml());
+    return false;
+    /* purecov: end */
+  }
+
+  virtual bool accept(THD *, Select_lex_visitor *) { return false; }
+
+  /**
+    Is this statement of a type and on a form that makes it eligible
+    for execution in a secondary storage engine?
+
+    @return the name of the secondary storage engine, or nullptr if
+    the statement is not eligible for execution in a secondary storage
+    engine
+  */
+  virtual const MYSQL_LEX_CSTRING *eligible_secondary_storage_engine() const {
+    return nullptr;
+  }
+
+  /**
+    Disable use of secondary storage engines in this statement. After
+    a call to this function, the statement will not try to use a
+    secondary storage engine until it is reprepared.
+  */
+  void disable_secondary_storage_engine() {
+    assert(m_secondary_engine == nullptr);
+    m_secondary_engine_enabled = false;
+  }
+
+  /**
+    Has use of secondary storage engines been disabled for this statement?
+  */
+  bool secondary_storage_engine_disabled() const {
+    return !m_secondary_engine_enabled;
+  }
+
+  /**
+  Mark the current statement as using a secondary storage engine.
+  This function must be called before the statement starts opening
+  tables in a secondary engine.
+  */
+  void use_secondary_storage_engine(const handlerton *hton) {
+    assert(m_secondary_engine_enabled);
+    m_secondary_engine = hton;
+  }
+
+  /**
+    Is this statement using a secondary storage engine?
+    @note that this is reliable during optimization and afterwards; during
+    preparation, if this is an explicit preparation (SQL PREPARE, C API
+    PREPARE, and automatic repreparation), it may be false as RAPID tables have
+    not yet been opened. Therefore, during preparation, it is safer to test
+    THD::secondary_engine_optimization().
+  */
+  bool using_secondary_storage_engine() const {
+    return m_secondary_engine != nullptr;
+  }
+
+  /**
+    Get the handlerton of the secondary engine that is used for
+    executing this statement, or nullptr if a secondary engine is not
+    used.
+  */
+  const handlerton *secondary_engine() const { return m_secondary_engine; }
+
+  void set_optional_transform_prepared(bool value) {
+    m_prepared_with_optional_transform = value;
+  }
+
+  bool is_optional_transform_prepared() {
+    return m_prepared_with_optional_transform;
+  }
+
+ protected:
+  Sql_cmd() : m_owner(nullptr), m_part_of_sp(false), m_prepared(false) {}
+
+  virtual ~Sql_cmd() {
     /*
       Sql_cmd objects are allocated in thd->mem_root.
       In MySQL, the C++ destructor is never called, the underlying MEM_ROOT is
       simply destroyed instead.
       Do not rely on the destructor for any cleanup.
     */
-    DBUG_ASSERT(FALSE);
+    assert(false);
   }
+
+  /// Set this statement as prepared
+  void set_prepared() { m_prepared = true; }
+
+ private:
+  Prepared_statement *m_owner;  /// Owning prepared statement, NULL if non-prep.
+  bool m_part_of_sp;            /// True when statement is part of stored proc.
+  bool m_prepared;              /// True when statement has been prepared
+
+  /**
+    Tells if a secondary storage engine can be used for this
+    statement. If it is false, use of a secondary storage engine will
+    not be considered for executing this statement.
+  */
+  bool m_secondary_engine_enabled{true};
+
+  /**
+    Keeps track of whether the statement was prepared optional
+    transformation.
+  */
+  bool m_prepared_with_optional_transform{false};
+
+  /**
+    The secondary storage engine to use for execution of this
+    statement, if any, or nullptr if the primary engine is used.
+    This property is reset at the start of each execution.
+  */
+  const handlerton *m_secondary_engine{nullptr};
 };
 
-#endif // SQL_CMD_INCLUDED
+#endif  // SQL_CMD_INCLUDED

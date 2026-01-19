@@ -1,0 +1,139 @@
+/*****************************************************************************
+
+Copyright (c) 2017, 2025, Oracle and/or its affiliates.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+*****************************************************************************/
+
+/**************************************************************/ /**
+ @file include/os0event.ic
+
+ Inlined implementation for os_event_*
+ *******************************************************************/
+
+/** Waits in loop until a provided condition is satisfied. Combines usage
+of spin-delay and event.
+
+@remarks
+First it uses a spin loop with PAUSE instructions. In each spin iteration
+it checks the condition and stops as soon as it returned true.
+
+When a provided number of spin iterations is reached, and the condition
+still has not returned true, waiting on a provided event starts.
+
+Each wait uses a provided timeout. After each wake-up the condition is
+re-checked and function stops as soon as the condition returned true.
+
+Every k-waits (ended on wake-up or timeout), the timeout is multiplied by two
+(but it's limited up to maximum value of 100ms).
+
+@param[in,out]  event                   event on which function may wait
+@param[in]      spins_limit             maximum spin iterations
+@param[in]      timeout                 initial timeout value
+@param[in]      condition               returns true when condition is
+                                        satisfied
+
+@return number of loops with wait on event that have been used */
+template <typename Condition>
+inline static Wait_stats os_event_wait_for(os_event_t &event,
+                                           uint64_t spins_limit,
+                                           std::chrono::microseconds timeout,
+                                           Condition condition = {}) {
+#ifdef _WIN32
+  uint32_t next_level = 64;
+#else
+  uint32_t next_level = 4;
+#endif
+  uint32_t waits = 0;
+
+  constexpr auto MIN_TIMEOUT = std::chrono::microseconds{1};
+  constexpr auto MAX_TIMEOUT = std::chrono::microseconds{100 * 1000};
+
+  while (true) {
+    /* Store current sig_count before checking the
+    condition, not to miss notification. */
+    const bool wait = spins_limit == 0;
+
+    const int64_t sig_count = !wait ? 0 : os_event_reset(event);
+
+    /* Important: we do not want to split this loop to two
+    loops (one for spin-delay and one for event), because
+    we assume the condition is inlined below, and we don't
+    want to make it inlined in two places. */
+
+    if (condition(wait)) {
+      return (Wait_stats{waits});
+    }
+
+    if (!wait) {
+      /* It's still spin-delay loop. */
+      --spins_limit;
+
+      UT_RELAX_CPU();
+
+    } else {
+      /* Event-based loop. */
+      ++waits;
+      if (timeout < MIN_TIMEOUT) {
+        /* If timeout = 0, then timeout * 2 = 0 and
+        we would not keep increasing timeout below.
+        Therefore we need some limitation for min.
+
+        Moreover, we measured how long does it take
+        to wake up on timeout, depending on timeout:
+             1us ->   57us,
+            10us ->   66us,
+            20us ->   76us,
+            50us ->  106us,
+           100us ->  156us,
+          1000us -> 1100us.
+
+        (Oracle Linux 4.14.28) */
+
+        timeout = MIN_TIMEOUT;
+      }
+
+      if (waits == next_level) {
+        timeout = std::min(timeout * 2, MAX_TIMEOUT);
+
+#ifdef _WIN32
+        /* On Windows timeout is expressed in ms,
+        so it's divided by 1000 and rounded down
+        to 0 when it's smaller than 1000.
+
+        In such case, it takes in average 10us to
+        perform single SleepConditionVariableCS.
+
+        So we need to perform more such 10us waits
+        to simulate given number of timeout waits. */
+        next_level += 64;
+#else
+        next_level += 4;
+#endif
+      }
+
+      /* This translates to pthread_cond_wait (linux). */
+      os_event_wait_time_low(event, timeout, sig_count);
+    }
+  }
+}

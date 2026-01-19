@@ -1,19 +1,27 @@
 #!/usr/bin/perl
 
-# Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 # -*- cperl -*-
 #
@@ -23,9 +31,14 @@
 # This script is intended for internal use
 #
 use strict;
-use Cwd 'abs_path';
+use Cwd qw[abs_path cwd];
 use File::Basename;
 use Getopt::Long;
+use IPC::Cmd qw[can_run];
+
+# Automatically flush STDOUT
+select(STDOUT);
+$| = 1;
 
 # Only add the command line options handled by this script, 
 # thus acting like a filter and passing all other arguments
@@ -33,8 +46,19 @@ use Getopt::Long;
 my $opt_debug;
 my $opt_build_type;
 my $opt_build = 1;
+if ($^O eq "cygwin" or $^O eq "MSWin32" or $^O eq "msys")
+{
+  # Default to not build on Windows, just configure a solution
+  # which can then be opened in VS
+  $opt_build = 0;
+}
+my $opt_embedded = 0;
 my $opt_just_print;
-
+my $opt_vanilla;
+my $opt_autotest;
+my $opt_valgrind;
+my $opt_distcheck;
+my $opt_quick = 1;
 Getopt::Long::Configure("pass_through");
 GetOptions(
 
@@ -45,26 +69,35 @@ GetOptions(
   'build!' => \$opt_build,
   'c|just-configure' => sub { $opt_build = 0; },
   'n|just-print' => \$opt_just_print,
+  'vanilla' => \$opt_vanilla,
+  'autotest' => \$opt_autotest,
+  'valgrind' => \$opt_valgrind,
+  'distcheck' => \$opt_distcheck,
+  'embedded' => sub { $opt_embedded = 1; },
+  'quick=s' => \$opt_quick
+
 ) or exit(1);
 
 # Find source root directory, assume this script is
 # in <srcroot>/storage/ndb/
 my $opt_srcdir = dirname(dirname(dirname(abs_path($0))));
 die unless -d $opt_srcdir; # Sanity check that the srcdir exist
-if ($^O eq "cygwin") {
+if ($^O eq "cygwin" or $^O eq "msys") {
   # Convert posix path to Windows mixed path since cmake
   # is most likely a windows binary
   $opt_srcdir= `cygpath -m $opt_srcdir`;
   chomp $opt_srcdir;
 }
 
-# Check that cmake exists and figure out it's version 
+# Check that cmake exists and figure out it's version
+my $cmake = can_run("cmake3") || can_run("cmake");
+
 my $cmake_version_id;
 {
-  my $version_text = `cmake --version`;
+  my $version_text = `$cmake --version`;
   print $version_text;
   die "Could not find cmake" if ($?);
-  if ( $version_text =~ /^cmake version ([0-9]*)\.([0-9]*)\.*([^\s]*)/ )
+  if ( $version_text =~ /^cmake[3]? version ([0-9]*)\.([0-9]*)\.*([^\s]*)/ )
   {
     #print "1: $1 2: $2 3: $3\n";
     $cmake_version_id= $1*10000 + $2*100 + $3;
@@ -73,6 +106,30 @@ my $cmake_version_id;
   die "Could not parse cmake version" unless ($cmake_version_id);
 }
 
+# Replace gcc with g++ in CXX environment variable
+if(defined $ENV{"CXX"} and $ENV{"CXX"} =~ m/gcc/)
+{
+  my $old_cxx= $ENV{"CXX"};
+  $ENV{"CXX"} =~ s/gcc/g++/;
+  print("compile-cluster: switched CXX compiler from '$old_cxx' to '$ENV{CXX}'\n");
+}
+
+# Remove -fno-exceptions from CXXFLAGS environment variable
+if(defined $ENV{"CXXFLAGS"} and $ENV{"CXXFLAGS"} =~ "-fno-exceptions")
+{
+  $ENV{"CXXFLAGS"} =~ s/-fno-exceptions//g;
+  print("compile-cluster: stripped off -fno-exceptions from CXXFLAGS='$ENV{CXXFLAGS}'\n");
+}
+
+# If no libmysqld directory in source, there is support for build embedded server.
+if(! -d "$opt_srcdir/libmysqld")
+{
+  if($opt_embedded)
+  {
+    die "Build with embedded server is not possible";
+  }
+  $opt_embedded = undef;
+}
 
 #
 # Configure
@@ -81,26 +138,85 @@ my $cmake_version_id;
   # Remove old CMakeCache.txt(ignore if not exists) to
   # force fresh configure
   unlink("CMakeCache.txt");
-   
+
   my @args;
-  
-  # Hardcoded options controlling how to build MySQL Server
-  push(@args, "-DWITH_SSL=bundled");
- 
   if ($opt_debug)
   {
+    print("compile-cluster: debug build requested\n");
     push(@args, "-DWITH_DEBUG=1");
-    push(@args, "-DMYSQL_MAINTAINER_MODE=0");
+    # The MySQL maintainter mode is automatically turned on when
+    # building with debug using gcc on linux, turn it off
+    # by uncommenting the line below or use --mysql-maintainer-mode=0
+    # push(@args, "-DMYSQL_MAINTAINER_MODE=0");
   }
 
-  # Hardcoded options controlling how to build NDB
-  push(@args, "-DWITH_PLUGIN_NDBCLUSTER=1");
-  push(@args, "-DWITH_NDB_TEST=1");
+  if ($opt_vanilla)
+  {
+    # Build MySQL without any NDB functionality
+    print("compile-cluster: vanilla build requested, no sugar\n");
+    push(@args, "-DWITH_NDBCLUSTER_STORAGE_ENGINE=0");
+  }
+  else
+  {
+    # Hardcoded options controlling how to build MySQL Server
+    push(@args, "-DWITH_SSL=system"); # Consistent error messages
+    push(@args, "-DWITH_NDB=1"); # Build MySQL Cluster
+
+    # Hardcoded options controlling how to build NDB
+    push(@args, "-DWITH_NDB_TEST=1");
+    push(@args, "-DWITH_NDBAPI_EXAMPLES=1")
+      unless ($^O eq "cygwin" or $^O eq "MSWin32")
+  }
+
+  if ($opt_quick)
+  {
+    # Hardcoded options removing an arbitrary set of slow to build
+    # unrelated components
+    push(@args, "-DWITH_ROUTER=0"); # No MySQL Router
+    push(@args, "-DWITH_MEB=0"); # No MEB
+    push(@args, "-DWITH_RAPID=0"); # No RAPID
+    push(@args, "-DWITH_GROUP_REPLICATION=0"); # No GR
+
+    # To speed up build it's possible to skip building the
+    # unittests with "-DWITH_UNIT_TESTS=0", however those
+    # are important and certainly well worth the time spent
+    # to detect problems early and should thus not be skipped
+    # by default.
+  }
+
+  if ($opt_autotest)
+  {
+    print("compile-cluster: autotest build requested, extra everything\n");
+    push(@args, "-DWITH_NDB_CCFLAGS='-DERROR_INSERT'");
+  }
+
+  if (defined $opt_embedded)
+  {
+    push(@args, "-DWITH_EMBEDDED_SERVER=$opt_embedded");
+  }
+
+  if ($opt_valgrind)
+  {
+    print("compile-cluster: valgrind build requested, adjusting the knobs\n");
+    # Add HAVE_purify to compiler flags in order to silence
+    # inspected warnings
+    push(@args, "-DCMAKE_C_FLAGS='-DHAVE_purify'");
+    push(@args, "-DCMAKE_CXX_FLAGS='-DHAVE_purify'");
+    # Turn on use of the valgrind headers to enhance detection
+    push(@args, "-DWITH_VALGRIND=1");
+  }
 
   # The cmake generator to use
   if ($opt_build_type)
   {
     push(@args, "-G \"$opt_build_type\"");
+  }
+
+  if ($^O eq "cygwin" or $^O eq "MSWin32" or $^O eq "msys")
+  {
+    # Default to x64 since that's currrenlty the only supported
+    # architecture for building MySQL on Windows
+    push(@args, "-A x64");
   }
 
   # Sets installation directory,  bindir, libdir, libexecdir etc.
@@ -146,7 +262,8 @@ my $cmake_version_id;
   my $opt_with_plugins;
   my $opt_without_plugin;
   my $opt_extra_charsets;
-  my $opt_with_extra_charsets;  
+  my $opt_with_extra_charsets;
+  my $opt_force_insource_build;
   Getopt::Long::Configure("pass_through");
   GetOptions(
     'prefix=s' => \$opt_prefix,
@@ -165,6 +282,7 @@ my $cmake_version_id;
     'without-plugin=s' => \$opt_without_plugin,
     'with-extra-charsets=s' => \$opt_with_extra_charsets,
     'extra-charsets=s' => \$opt_extra_charsets,
+    'force-insource-build' => \$opt_force_insource_build,
   ) or exit(1);
 
   if($opt_prefix)
@@ -195,7 +313,7 @@ my $cmake_version_id;
   }
   if($opt_with_ssl)
   {
-    push(@args, "-DWITH_SSL=".($opt_with_ssl ? "yes" : "bundled"));
+    push(@args, "-DWITH_SSL=".($opt_with_ssl ? "yes" : "wolfssl"));
   }
   if ($opt_localstatedir)
   {
@@ -235,7 +353,10 @@ my $cmake_version_id;
   {
     push(@args, "-DWITH_EXTRA_CHARSETS=$opt_with_extra_charsets");
   }
-  
+  if ($opt_force_insource_build)
+  {
+    push(@args, "-DFORCE_INSOURCE_BUILD=1");
+  }
 
   # Default conversion of remaining args in ARGV from
   # 1) --arg          -> -DARG=1
@@ -282,66 +403,77 @@ my $cmake_version_id;
   die "srcdir already contains CMakeCache.txt, this will not work!"
     if (-f "$opt_srcdir/CMakeCache.txt");
   push(@args, $opt_srcdir);
+
+  if (cwd() eq $opt_srcdir && !$opt_force_insource_build)
+  {
+    die "
+    Please do not build in-source.  Out-of source builds are highly
+    recommended: you can have multiple builds for the same source, and there is
+    an easy way to do cleanup, simply remove the build directory (note that
+    'make clean' or 'make distclean' does *not* work)
+
+    You *can* force in-source build by invoking compile-cluster with
+    -force-insource-build option which in turn invokes cmake with
+    -DFORCE_INSOURCE_BUILD=1";
+  }
+
+  if ($cmake_version_id < 30403)
+  {
+    die "CMake 3.4.3 or higher is required";
+  }
   
-  cmd("cmake", @args);
+  cmd($cmake, @args);
 }
 
+#
+# Build
+#
 if (!$opt_build)
 {
   print "Configuration completed, skipping build(used --no-build)\n";
   exit(0);
 }
 
-
-#
-# Build
-#
 {
-  if ($cmake_version_id >= 20800)
-  {
-    # Use the universal "cmake --build <dir>" way of building
-    # which is available from cmake 2.8 and works on all platforms
-    my @args;
-    push(@args, "--build");
-    push(@args, ".");
+  # Use the universal "cmake --build <dir>" way of building
+  # which is available from cmake 2.8 and works on all platforms
+  my @args;
+  push(@args, "--build");
+  push(@args, ".");
 
-    if ($^O eq "cygwin" or $^O eq "MSWin32")
+  if ($^O eq "cygwin" or $^O eq "MSWin32" or $^O eq "msys")
+  {
+    # Choose to build RelWitDebInfo by default on Windows
+    my $config = 'RelWithDebInfo';
+    if ($opt_debug)
     {
-      # Choose to build RelWitDebInfo by default on Windows
-      my $config = 'RelWithDebInfo';
-      if ($opt_debug)
-      {
-	$config = 'Debug';
-      }
-      push(@args, "--config");
-      push(@args, $config);
+      $config = 'Debug';
     }
-
-    cmd("cmake", @args);
-
+    push(@args, "--config");
+    push(@args, $config);
   }
-  else
-  {
-    # Use make to build, not supported on Windows
-    die "You need to install cmake with version > 2.8"
-      if ($^O eq "cygwin" or $^O eq "MSWin32");
 
-    cmd("make");
-  }
+  cmd($cmake, @args);
+
 }
 
-sub cmd {
-  my ($cmd, @a)= @_;
-  
-  if ($opt_just_print){
-    print "$cmd ", join(' ', @a), "\n";
-    return; 
-  }
-  
-  print "compile-cluster: calling '$cmd ", join(' ', @a), "'\n";
-  system($cmd, @a)
-    and print("command failed: $!\n")
-      and exit(1);
+if ($opt_distcheck)
+{
+    print "\n";
+    print "NOTE! 'make distcheck' not (yet) supported in this version\n";
+    print "\n";
 }
 
 exit(0);
+
+
+sub cmd {
+  my ($cmd, @a)= @_;
+  my $cmd_str = join(' ', $cmd, @a);
+  print "compile-cluster: '$cmd_str'\n";
+  return if ($opt_just_print);
+  system($cmd_str)
+    and print("command '$cmd_str' failed\n")
+	  and exit(1);
+}
+

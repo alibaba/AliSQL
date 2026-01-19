@@ -67,7 +67,7 @@ BEGIN;
 UPDATE t1 SET b = 4*a WHERE a > 4;
 COMMIT;
 
-SET BINLOG_FORMAT=ROW;
+SET BINLOG_FORMAT='ROW';
 
 SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 BEGIN;
@@ -107,7 +107,7 @@ create table t1 (a int) engine=innodb;
 
 # Now we are going to create transaction which is long enough so its
 # transaction binlog will be flushed to disk...
-let $1=2000;
+let $1=600;
 disable_query_log;
 begin;
 while ($1)
@@ -128,44 +128,3 @@ commit;
 show status like "binlog_cache_use";
 show status like "binlog_cache_disk_use";
 drop table t1;
-
-#
-# Bug#27716  	multi-update did partially and has not binlogged
-#
-
-CREATE TABLE `t1` (
-  `a` int(11) NOT NULL auto_increment,
-  `b` int(11) default NULL,
-  PRIMARY KEY  (`a`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 ;
-
-CREATE TABLE `t2` (
-  `a` int(11) NOT NULL auto_increment,
-  `b` int(11) default NULL,
-  PRIMARY KEY  (`a`)
-) ENGINE=INNODB DEFAULT CHARSET=latin1 ;
-
-# A. testing multi_update::send_eof() execution branch
-insert into t1 values (1,1),(2,2);
-insert into t2 values (1,1),(4,4);
-reset master;
---error ER_DUP_ENTRY
-UPDATE t2,t1 SET t2.a=t1.a+2;
-# check
-select * from t2 /* must be (3,1), (4,4) */;
---echo # There must no UPDATE in binlog;
-source include/show_binlog_events.inc;
-
-# B. testing multi_update::send_error() execution branch
-delete from t1;
-delete from t2;
-insert into t1 values (1,2),(3,4),(4,4);
-insert into t2 values (1,2),(3,4),(4,4);
-reset master;
---error ER_DUP_ENTRY
-UPDATE t2,t1  SET t2.a=t2.b where t2.a=t1.a;
---echo # There must be no UPDATE query event;
-source include/show_binlog_events.inc;
-
-# cleanup bug#27716
-drop table t1, t2;

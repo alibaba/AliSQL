@@ -1,0 +1,293 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Proposed Standard Executors</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../boost_asio.html" title="Boost.Asio">
+<link rel="prev" href="net_ts.html" title="Networking TS compatibility">
+<link rel="next" href="history.html" title="Revision History">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="net_ts.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../boost_asio.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../boost_asio.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="history.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="boost_asio.std_executors"></a><a class="link" href="std_executors.html" title="Proposed Standard Executors">Proposed Standard Executors</a>
+</h2></div></div></div>
+<p>
+      Boost.Asio provides a complete implementation of the proposed standard executors,
+      as described in <a href="http://wg21.link/P0443r13" target="_top">P0443r13</a>, <a href="http://wg21.link/P1348r0" target="_top">P1348r0</a>, and <a href="http://wg21.link/P1393r0" target="_top">P1393r0</a>.
+    </p>
+<p>
+      Just as with executors under the Networking TS model, a standard executor represents
+      a policy as to how, when, and where a piece of code should be executed. Most
+      existing code should continue to work with little or no change.
+    </p>
+<h4>
+<a name="boost_asio.std_executors.h0"></a>
+      <span class="phrase"><a name="boost_asio.std_executors.standard_executor_implementations_in_boost_asio"></a></span><a class="link" href="std_executors.html#boost_asio.std_executors.standard_executor_implementations_in_boost_asio">Standard
+      Executor Implementations in Boost.Asio</a>
+    </h4>
+<p>
+      The <a class="link" href="reference/io_context/executor_type.html" title="io_context::executor_type"><code class="computeroutput">io_context::executor_type</code></a>,
+      <a class="link" href="reference/thread_pool/executor_type.html" title="thread_pool::executor_type"><code class="computeroutput">thread_pool::executor_type</code></a>,
+      <a class="link" href="reference/system_executor.html" title="system_executor"><code class="computeroutput">system_executor</code></a>,
+      and <a class="link" href="reference/strand.html" title="strand"><code class="computeroutput">strand</code></a>
+      executors meet the requirements for the proposed standard executors. For compatibility,
+      these classes also meet the requirements for the Networking TS model of executors.
+    </p>
+<h4>
+<a name="boost_asio.std_executors.h1"></a>
+      <span class="phrase"><a name="boost_asio.std_executors.standard_executor_use_in_boost_asio"></a></span><a class="link" href="std_executors.html#boost_asio.std_executors.standard_executor_use_in_boost_asio">Standard
+      Executor Use in Boost.Asio</a>
+    </h4>
+<p>
+      All I/O objects such as <a class="link" href="reference/ip__tcp/socket.html" title="ip::tcp::socket"><code class="computeroutput">ip::tcp::socket</code></a>,
+      asynchronous operations, and utilities including <a class="link" href="reference/dispatch.html" title="dispatch"><code class="computeroutput">dispatch</code></a>,
+      <a class="link" href="reference/post.html" title="post"><code class="computeroutput">post</code></a>, <a class="link" href="reference/defer.html" title="defer"><code class="computeroutput">defer</code></a>,
+      <a class="link" href="reference/get_associated_executor.html" title="get_associated_executor"><code class="computeroutput">get_associated_executor</code></a>,
+      <a class="link" href="reference/bind_executor.html" title="bind_executor"><code class="computeroutput">bind_executor</code></a>,
+      <a class="link" href="reference/make_work_guard.html" title="make_work_guard"><code class="computeroutput">make_work_guard</code></a>,
+      <a class="link" href="reference/spawn.html" title="spawn"><code class="computeroutput">spawn</code></a>, <a class="link" href="reference/co_spawn.html" title="co_spawn"><code class="computeroutput">co_spawn</code></a>, <a class="link" href="reference/async_compose.html" title="async_compose"><code class="computeroutput">async_compose</code></a>,
+      <a class="link" href="reference/use_future.html" title="use_future"><code class="computeroutput">use_future</code></a>,
+      etc., can interoperate with both proposed standard executors, and with Networking
+      TS executors. Boost.Asio's implementation determines at compile time which
+      model a particular executor meets; the proposed standard executor model is
+      used in preference if both are detected.
+    </p>
+<p>
+      Support for the existing Networking TS model of executors can be disabled by
+      defining <code class="computeroutput">BOOST_ASIO_NO_TS_EXECUTORS</code>.
+    </p>
+<h4>
+<a name="boost_asio.std_executors.h2"></a>
+      <span class="phrase"><a name="boost_asio.std_executors.polymorphic_i_o_executor"></a></span><a class="link" href="std_executors.html#boost_asio.std_executors.polymorphic_i_o_executor">Polymorphic
+      I/O Executor</a>
+    </h4>
+<p>
+      The <a class="link" href="reference/any_io_executor.html" title="any_io_executor"><code class="computeroutput">any_io_executor</code></a>
+      type alias is the default runtime-polymorphic executor for all I/O objects.
+      This type alias points to the <a class="link" href="reference/execution__any_executor.html" title="execution::any_executor"><code class="computeroutput">execution::any_executor&lt;&gt;</code></a>
+      template with a set of supportable properties specified for use with I/O.
+    </p>
+<p>
+      This new name may break existing code that directly uses the old polymorphic
+      wrapper, <a class="link" href="reference/executor.html" title="executor"><code class="computeroutput">executor</code></a>.
+      If required for backward compatibility, <code class="computeroutput">BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT</code>
+      can be defined, which changes the <code class="computeroutput">any_io_executor</code> type alias to
+      instead point to the <code class="computeroutput">executor</code> polymorphic wrapper.
+    </p>
+<h4>
+<a name="boost_asio.std_executors.h3"></a>
+      <span class="phrase"><a name="boost_asio.std_executors.implementing_a_minimal_i_o_executor"></a></span><a class="link" href="std_executors.html#boost_asio.std_executors.implementing_a_minimal_i_o_executor">Implementing
+      a Minimal I/O Executor</a>
+    </h4>
+<p>
+      Standard executor properties make what were previously hard requirements on
+      an executor (such as work counting, or the ability to distinguish between
+      <code class="computeroutput">post</code>, <code class="computeroutput">dispatch</code>, and <code class="computeroutput">defer</code>) into optional
+      facilities. With this relaxation, the minimal requirements for an I/O executor
+      are:
+    </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+          Conformance to the <a class="link" href="reference/Executor1.html#boost_asio.reference.Executor1.standard_executors"><code class="computeroutput">executor</code></a>
+          concept.
+        </li>
+<li class="listitem">
+          The ability to query the <a class="link" href="reference/execution__context.html" title="execution::context"><code class="computeroutput">execution::context</code></a>
+          property, with the result being <a class="link" href="reference/execution_context.html" title="execution_context"><code class="computeroutput">execution_context&amp;</code></a>
+          or a reference to a class that is derived from <code class="computeroutput">execution_context</code>.
+        </li>
+<li class="listitem">
+          The <code class="computeroutput">execute</code> operation having, at minimum, the <a class="link" href="reference/execution__blocking_t/never.html" title="execution::blocking_t::never"><code class="computeroutput">execution::blocking.never</code></a>
+          semantic.
+        </li>
+</ul></div>
+<p>
+      The following example shows a minimal I/O executor. Given a queue submission
+      operation implemented elsewhere:
+    </p>
+<p>
+</p>
+<pre class="programlisting">queue_t queue_create();
+template &lt;typename F&gt; void queue_submit(queue_t q, F f);
+</pre>
+<p>
+    </p>
+<p>
+      the executor may be defined as follows:
+    </p>
+<p>
+</p>
+<pre class="programlisting">struct minimal_io_executor
+{
+  boost::asio::execution_context* context_;
+  queue_t queue_;
+
+  bool operator==(const minimal_io_executor&amp; other) const noexcept
+  {
+    return context_ == other.context_ &amp;&amp; queue_ == other.queue_;
+  }
+
+  bool operator!=(const minimal_io_executor&amp; other) const noexcept
+  {
+    return !(*this == other);
+  }
+
+  boost::asio::execution_context&amp; query(
+      boost::asio::execution::context_t) const noexcept
+  {
+    return *context_;
+  }
+
+  static constexpr boost::asio::execution::blocking_t::never_t query(
+      boost::asio::execution::blocking_t) noexcept
+  {
+    // This executor always has blocking.never semantics.
+    return boost::asio::execution::blocking.never;
+  }
+
+  template &lt;class F&gt;
+  void execute(F f) const
+  {
+    queue_submit(queue_, std::move(f));
+  }
+};
+</pre>
+<p>
+    </p>
+<p>
+      This executor may be created as follows:
+    </p>
+<p>
+</p>
+<pre class="programlisting">boost::asio::execution_context context;
+queue_t queue = queue_create();
+minimal_io_executor executor{&amp;context, queue};
+</pre>
+<p>
+    </p>
+<p>
+      and then used with I/O objects:
+    </p>
+<p>
+</p>
+<pre class="programlisting">boost::asio::ip::tcp::acceptor acceptor(executor);
+</pre>
+<p>
+    </p>
+<p>
+      or assigned into the <a class="link" href="reference/any_io_executor.html" title="any_io_executor"><code class="computeroutput">any_io_executor</code></a>
+      polymorphic wrapper:
+    </p>
+<p>
+</p>
+<pre class="programlisting">boost::asio::any_io_executor poly_executor = executor;
+</pre>
+<p>
+    </p>
+<h4>
+<a name="boost_asio.std_executors.h4"></a>
+      <span class="phrase"><a name="boost_asio.std_executors.traits_for_deducing_conformance_to_the_executor_concept"></a></span><a class="link" href="std_executors.html#boost_asio.std_executors.traits_for_deducing_conformance_to_the_executor_concept">Traits
+      for Deducing Conformance to the Executor Concept</a>
+    </h4>
+<p>
+      Older C++ standards and compilers require some assistance to determine whether
+      an executor implementation conforms to the <code class="computeroutput">executor</code> concept and
+      type requirements. This is achieved through specialisation of traits. The following
+      code shows a specialisation of these traits for the <code class="computeroutput">minimal_io_executor</code>
+      example from above:
+    </p>
+<p>
+</p>
+<pre class="programlisting">namespace boost { namespace asio {
+namespace traits {
+
+#if !defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+
+template &lt;typename F&gt;
+struct execute_member&lt;minimal_io_executor, F&gt;
+{
+  static constexpr bool is_valid = true;
+  static constexpr bool is_noexcept = true;
+  typedef void result_type;
+};
+
+#endif // !defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+#if !defined(BOOST_ASIO_HAS_DEDUCED_EQUALITY_COMPARABLE_TRAIT)
+
+template &lt;&gt;
+struct equality_comparable&lt;minimal_io_executor&gt;
+{
+  static constexpr bool is_valid = true;
+  static constexpr bool is_noexcept = true;
+};
+
+#endif // !defined(BOOST_ASIO_HAS_DEDUCED_EQUALITY_COMPARABLE_TRAIT)
+#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+
+template &lt;&gt;
+struct query_member&lt;minimal_io_executor,
+    boost::asio::execution::context_t&gt;
+{
+  static constexpr bool is_valid = true;
+  static constexpr bool is_noexcept = true;
+  typedef boost::asio::execution_context&amp; result_type;
+};
+
+#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+
+template &lt;typename Property&gt;
+struct query_static_constexpr_member&lt;minimal_io_executor, Property,
+    typename enable_if&lt;
+      std::is_convertible&lt;Property, boost::asio::execution::blocking_t&gt;::value
+    &gt;::type&gt;
+{
+  static constexpr bool is_valid = true;
+  static constexpr bool is_noexcept = true;
+  typedef boost::asio::execution::blocking_t::never_t result_type;
+  static constexpr result_type value() noexcept { return result_type(); }
+};
+
+#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+
+} // namespace traits
+} } // namespace boost::asio
+</pre>
+<p>
+    </p>
+<p>
+      Boost.Asio uses an extensive set of traits to implement all of the proposed
+      standard executor functionality on older C++ standards. These traits may be
+      found under the <code class="literal">boost/asio/traits</code> include directory.
+    </p>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="net_ts.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../boost_asio.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../boost_asio.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="history.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

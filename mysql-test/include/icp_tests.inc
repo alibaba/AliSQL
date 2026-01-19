@@ -1,4 +1,4 @@
---echo #
+
 --echo # Bug#36981 - "innodb crash when selecting for update"
 --echo #
 
@@ -8,7 +8,6 @@
 #         InnoDB changing from using the index which the push condition
 #         where for to use the clustered index due to "SELECT ... FOR UPDATE".
 #
-
 CREATE TABLE t1 (
   c1 CHAR(1),
   c2 CHAR(10),
@@ -27,10 +26,10 @@ DROP TABLE t1;
 #         the pushed index condition it is still evaluated.
 #         
 
-CREATE TABLE t1 (a INT);
+CREATE TABLE t1 (a INT) charset latin1;
 INSERT INTO t1 VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
 
-CREATE TABLE t2 (a INT);
+CREATE TABLE t2 (a INT) charset latin1;
 INSERT INTO t2 SELECT A.a + 10*(B.a + 10*C.a) FROM t1 A, t1 B, t1 C;
 
 CREATE TABLE t3 (
@@ -239,7 +238,7 @@ DROP TABLE t1, t2, t3;
 --echo # Bug#42580 - Innodb's ORDER BY ..LIMIT returns no rows for 
 --echo #             null-safe operator <=> NULL
 --echo #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1(
   c1 DATE NOT NULL, 
   c2 DATE NULL, 
@@ -263,13 +262,13 @@ SELECT * FROM t1 WHERE c2 <=> NULL ORDER BY c1,c2 LIMIT 2;
 
 --echo
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo #
 --echo # Bug#43617 - Innodb returns wrong results with timestamp's range value 
 --echo #             in IN clause
 --echo # (Note: Fixed by patch for BUG#42580)
 --echo #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1(
   c1 TIMESTAMP NOT NULL, 
   c2 TIMESTAMP NULL, 
@@ -315,7 +314,7 @@ ORDER BY c2 DESC LIMIT 2;
 
 --echo
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo #
 --echo # Bug#43249 - Innodb returns zero time for the time column 
 --echo #             with <=> NULL order by limit 
@@ -369,11 +368,13 @@ ANALYZE TABLE t1;
 
 --echo
 --echo # Execute select with invalid timestamp, desc ordering
+SET sql_mode = '';
 SELECT *
 FROM t1 
 WHERE ts BETWEEN '0000-00-00' AND '2010-00-01 00:00:00' 
 ORDER BY ts DESC
 LIMIT 2; 
+SET sql_mode = default;
 
 --echo
 --echo # Should use index condition
@@ -423,7 +424,7 @@ CREATE TABLE t3 (
   c1 TINYTEXT NOT NULL,
   i1 INT NOT NULL,
   KEY (c1(6),i1)
-);
+) charset utf8mb4;
 
 -- disable_query_log
 -- disable_result_log
@@ -438,6 +439,8 @@ INSERT INTO t3 SELECT CONCAT('c-',1000+t2.a,'=w'), 1 FROM t2;
 let query=SELECT c1 FROM t3 WHERE c1 >= 'c-1004=w' and c1 <= 'c-1006=w' and i1 > 2;
 
 eval EXPLAIN $query;
+--skip_if_hypergraph  # Depends on the query plan.
+eval EXPLAIN FORMAT=tree $query;
 eval $query;
 
 DROP TABLE t1, t2, t3;
@@ -525,7 +528,7 @@ CREATE TABLE t1 (
   c2 INT NOT NULL,
   PRIMARY KEY (c2),
   KEY id1 (c1(4))
-);
+) charset utf8mb4;
 
 INSERT INTO t1 VALUES ('Anastasia', 5);
 INSERT INTO t1 VALUES ('Karianne', 4);
@@ -554,7 +557,7 @@ CREATE TABLE t1 (
 
   KEY (col_int_key),
   KEY (col_varchar_key, col_int_key)
-) stats_persistent=0;
+) charset utf8mb4 stats_persistent=0;
 
 INSERT INTO t1 VALUES (NULL,2,'w');
 INSERT INTO t1 VALUES (7,9,'m');
@@ -643,7 +646,7 @@ DROP TABLE t1, t2;
 CREATE TABLE t1 (
   i1 INTEGER NOT NULL,
   c1 VARCHAR(1) NOT NULL
-);
+) charset latin1;
 
 INSERT INTO t1 VALUES (2,'w');
 
@@ -652,14 +655,14 @@ CREATE TABLE t2 (
   c1 VARCHAR(1) NOT NULL,
   c2 VARCHAR(1) NOT NULL,
   KEY (c1, i1)
-);
+) charset latin1;
 
 INSERT INTO t2 VALUES (8,'d','d');
 INSERT INTO t2 VALUES (4,'v','v');
 
 CREATE TABLE t3 (
   c1 VARCHAR(1) NOT NULL
-);
+) charset latin1;
 
 INSERT INTO t3 VALUES ('v');
 
@@ -753,7 +756,6 @@ set optimizer_switch= @save_optimizer_switch_bug58816;
 --echo # Bug#58837: ICP crash or valgrind error due to uninitialized 
 --echo #            value in innobase_index_cond
 --echo #
-
 CREATE TABLE t1 (
   t1_int INT,
   t1_time TIME
@@ -765,7 +767,7 @@ CREATE TABLE t2 (
 );
 
 --disable_warnings
-INSERT INTO t2 VALUES ();
+INSERT IGNORE INTO t2 VALUES ();
 INSERT INTO t1 VALUES ();
 --enable_warnings
 
@@ -799,7 +801,6 @@ WHERE NOT EXISTS
 --echo
 
 DROP TABLE t1,t2;
-
 --echo #
 --echo # Bug#59186 Wrong results of join when ICP is enabled
 --echo #
@@ -886,7 +887,6 @@ DROP TABLE t1;
 --echo # Bug #11766678 - 59843:
 --echo # USING UNINITIALISED VALUE IN USES_INDEX_FIELDS_ONLY
 --echo #
-
 CREATE TABLE t1 (
   col999 FLOAT NOT NULL,
   COL1000 VARBINARY(179) NOT NULL,
@@ -894,11 +894,10 @@ CREATE TABLE t1 (
   KEY idx4267 (col1000, col1003)
 );
 
-INSERT INTO t1 VALUES (),();
+INSERT IGNORE INTO t1 VALUES (),();
 SELECT col999 FROM t1 WHERE col1000 = "3" AND col1003 <=> sysdate();
 
 DROP TABLE t1;
-
 --echo #
 --echo # Bug#11873324 "WRONG RESULT WITH ICP AND STRAIGHT_JOIN"
 --echo #
@@ -945,12 +944,12 @@ let query=
 SELECT t1.i1
 FROM t1
 WHERE t1.i1 NOT IN
-( SELECT STRAIGHT_JOIN SUBQUERY_t1.pk
-  FROM t1 AS SUBQUERY_t1
-    JOIN t2 AS SUBQUERY_t2
-    ON SUBQUERY_t2.i1 = SUBQUERY_t1.pk
-  WHERE SUBQUERY_t1.i1 > 0
-    OR SUBQUERY_t2.c1 = 'a'
+( SELECT STRAIGHT_JOIN subquery_t1.pk
+  FROM t1 AS subquery_t1
+    JOIN t2 AS subquery_t2
+    ON subquery_t2.i1 = subquery_t1.pk
+  WHERE subquery_t1.i1 > 0
+    OR subquery_t2.c1 = 'a'
 );
 
 eval EXPLAIN $query;
@@ -968,7 +967,7 @@ CREATE TABLE t1 (
    i1 INTEGER,
    c1 VARCHAR(1),
    KEY col_varchar_key (c1)
-);
+) charset utf8mb4;
 
 INSERT INTO t1 VALUES (1,'j'), (0,'e'), (210,'f'), (8,'v'), (7,'x'),
                       (5,'m'), (NULL,'c');
@@ -977,7 +976,7 @@ CREATE TABLE t2 (
    i1 INTEGER,
    c1 VARCHAR(1),
    KEY col_varchar_key (c1)
-);
+) charset utf8mb4;
 
 INSERT INTO t2 VALUES (8,NULL);
 
@@ -985,7 +984,7 @@ CREATE TABLE t3 (
    i1 INTEGER,
    c1 VARCHAR(1),
    KEY col_varchar_key (c1)
-) ENGINE=InnoDB;
+) charset utf8mb4 ENGINE=InnoDB;
 
 INSERT INTO t3 VALUES (NULL,'w'), (1,NULL), (2,'d');
 
@@ -1032,7 +1031,7 @@ CREATE TABLE t1 (
   a INTEGER NOT NULL, 
   b CHAR(1), 
   KEY(b)
-);
+) charset utf8mb4;
 
 INSERT INTO t1 VALUES (23,5,'d');
 

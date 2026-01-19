@@ -5,7 +5,7 @@
 # Access Type: Dynamic                                                        #
 # Data Type: numeric                                                          #
 # Default Value: 16382                                                        #
-# Range: 0-1048576                                                            #
+# Range: 0-4194304                                                            #
 #                                                                             #
 #                                                                             #
 # Creation Date: 2008-02-07                                                   #
@@ -94,6 +94,10 @@ SET @@global.max_prepared_stmt_count = -1024;
 SELECT @@global.max_prepared_stmt_count;
 SET @@global.max_prepared_stmt_count = 1048577;
 SELECT @@global.max_prepared_stmt_count;
+SET @@global.max_prepared_stmt_count = 4194304;
+SELECT @@global.max_prepared_stmt_count;
+SET @@global.max_prepared_stmt_count = 4194305;
+SELECT @@global.max_prepared_stmt_count;
 SET @@global.max_prepared_stmt_count = 104857612;
 SELECT @@global.max_prepared_stmt_count;
 
@@ -102,6 +106,9 @@ SET @@global.max_prepared_stmt_count = ON;
 SELECT @@global.max_prepared_stmt_count;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_prepared_stmt_count = 'test';
+SELECT @@global.max_prepared_stmt_count;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.max_prepared_stmt_count = ' ';
 SELECT @@global.max_prepared_stmt_count;
 
 
@@ -121,13 +128,15 @@ SELECT @@session.max_prepared_stmt_count;
 # Check if the value in GLOBAL & SESSION Tables matches values in variable   #
 ##############################################################################
 
+--disable_warnings
 SELECT @@global.max_prepared_stmt_count = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='max_prepared_stmt_count';
 
 SELECT @@max_prepared_stmt_count = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='max_prepared_stmt_count';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_081_07----------------------#'
@@ -167,7 +176,9 @@ SET global.max_prepared_stmt_count = 8000;
 --Error ER_UNKNOWN_TABLE
 SELECT global.max_prepared_stmt_count;
 --Error ER_BAD_FIELD_ERROR
-SELECT max_prepared_stmt_count = @@session.max_prepared_stmt_count;
+SELECT max_prepared_stmt_count;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.max_prepared_stmt_count;
 
 
 ##############################  

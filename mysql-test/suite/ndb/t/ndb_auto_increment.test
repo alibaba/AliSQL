@@ -1,5 +1,4 @@
 -- source include/have_multi_ndb.inc
--- source include/not_embedded.inc
 
 --disable_warnings
 connection server1;
@@ -291,14 +290,14 @@ select * from t1 order by a;
 
 set auto_increment_offset = @old_auto_increment_offset;
 set auto_increment_increment = @old_auto_increment_increment;
-set ndb_autoincrement_prefetch_sz = @old_ndb_autoincrement_prefetch_sz;
+set ndb_autoincrement_prefetch_sz = 1;
 
 drop table t1;
 
 connection server2;
 set auto_increment_offset = @old_auto_increment_offset;
 set auto_increment_increment = @old_auto_increment_increment;
-set ndb_autoincrement_prefetch_sz = @old_ndb_autoincrement_prefetch_sz;
+set ndb_autoincrement_prefetch_sz = 1;
 
 # bug#46712 Auto_increment work incorrectly when using triggers and NDB Cluster
 #
@@ -389,7 +388,9 @@ create table t1 (a int primary key auto_increment, b int) engine=ndb;
 
 insert into t1 values (null,1),(null,2),(null,3);
 
+--disable_warnings
 show create table t1;
+--enable_warnings
 
 drop table t1;
 
@@ -401,6 +402,68 @@ engine=ndb;
 
 alter table t1 auto_increment=32000000;
 
+--disable_warnings
 show create table t1;
+--enable_warnings
 
+drop table t1;
+
+#
+# Bug #46985 Got error 4350 'Transaction already aborted' from NDBCLUSTER
+#
+# This bug was a configuration issue, but the testcase revealed another
+# bug whereauto_increment was not handled correctly for INSERT IGNORE
+
+CREATE TABLE t1 (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  data binary(16) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_t1_data (data)
+) ENGINE = NDB;
+
+INSERT IGNORE INTO t1 (data) VALUES (6),(6),(6),(6),(6),(6),(6);
+
+SELECT id FROM t1;
+
+DELETE from t1;
+
+INSERT IGNORE INTO t1 (data) VALUES (6),(6),(6),(6),(6),(6),(6);
+
+SELECT id from t1;
+
+DROP TABLE t1;
+
+#
+# Bug #13731134	AUTO-INC COUNTER IS NOT UPDATED WITH EXPLICIT @@INSERT_ID SET
+#
+
+create table t1 (a serial) engine ndb;
+
+set @@insert_id=1;
+insert into t1 values(null);
+
+connection server2;
+
+insert into t1 values(null);
+insert into t1 values(null);
+insert into t1 values(null);
+set @@insert_id=17;
+insert into t1 values(null);
+insert into t1 values(null);
+insert into t1 values(null);
+select * from t1 order by a;
+
+set @@insert_id=1;
+--error ER_DUP_ENTRY
+insert into t1 values(null);
+
+set ndb_autoincrement_prefetch_sz = @old_ndb_autoincrement_prefetch_sz;
+connection server1;
+set ndb_autoincrement_prefetch_sz = @old_ndb_autoincrement_prefetch_sz;
+drop table t1;
+
+#
+# Bug 30316314 INCREASE AUTO INCREMENT PREFETCH SIZE
+#
+create table t1 (a tinyint not null auto_increment primary key) engine ndb;
 drop table t1;

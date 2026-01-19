@@ -1,0 +1,71 @@
+show variables like 'log_bin';
+Variable_name	Value
+log_bin	ON
+show variables like 'ndb_log_bin';
+Variable_name	Value
+ndb_log_bin	ON
+Test 1 : Show that reorg of table being Binlogged does not result 
+in any Binlog content
+create table t1 (a int primary key, b varchar(100), c int, unique(c)) engine=ndb;
+Insert 8192 rows
+Show t1 distribution prior to reorg
+TABLE_INFO
+PartitionCount: 8
+Add new nodes
+Nodegroup 1 created
+Show empty binlog prior to reorg
+reset master;
+select count(1), sum(inserts), sum(updates), sum(deletes) from mysql.ndb_binlog_index;
+count(1)	sum(inserts)	sum(updates)	sum(deletes)
+0	NULL	NULL	NULL
+Reorg table to use new nodes
+alter table t1 reorganize partition;
+Show t1 distribution after reorg
+TABLE_INFO
+PartitionCount: 16
+Show empty binlog after reorg
+select count(1), sum(inserts), sum(updates), sum(deletes) from mysql.ndb_binlog_index;
+count(1)	sum(inserts)	sum(updates)	sum(deletes)
+0	NULL	NULL	NULL
+Cleanup
+drop table t1;
+Drop Node Group 1 done
+Test 2 : Show that reorg of table with concurrent writes
+Results in Binlog content
+Create table including Blobs for interest
+create table test.t1 (a int auto_increment primary key,
+b text,
+c text,
+d int, unique(d)) engine=ndb;
+Load 100 rows first
+Show t1 distribution prior to reorg
+TABLE_INFO
+PartitionCount: 8
+Add new nodes
+Nodegroup 1 created
+reset master;
+Show empty binlog prior to test
+select count(1), sum(inserts), sum(updates), sum(deletes) from mysql.ndb_binlog_index;
+count(1)	sum(inserts)	sum(updates)	sum(deletes)
+0	NULL	NULL	NULL
+Request reorg starting in 2 seconds
+select sleep(2); alter table test.t1 reorganize partition;;
+Start I/U/D load on table
+Wait for reorg to complete
+sleep(2)
+0
+Show t1 distribution after reorg
+TABLE_INFO
+PartitionCount: 16
+Show Binlog content after reorg
+Expect to see content
+select count(epoch) > 100,  
+sum(inserts) > 1000, 
+sum(updates) > 1000, 
+sum(deletes) > 1000 
+from mysql.ndb_binlog_index;
+count(epoch) > 100	sum(inserts) > 1000	sum(updates) > 1000	sum(deletes) > 1000
+1	1	1	1
+cleanup
+drop table test.t1;
+Drop Node Group 1 done

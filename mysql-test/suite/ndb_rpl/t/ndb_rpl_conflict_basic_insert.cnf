@@ -1,0 +1,7 @@
+!include ../my.cnf
+
+[mysqld]
+# Turn off auto sync so it doesn't interfere with the test
+ndb-metadata-check = false
+#debug=d
+ndb-extra-logging=99

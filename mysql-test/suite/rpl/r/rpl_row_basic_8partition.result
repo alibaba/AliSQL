@@ -1,13 +1,14 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
-DROP TABLE IF EXISTS t1;
 SET @@BINLOG_FORMAT = ROW;
 SELECT @@BINLOG_FORMAT;
 @@BINLOG_FORMAT
 ROW
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 **** Partition RANGE testing ****
 CREATE TABLE t1 (id MEDIUMINT NOT NULL, b1 BIT(8), vc VARCHAR(255), 
 bc CHAR(255), d DECIMAL(10,4) DEFAULT 0, 
@@ -24,45 +25,45 @@ PARTITION p5 VALUES LESS THAN MAXVALUE);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (YEAR(t))
-(PARTITION p0 VALUES LESS THAN (1901) ENGINE = MyISAM,
- PARTITION p1 VALUES LESS THAN (1946) ENGINE = MyISAM,
- PARTITION p2 VALUES LESS THAN (1966) ENGINE = MyISAM,
- PARTITION p3 VALUES LESS THAN (1986) ENGINE = MyISAM,
- PARTITION p4 VALUES LESS THAN (2005) ENGINE = MyISAM,
- PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`t`))
+(PARTITION p0 VALUES LESS THAN (1901) ENGINE = ENGINE,
+ PARTITION p1 VALUES LESS THAN (1946) ENGINE = ENGINE,
+ PARTITION p2 VALUES LESS THAN (1966) ENGINE = ENGINE,
+ PARTITION p3 VALUES LESS THAN (1986) ENGINE = ENGINE,
+ PARTITION p4 VALUES LESS THAN (2005) ENGINE = ENGINE,
+ PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = ENGINE) */
 --- On slave --
 include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (YEAR(t))
-(PARTITION p0 VALUES LESS THAN (1901) ENGINE = MyISAM,
- PARTITION p1 VALUES LESS THAN (1946) ENGINE = MyISAM,
- PARTITION p2 VALUES LESS THAN (1966) ENGINE = MyISAM,
- PARTITION p3 VALUES LESS THAN (1986) ENGINE = MyISAM,
- PARTITION p4 VALUES LESS THAN (2005) ENGINE = MyISAM,
- PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`t`))
+(PARTITION p0 VALUES LESS THAN (1901) ENGINE = ENGINE,
+ PARTITION p1 VALUES LESS THAN (1946) ENGINE = ENGINE,
+ PARTITION p2 VALUES LESS THAN (1966) ENGINE = ENGINE,
+ PARTITION p3 VALUES LESS THAN (1986) ENGINE = ENGINE,
+ PARTITION p4 VALUES LESS THAN (2005) ENGINE = ENGINE,
+ PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = ENGINE) */
 "--- Insert into t1 --" as "";
 --- Select from t1 on master --- 
 select id,hex(b1),vc,bc,d,f,total,y,t from t1 order by id;
@@ -106,45 +107,45 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (YEAR(t))
-(PARTITION p0 VALUES LESS THAN (1901) ENGINE = MyISAM,
- PARTITION p1 VALUES LESS THAN (1946) ENGINE = MyISAM,
- PARTITION p2 VALUES LESS THAN (1966) ENGINE = MyISAM,
- PARTITION p3 VALUES LESS THAN (1986) ENGINE = MyISAM,
- PARTITION p4 VALUES LESS THAN (2005) ENGINE = MyISAM,
- PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`t`))
+(PARTITION p0 VALUES LESS THAN (1901) ENGINE = ENGINE,
+ PARTITION p1 VALUES LESS THAN (1946) ENGINE = ENGINE,
+ PARTITION p2 VALUES LESS THAN (1966) ENGINE = ENGINE,
+ PARTITION p3 VALUES LESS THAN (1986) ENGINE = ENGINE,
+ PARTITION p4 VALUES LESS THAN (2005) ENGINE = ENGINE,
+ PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = ENGINE) */
 --- On slave ---
 include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (YEAR(t))
-(PARTITION p0 VALUES LESS THAN (1901) ENGINE = MyISAM,
- PARTITION p1 VALUES LESS THAN (1946) ENGINE = MyISAM,
- PARTITION p2 VALUES LESS THAN (1966) ENGINE = MyISAM,
- PARTITION p3 VALUES LESS THAN (1986) ENGINE = MyISAM,
- PARTITION p4 VALUES LESS THAN (2005) ENGINE = MyISAM,
- PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`t`))
+(PARTITION p0 VALUES LESS THAN (1901) ENGINE = ENGINE,
+ PARTITION p1 VALUES LESS THAN (1946) ENGINE = ENGINE,
+ PARTITION p2 VALUES LESS THAN (1966) ENGINE = ENGINE,
+ PARTITION p3 VALUES LESS THAN (1986) ENGINE = ENGINE,
+ PARTITION p4 VALUES LESS THAN (2005) ENGINE = ENGINE,
+ PARTITION p5 VALUES LESS THAN MAXVALUE ENGINE = ENGINE) */
 "--- Insert into t1 --" as "";
 --- Select from t1 on master --- 
 select id,hex(b1),vc,bc,d,f,total,y,t from t1 order by id;
@@ -197,39 +198,39 @@ PARTITION p2 VALUES IN (412));
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (id)
-(PARTITION p0 VALUES IN (2,4) ENGINE = MyISAM,
- PARTITION p1 VALUES IN (42,142) ENGINE = MyISAM,
- PARTITION p2 VALUES IN (412) ENGINE = MyISAM) */
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`id`)
+(PARTITION p0 VALUES IN (2,4) ENGINE = ENGINE,
+ PARTITION p1 VALUES IN (42,142) ENGINE = ENGINE,
+ PARTITION p2 VALUES IN (412) ENGINE = ENGINE) */
 --- On slave ---
 include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (id)
-(PARTITION p0 VALUES IN (2,4) ENGINE = MyISAM,
- PARTITION p1 VALUES IN (42,142) ENGINE = MyISAM,
- PARTITION p2 VALUES IN (412) ENGINE = MyISAM) */
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`id`)
+(PARTITION p0 VALUES IN (2,4) ENGINE = ENGINE,
+ PARTITION p1 VALUES IN (42,142) ENGINE = ENGINE,
+ PARTITION p2 VALUES IN (412) ENGINE = ENGINE) */
 "--- Insert into t1 --" as "";
 --- Select from t1 on master --- 
 select id,hex(b1),vc,bc,d,f,total,y,t from t1 order by id;
@@ -273,39 +274,39 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (id)
-(PARTITION p0 VALUES IN (2,4) ENGINE = MyISAM,
- PARTITION p1 VALUES IN (42,142) ENGINE = MyISAM,
- PARTITION p2 VALUES IN (412) ENGINE = MyISAM) */
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`id`)
+(PARTITION p0 VALUES IN (2,4) ENGINE = ENGINE,
+ PARTITION p1 VALUES IN (42,142) ENGINE = ENGINE,
+ PARTITION p2 VALUES IN (412) ENGINE = ENGINE) */
 --- On slave ---
 include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY LIST (id)
-(PARTITION p0 VALUES IN (2,4) ENGINE = MyISAM,
- PARTITION p1 VALUES IN (42,142) ENGINE = MyISAM,
- PARTITION p2 VALUES IN (412) ENGINE = MyISAM) */
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY LIST (`id`)
+(PARTITION p0 VALUES IN (2,4) ENGINE = ENGINE,
+ PARTITION p1 VALUES IN (42,142) ENGINE = ENGINE,
+ PARTITION p2 VALUES IN (412) ENGINE = ENGINE) */
 "--- Insert into t1 --" as "";
 --- Select from t1 on master --- 
 select id,hex(b1),vc,bc,d,f,total,y,t from t1 order by id;
@@ -356,34 +357,34 @@ PARTITIONS 4;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH ( YEAR(t))
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (year(`t`))
 PARTITIONS 4 */
 --- On slave ---
 include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH ( YEAR(t))
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (year(`t`))
 PARTITIONS 4 */
 "--- Insert into t1 --" as "";
 --- Select from t1 on master --- 
@@ -428,34 +429,34 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH ( YEAR(t))
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (year(`t`))
 PARTITIONS 4 */
 --- On slave ---
 include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY HASH ( YEAR(t))
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (year(`t`))
 PARTITIONS 4 */
 "--- Insert into t1 --" as "";
 --- Select from t1 on master --- 
@@ -507,17 +508,17 @@ PARTITIONS 4;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- On slave ---
@@ -525,17 +526,17 @@ include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned DEFAULT NULL,
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned DEFAULT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 "--- Insert into t1 --" as "";
@@ -581,17 +582,17 @@ ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(id, total);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- On slave ---
@@ -599,17 +600,17 @@ include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` varchar(255) DEFAULT NULL,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 "--- Insert into t1 --" as "";
@@ -655,17 +656,17 @@ ALTER TABLE t1 MODIFY vc TEXT;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 --- On slave ---
@@ -673,17 +674,17 @@ include/sync_slave_sql_with_master.inc
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` mediumint(9) NOT NULL,
+  `id` mediumint NOT NULL,
   `b1` bit(8) DEFAULT NULL,
   `vc` text,
   `bc` char(255) DEFAULT NULL,
   `d` decimal(10,4) DEFAULT '0.0000',
   `f` float DEFAULT '0',
-  `total` bigint(20) unsigned NOT NULL DEFAULT '0',
-  `y` year(4) DEFAULT NULL,
+  `total` bigint unsigned NOT NULL,
+  `y` year DEFAULT NULL,
   `t` date DEFAULT NULL,
   PRIMARY KEY (`id`,`total`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 /*!50100 PARTITION BY KEY ()
 PARTITIONS 4 */
 "--- Insert into t1 --" as "";

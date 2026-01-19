@@ -1,0 +1,7 @@
+# Bug#30875669 CORE CLIENT CANNOT SEND QUERY WITH NUMBER SIGN OR DOUBLE DASH IN HINT COMMENT
+CREATE USER myuser;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+DROP USER myuser;

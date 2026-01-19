@@ -3,8 +3,6 @@
 # Bug#42419 Server crash with "Pure virtual method called" on two concurrent connections
 #
 
---source include/not_embedded.inc
---source include/have_innodb.inc
 
 let $innodb_lock_wait_timeout= query_get_value(SHOW VARIABLES LIKE 'innodb_lock_wait_timeout%', Value, 1);
 if ($innodb_lock_wait_timeout < 10)
@@ -21,8 +19,6 @@ if ($innodb_lock_wait_timeout < 10)
 # First session
 connection default;
 
-
---enable_warnings
 CREATE TABLE t1 (a INT AUTO_INCREMENT PRIMARY KEY, b INT) ENGINE = InnoDB;
 
 INSERT INTO t1 VALUES (1,1),(2,2),(3,3);

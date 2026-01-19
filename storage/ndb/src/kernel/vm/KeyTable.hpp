@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005, 2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,34 +28,31 @@
 
 #include <DLHashTable.hpp>
 
+#define JAM_FILE_ID 221
+
 /**
  * KeyTable2 is DLHashTable2 with hardcoded Uint32 key named "key".
  */
-template <typename P, typename T>
-class KeyTableImpl : public DLHashTableImpl<P, T> {
-public:
-  KeyTableImpl(P & pool) :
-    DLHashTableImpl<P, T>(pool) {
+/**
+ * Using TT instead of T since VisualStudio2013 tries to access private
+ * typedef of DLMHashTable instance!
+ */
+template <typename P, typename TT = typename P::Type>
+class KeyTable : public DLHashTable<P, TT> {
+ public:
+  KeyTable(P &pool) : DLHashTable<P, TT>(pool) {}
+
+  bool find(Ptr<TT> &ptr, const TT &rec) const {
+    return DLHashTable<P, TT>::find(ptr, rec);
   }
 
-  bool find(Ptr<T>& ptr, const T& rec) const {
-    return DLHashTableImpl<P, T>::find(ptr, rec);
-  }
-
-  bool find(Ptr<T>& ptr, Uint32 key) const {
-    T rec;
+  bool find(Ptr<TT> &ptr, Uint32 key) const {
+    TT rec;
     rec.key = key;
-    return DLHashTableImpl<P, T>::find(ptr, rec);
+    return DLHashTable<P, TT>::find(ptr, rec);
   }
 };
 
-// Specializations
-
-template <typename T>
-class KeyTable : public KeyTableImpl<ArrayPool<T>, T>
-{
-public:
-  KeyTable(ArrayPool<T> & p) : KeyTableImpl<ArrayPool<T>, T>(p) {}
-};
+#undef JAM_FILE_ID
 
 #endif

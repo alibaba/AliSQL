@@ -1,5 +1,12 @@
 -- source include/have_ndb.inc
 -- source include/count_sessions.inc
+-- source suite/ndb/include/backup_restore_setup.inc
+
+# Turn off metadata check so it doesn't interfere with table discovery
+--disable_query_log
+SET @save_ndb_metadata_check = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
+--enable_query_log
 
 --echo #
 --echo # 18075170 - sql node restart required to avoid deadlock after
@@ -24,7 +31,9 @@ SET autocommit = 0;
 SELECT * FROM t1;
 
 # Without fix below select was resulting in DEADLOCK error. With fix select
-# should succeed.
+# should succeed and return erorr indicating that table definition is outdated
+# and can't be discovered.
+--error ER_TABLE_DEF_CHANGED
 SELECT * FROM t2;
 ROLLBACK;
 SET autocommit = 1;
@@ -42,6 +51,7 @@ drop table t2;
 
 SET autocommit = 0;
 SELECT * FROM t1;
+--error ER_TABLE_DEF_CHANGED
 SELECT * FROM t2;
 
 connect(con2, localhost, root);
@@ -66,5 +76,10 @@ connection default;
 drop table t1;
 drop table t2;
 
+--disable_query_log ONCE
+SET GLOBAL ndb_metadata_check = @save_ndb_metadata_check;
+
 # Wait till all disconnects are completed
 -- source include/wait_until_count_sessions.inc
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT

@@ -1,317 +1,66 @@
 /*
-   Copyright (C) 2003, 2005, 2006, 2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-//**************************************************************************** 
-// 
-//  AUTHOR 
-//      Åsa Fransson 
-// 
-//  NAME 
-//      TransporterCallback 
-// 
-// 
-//***************************************************************************/ 
-#ifndef TRANSPORTER_CALLBACK_H 
-#define TRANSPORTER_CALLBACK_H 
- 
-#include <kernel_types.h> 
-#include "TransporterDefinitions.hpp" 
- 
- 
-#define TE_DO_DISCONNECT 0x8000
+//****************************************************************************
+//
+//  AUTHOR
+//      Ã…sa Fransson
+//
+//  NAME
+//      TransporterCallback
+//
+//
+//***************************************************************************/
+#ifndef TRANSPORTER_CALLBACK_H
+#define TRANSPORTER_CALLBACK_H
 
-enum TransporterError {
-  TE_NO_ERROR = 0,
-  /**
-   * TE_ERROR_CLOSING_SOCKET
-   *
-   *   Error found during closing of socket
-   *
-   * Recommended behavior: Ignore
-   */
-  TE_ERROR_CLOSING_SOCKET = 0x1,
+#include <kernel_types.h>
+#include "TransporterDefinitions.hpp"
+#include "TransporterRegistry.hpp"
 
-  /**
-   * TE_ERROR_IN_SELECT_BEFORE_ACCEPT
-   *
-   *   Error found during accept (just before)
-   *     The transporter will retry.
-   *
-   * Recommended behavior: Ignore
-   *   (or possible do setPerformState(PerformDisconnect)
-   */
-  TE_ERROR_IN_SELECT_BEFORE_ACCEPT = 0x2,
-
-  /**
-   * TE_INVALID_MESSAGE_LENGTH
-   *
-   *   Error found in message (message length)
-   *
-   * Recommended behavior: setPerformState(PerformDisconnect)
-   */
-  TE_INVALID_MESSAGE_LENGTH = 0x3 | TE_DO_DISCONNECT,
-
-  /**
-   * TE_INVALID_CHECKSUM
-   *
-   *   Error found in message (checksum)
-   *
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  TE_INVALID_CHECKSUM = 0x4 | TE_DO_DISCONNECT,
-
-  /**
-   * TE_COULD_NOT_CREATE_SOCKET
-   *
-   *   Error found while creating socket
-   *
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  TE_COULD_NOT_CREATE_SOCKET = 0x5,
-
-  /**
-   * TE_COULD_NOT_BIND_SOCKET
-   *
-   *   Error found while binding server socket
-   *
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  TE_COULD_NOT_BIND_SOCKET = 0x6,
-
-  /**
-   * TE_LISTEN_FAILED
-   *
-   *   Error found while listening to server socket
-   *
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  TE_LISTEN_FAILED = 0x7,
-
-  /**
-   * TE_ACCEPT_RETURN_ERROR
-   *
-   *   Error found during accept
-   *     The transporter will retry.
-   *
-   * Recommended behavior: Ignore
-   *   (or possible do setPerformState(PerformDisconnect)
-   */
-  TE_ACCEPT_RETURN_ERROR = 0x8
-
-  /**
-   * TE_SHM_DISCONNECT
-   *
-   *    The remote node has disconnected
-   *
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SHM_DISCONNECT = 0xb | TE_DO_DISCONNECT
-
-  /**
-   * TE_SHM_IPC_STAT
-   *
-   *    Unable to check shm segment
-   *      probably because remote node
-   *      has disconnected and removed it
-   *
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SHM_IPC_STAT = 0xc | TE_DO_DISCONNECT
-
-  /**
-   * Permanent error
-   */
-  ,TE_SHM_IPC_PERMANENT = 0x21
-
-  /**
-   * TE_SHM_UNABLE_TO_CREATE_SEGMENT
-   *
-   *    Unable to create shm segment
-   *      probably os something error
-   *
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SHM_UNABLE_TO_CREATE_SEGMENT = 0xd
-
-  /**
-   * TE_SHM_UNABLE_TO_ATTACH_SEGMENT
-   *
-   *    Unable to attach shm segment
-   *      probably invalid group / user
-   *
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SHM_UNABLE_TO_ATTACH_SEGMENT = 0xe
-
-  /**
-   * TE_SHM_UNABLE_TO_REMOVE_SEGMENT
-   *
-   *    Unable to remove shm segment
-   *
-   * Recommended behavior: Ignore (not much to do)
-   *                       Print warning to logfile
-   */
-  ,TE_SHM_UNABLE_TO_REMOVE_SEGMENT = 0xf
-
-  ,TE_TOO_SMALL_SIGID = 0x10
-  ,TE_TOO_LARGE_SIGID = 0x11
-  ,TE_WAIT_STACK_FULL = 0x12 | TE_DO_DISCONNECT
-  ,TE_RECEIVE_BUFFER_FULL = 0x13 | TE_DO_DISCONNECT
-
-  /**
-   * TE_SIGNAL_LOST_SEND_BUFFER_FULL
-   *
-   *   Send buffer is full, and trying to force send fails
-   *   a signal is dropped!! very bad very bad
-   *
-   */
-  ,TE_SIGNAL_LOST_SEND_BUFFER_FULL = 0x14 | TE_DO_DISCONNECT
-
-  /**
-   * TE_SIGNAL_LOST
-   *
-   *   Send failed for unknown reason
-   *   a signal is dropped!! very bad very bad
-   *
-   */
-  ,TE_SIGNAL_LOST = 0x15
-
-  /**
-   * TE_SEND_BUFFER_FULL
-   *
-   *   The send buffer was full, but sleeping for a while solved it
-   */
-  ,TE_SEND_BUFFER_FULL = 0x16
-
-  /**
-   * TE_SCI_UNABLE_TO_CLOSE_CHANNEL
-   *
-   *  Unable to close the sci channel and the resources allocated by
-   *  the sisci api.
-   */
-  ,TE_SCI_UNABLE_TO_CLOSE_CHANNEL = 0x22
-
-  /**
-   * TE_SCI_LINK_ERROR
-   *
-   *  There is no link from this node to the switch.
-   *  No point in continuing. Must check the connections.
-   * Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_LINK_ERROR = 0x0017
-
-  /**
-   * TE_SCI_UNABLE_TO_START_SEQUENCE
-   *
-   *  Could not start a sequence, because system resources
-   *  are exumed or no sequence has been created.
-   *  Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_UNABLE_TO_START_SEQUENCE = 0x18 | TE_DO_DISCONNECT
-
-  /**
-   * TE_SCI_UNABLE_TO_REMOVE_SEQUENCE
-   *
-   *  Could not remove a sequence
-   */
-  ,TE_SCI_UNABLE_TO_REMOVE_SEQUENCE = 0x19 | TE_DO_DISCONNECT
-
-  /**
-   * TE_SCI_UNABLE_TO_CREATE_SEQUENCE
-   *
-   *  Could not create a sequence, because system resources are
-   *  exempted. Must reboot.
-   *  Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_UNABLE_TO_CREATE_SEQUENCE = 0x1a | TE_DO_DISCONNECT
-
-  /**
-   * TE_SCI_UNRECOVERABLE_DATA_TFX_ERROR
-   *
-   *  Tried to send data on redundant link but failed.
-   *  Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_UNRECOVERABLE_DATA_TFX_ERROR = 0x1b | TE_DO_DISCONNECT
-
-  /**
-   * TE_SCI_CANNOT_INIT_LOCALSEGMENT
-   *
-   *  Cannot initialize local segment. A whole lot of things has
-   *  gone wrong (no system resources). Must reboot.
-   *  Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_CANNOT_INIT_LOCALSEGMENT = 0x1c | TE_DO_DISCONNECT
-
-  /**
-   * TE_SCI_CANNOT_MAP_REMOTESEGMENT
-   *
-   *  Cannot map remote segment. No system resources are left.
-   *  Must reboot system.
-   *  Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_CANNOT_MAP_REMOTESEGMENT = 0x1d | TE_DO_DISCONNECT
-
-  /**
-   * TE_SCI_UNABLE_TO_UNMAP_SEGMENT
-   *
-   *  Cannot free the resources used by this segment (step 1).
-   *  Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_UNABLE_TO_UNMAP_SEGMENT = 0x1e | TE_DO_DISCONNECT
-
-  /**
-   * TE_SCI_UNABLE_TO_REMOVE_SEGMENT
-   *
-   *  Cannot free the resources used by this segment (step 2).
-   *  Cannot guarantee that enough resources exist for NDB
-   *  to map more segment
-   *  Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_UNABLE_TO_REMOVE_SEGMENT = 0x1f  | TE_DO_DISCONNECT
-
-  /**
-   * TE_SCI_UNABLE_TO_DISCONNECT_SEGMENT
-   *
-   *  Cannot disconnect from a remote segment.
-   *  Recommended behavior: setPerformState(PerformDisonnect)
-   */
-  ,TE_SCI_UNABLE_TO_DISCONNECT_SEGMENT = 0x20 | TE_DO_DISCONNECT
-
-  /* Used 0x21 */
-  /* Used 0x22 */
-};
+class Transporter;
 
 /**
- * The TransporterCallback class encapsulates those aspects of the transporter
- * code that is specific to particular upper layer (NDB API, single-threaded
- * kernel, or multi-threaded kernel).
+ * The TransporterReceiveCallback class encapsulates
+ * the receive aspects of the transporter code that is
+ * specific to particular
+ * upper layer (NDB API, single-threaded kernel, or multi-threaded kernel).
  */
-class TransporterCallback {
-public:
+class TransporterReceiveHandle : public TransporterReceiveData {
+ public:
   /**
    * This method is called to deliver a signal to the upper layer.
    *
    * The method may either execute the signal immediately (NDB API), or
    * queue it for later execution (kernel).
+   *
+   * @returns true if no more signals should be delivered
    */
-  virtual void deliver_signal(SignalHeader * const header,
-                              Uint8 prio,
-                              Uint32 * const signalData,
+  virtual bool deliver_signal(SignalHeader *const header, Uint8 prio,
+                              TransporterError &error_code,
+                              Uint32 *const signalData,
                               LinearSectionPtr ptr[3]) = 0;
 
   /**
@@ -327,15 +76,6 @@ public:
    * The method should return non-zero if signals were execute, zero if not.
    */
   virtual int checkJobBuffer() = 0;
-
-  /**
-   * The transporter periodically calls this method, indicating the number
-   * of sends done to one NodeId, as well as total bytes sent.
-   *
-   * For multithreaded cases, this is only called while the send lock for the
-   * given node is held.
-   */
-  virtual void reportSendLen(NodeId nodeId, Uint32 count, Uint64 bytes) = 0;
 
   /**
    * Same as reportSendLen(), but for received data.
@@ -370,7 +110,7 @@ public:
    * runs from the receive thread.
    */
   virtual void reportError(NodeId nodeId, TransporterError errorCode,
-                           const char *info = 0) = 0;
+                           const char *info = nullptr) = 0;
 
   /**
    * Called from transporter code after a successful receive from a node.
@@ -379,6 +119,73 @@ public:
    */
   virtual void transporter_recv_from(NodeId node) = 0;
 
+  /**
+   *
+   */
+  virtual ~TransporterReceiveHandle() {}
+
+#ifndef NDEBUG
+  /**
+   * 'm_active' is used by 'class TransporterReceiveWatchdog' in
+   * DEBUG to detect concurrent calls to ::update_connections and
+   * ::performReceive() which isn't allowed.
+   */
+  TransporterReceiveHandle() : m_active(false) {}
+  volatile bool m_active;
+#endif
+  Uint32 nTCPTransporters;
+  Uint32 nSHMTransporters;
+};
+
+/**
+ * The TransporterCallback class encapsulates those aspects of the transporter
+ * code that is specific to particular upper layer (NDB API, single-threaded
+ * kernel, or multi-threaded kernel).
+ */
+class TransporterCallback {
+ public:
+  /**
+   * Enable or disable the send buffers.
+   *
+   * These are used for enabling/disabling of sending as the transporter
+   * is connected or disconnect.
+   *
+   * Initially the transporter is in a disabled (disconnected) state and
+   * must be 'enabled' when a connection to a 'node' is established.
+   * If it later disconnect, disabling it will discard any unsent
+   * data in the send buffer(s).
+   *
+   * Note that the entire process of multiple client- / block-threads
+   * writing to the send buffers, and the connect/disconnect handling is
+   * highly asynch: We may disconnect at any time, and data successfully
+   * written to the send buffers may thus later be discarded before they
+   * are sent.
+   *
+   * The upper layer implementing the TransporterCallback
+   * interface, should provide sufficient locking of enable/disable vs.
+   * get_bytes_to_send_iovec(). It may, or may not, also provide
+   * synchronization wrt TransporterSendBufferHandle::isSendEnabled().
+   * Iff not synchronized, we allow send buffer allocation to disconnected
+   * the transporter and silently discard the written contents later
+   * (at next synch point)
+   *
+   * A send buffer should not be enabled without first being in a
+   * disabled state. This might be asserted by the implementation.
+   * Duplicated disable call is allowed in case a connection attempt
+   * failures, e.g. a couple of direct transitions from CONNECTING
+   * to DISCONNECTING in the TransporterRegistry.
+   */
+  virtual void enable_send_buffer(TrpId) = 0;
+  virtual void disable_send_buffer(TrpId) = 0;
+
+  /**
+   * The transporter periodically calls this method, indicating the number
+   * of sends done to one NodeId, as well as total bytes sent.
+   *
+   * For multithreaded cases, this is only called while the send lock for the
+   * given node is held.
+   */
+  virtual void reportSendLen(NodeId nodeId, Uint32 count, Uint64 bytes) = 0;
 
   /**
    * Locking (no-op in single-threaded VM).
@@ -393,8 +200,10 @@ public:
    *
    * See src/common/transporter/trp.txt for more information.
    */
-  virtual void lock_transporter(NodeId node) { }
-  virtual void unlock_transporter(NodeId node) { }
+  virtual void lock_transporter(TrpId) {}
+  virtual void unlock_transporter(TrpId) {}
+  virtual void lock_send_transporter(TrpId) {}
+  virtual void unlock_send_transporter(TrpId) {}
 
   /**
    * ToDo: In current patch, these are not used, instead we use default
@@ -402,19 +211,31 @@ public:
    */
 
   /**
+   * Notify upper layer of explicit wakeup request
+   *
+   * The is called from the thread holding receiving data from the
+   * transporter, under the protection of the transporter lock.
+   */
+  virtual void reportWakeup() {}
+
+  /**
    * Ask upper layer to supply a list of struct iovec's with data to
-   * send to a node.
+   * send over a transporter.
    *
    * The call should fill in data from all threads (if any).
    *
    * The call will write at most MAX iovec structures starting at DST.
    *
-   * Returns number of entries filled-in on success, -1 on error.
+   * Returns number of entries filled-in on success. 0 if nothing
+   * available.
    *
    * Will be called from the thread that does performSend(), so multi-threaded
    * use cases must be prepared for that and do any necessary locking.
+   *
+   * Nothing should be returned for a transporter with a disabled send buffer.
    */
-  virtual Uint32 get_bytes_to_send_iovec(NodeId, struct iovec *dst, Uint32) = 0;
+  virtual Uint32 get_bytes_to_send_iovec(TrpId id, struct iovec *dst,
+                                         Uint32) = 0;
 
   /**
    * Called when data has been sent, allowing to free / reuse the space. Passes
@@ -425,52 +246,79 @@ public:
    * partially sent, and may not be freed until another call to bytes_sent()
    * which covers the rest of its data.
    *
-   * Returns total amount of unsent data in send buffers for this node.
+   * Returns total amount of unsent data in send buffers for this transporter.
    *
    * Like get_bytes_to_send_iovec(), this is called during performSend().
    */
-  virtual Uint32 bytes_sent(NodeId node, Uint32 bytes) = 0;
+  virtual Uint32 bytes_sent(TrpId, Uint32 bytes) = 0;
 
-  /**
-   * Called to check if any data is available for sending with doSend().
-   *
-   * Like get_bytes_to_send_iovec(), this is called during performSend().
-   */
-  virtual bool has_data_to_send(NodeId node) = 0;
-
-  /**
-   * Called to completely empty the send buffer for a node (ie. disconnect).
-   *
-   * Can be called to check that no one has written to the sendbuffer
-   * since it was reset last time by using the "should_be_emtpy" flag
-   */
-  virtual void reset_send_buffer(NodeId node, bool should_be_empty=false) = 0;
-
-  virtual ~TransporterCallback() { };
+  virtual ~TransporterCallback() {}
 };
-
 
 /**
  * This interface implements send buffer access for the
  * TransporterRegistry::prepareSend() method.
  *
- * It is used to allocate send buffer space for signals to send, and can be
- * used to do per-thread buffer allocation.
+ * It is used to allocate send buffer memory in thread local buffers.
+ * The 'protocol' requires that isSendEnabled() should be checked
+ * before any allocation is attempted.
  *
- * Reading and freeing data is done from the TransporterCallback class,
- * methods get_bytes_to_send_iovec() and bytes_send_iovec().
+ * Depending on each implementation of this interface, there might(Ndb API),
+ * or might not(data nodes) be thread synchronization protecting against
+ * Transporters being disconnected while we write to these thread-local
+ * send buffers. Without such synchronication, checking for transporters
+ * being connected, or returning 'not connected' type errors from
+ * prepareSend() is 'unsafe', and result should not be trusted. Thus,
+ * SEND_DISCONNECTED errors are also ignored on the data nodes.
+ *
+ * Reading and freeing data is done from the TransporterCallback class
+ * methods get_bytes_to_send_iovec() and bytes_sent(). These *are*
+ * synchronized with the connection state of the transporter, such that
+ * send data allocated with get-/updateWritePtr() will not show up in
+ * get_bytes_to_send_iovec() if the transporter was, or later becomes,
+ * disconnected.
  */
 class TransporterSendBufferHandle {
-public:
+ public:
+  /**
+   * - Allocate send buffer for default send buffer handling.
+   *
+   * - Upper layer that implements their own TransporterSendBufferHandle do not
+   * - use this, instead they manage their own send buffers.
+   *
+   * Argument is the value of config parameter TotalSendBufferMemory. If 0,
+   * a default will be used of sum(max send buffer) over all transporters.
+   * The second is the config parameter ExtraSendBufferMemory
+   */
+  virtual void allocate_send_buffers(Uint64 /*total_send_buffer*/,
+                                     Uint64 /*extra_send_buffer*/) {}
+
+  /**
+   * Check that send bufferes are enabled for the specified transporter.
+   * Calling getWritePtr() for a transporter with a disabled send buffer
+   * is considered a protocol breakage. (could be asserted).
+   *
+   * It is up to each implementation whether we allow send buffer
+   * allocation to a possibly disconnected transporter or not.
+   * Default is to always allow buffer allocation and silently
+   * discard the prepared send message if it later turns out that
+   * the transporter was disconnected.
+   *
+   * Note, that even if send was enabled at the time we allocated
+   * send buffers, it may be disabled before the written data is
+   * actually sent. The buffer contents is then silently discarded.
+   */
+  virtual bool isSendEnabled(TrpId) const { return true; }
+
   /**
    * Get space for packing a signal into, allocate more buffer as needed.
    *
    * The max_use parameter is a limit on the amount of unsent data (whether
-   * delivered through get_bytes_to_send_iovec() or not) for one node; the
-   * method must return NULL rather than allow to exceed this amount.
+   * delivered through get_bytes_to_send_iovec() or not) for a transporter;
+   * the method must return NULL rather than allow to exceed this amount.
    */
-  virtual Uint32 *getWritePtr(NodeId node, Uint32 lenBytes, Uint32 prio,
-                              Uint32 max_use) = 0;
+  virtual Uint32 *getWritePtr(TrpId, Uint32 lenBytes, Uint32 prio,
+                              Uint32 max_use, SendStatus *error) = 0;
   /**
    * Called when new signal is packed.
    *
@@ -478,16 +326,29 @@ public:
    * was made available to send with get_bytes_to_send_iovec(), but has not
    * yet been marked as really sent from bytes_sent()).
    */
-  virtual Uint32 updateWritePtr(NodeId node, Uint32 lenBytes, Uint32 prio) = 0;
+  virtual Uint32 updateWritePtr(TrpId, Uint32 lenBytes, Uint32 prio) = 0;
+
+  /**
+   * Provide a mechanism to check the level of risk in using the send buffer.
+   * This is useful in long-running activities to ensure that they don't
+   * jeopardize short, high priority actions in the cluster.
+   */
+  // virtual void getSendBufferLevel(TrpId, SB_LevelType &level) = 0;
 
   /**
    * Called during prepareSend() if send buffer gets full, to do an emergency
-   * send to the remote node with the hope of freeing up send buffer for the
+   * send on th etransporter with the hope of freeing up send buffer for the
    * signal to be queued.
    */
-  virtual bool forceSend(NodeId node) = 0;
+  virtual bool forceSend(TrpId) = 0;
 
-  virtual ~TransporterSendBufferHandle() { };
+  virtual ~TransporterSendBufferHandle() {}
 };
+
+/**
+ * Return the TransporterSendBufferHandle if the 'default' (non-mt)
+ * implementation of the SendBufferHandle is used, NULL otherwise.
+ */
+TransporterSendBufferHandle *getNonMTTransporterSendHandle();
 
 #endif

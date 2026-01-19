@@ -22,7 +22,6 @@
 #              server-options.html#option_mysqld_event-scheduler               #
 #                                                                              #
 ################################################################################
---source include/not_embedded.inc
 --source include/load_sysvars.inc
 
 ###############################################################
@@ -107,9 +106,11 @@ SELECT @@session.event_scheduler;
 # Check if the value in GLOBAL Tables matches values in variable             #
 ##############################################################################
 
+--disable_warnings
 SELECT @@global.event_scheduler = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='event_scheduler';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_004_06----------------------#'
@@ -156,7 +157,9 @@ SET global.event_scheduler = ON;
 --Error ER_UNKNOWN_TABLE
 SELECT global.event_scheduler;
 --Error ER_BAD_FIELD_ERROR
-SELECT event_scheduler = @@session.event_scheduler;
+SELECT event_scheduler;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.event_scheduler;
 
 
 
@@ -167,7 +170,8 @@ SELECT event_scheduler = @@session.event_scheduler;
 SET @@global.event_scheduler = @start_value;
 SELECT @@global.event_scheduler;
 
-
+# To clear the entries in P_S, restart mysqld (Bug#26533649)
+--source include/restart_mysqld.inc
 #####################################################
 #       END OF event_scheduler TESTS                #
 #####################################################

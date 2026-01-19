@@ -1,6 +1,5 @@
--- source include/have_innodb.inc
 # Bug #59307 uninitialized value in rw_lock_set_writer_id_and_recursion_flag()
-# when Valgrind instrumentation (UNIV_DEBUG_VALGRIND) is not enabled
+# when Valgrind instrumentation (HAVE_VALGRIND) is not enabled
 
 CREATE TABLE t1 (
   t1_int INT,
@@ -12,7 +11,7 @@ CREATE TABLE t2 (
   t2_int2 INT
 ) ENGINE=INNODB;
 
-INSERT INTO t2 VALUES ();
+INSERT IGNORE INTO t2 VALUES ();
 INSERT INTO t1 VALUES ();
 
 SELECT *

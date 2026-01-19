@@ -1,13 +1,5 @@
 # Include this in any test using mysql_upgrade
 
-# Can't run test of external client with embedded server
--- source include/not_embedded.inc
-
-# Only run test if "mysql_upgrade" is found
---require r/have_mysql_upgrade.result
---disable_query_log
-select LENGTH("$MYSQL_UPGRADE")>0 as have_mysql_upgrade;
---enable_query_log
 
 #
 # Hack:
@@ -28,3 +20,21 @@ if ($VALGRIND_TEST)
   --enable_result_log
   --enable_query_log
 }
+
+#
+# Preserve the original timestamps in:
+# - table mysql.user
+# - table mysql.tables_priv
+# for the mysql.sys user.
+#
+
+--disable_query_log
+--disable_result_log
+
+--let $saved_sys_timestamp_1 = `SELECT password_last_changed FROM mysql.user WHERE Host='localhost' AND User='mysql.sys'`
+
+--let $saved_sys_timestamp_2 = `SELECT Timestamp from mysql.tables_priv WHERE Host='localhost' AND Db='sys' AND User='mysql.sys' AND Table_name='sys_config'`
+
+--enable_result_log
+--enable_query_log
+

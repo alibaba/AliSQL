@@ -6,15 +6,23 @@
 #
 # ==== Usage ====
 #
+# [--let $rpl_channel_name= 'NAME']
 # [--let $rpl_debug= 1]
 # --source include/check_slave_no_error.inc
 #
 # Parameters:
+#   $rpl_channel_name
+#     See include/check_slave_param.inc
+#
 #   $rpl_debug
 #     See include/rpl_init.inc
 
 
 --let $include_filename= check_slave_no_error.inc
+if ($rpl_channel_name)
+{
+  --let $include_filename= $include_filename [FOR CHANNEL $rpl_channel_name]
+}
 --source include/begin_include_file.inc
 
 

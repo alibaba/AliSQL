@@ -5,37 +5,48 @@ SET GLOBAL LOG_OUTPUT = 'FILE';
 flush status;
 show status like 'Table_lock%';
 Variable_name	Value
-Table_locks_immediate	0
+Table_locks_immediate	1
 Table_locks_waited	0
-select * from information_schema.session_status where variable_name like 'Table_lock%';
+select * from performance_schema.session_status where variable_name like 'Table_lock%';
 VARIABLE_NAME	VARIABLE_VALUE
-TABLE_LOCKS_IMMEDIATE	0
-TABLE_LOCKS_WAITED	0
-# Switched to connection: con1
+Table_locks_immediate	2
+Table_locks_waited	0
 set sql_log_bin=0;
 set @old_general_log = @@global.general_log;
 set global general_log = 'OFF';
 drop table if exists t1;
-create table t1(n int) engine=myisam;
+create table t1(n int);
 insert into t1 values(1);
-select 1;
-1
+select get_lock('mysqltest_lock', 100);
+get_lock('mysqltest_lock', 100)
 1
 # Switched to connection: con2
-lock tables t1 read;
-unlock tables;
-lock tables t1 read;
+# Sending:
+update t1 set n = get_lock('mysqltest_lock', 100) ;
 # Switched to connection: con1
+# Wait for the first UPDATE to get blocked.
+# Sending:
 update t1 set n = 3;
+# Switched to connection: default
+# wait for the second UPDATE to get blocked
+Timeout in wait_condition.inc for select 1 from INFORMATION_SCHEMA.PROCESSLIST
+where ID = (select connection_id()) and STATE = "Waiting for table level lock"
+select release_lock('mysqltest_lock');
+release_lock('mysqltest_lock')
+1
 # Switched to connection: con2
-unlock tables;
+# Reaping first UPDATE
+select release_lock('mysqltest_lock');
+release_lock('mysqltest_lock')
+1
 # Switched to connection: con1
+# Reaping second UPDATE
 show status like 'Table_locks_waited';
 Variable_name	Value
-Table_locks_waited	1
+Table_locks_waited	0
+# Switched to connection: default
 drop table t1;
 set global general_log = @old_general_log;
-# Switched to connection: default
 select 1;
 1
 1
@@ -48,6 +59,9 @@ insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
 insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
 insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
 insert into t1 values (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 select * from t1 where a=6;
 a
 6
@@ -57,10 +71,10 @@ a
 6
 show status like 'last_query_cost';
 Variable_name	Value
-Last_query_cost	12.084449
+Last_query_cost	5.249000
 show status like 'last_query_cost';
 Variable_name	Value
-Last_query_cost	12.084449
+Last_query_cost	5.249000
 select 1;
 1
 1
@@ -72,109 +86,92 @@ FLUSH STATUS;
 SHOW STATUS LIKE 'max_used_connections';
 Variable_name	Value
 Max_used_connections	1
-SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+SELECT * FROM performance_schema.session_status WHERE VARIABLE_NAME LIKE 'max_used_connections';
 VARIABLE_NAME	VARIABLE_VALUE
-MAX_USED_CONNECTIONS	1
+Max_used_connections	1
 SET @save_thread_cache_size=@@thread_cache_size;
 SET GLOBAL thread_cache_size=3;
 SHOW STATUS LIKE 'max_used_connections';
 Variable_name	Value
 Max_used_connections	3
-SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+SELECT * FROM performance_schema.session_status WHERE VARIABLE_NAME LIKE 'max_used_connections';
 VARIABLE_NAME	VARIABLE_VALUE
-MAX_USED_CONNECTIONS	3
+Max_used_connections	3
 FLUSH STATUS;
 SHOW STATUS LIKE 'max_used_connections';
 Variable_name	Value
 Max_used_connections	2
-SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+SELECT * FROM performance_schema.session_status WHERE VARIABLE_NAME LIKE 'max_used_connections';
 VARIABLE_NAME	VARIABLE_VALUE
-MAX_USED_CONNECTIONS	2
+Max_used_connections	2
 SHOW STATUS LIKE 'max_used_connections';
 Variable_name	Value
 Max_used_connections	3
-SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+SELECT * FROM performance_schema.session_status WHERE VARIABLE_NAME LIKE 'max_used_connections';
 VARIABLE_NAME	VARIABLE_VALUE
-MAX_USED_CONNECTIONS	3
+Max_used_connections	3
 SHOW STATUS LIKE 'max_used_connections';
 Variable_name	Value
 Max_used_connections	4
-SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+SELECT * FROM performance_schema.session_status WHERE VARIABLE_NAME LIKE 'max_used_connections';
 VARIABLE_NAME	VARIABLE_VALUE
-MAX_USED_CONNECTIONS	4
+Max_used_connections	4
 SET GLOBAL thread_cache_size=@save_thread_cache_size;
 CREATE TABLE t1 ( a INT );
 INSERT INTO t1 VALUES (1), (2);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 SELECT a FROM t1 LIMIT 1;
 a
 1
 SHOW SESSION STATUS LIKE 'Last_query_cost';
 Variable_name	Value
-Last_query_cost	2.402418
+Last_query_cost	0.449000
 EXPLAIN SELECT a FROM t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	2	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1`
 SHOW SESSION STATUS LIKE 'Last_query_cost';
 Variable_name	Value
-Last_query_cost	2.402418
+Last_query_cost	0.449000
 SELECT a FROM t1 UNION SELECT a FROM t1 ORDER BY a;
 a
 1
 2
 SHOW SESSION STATUS LIKE 'Last_query_cost';
 Variable_name	Value
-Last_query_cost	0.000000
+Last_query_cost	0.898000
 EXPLAIN SELECT a FROM t1 UNION SELECT a FROM t1 ORDER BY a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	NULL
-2	UNION	t1	ALL	NULL	NULL	NULL	NULL	2	NULL
-NULL	UNION RESULT	<union1,2>	ALL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+2	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+3	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` union /* select#2 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` order by `a`
 SHOW SESSION STATUS LIKE 'Last_query_cost';
 Variable_name	Value
-Last_query_cost	0.000000
+Last_query_cost	0.898000
 SELECT a IN (SELECT a FROM t1) FROM t1 LIMIT 1;
 a IN (SELECT a FROM t1)
 1
 SHOW SESSION STATUS LIKE 'Last_query_cost';
 Variable_name	Value
-Last_query_cost	0.000000
+Last_query_cost	0.898000
 SELECT (SELECT a FROM t1 LIMIT 1) x FROM t1 LIMIT 1;
 x
 1
 SHOW SESSION STATUS LIKE 'Last_query_cost';
 Variable_name	Value
-Last_query_cost	0.000000
-SELECT * FROM t1 a, t1 b LIMIT 1;
+Last_query_cost	0.898000
+SELECT * FROM t1 a, t1 b ORDER BY a.a, b.a LIMIT 1;
 a	a
 1	1
 SHOW SESSION STATUS LIKE 'Last_query_cost';
 Variable_name	Value
-Last_query_cost	5.205912
+Last_query_cost	1.099010
 DROP TABLE t1;
-show status like 'com_show_status';
-Variable_name	Value
-Com_show_status	3
-show status like 'hand%write%';
-Variable_name	Value
-Handler_write	0
-show status like '%tmp%';
-Variable_name	Value
-Created_tmp_disk_tables	0
-Created_tmp_files	0
-Created_tmp_tables	0
-show status like 'hand%write%';
-Variable_name	Value
-Handler_write	0
-show status like '%tmp%';
-Variable_name	Value
-Created_tmp_disk_tables	0
-Created_tmp_files	0
-Created_tmp_tables	0
-show status like 'com_show_status';
-Variable_name	Value
-Com_show_status	8
-rnd_diff	tmp_table_diff
-20	8
 flush status;
 show status like 'Com%function';
 Variable_name	Value
@@ -196,6 +193,7 @@ Com_drop_function	1
 create database db37908;
 create table db37908.t1(f1 int);
 insert into db37908.t1 values(1);
+create user mysqltest_1@localhost;
 grant usage,execute on test.* to mysqltest_1@localhost;
 create procedure proc37908() begin select 1; end |
 create function func37908() returns int sql security invoker
@@ -264,8 +262,8 @@ select * from t1;
 i
 show status like 'table_open_cache_%';
 Variable_name	Value
-Table_open_cache_hits	0
-Table_open_cache_misses	1
+Table_open_cache_hits	1
+Table_open_cache_misses	16
 Table_open_cache_overflows	0
 # The second statement accessing the same table should
 # result in table cache hit.
@@ -273,24 +271,24 @@ select * from t1;
 i
 show status like 'table_open_cache_%';
 Variable_name	Value
-Table_open_cache_hits	1
-Table_open_cache_misses	1
+Table_open_cache_hits	2
+Table_open_cache_misses	16
 Table_open_cache_overflows	0
 # Again table cache miss if accessing different table.
 select * from t2;
 j
 show status like 'table_open_cache_%';
 Variable_name	Value
-Table_open_cache_hits	1
-Table_open_cache_misses	2
+Table_open_cache_hits	18
+Table_open_cache_misses	17
 Table_open_cache_overflows	0
 # And cache hit then accessing it second time.
 select * from t2;
 j
 show status like 'table_open_cache_%';
 Variable_name	Value
-Table_open_cache_hits	2
-Table_open_cache_misses	2
+Table_open_cache_hits	19
+Table_open_cache_misses	17
 Table_open_cache_overflows	0
 # The below statement should result in 2 cache hits and 
 # 4 cache misses since it needs 6 table instances in total.
@@ -298,8 +296,8 @@ select * from t1 as a, t2 as b, t1 as c, t2 as d, t1 as e, t2 as f;
 i	j	i	j	i	j
 show status like 'table_open_cache_%';
 Variable_name	Value
-Table_open_cache_hits	4
-Table_open_cache_misses	6
+Table_open_cache_hits	21
+Table_open_cache_misses	21
 Table_open_cache_overflows	0
 # Reduce size of table cache to check that status
 # variable tracking cache overflows works.
@@ -312,18 +310,18 @@ select * from t1;
 i
 show status like 'table_open_cache_%';
 Variable_name	Value
-Table_open_cache_hits	5
-Table_open_cache_misses	6
-Table_open_cache_overflows	2
+Table_open_cache_hits	22
+Table_open_cache_misses	21
+Table_open_cache_overflows	19
 # This statement should result in 4 cache hits, 2 cache misses/
 # overflows.
 select * from t1 as a, t2 as b, t1 as c, t2 as d, t1 as e, t2 as f;
 i	j	i	j	i	j
 show status like 'table_open_cache_%';
 Variable_name	Value
-Table_open_cache_hits	9
-Table_open_cache_misses	8
-Table_open_cache_overflows	4
+Table_open_cache_hits	25
+Table_open_cache_misses	24
+Table_open_cache_overflows	22
 # Finally, the below statement should result in 1 cache miss
 # and 1 overflow since it accesses table which is not yet in
 # cache and table cache is full.
@@ -331,11 +329,191 @@ select * from t3;
 k
 show status like 'table_open_cache_%';
 Variable_name	Value
-Table_open_cache_hits	9
-Table_open_cache_misses	9
-Table_open_cache_overflows	5
+Table_open_cache_hits	25
+Table_open_cache_misses	41
+Table_open_cache_overflows	39
 # Cleanup
 set @@global.table_open_cache= @old_table_open_cache;
 drop tables t1, t2, t3;
+SHOW STATUS LIKE 'max_used_connections_time';
+Variable_name	Value
+Max_used_connections_time	DTVALUE
+# Should report 4
+SHOW STATUS LIKE 'max_used_connections';
+Variable_name	Value
+Max_used_connections	4
+# Should report 4
+SHOW STATUS LIKE 'max_used_connections';
+Variable_name	Value
+Max_used_connections	4
+# This should report 0 as it must have the same value as above
+TIMESTAMPDIFF(SECOND,'DTVALUE','DTVALUE') <> 0
+0
+# This should report 0 as timestamp is updated only when connection count strictly exceeds the previos highest value
+TIMESTAMPDIFF(SECOND,'DTVALUE','DTVALUE') <> 0
+0
+FLUSH STATUS;
+# This should not report 0 as FLUSH STATUS is called.
+TIMESTAMPDIFF(SECOND,'DTVALUE','DTVALUE') <> 0
+1
 set @@global.concurrent_insert= @old_concurrent_insert;
-SET GLOBAL log_output = @old_log_output;
+SET GLOBAL log_output = 'FILE,TABLE';
+#
+# Bug#28786951 SET LAST_QUERY_COST FOR QUERIES WITH SUBQUERIES AND UNIONS
+#
+CREATE TABLE t1(x INT, y INT);
+INSERT INTO t1 VALUES (1, 2), (3, 4), (5, 6);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN SELECT * FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1`
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	0.549000
+EXPLAIN SELECT (SELECT MAX(x) FROM t1) FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+2	SUBQUERY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select (/* select#2 */ select max(`test`.`t1`.`x`) from `test`.`t1`) AS `(SELECT MAX(x) FROM t1)` from `test`.`t1`
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	1.098000
+EXPLAIN SELECT * FROM t1 WHERE x IN (SELECT MAX(x) FROM t1);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using where
+2	DEPENDENT SUBQUERY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where <in_optimizer>(`test`.`t1`.`x`,<exists>(/* select#2 */ select max(`test`.`t1`.`x`) from `test`.`t1` having (<cache>(`test`.`t1`.`x`) = <ref_null_helper>(max(`test`.`t1`.`x`)))))
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	2.196000
+EXPLAIN SELECT /*+ NO_MERGE(a) */ * FROM (SELECT * FROM t1) a, t1 b;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+1	PRIMARY	b	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using join buffer (hash join)
+2	DERIVED	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select /*+ NO_MERGE(`a`@`select#1`) */ `a`.`x` AS `x`,`a`.`y` AS `y`,`test`.`b`.`x` AS `x`,`test`.`b`.`y` AS `y` from (/* select#2 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1`) `a` join `test`.`t1` `b`
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	4.535526
+EXPLAIN SELECT * FROM t1 WHERE x > 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`x` > 0)
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	0.549000
+EXPLAIN SELECT * FROM t1 WHERE y > 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`y` > 0)
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	0.549000
+EXPLAIN SELECT * FROM t1 WHERE x > 0
+UNION ALL
+SELECT * FROM t1 WHERE y > 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+2	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`x` > 0) union all /* select#2 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`y` > 0)
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	1.098000
+EXPLAIN SELECT * FROM t1 WHERE x > 0
+UNION DISTINCT
+SELECT * FROM t1 WHERE y > 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+2	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+3	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`x` > 0) union /* select#2 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`y` > 0)
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	1.098000
+EXPLAIN INSERT INTO t1 SELECT * FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using temporary
+Warnings:
+Note	1003	insert into `test`.`t1` /* select#1 */ select sql_buffer_result `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1`
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	0.549000
+EXPLAIN INSERT INTO t1
+SELECT * FROM t1 WHERE x > 0
+UNION ALL
+SELECT * FROM t1 WHERE y > 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+2	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+3	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary
+Warnings:
+Note	1003	insert into `test`.`t1` /* select#1 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`x` > 0) union all /* select#2 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`y` > 0)
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	1.098000
+EXPLAIN INSERT INTO t1
+SELECT * FROM t1 WHERE x > 0
+UNION DISTINCT
+SELECT * FROM t1 WHERE y > 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+2	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+3	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary
+Warnings:
+Note	1003	insert into `test`.`t1` /* select#1 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`x` > 0) union /* select#2 */ select `test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y` from `test`.`t1` where (`test`.`t1`.`y` > 0)
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	1.098000
+DROP TABLE t1;
+#
+# Bug#28884359: LAST_QUERY_COST IS NEGATIVE AFTER ORDER BY/LIMIT QUERY
+#
+CREATE TABLE t1 (pk INTEGER PRIMARY KEY,
+i1 INTEGER,
+i2 INTEGER NOT NULL,
+INDEX k1 (i1),
+INDEX k2 (i1, i2));
+INSERT INTO t1 VALUES
+(1, NULL, 43), (11, NULL, 103), (10, 32,50), (9, 12, 43),
+(8, NULL, 13), (7, 48, 90), (6, 56, 90), (5, 87, 84),
+(4, 58, 98), (3, 30, 82), (2, 54, 57), (12, 232, 43),
+(13, 43, 103), (14, 32, 45), (15, 12, 43), (16, 89, 23),
+(17, 48, 90), (18, 56, 90), (19, 87, 84);
+CREATE TABLE t2 (pk INTEGER PRIMARY KEY,
+i1 INTEGER NOT NULL,
+INDEX k1 (i1));
+INSERT INTO t2 VALUES
+(3, 89), (4, 98), (5, 84), (6, 8), (7, 99), (8, 110),
+(9, 84), (10, 98), (11, 103), (12, 50), (13, 84),
+(14, 57), (15, 82), (16, 103), (2, 98), (1, 90);
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+EXPLAIN SELECT * FROM t1, t2 WHERE t1.i1 = t2.i1 ORDER BY t1.i1 LIMIT 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	k1,k2	k2	9	NULL	10	100.00	Using where; Using index
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` join `test`.`t2` where (`test`.`t2`.`i1` = `test`.`t1`.`i1`) order by `test`.`t1`.`i1` limit 10
+SHOW STATUS LIKE 'Last_query_cost';
+Variable_name	Value
+Last_query_cost	9.664743
+DROP TABLE t1, t2;
+SET @@global.log_output = @old_log_output;
+SET @@global.general_log = @old_general_log;
+TRUNCATE TABLE mysql.general_log;

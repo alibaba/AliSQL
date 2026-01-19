@@ -1,39 +1,85 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 set @old_global_binlog_format=  @@global.binlog_format;
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 set @old_session_binlog_format=  @@session.binlog_format;
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 SET GLOBAL binlog_format = 'ROW';
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 SET SESSION binlog_format = 'ROW';
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	ROW
 @@session.binlog_format	ROW
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 [on slave]
 set @old_global_binlog_format=  @@global.binlog_format;
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 set @old_session_binlog_format=  @@session.binlog_format;
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
+include/stop_slave.inc
 SET GLOBAL binlog_format = 'ROW';
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 SET SESSION binlog_format = 'ROW';
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	ROW
 @@session.binlog_format	ROW
-include/stop_slave.inc
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 include/start_slave.inc
 [on master]
 CREATE TABLE t1(id MEDIUMINT NOT NULL AUTO_INCREMENT,
 dt TIMESTAMP, user CHAR(255), uuidf LONGBLOB,
 fkid MEDIUMINT, filler VARCHAR(255),
-PRIMARY KEY(id)) ENGINE='innodb';
+PRIMARY KEY(id)) charset latin1 ENGINE='innodb';
 CREATE TABLE t2(id MEDIUMINT NOT NULL AUTO_INCREMENT,
 dt TIMESTAMP, user CHAR(255), uuidf LONGBLOB,
 fkid MEDIUMINT, filler VARCHAR(255),
-PRIMARY KEY(id)) ENGINE='innodb'
+PRIMARY KEY(id)) charset latin1 ENGINE='innodb'
 PARTITION BY KEY(id) partitions 5;
 CREATE TABLE t3(id MEDIUMINT NOT NULL AUTO_INCREMENT,
 dt TIMESTAMP, user CHAR(255), uuidf LONGBLOB,
 fkid MEDIUMINT, filler VARCHAR(255),
-PRIMARY KEY(id)) ENGINE='innodb' 
+PRIMARY KEY(id)) ENGINE='innodb' charset latin1
 PARTITION BY RANGE(id) 
 SUBPARTITION BY hash(id) subpartitions 2
 (PARTITION pa1 values less than (10),
@@ -122,16 +168,16 @@ Master byrange	500
 show create table t3;
 Table	t3
 Create Table	CREATE TABLE `t3` (
-  `id` mediumint(9) NOT NULL AUTO_INCREMENT,
-  `dt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id` mediumint NOT NULL AUTO_INCREMENT,
+  `dt` timestamp NULL DEFAULT NULL,
   `user` char(255) DEFAULT NULL,
   `uuidf` longblob,
-  `fkid` mediumint(9) DEFAULT NULL,
+  `fkid` mediumint DEFAULT NULL,
   `filler` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=latin1
-/*!50100 PARTITION BY RANGE (id)
-SUBPARTITION BY HASH (id)
+/*!50100 PARTITION BY RANGE (`id`)
+SUBPARTITION BY HASH (`id`)
 SUBPARTITIONS 2
 (PARTITION pa1 VALUES LESS THAN (10) ENGINE = InnoDB,
  PARTITION pa2 VALUES LESS THAN (20) ENGINE = InnoDB,
@@ -152,12 +198,29 @@ Slave bykey	500
 SELECT count(*) "Slave byrange" FROM t3;
 Slave byrange	500
 set @@global.binlog_format=  @old_global_binlog_format;
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 set @@session.binlog_format=  @old_session_binlog_format;
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 DROP TABLE t1, t2, t3;
 DROP PROCEDURE p1;
 DROP PROCEDURE p2;
 DROP PROCEDURE p3;
 [on slave]
+include/stop_slave_sql.inc
 set @@global.binlog_format=  @old_global_binlog_format;
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 set @@session.binlog_format=  @old_session_binlog_format;
+Warnings:
+Level	Warning
+Code	1287
+Message	'@@binlog_format' is deprecated and will be removed in a future release.
 include/rpl_end.inc

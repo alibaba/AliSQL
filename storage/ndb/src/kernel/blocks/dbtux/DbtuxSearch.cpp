@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2004-2006 MySQL AB, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +25,8 @@
 
 #define DBTUX_SEARCH_CPP
 #include "Dbtux.hpp"
+
+#define JAM_FILE_ID 368
 
 /*
  * Search down non-empty tree for node to update.  Compare search key to
@@ -30,59 +39,60 @@
  * Search within the found node is done by caller.  On add, search key
  * may be before minimum or after maximum entry.  On remove, search key
  * is within the node.
+ *
+ * Can be called by MT-build of ordered indexes.
  */
-void
-Dbtux::findNodeToUpdate(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEnt searchEnt, NodeHandle& currNode)
-{
-  const Index& index = *c_indexPool.getPtr(frag.m_indexId);
+void Dbtux::findNodeToUpdate(TuxCtx &ctx, Frag &frag,
+                             const KeyBoundArray &searchBound,
+                             TreeEnt searchEnt, NodeHandle &currNode) {
+  const Index &index = *ctx.indexPtr.p;
   const Uint32 numAttrs = index.m_numAttrs;
   const Uint32 prefAttrs = index.m_prefAttrs;
-  const Uint32 prefBytes = index.m_prefBytes;
-  KeyData entryKey(index.m_keySpec, false, 0);
-  entryKey.set_buf(ctx.c_entryKey, MaxAttrDataSize << 2);
-  KeyDataC prefKey(index.m_keySpec, false);
-  NodeHandle glbNode(frag);     // potential g.l.b of final node
+  NodeHandle glbNode(frag);  // potential g.l.b of final node
   while (true) {
-    thrjam(ctx.jamBuffer);
-    selectNode(currNode, currNode.m_loc);
-    prefKey.set_buf(currNode.getPref(), prefBytes, prefAttrs);
+    thrjamDebug(ctx.jamBuffer);
+    selectNode(ctx, currNode, currNode.m_loc);
     int ret = 0;
-    if (prefAttrs > 0) {
-      thrjam(ctx.jamBuffer);
-      ret = cmpSearchKey(ctx, searchKey, prefKey, prefAttrs);
+    if (likely(prefAttrs > 0)) {
+      thrjamDebug(ctx.jamBuffer);
+      KeyDataArray key_data;
+      key_data.init_poai(currNode.getPref(), prefAttrs);
+      ret = searchBound.cmp(&key_data, prefAttrs, true);
     }
     if (ret == 0 && prefAttrs < numAttrs) {
-      thrjam(ctx.jamBuffer);
+      thrjamDebug(ctx.jamBuffer);
       // read and compare all attributes
-      readKeyAttrs(ctx, frag, currNode.getEnt(0), entryKey, numAttrs);
-      ret = cmpSearchKey(ctx, searchKey, entryKey, numAttrs);
+      readKeyAttrs(ctx, frag, currNode.getEnt(0), numAttrs, ctx.c_dataBuffer);
+      KeyDataArray key_data;
+      key_data.init_poai(ctx.c_dataBuffer, numAttrs);
+      ret = searchBound.cmp(&key_data, numAttrs, true);
     }
-    if (ret == 0) {
-      thrjam(ctx.jamBuffer);
+    if (unlikely(ret == 0)) {
+      thrjamDebug(ctx.jamBuffer);
       // keys are equal, compare entry values
       ret = searchEnt.cmp(currNode.getEnt(0));
     }
     if (ret < 0) {
-      thrjam(ctx.jamBuffer);
+      thrjamDebug(ctx.jamBuffer);
       const TupLoc loc = currNode.getLink(0);
       if (loc != NullTupLoc) {
-        thrjam(ctx.jamBuffer);
+        thrjamDebug(ctx.jamBuffer);
         // continue to left subtree
         currNode.m_loc = loc;
         continue;
       }
-      if (! glbNode.isNull()) {
-        thrjam(ctx.jamBuffer);
+      if (!glbNode.isNull()) {
+        thrjamDebug(ctx.jamBuffer);
         // move up to the g.l.b
         currNode = glbNode;
       }
       break;
     }
     if (ret > 0) {
-      thrjam(ctx.jamBuffer);
+      thrjamDebug(ctx.jamBuffer);
       const TupLoc loc = currNode.getLink(1);
       if (loc != NullTupLoc) {
-        thrjam(ctx.jamBuffer);
+        thrjamDebug(ctx.jamBuffer);
         // save potential g.l.b
         glbNode = currNode;
         // continue to right subtree
@@ -92,7 +102,7 @@ Dbtux::findNodeToUpdate(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, Tree
       break;
     }
     // ret == 0
-    thrjam(ctx.jamBuffer);
+    thrjamDebug(ctx.jamBuffer);
     break;
   }
 }
@@ -100,32 +110,36 @@ Dbtux::findNodeToUpdate(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, Tree
 /*
  * Find position within the final node to add entry to.  Use binary
  * search.  Return true if ok i.e. entry to add is not a duplicate.
+ *
+ * Can be called from MT-build of ordered indexes.
  */
-bool
-Dbtux::findPosToAdd(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEnt searchEnt, NodeHandle& currNode, TreePos& treePos)
-{
-  const Index& index = *c_indexPool.getPtr(frag.m_indexId);
+bool Dbtux::findPosToAdd(TuxCtx &ctx, Frag &frag,
+                         const KeyBoundArray &searchBound, TreeEnt searchEnt,
+                         NodeHandle &currNode, TreePos &treePos) {
+  const Index &index = *ctx.indexPtr.p;
   int lo = -1;
   int hi = (int)currNode.getOccup();
-  KeyData entryKey(index.m_keySpec, false, 0);
-  entryKey.set_buf(ctx.c_entryKey, MaxAttrDataSize << 2);
   while (hi - lo > 1) {
-    thrjam(ctx.jamBuffer);
+    thrjamDebug(ctx.jamBuffer);
     // hi - lo > 1 implies lo < j < hi
     int j = (hi + lo) / 2;
     // read and compare all attributes
-    readKeyAttrs(ctx, frag, currNode.getEnt(j), entryKey, index.m_numAttrs);
-    int ret = cmpSearchKey(ctx, searchKey, entryKey, index.m_numAttrs);
-    if (ret == 0) {
-      thrjam(ctx.jamBuffer);
+    readKeyAttrs(ctx, frag, currNode.getEnt(j), index.m_numAttrs,
+                 ctx.c_dataBuffer);
+    KeyDataArray key_data;
+    Uint32 numAttrs = index.m_numAttrs;
+    key_data.init_poai(ctx.c_dataBuffer, numAttrs);
+    int ret = searchBound.cmp(&key_data, numAttrs, true);
+    if (unlikely(ret == 0)) {
+      thrjamDebug(ctx.jamBuffer);
       // keys are equal, compare entry values
       ret = searchEnt.cmp(currNode.getEnt(j));
     }
     if (ret < 0) {
-      thrjam(ctx.jamBuffer);
+      thrjamDebug(ctx.jamBuffer);
       hi = j;
     } else if (ret > 0) {
-      thrjam(ctx.jamBuffer);
+      thrjamDebug(ctx.jamBuffer);
       lo = j;
     } else {
       treePos.m_pos = j;
@@ -143,15 +157,14 @@ Dbtux::findPosToAdd(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEnt 
  * Find position within the final node to remove entry from.  Use linear
  * search.  Return true if ok i.e. the entry was found.
  */
-bool
-Dbtux::findPosToRemove(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEnt searchEnt, NodeHandle& currNode, TreePos& treePos)
-{
+bool Dbtux::findPosToRemove(TuxCtx &ctx, TreeEnt searchEnt,
+                            NodeHandle &currNode, TreePos &treePos) {
   const unsigned occup = currNode.getOccup();
   for (unsigned j = 0; j < occup; j++) {
-    thrjam(ctx.jamBuffer);
+    thrjamDebug(ctx.jamBuffer);
     // compare only the entry
     if (searchEnt.eq(currNode.getEnt(j))) {
-      thrjam(ctx.jamBuffer);
+      thrjamDebug(ctx.jamBuffer);
       treePos.m_pos = j;
       return true;
     }
@@ -163,11 +176,12 @@ Dbtux::findPosToRemove(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeE
 
 /*
  * Search for entry to add.
+ * Can be called from MT-build of ordered indexes.
  */
-bool
-Dbtux::searchToAdd(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEnt searchEnt, TreePos& treePos)
-{
-  const TreeHead& tree = frag.m_tree;
+bool Dbtux::searchToAdd(TuxCtx &ctx, Frag &frag,
+                        const KeyBoundArray &searchBound, TreeEnt searchEnt,
+                        TreePos &treePos) {
+  const TreeHead &tree = frag.m_tree;
   NodeHandle currNode(frag);
   currNode.m_loc = tree.m_root;
   if (unlikely(currNode.m_loc == NullTupLoc)) {
@@ -175,22 +189,23 @@ Dbtux::searchToAdd(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEnt s
     thrjam(ctx.jamBuffer);
     return true;
   }
-  findNodeToUpdate(ctx, frag, searchKey, searchEnt, currNode);
+  findNodeToUpdate(ctx, frag, searchBound, searchEnt, currNode);
   treePos.m_loc = currNode.m_loc;
-  if (! findPosToAdd(ctx, frag, searchKey, searchEnt, currNode, treePos)) {
-    thrjam(ctx.jamBuffer);
-    return false;
+  if (likely(
+          findPosToAdd(ctx, frag, searchBound, searchEnt, currNode, treePos))) {
+    return true;
   }
-  return true;
+  thrjam(ctx.jamBuffer);
+  return false;
 }
 
 /*
  * Search for entry to remove.
  */
-bool
-Dbtux::searchToRemove(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEnt searchEnt, TreePos& treePos)
-{
-  const TreeHead& tree = frag.m_tree;
+bool Dbtux::searchToRemove(TuxCtx &ctx, Frag &frag,
+                           const KeyBoundArray &searchBound, TreeEnt searchEnt,
+                           TreePos &treePos) {
+  const TreeHead &tree = frag.m_tree;
   NodeHandle currNode(frag);
   currNode.m_loc = tree.m_root;
   if (unlikely(currNode.m_loc == NullTupLoc)) {
@@ -198,13 +213,13 @@ Dbtux::searchToRemove(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEn
     thrjam(ctx.jamBuffer);
     return false;
   }
-  findNodeToUpdate(ctx, frag, searchKey, searchEnt, currNode);
+  findNodeToUpdate(ctx, frag, searchBound, searchEnt, currNode);
   treePos.m_loc = currNode.m_loc;
-  if (! findPosToRemove(ctx, frag, searchKey, searchEnt, currNode, treePos)) {
-    thrjam(ctx.jamBuffer);
-    return false;
+  if (likely(findPosToRemove(ctx, searchEnt, currNode, treePos))) {
+    return true;
   }
-  return true;
+  thrjam(ctx.jamBuffer);
+  return false;
 }
 
 /*
@@ -212,63 +227,62 @@ Dbtux::searchToRemove(TuxCtx& ctx, Frag& frag, const KeyDataC& searchKey, TreeEn
  * findNodeToUpdate().  Direction is 0-ascending or 1-descending.
  * Search within the found node is done by caller.
  */
-void
-Dbtux::findNodeToScan(Frag& frag, unsigned idir, const KeyBoundC& searchBound, NodeHandle& currNode)
-{
+void Dbtux::findNodeToScan(Frag &frag, unsigned idir,
+                           const KeyBoundArray &searchBound,
+                           NodeHandle &currNode) {
   const int jdir = 1 - 2 * int(idir);
-  const Index& index = *c_indexPool.getPtr(frag.m_indexId);
-  const Uint32 numAttrs = searchBound.get_data().get_cnt();
+  const Index &index = *c_ctx.indexPtr.p;
+  const Uint32 numAttrs = searchBound.cnt();
   const Uint32 prefAttrs = min(index.m_prefAttrs, numAttrs);
-  const Uint32 prefBytes = index.m_prefBytes;
-  KeyData entryKey(index.m_keySpec, false, 0);
-  entryKey.set_buf(c_ctx.c_entryKey, MaxAttrDataSize << 2);
-  KeyDataC prefKey(index.m_keySpec, false);
-  NodeHandle glbNode(frag);     // potential g.l.b of final node
+  NodeHandle glbNode(frag);  // potential g.l.b of final node
   while (true) {
-    jam();
-    selectNode(currNode, currNode.m_loc);
-    prefKey.set_buf(currNode.getPref(), prefBytes, prefAttrs);
+    jamDebug();
+    selectNode(c_ctx, currNode, currNode.m_loc);
     int ret = 0;
-    if (numAttrs > 0) {
-      if (prefAttrs > 0) {
-        jam();
+    if (likely(numAttrs > 0)) {
+      if (likely(prefAttrs > 0)) {
+        jamDebug();
+        KeyDataArray key_data;
+        key_data.init_poai(currNode.getPref(), prefAttrs);
+        ret = searchBound.cmp(&key_data, prefAttrs, false);
         // compare node prefix - result 0 implies bound is longer
-        ret = cmpSearchBound(c_ctx, searchBound, prefKey, prefAttrs);
       }
-      if (ret == 0) {
-        jam();
+      if (unlikely(ret == 0)) {
+        jamDebug();
         // read and compare all attributes
-        readKeyAttrs(c_ctx, frag, currNode.getEnt(0), entryKey, numAttrs);
-        ret = cmpSearchBound(c_ctx, searchBound, entryKey, numAttrs);
-        ndbrequire(ret != 0);
+        readKeyAttrs(c_ctx, frag, currNode.getEnt(0), numAttrs,
+                     c_ctx.c_dataBuffer);
+        KeyDataArray key_data;
+        key_data.init_poai(c_ctx.c_dataBuffer, numAttrs);
+        ret = searchBound.cmp(&key_data, numAttrs, false);
       }
     } else {
-      jam();
+      jamDebug();
       ret = (-1) * jdir;
     }
     if (ret < 0) {
       // bound is left of this node
-      jam();
+      jamDebug();
       const TupLoc loc = currNode.getLink(0);
       if (loc != NullTupLoc) {
-        jam();
+        jamDebug();
         // continue to left subtree
         currNode.m_loc = loc;
         continue;
       }
-      if (! glbNode.isNull()) {
-        jam();
+      if (!glbNode.isNull()) {
+        jamDebug();
         // move up to the g.l.b
         currNode = glbNode;
       }
       break;
     }
-    if (ret > 0) {
+    if (likely(ret > 0)) {
       // bound is at or right of this node
-      jam();
+      jamDebug();
       const TupLoc loc = currNode.getLink(1);
       if (loc != NullTupLoc) {
-        jam();
+        jamDebug();
         // save potential g.l.b
         glbNode = currNode;
         // continue to right subtree
@@ -278,7 +292,7 @@ Dbtux::findNodeToScan(Frag& frag, unsigned idir, const KeyBoundC& searchBound, N
       break;
     }
     // ret == 0 never
-    ndbrequire(false);
+    ndbabort();
   }
 }
 
@@ -286,36 +300,35 @@ Dbtux::findNodeToScan(Frag& frag, unsigned idir, const KeyBoundC& searchBound, N
  * Search across final node for position to start scan from.  Use binary
  * search similar to findPosToAdd().
  */
-void
-Dbtux::findPosToScan(Frag& frag, unsigned idir, const KeyBoundC& searchBound, NodeHandle& currNode, Uint16* pos)
-{
+void Dbtux::findPosToScan(Frag &frag, unsigned idir,
+                          const KeyBoundArray &searchBound,
+                          NodeHandle &currNode, Uint32 *pos) {
   const int jdir = 1 - 2 * int(idir);
-  const Index& index = *c_indexPool.getPtr(frag.m_indexId);
-  const Uint32 numAttrs = searchBound.get_data().get_cnt();
+  const Uint32 numAttrs = searchBound.cnt();
   int lo = -1;
   int hi = (int)currNode.getOccup();
-  KeyData entryKey(index.m_keySpec, false, 0);
-  entryKey.set_buf(c_ctx.c_entryKey, MaxAttrDataSize << 2);
-  while (hi - lo > 1) {
-    jam();
+  while ((hi - lo) > 1) {
+    jamDebug();
     // hi - lo > 1 implies lo < j < hi
     int j = (hi + lo) / 2;
     int ret = (-1) * jdir;
-    if (numAttrs != 0) {
+    if (likely(numAttrs != 0)) {
       // read and compare all attributes
-      readKeyAttrs(c_ctx, frag, currNode.getEnt(j), entryKey, numAttrs);
-      ret = cmpSearchBound(c_ctx, searchBound, entryKey, numAttrs);
-      ndbrequire(ret != 0);
+      readKeyAttrs(c_ctx, frag, currNode.getEnt(j), numAttrs,
+                   c_ctx.c_dataBuffer);
+      KeyDataArray key_data;
+      key_data.init_poai(c_ctx.c_dataBuffer, numAttrs);
+      ret = searchBound.cmp(&key_data, numAttrs, false);
     }
     if (ret < 0) {
-      jam();
+      jamDebug();
       hi = j;
     } else if (ret > 0) {
-      jam();
+      jamDebug();
       lo = j;
     } else {
       // ret == 0 never
-      ndbrequire(false);
+      ndbabort();
     }
   }
   // return hi pos, caller handles ascending vs descending
@@ -325,40 +338,41 @@ Dbtux::findPosToScan(Frag& frag, unsigned idir, const KeyBoundC& searchBound, No
 /*
  * Search for scan start position.
  */
-void
-Dbtux::searchToScan(Frag& frag, unsigned idir, const KeyBoundC& searchBound, TreePos& treePos)
-{
-  const TreeHead& tree = frag.m_tree;
+void Dbtux::searchToScan(Frag &frag, unsigned idir,
+                         const KeyBoundArray &searchBound, TreePos &treePos) {
+  const TreeHead &tree = frag.m_tree;
   NodeHandle currNode(frag);
   currNode.m_loc = tree.m_root;
   if (unlikely(currNode.m_loc == NullTupLoc)) {
     // empty tree
-    jam();
+    jamDebug();
     return;
   }
   findNodeToScan(frag, idir, searchBound, currNode);
   treePos.m_loc = currNode.m_loc;
-  Uint16 pos;
+  Uint32 pos;
   findPosToScan(frag, idir, searchBound, currNode, &pos);
   const unsigned occup = currNode.getOccup();
   if (idir == 0) {
-    if (pos < occup) {
-      jam();
+    if (likely(pos < occup)) {
+      jamDebug();
       treePos.m_pos = pos;
       treePos.m_dir = 3;
     } else {
       // start scan after node end i.e. proceed to right child
-      treePos.m_pos = ZNIL;
+      jamDebug();
+      treePos.m_pos = Uint32(~0);
       treePos.m_dir = 5;
     }
   } else {
-    if (pos > 0) {
-      jam();
+    if (likely(pos > 0)) {
+      jamDebug();
       // start scan from previous entry
       treePos.m_pos = pos - 1;
       treePos.m_dir = 3;
     } else {
-      treePos.m_pos = ZNIL;
+      jamDebug();
+      treePos.m_pos = Uint32(~0);
       treePos.m_dir = 0;
     }
   }

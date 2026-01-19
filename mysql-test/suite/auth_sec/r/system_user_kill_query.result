@@ -1,0 +1,42 @@
+# Setup
+CREATE USER sys_user, non_sys_user;
+GRANT CONNECTION_ADMIN, SYSTEM_VARIABLES_ADMIN ON *.* TO non_sys_user;
+GRANT SYSTEM_USER, CREATE, SELECT, INSERT, EXECUTE,SET_USER_ID,
+SYSTEM_VARIABLES_ADMIN ON *.* TO sys_user;
+#------------------------------------------------------------------------
+# 1. User without SYSTEM_USER privilege cannot the kill query running
+#    in the power session
+#------------------------------------------------------------------------
+SET DEBUG_SYNC= 'before_join_optimize SIGNAL in_sync WAIT_FOR continue';
+PREPARE stmt FROM 'SELECT count(*) FROM t1,t2,t3,t4,t5 WHERE a1=a2 AND a2=a3 AND a3=a4 AND a4=a5  ';
+EXECUTE stmt;
+# Regular session should not be able to to kill the query running in
+# power session.
+SET DEBUG_SYNC= 'now WAIT_FOR in_sync';
+KILL QUERY <CONNECTION_ID>;
+ERROR HY000: You are not owner of thread <CONNECTION_ID>
+SET DEBUG_SYNC= 'now SIGNAL continue';
+count(*)
+7
+SET DEBUG_SYNC= 'before_join_optimize SIGNAL in_sync WAIT_FOR continue';
+EXECUTE stmt;
+# The running query cannot be killed by non_sys_user user
+# even after revoking the SYSTEM_USER privilege from sys_user
+REVOKE SYSTEM_USER ON *.* FROM sys_user;
+SET DEBUG_SYNC= 'now WAIT_FOR in_sync';
+KILL QUERY <CONNECTION_ID>;
+ERROR HY000: You are not owner of thread <CONNECTION_ID>
+SET DEBUG_SYNC= 'now SIGNAL continue';
+count(*)
+7
+SET DEBUG_SYNC= 'before_join_optimize SIGNAL in_sync WAIT_FOR continue';
+EXECUTE stmt;
+# Another power_session should be able to kill the query.
+SET DEBUG_SYNC= 'now WAIT_FOR in_sync';
+KILL QUERY <CONNECTION_ID>;
+SET DEBUG_SYNC= 'now SIGNAL continue';
+# Verify that query was killed
+ERROR 70100: Query execution was interrupted
+SET DEBUG_SYNC = 'RESET';
+# Test Cleanup
+DROP USER sys_user, non_sys_user;

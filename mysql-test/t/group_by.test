@@ -1,8 +1,12 @@
+--source include/elide_costs.inc
+# Innodb page size 16k required
 
 # Initialise
 --disable_warnings
 drop table if exists t1,t2,t3;
 --enable_warnings
+
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 
 #
 # Simple test without tables
@@ -48,11 +52,23 @@ INSERT INTO t2 VALUES (3,'name','pass','mail','Y','v','n','adr','1','1','1');
 INSERT INTO t2 VALUES (4,'name','pass','mail','Y','v','n','adr','1','1','1');
 INSERT INTO t2 VALUES (5,'name','pass','mail','Y','v','n','adr','1','1','1');
 
+ANALYZE TABLE t1,t2;
+
+# Tests printing of TemptableAggregateIterator.
+--skip_if_hypergraph  # TemptableAggregateIterator not supported.
+EXPLAIN FORMAT=tree SELECT t2.userid, MIN(t1.score) FROM t1, t2 WHERE t1.userID=t2.userID GROUP BY t2.userid;
+
+--sorted_result
 SELECT t2.userid, MIN(t1.score) FROM t1, t2 WHERE t1.userID=t2.userID GROUP BY t2.userid;
+--sorted_result
 SELECT t2.userid, MIN(t1.score) FROM t1, t2 WHERE t1.userID=t2.userID GROUP BY t2.userid ORDER BY NULL;
+--sorted_result
 SELECT t2.userid, MIN(t1.score) FROM t1, t2 WHERE t1.userID=t2.userID AND t1.spID=2  GROUP BY t2.userid;
+--sorted_result
 SELECT t2.userid, MIN(t1.score+0.0) FROM t1, t2 WHERE t1.userID=t2.userID AND t1.spID=2  GROUP BY t2.userid;
+--sorted_result
 SELECT t2.userid, MIN(t1.score+0.0) FROM t1, t2 WHERE t1.userID=t2.userID AND t1.spID=2  GROUP BY t2.userid ORDER BY NULL;
+--sorted_result
 EXPLAIN SELECT t2.userid, MIN(t1.score+0.0) FROM t1, t2 WHERE t1.userID=t2.userID AND t1.spID=2  GROUP BY t2.userid ORDER BY NULL;
 drop table t1,t2;
 
@@ -223,10 +239,20 @@ INSERT INTO t2 VALUES ('Setup','CCC/CCCCCC','id0002','','');
 INSERT INTO t2 VALUES ('Unspecified','CCC/CCCCCC','id0002','','');
 INSERT INTO t2 VALUES ('Web Interface','AAAAAAAA-AAA','id0001','','');
 INSERT INTO t2 VALUES ('Host communication','AAAAA','id0001','','');
-select value,description,bug_id from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA";
-select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value;
-select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
+--source include/turn_off_only_full_group_by.inc
 
+--sorted_result
+select value,description,bug_id from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA";
+--sorted_result
+select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value;
+--sorted_result
+select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
+# NOTE: The DISTINCT is to force sort-based aggregation, making the query somewhat
+# more deterministic between the hypergraph and non-hypergraph optimizers.
+--sorted_result
+select row_number() over (), value,description,COUNT(DISTINCT bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(DISTINCT bug_id) IN (0,2);
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1,t2;
 
 #
@@ -252,22 +278,23 @@ CREATE TABLE t1 (
 );
 
 INSERT INTO t1 VALUES (1,1,1),(2,2,2),(2,1,1),(3,3,3),(4,3,3),(5,3,3),(6,3,3),(7,3,3);
-explain select userid,count(*) from t1 group by userid desc;
-explain select userid,count(*) from t1 group by userid desc order by null;
-select userid,count(*) from t1 group by userid desc;
-select userid,count(*) from t1 group by userid desc having (count(*)+1) IN (4,3);
-select userid,count(*) from t1 group by userid desc having 3  IN (1,COUNT(*));
-explain select spid,count(*) from t1 where spid between 1 and 2 group by spid desc;
+ANALYZE TABLE t1;
+explain select userid,count(*) from t1 group by userid order by userid desc;
+explain select userid,count(*) from t1 group by userid order by null;
+select userid,count(*) from t1 group by userid order by userid desc;
+select userid,count(*) from t1 group by userid having (count(*)+1) IN (4,3) order by userid desc;
+select userid,count(*) from t1 group by userid having 3  IN (1,COUNT(*)) order by userid desc;
+explain select spid,count(*) from t1 where spid between 1 and 2 group by spid order by spid desc;
 explain select spid,count(*) from t1 where spid between 1 and 2 group by spid;
 explain select spid,count(*) from t1 where spid between 1 and 2 group by spid order by null;
 select spid,count(*) from t1 where spid between 1 and 2 group by spid;
-select spid,count(*) from t1 where spid between 1 and 2 group by spid desc;
-explain extended select sql_big_result spid,sum(userid) from t1 group by spid desc;
-explain select sql_big_result spid,sum(userid) from t1 group by spid desc order by null;
-select sql_big_result spid,sum(userid) from t1 group by spid desc;
-explain select sql_big_result score,count(*) from t1 group by score desc;
-explain select sql_big_result score,count(*) from t1 group by score desc order by null;
-select sql_big_result score,count(*) from t1 group by score desc;
+select spid,count(*) from t1 where spid between 1 and 2 group by spid order by spid desc;
+explain select sql_big_result spid,sum(userid) from t1 group by spid order by spid desc;
+explain select sql_big_result spid,sum(userid) from t1 group by spid order by null;
+select sql_big_result spid,sum(userid) from t1 group by spid order by spid desc;
+explain select sql_big_result score,count(*) from t1 group by score order by score desc;
+explain select sql_big_result score,count(*) from t1 group by score order by null;
+select sql_big_result score,count(*) from t1 group by score order by score desc;
 drop table t1;
 
 # not purely group_by bug, but group_by is involved...
@@ -281,21 +308,37 @@ drop table t1;
 
 CREATE TABLE t1 (a char(1));
 INSERT INTO t1 VALUES ('A'),('B'),('A'),('B'),('A'),('B'),(NULL),('a'),('b'),(NULL),('A'),('B'),(NULL);
+--source include/turn_off_only_full_group_by.inc
+
+--sorted_result
 SELECT a FROM t1 GROUP BY a;
+--sorted_result
 SELECT a,count(*) FROM t1 GROUP BY a;
+--sorted_result
 SELECT a FROM t1 GROUP BY binary a;
+--sorted_result
 SELECT a,count(*) FROM t1 GROUP BY binary a;
+--sorted_result
 SELECT binary a FROM t1 GROUP BY 1;
+--sorted_result
 SELECT binary a,count(*) FROM t1 GROUP BY 1;
 # Do the same tests with MyISAM temporary tables
 SET BIG_TABLES=1;
-SELECT a FROM t1 GROUP BY a;
-SELECT a,count(*) FROM t1 GROUP BY a;
-SELECT a FROM t1 GROUP BY binary a;
-SELECT a,count(*) FROM t1 GROUP BY binary a;
-SELECT binary a FROM t1 GROUP BY 1;
-SELECT binary a,count(*) FROM t1 GROUP BY 1;
+--sorted_result
+SELECT a FROM t1 GROUP BY a ORDER BY a;
+--sorted_result
+SELECT a,count(*) FROM t1 GROUP BY a ORDER BY a;
+--sorted_result
+SELECT a FROM t1 GROUP BY binary a ORDER BY binary a;
+--sorted_result
+SELECT a,count(*) FROM t1 GROUP BY binary a ORDER BY binary a;
+--sorted_result
+SELECT binary a FROM t1 GROUP BY 1 ORDER BY 1;
+--sorted_result
+SELECT binary a,count(*) FROM t1 GROUP BY 1 ORDER BY 1;
 SET BIG_TABLES=0;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1;
 
 #
@@ -321,6 +364,7 @@ DROP TABLE t1;
 
 create table t1 (One int unsigned, Two int unsigned, Three int unsigned, Four int unsigned);
 insert into t1 values (1,2,1,4),(1,2,2,4),(1,2,3,4),(1,2,4,4),(1,1,1,4),(1,1,2,4),(1,1,3,4),(1,1,4,4),(1,3,1,4),(1,3,2,4),(1,3,3,4),(1,3,4,4);
+--sorted_result
 select One, Two, sum(Four) from t1 group by One,Two;
 drop table t1;
 
@@ -355,7 +399,7 @@ CREATE TABLE t1 (
   value int(11) unsigned NOT NULL default '0',
   UNIQUE KEY pid2 (pid,c1id,c2id),
   UNIQUE KEY pid (pid,value)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t1 VALUES (1, 1, NULL, 1),(1, 2, NULL, 2),(1, NULL, 3, 3),(1, 4, NULL, 4),(1, 5, NULL, 5);
 
@@ -363,7 +407,7 @@ CREATE TABLE t2 (
   id int(11) unsigned NOT NULL default '0',
   active enum('Yes','No') NOT NULL default 'Yes',
   PRIMARY KEY  (id)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t2 VALUES (1, 'Yes'),(2, 'No'),(4, 'Yes'),(5, 'No');
 
@@ -374,6 +418,7 @@ CREATE TABLE t3 (
 );
 INSERT INTO t3 VALUES (3, 'Yes');
 
+--sorted_result
 select * from t1 AS m LEFT JOIN t2 AS c1 ON m.c1id = 
 c1.id AND c1.active = 'Yes' LEFT JOIN t3 AS c2 ON m.c2id = c2.id AND 
 c2.active = 'Yes' WHERE m.pid=1  AND (c1.id IS NOT NULL OR c2.id IS NOT NULL);
@@ -402,9 +447,12 @@ create table t1 (a int not null, b int not null);
 insert into t1 values (1,1),(1,2),(3,1),(3,2),(2,2),(2,1);
 create table t2 (a int not null, b int not null, key(a));
 insert into t2 values (1,3),(3,1),(2,2),(1,1);
+analyze table t1,t2;
 select t1.a,t2.b from t1,t2 where t1.a=t2.a group by t1.a,t2.b;
 select t1.a,t2.b from t1,t2 where t1.a=t2.a group by t1.a,t2.b ORDER BY NULL;
+--replace_column 10 # 11 #
 explain select t1.a,t2.b from t1,t2 where t1.a=t2.a group by t1.a,t2.b;
+--replace_column 10 # 11 #
 explain select t1.a,t2.b from t1,t2 where t1.a=t2.a group by t1.a,t2.b ORDER BY NULL;
 drop table t1,t2;
 
@@ -445,19 +493,20 @@ CREATE TABLE t1 (
   key (score)
 );
 INSERT INTO t1 VALUES (1,1),(2,2),(1,1),(3,3),(3,3),(3,3),(3,3),(3,3);
-# Here we select unordered GROUP BY into a temporary talbe, 
-# and then sort it with filesort (GROUP BY in MySQL 
-# implies sorted order of results)
-SELECT userid,count(*) FROM t1 GROUP BY userid DESC;
-EXPLAIN SELECT userid,count(*) FROM t1 GROUP BY userid DESC;
+ANALYZE TABLE t1;
+SELECT userid,count(*) FROM t1 GROUP BY userid ORDER BY userid DESC;
+EXPLAIN SELECT userid,count(*) FROM t1 GROUP BY userid ORDER BY userid DESC;
 DROP TABLE t1;
 CREATE TABLE t1 (
   i int(11) default NULL,
   j int(11) default NULL
 );
 INSERT INTO t1 VALUES (1,2),(2,3),(4,5),(3,5),(1,5),(23,5);
+ANALYZE TABLE t1;
+--source include/turn_off_only_full_group_by.inc
 SELECT i, COUNT(DISTINCT(i)) FROM t1 GROUP BY j ORDER BY NULL;
 explain SELECT i, COUNT(DISTINCT(i)) FROM t1 GROUP BY j ORDER BY NULL;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1;
 
 #Test for BUG#6976: Aggregate functions have incorrect NULL-ness
@@ -480,21 +529,58 @@ drop table t1;
 # Test BUG#8216 when referring in HAVING to n alias which is rand() function
 #
 
-create table t1 (a integer, b integer, c integer);
-insert into t1 (a,b) values (1,2),(1,3),(2,5);
-select a, 0.1*0+1 r2, sum(1) r1 from t1 where a = 1 group  by a having r1>1 and r2=1;
-# rand(100)*10 will be < 2 only for the first row (of 6)
-select a, round(rand(100)*10) r2, sum(1) r1 from t1 where a = 1 group  by a having r1>1 and r2<=2;
-select a,sum(b) from t1 where a=1 group by c;
-select a*sum(b) from t1 where a=1 group by c;
-select sum(a)*sum(b) from t1 where a=1 group by c;
-select a,sum(b) from t1 where a=1 group by c having a=1;
-select a as d,sum(b) from t1 where a=1 group by c having d=1;
-select sum(a)*sum(b) as d from t1 where a=1 group by c having d > 0;
-drop table t1;
+CREATE TABLE t1 (a INTEGER, b INTEGER, c INTEGER);
+INSERT INTO t1 (a,b) VALUES (1,2),(1,3),(2,5);
 
+SELECT a, 0.1*0+1 r2, SUM(1) r1 FROM t1 WHERE a = 1 GROUP BY a HAVING r1>1 AND r2=1;
+
+SELECT a, ROUND(RAND(100)*10) r2, SUM(1) r1 FROM t1 GROUP BY a;
+# Will have two rows unless by mistake RAND() is done again for the
+# HAVING r2 reference (not cached).
+# The last predicate (r2 > 0) will detect if r2 has been computed when we
+# reference it from the tmp table's field (pre-computed since it's an alias).
+# This requires a certain order of evaluation in copy_funcs
+# ("aliased Item" before "referencing Item")
+--skip_if_hypergraph   # Different query plan (and also does not give any single-evaluation guarantees).
+SELECT a, ROUND(RAND(100)*10) r2, SUM(1) r1 FROM t1 GROUP BY a
+  HAVING r1>=1 AND r2<=7 AND r2 > 0;
+# Referencing item might be in a subquery:
+--skip_if_hypergraph   # Different query plan (and also does not give any single-evaluation guarantees).
+SELECT a, ROUND(RAND(100)*10) r2, SUM(1) r1 FROM t1 GROUP BY a
+  HAVING r1>=1 AND (SELECT r2<=7 AND r2 > 0 FROM t1 AS t2 LIMIT 1);
+
+# rand(100)*10 will be < 2 only for the first row (of 3)
+# NOTE: This currently gives the wrong result, because HAVING
+# and send() both evaluate RAND() instead
+# of sharing the result between them. See the comment in
+# JOIN::create_root_access_path_for_join() for more details.
+SELECT a, ROUND(RAND(100)*10) r2, SUM(1) r1 FROM t1 WHERE a = 1
+ GROUP BY a HAVING r1>1 AND r2<=2;
+--skip_if_hypergraph   # Different query plan (and also does not give any single-evaluation guarantees).
+SELECT a, ROUND(RAND(100)*10) r2, SUM(1) r1 FROM t1 WHERE a = 1
+ GROUP BY a HAVING r1>1 AND r2<=2 ORDER BY a+r2+r1;
+SELECT a,SUM(b) FROM t1 WHERE a=1 GROUP BY c;
+SELECT a*SUM(b) FROM t1 WHERE a=1 GROUP BY c;
+SELECT SUM(a)*SUM(b) FROM t1 WHERE a=1 GROUP BY c;
+SELECT a,SUM(b) FROM t1 WHERE a=1 GROUP BY c HAVING a=1;
+SELECT a AS d,SUM(b) FROM t1 WHERE a=1 GROUP BY c HAVING d=1;
+SELECT SUM(a)*SUM(b) AS d FROM t1 WHERE a=1 GROUP BY c HAVING d > 0;
+
+SELECT a, ROUND(RAND(100)*10) r2 FROM t1;
+--skip_if_hypergraph   # Depends on the query plan.
+SELECT ROUND(RAND(100)*10) r2 FROM t1 GROUP BY r2;
+
+DROP TABLE t1;
+
+# Another query where order of evaluation in copy_funcs matters:
+CREATE TABLE t1(i INT);
+INSERT INTO t1 VALUES (NULL),(1);
+SELECT DISTINCT STD(i)+0 as splus0, i+0 as plain FROM t1 GROUP BY i ;
+DROP TABLE t1;
+
+# Following is a Myisam specific bug.
 # Test for BUG#9213 GROUP BY query on utf-8 key returns wrong results
-create table t1(a int);
+create table t1(a int) ENGINE=INNODB;
 insert into t1 values (0),(1),(2),(3),(4),(5),(6),(8),(9);
 create table t2 (
   a int,
@@ -503,17 +589,19 @@ create table t2 (
   d varchar(100) NOT NULL,
   primary key (a,b(132),c,d),
   key a (a,b)
-) charset=utf8;
+) ENGINE=INNODB charset=utf8;
 
 insert into t2 select 
    x3.a,  -- 3
    concat('val-', x3.a + 3*x4.a), -- 12
    concat('val-', @a:=x3.a + 3*x4.a + 12*C.a), -- 120
    concat('val-', @a + 120*D.a)
-from t1 x3, t1 x4, t1 C, t1 D where x3.a < 3 and x4.a < 4 and D.a < 4;
+from t1 x3, t1 x4, t1 C, t1 D where x3.a < 3 and x4.a < 4 and D.a < 4
+order by x3.a, x4.a, C.a, D.a;
 
 delete from t2  where a = 2 and b = 'val-2' order by a,b,c,d limit 30;
-
+ANALYZE TABLE t1, t2;
+--replace_column 10 6
 explain select c from t2 where a = 2 and b = 'val-2' group by c;
 select c from t2 where a = 2 and b = 'val-2' group by c;
 drop table t1,t2;
@@ -550,9 +638,12 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (a  int, b int);
 INSERT INTO t1 VALUES (1,2), (1,3);
+--source include/turn_off_only_full_group_by.inc
+
 SELECT a, b FROM t1 GROUP BY 'const';
 SELECT DISTINCT a, b FROM t1 GROUP BY 'const';
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1;
 
 #
@@ -564,8 +655,11 @@ INSERT INTO t1 VALUES ( 1, '2005-05-01 12:30:00' );
 INSERT INTO t1 VALUES ( 1, '2005-05-01 12:30:00' );
 INSERT INTO t1 VALUES ( 1, '2005-05-01 12:30:00' );
 INSERT INTO t1 VALUES ( 1, '2005-05-01 12:30:00' );
+--source include/turn_off_only_full_group_by.inc
+
 SELECT dt DIV 1 AS f, id FROM t1 GROUP BY f;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1;
 
 #
@@ -616,15 +710,18 @@ drop table t1;
 #
 CREATE TABLE t1(a INT); INSERT INTO t1 VALUES (1),(2);
 
+--source include/turn_off_only_full_group_by.inc
 SELECT a FROM t1 GROUP BY 'a';
 SELECT a FROM t1 GROUP BY "a";
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+
 SELECT a FROM t1 GROUP BY `a`;
 
 set sql_mode=ANSI_QUOTES;
 SELECT a FROM t1 GROUP BY "a";
 SELECT a FROM t1 GROUP BY 'a';
 SELECT a FROM t1 GROUP BY `a`;
-set sql_mode='';
+set sql_mode=DEFAULT;
 
 SELECT a FROM t1 HAVING 'a' > 1;
 SELECT a FROM t1 HAVING "a" > 1;
@@ -668,16 +765,18 @@ create table t2 (c3 char(3), c4 char(3));
 insert into t1 values ('aaa', 'bb1'), ('aaa', 'bb2');
 insert into t2 values ('aaa', 'bb1'), ('aaa', 'bb2');
 
+--source include/turn_off_only_full_group_by.inc
+
 # query with ambiguous column reference 'c2'
 select t1.c1 as c2 from t1, t2 where t1.c2 = t2.c4
 group by c2;
-show warnings;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 # this query has no ambiguity
 select t1.c1 as c2 from t1, t2 where t1.c2 = t2.c4
 group by t1.c1;
 
-show warnings;
 drop table t1, t2;
 
 #
@@ -695,10 +794,13 @@ INSERT INTO t2 VALUES (1,1), (2,1), (6,6), (18,17), (15,25), (16,25),
 
 CREATE VIEW v1 AS select t1.a, concat(t1.b,'') AS b, t1.b as real_b from t1;
 
+ANALYZE TABLE t1,t2;
+
+--replace_column 10 #
 explain 
-SELECT straight_join sql_no_cache v1.a, v1.b, v1.real_b from t2, v1
+SELECT straight_join v1.a, v1.b, v1.real_b from t2, v1
 where t2.b=v1.a GROUP BY t2.b;
-SELECT straight_join sql_no_cache v1.a, v1.b, v1.real_b from t2, v1
+SELECT straight_join v1.a, v1.b, v1.real_b from t2, v1
 where t2.b=v1.a GROUP BY t2.b;
 
 DROP VIEW v1;
@@ -719,7 +821,7 @@ INSERT INTO t1 SELECT  a + 32, MOD(a + 32, 20) FROM t1;
 INSERT INTO t1 SELECT  a + 64, MOD(a + 64, 20) FROM t1;
 
 SELECT MIN(b), MAX(b) from t1;
-
+ANALYZE TABLE t1;
 EXPLAIN SELECT b, sum(1) FROM t1 GROUP BY b;
 EXPLAIN SELECT SQL_BIG_RESULT b, sum(1) FROM t1 GROUP BY b;
 SELECT b, sum(1) FROM t1 GROUP BY b;
@@ -729,7 +831,7 @@ DROP TABLE t1;
 #
 # Bug #23417: Too strict checks against GROUP BY in the ONLY_FULL_GROUP_BY mode
 #
-CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+CREATE TABLE t1 (a INT, b INT);
 INSERT INTO t1 VALUES (1,1),(2,1),(3,2),(4,2),(5,3),(6,3);
 
 SET SQL_MODE = 'ONLY_FULL_GROUP_BY';
@@ -754,9 +856,25 @@ SELECT (SELECT SUM(t1_inner.a) FROM t1 AS t1_inner LIMIT 1)
   FROM t1 AS t1_outer GROUP BY t1_outer.b;
 SELECT (SELECT SUM(t1_inner.a) FROM t1 AS t1_inner GROUP BY t1_inner.b LIMIT 1)
   FROM t1 AS t1_outer;
---error ER_WRONG_FIELD_WITH_GROUP 
+# This statement is valid, as aggregation happens in outer query.
+let $query=
 SELECT (SELECT SUM(t1_outer.a) FROM t1 AS t1_inner LIMIT 1) 
   FROM t1 AS t1_outer GROUP BY t1_outer.b;
+eval $query;
+SET SQL_MODE = '';
+eval $query;
+SET SQL_MODE = 'ONLY_FULL_GROUP_BY';
+let $query=
+SELECT (SELECT SUM(t1_outer.a+0*t1_inner.a) FROM t1 AS t1_inner LIMIT 1) 
+  FROM t1 AS t1_outer GROUP BY t1_outer.b;
+# Here we add a column of t1_inner in the MAX() so aggregation happens
+# in inner Q, which cannot know what value of t1_outer.a to pick, this
+# is invalid. And the result changes (multiples of 6).
+--error ER_WRONG_FIELD_WITH_GROUP 
+eval $query;
+SET SQL_MODE = '';
+eval $query;
+SET SQL_MODE = 'ONLY_FULL_GROUP_BY';
 
 SELECT 1 FROM t1 as t1_outer 
   WHERE (SELECT t1_outer.b FROM t1 AS t1_inner GROUP BY t1_inner.b LIMIT 1);
@@ -770,6 +888,7 @@ SELECT 1 FROM t1 GROUP BY b HAVING ROW (b,b) = ROW (1,1);
 SELECT 1 FROM t1 GROUP BY b HAVING a = 2;
 --error ER_INVALID_GROUP_FUNC_USE
 SELECT 1 FROM t1 GROUP BY SUM(b);
+# I deleted pk from table, as it was making query below become valid.
 --error ER_WRONG_FIELD_WITH_GROUP 
 SELECT b FROM t1 AS t1_outer GROUP BY a HAVING t1_outer.a IN 
   (SELECT SUM(t1_inner.b)+t1_outer.b FROM t1 AS t1_inner GROUP BY t1_inner.a
@@ -789,7 +908,7 @@ select * from t1 group by f1, f2;
 --error 1055
 select t1.f1,t.* from t1, t1 t group by 1;
 drop table t1;
-SET SQL_MODE = '';
+SET SQL_MODE = DEFAULT;
 
 #
 # Bug #32202: ORDER BY not working with GROUP BY
@@ -816,11 +935,18 @@ SELECT * FROM t1 GROUP BY c2 ,c1, id ORDER BY c2, c1;
 SELECT * FROM t1 GROUP BY c2, c1, id ORDER BY c2 DESC, c1;
 SELECT * FROM t1 GROUP BY c2, c1, id ORDER BY c2 DESC, c1 DESC;
 
+--source include/turn_off_only_full_group_by.inc
+
 # Show that results are correctly ordered when GROUP BY fields
 # are a subset of ORDER BY ones
+--skip_if_hypergraph  # Chooses a different (but equally valid) value for non-grouped c1.
 SELECT * FROM t1 GROUP BY c2  ORDER BY c2, c1;
+--skip_if_hypergraph  # Chooses a different (but equally valid) value for non-grouped c1.
 SELECT * FROM t1 GROUP BY c2  ORDER BY c2 DESC, c1;
+--skip_if_hypergraph  # Chooses a different (but equally valid) value for non-grouped c1.
 SELECT * FROM t1 GROUP BY c2  ORDER BY c2 DESC, c1 DESC;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 DROP TABLE t1;
 
@@ -834,50 +960,44 @@ SET @@sql_mode='ONLY_FULL_GROUP_BY';
 CREATE TABLE t1 (a INT, b INT, c INT DEFAULT 0);
 INSERT INTO t1 (a, b) VALUES (3,3), (2,2), (3,3), (2,2), (3,3), (4,4);
 CREATE TABLE t2 SELECT * FROM t1;
+SELECT COUNT(*) FROM t1 ORDER BY COUNT(*);
+SELECT COUNT(*) FROM t1 ORDER BY COUNT(*) + 1;
+# This is a bad ORDER BY, but as the result is guaranteed to have only
+# one row, there is no actual issue - ordering doesn't matter.
+SELECT COUNT(*) FROM t1 ORDER BY COUNT(*) + a;
+SELECT COUNT(*) FROM t1 ORDER BY COUNT(*), 1;
+SELECT COUNT(*) FROM t1 ORDER BY COUNT(*), a;
+SELECT COUNT(*) FROM t1 ORDER BY SUM(a);
+SELECT COUNT(*) FROM t1 ORDER BY SUM(a + 1);
+SELECT COUNT(*) FROM t1 ORDER BY SUM(a) + 1;
+SELECT COUNT(*) FROM t1 ORDER BY SUM(a), b;
 
-SELECT 1 FROM t1 ORDER BY COUNT(*);
-SELECT 1 FROM t1 ORDER BY COUNT(*) + 1;
---error 1140
-SELECT 1 FROM t1 ORDER BY COUNT(*) + a;
-SELECT 1 FROM t1 ORDER BY COUNT(*), 1;
---error 1140
-SELECT 1 FROM t1 ORDER BY COUNT(*), a;
-
-SELECT 1 FROM t1 ORDER BY SUM(a);
-SELECT 1 FROM t1 ORDER BY SUM(a + 1);
-SELECT 1 FROM t1 ORDER BY SUM(a) + 1;
---error 1140
-SELECT 1 FROM t1 ORDER BY SUM(a), b;
-
---error 1140
-SELECT a FROM t1 ORDER BY COUNT(b);
+SELECT SUM(a) FROM t1 ORDER BY COUNT(b);
 
 SELECT t1.a FROM t1 ORDER BY (SELECT SUM(t2.a) FROM t2);
 
---error 1140
+--error ER_OPERAND_COLUMNS
 SELECT t1.a FROM t1 ORDER BY (SELECT SUM(t2.a), t2.a FROM t2);
---error 1140
 SELECT t1.a FROM t1 ORDER BY (SELECT SUM(t2.a) FROM t2 ORDER BY t2.a);
---error 1140
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
 SELECT t1.a FROM t1 ORDER BY (SELECT t2.a FROM t2 ORDER BY SUM(t2.b) LIMIT 1);
 
---error 1140
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
 SELECT t1.a FROM t1
   WHERE t1.a = (SELECT t2.a FROM t2 ORDER BY SUM(t2.b) LIMIT 1);
---error 1140
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
 SELECT t1.a FROM t1 GROUP BY t1.a
   HAVING t1.a = (SELECT t2.a FROM t2 ORDER BY SUM(t2.a) LIMIT 1);
-
 SELECT t1.a FROM t1 GROUP BY t1.a
   HAVING t1.a IN (SELECT t2.a FROM t2 ORDER BY SUM(t1.b));
---error 1140
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
 SELECT t1.a FROM t1 GROUP BY t1.a
   HAVING t1.a IN (SELECT t2.a FROM t2 ORDER BY t2.a, SUM(t2.b));
---error 1140
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
 SELECT t1.a FROM t1 GROUP BY t1.a
   HAVING t1.a > ANY (SELECT t2.a FROM t2 ORDER BY t2.a, SUM(t2.b));
 
---error 1140
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
 SELECT t1.a FROM t1
   WHERE t1.a = (SELECT t2.a FROM t2 ORDER BY SUM(t1.b));
 
@@ -885,16 +1005,15 @@ SELECT 1 FROM t1 GROUP BY t1.a
   HAVING (SELECT AVG(SUM(t1.b) + 1) FROM t2 ORDER BY SUM(t2.a) LIMIT 1);
 SELECT 1 FROM t1 GROUP BY t1.a
   HAVING (SELECT AVG(SUM(t1.b) + t2.b) FROM t2 ORDER BY SUM(t2.a) LIMIT 1);
+--error ER_WRONG_FIELD_WITH_GROUP
 SELECT 1 FROM t1 GROUP BY t1.a
   HAVING (SELECT AVG(t1.b + t2.b) FROM t2 ORDER BY SUM(t2.a) LIMIT 1);
 
---error 1140
 SELECT 1 FROM t1 GROUP BY t1.a
   HAVING (SELECT AVG(SUM(t1.b) + 1) FROM t2 ORDER BY t2.a LIMIT 1);
---error 1140
 SELECT 1 FROM t1 GROUP BY t1.a
   HAVING (SELECT AVG(SUM(t1.b) + t2.b) FROM t2 ORDER BY t2.a LIMIT 1);
---error 1140
+--error ER_WRONG_FIELD_WITH_GROUP
 SELECT 1 FROM t1 GROUP BY t1.a
   HAVING (SELECT AVG(t1.b + t2.b) FROM t2 ORDER BY t2.a LIMIT 1);
 
@@ -930,7 +1049,7 @@ select avg (
    from t1 as outr order by outr.a limit 1))
 from t1 as most_outer;
 
---error 1140
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
 select avg (
   (select (
     (select sum(outr.a + innr.a) from t1 as innr limit 1)) as tt
@@ -966,9 +1085,9 @@ INSERT INTO t1 VALUES
 (8,0,0, 'k','k'),
 (9,6,6, 't','t'),
 (10,0,0,'c','c');
-
-explain SELECT COUNT(varchar_key) AS X FROM t1 WHERE pk = 8 having 'foo'='bar';
-SELECT COUNT(varchar_key) AS X FROM t1 WHERE pk = 8 having 'foo'='bar';
+ANALYZE TABLE t1;
+explain SELECT COUNT(varchar_key) AS x FROM t1 WHERE pk = 8 having 'foo'='bar';
+SELECT COUNT(varchar_key) AS x FROM t1 WHERE pk = 8 having 'foo'='bar';
 drop table t1;
   
 --echo End of 5.0 tests
@@ -997,6 +1116,7 @@ FLUSH STATUS;
 --disable_result_log
 --eval $query
 --enable_result_log
+--skip_if_hypergraph  # Does not support this hint yet.
 SHOW SESSION STATUS LIKE 'Sort_scan%';
 --let $query=SELECT a FROM t1 IGNORE INDEX FOR ORDER BY (PRIMARY,i2) ORDER BY a
 --eval EXPLAIN $query
@@ -1004,6 +1124,7 @@ FLUSH STATUS;
 --disable_result_log
 --eval $query
 --enable_result_log
+--skip_if_hypergraph  # Does not support this hint yet.
 SHOW SESSION STATUS LIKE 'Sort_scan%';
 SELECT a FROM t1 IGNORE INDEX FOR ORDER BY (PRIMARY,i2) ORDER BY a;
 EXPLAIN SELECT a FROM t1 IGNORE INDEX FOR ORDER BY (PRIMARY)
@@ -1027,7 +1148,7 @@ EXPLAIN SELECT a FROM t1 IGNORE INDEX ();
 # without support for large files the rowid is shorter and its size affects 
 # the cost calculations. This causes the optimizer to choose loose index
 # scan over normal index access.
---replace_column 4 # 7 # 9 # 10 #
+--replace_column 10 # 
 EXPLAIN SELECT a FROM t1 USE INDEX FOR JOIN (i2) 
   USE INDEX FOR GROUP BY (i2) GROUP BY a;
 EXPLAIN SELECT a FROM t1 FORCE INDEX FOR JOIN (i2) 
@@ -1052,7 +1173,7 @@ CREATE TABLE t2 (a INT, b INT, KEY(a));
 INSERT INTO t2 VALUES (1, 1), (2, 2), (3,3), (4,4);
 EXPLAIN SELECT a, SUM(b) FROM t2 GROUP BY a LIMIT 2; 
 EXPLAIN SELECT a, SUM(b) FROM t2 IGNORE INDEX (a) GROUP BY a LIMIT 2;
-
+ANALYZE TABLE t2;
 EXPLAIN SELECT 1 FROM t2 WHERE a IN
   (SELECT a FROM t1 USE INDEX (i2) IGNORE INDEX (i2));
 
@@ -1082,6 +1203,7 @@ CREATE TABLE t2(
 );
 
 INSERT INTO t2 VALUES (NULL, NULL), (NULL, NULL), (NULL, 1), (1, NULL), (1, 1), (1,2);
+ANALYZE TABLE t1,t2;
 
 EXPLAIN SELECT c,b,d FROM t1 GROUP BY c,b,d;
 SELECT c,b,d FROM t1 GROUP BY c,b,d;
@@ -1130,7 +1252,6 @@ SET @@sql_mode='ONLY_FULL_GROUP_BY';
 SELECT b c, (SELECT a FROM t1 WHERE b = c)
 FROM t1;
 
---error ER_NON_GROUPING_FIELD_USED
 SELECT b c, (SELECT a FROM t1 WHERE b = c)
 FROM t1 
 HAVING b = 10;
@@ -1184,17 +1305,22 @@ SELECT (SELECT t1.a) aa, COUNT(DISTINCT b) FROM t1 GROUP BY aa;
 
 SELECT (SELECT (SELECT t1.a)) aa, COUNT(DISTINCT b) FROM t1 GROUP BY aa;
 
+--source include/turn_off_only_full_group_by.inc
+
 SELECT (SELECT t1.a) aa, COUNT(DISTINCT b) FROM t1 GROUP BY aa+0;
 
 --echo # should return the same result in a reverse order:
 SELECT (SELECT t1.a) aa, COUNT(DISTINCT b) FROM t1 GROUP BY -aa;
 
+ANALYZE TABLE t1;
 --echo # execution plan should not use temporary table:
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT (SELECT t1.a) aa, COUNT(DISTINCT b) FROM t1 GROUP BY aa+0;
 
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT (SELECT t1.a) aa, COUNT(DISTINCT b) FROM t1 GROUP BY -aa;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 --echo # should return only one record
 SELECT (SELECT tt.a FROM t1 tt LIMIT 1) aa, COUNT(DISTINCT b) FROM t1
@@ -1227,6 +1353,7 @@ DROP TABLE t1, t2;
 CREATE TABLE t1 (a INT PRIMARY KEY);
 CREATE TABLE t2 (a INT PRIMARY KEY);
 INSERT INTO t2 VALUES (1), (2);
+ANALYZE TABLE t1,t2;
 EXPLAIN SELECT MIN(t2.a) FROM t2 LEFT JOIN t1 ON t2.a = t1.a;
 SELECT MIN(t2.a) FROM t2 LEFT JOIN t1 ON t2.a = t1.a;
 EXPLAIN SELECT MAX(t2.a) FROM t2 LEFT JOIN t1 ON t2.a = t1.a;
@@ -1240,7 +1367,7 @@ DROP TABLE t1, t2;
 
 CREATE TABLE t1 (a text, b varchar(10));
 INSERT INTO t1 VALUES (repeat('1', 1300),'one'), (repeat('1', 1300),'two');
-
+ANALYZE TABLE t1;
 query_vertical EXPLAIN 
 SELECT SUBSTRING(a,1,10), LENGTH(a), GROUP_CONCAT(b) FROM t1 GROUP BY a;
 SELECT SUBSTRING(a,1,10), LENGTH(a), GROUP_CONCAT(b) FROM t1 GROUP BY a;
@@ -1305,6 +1432,8 @@ INSERT INTO t1 VALUES
   ( 2, 2,  7 ),
   ( 2, 3,  8 );
 
+ANALYZE TABLE t1;
+
 EXPLAIN
 SELECT a, AVG(t1.b),
 (SELECT t11.c FROM t1 t11 WHERE t11.a = t1.a AND t11.b = AVG(t1.b)) AS t11c,
@@ -1326,9 +1455,13 @@ DROP TABLE t1;
 SET BIG_TABLES=1;
 CREATE TABLE t1(a INT);
 INSERT INTO t1 VALUES (0),(0);
+--skip_if_hypergraph  # Does not use MyISAM temp tables, so no such restriction.
+--error ER_WRONG_KEY_COLUMN
 SELECT 1 FROM t1 GROUP BY IF(`a`,'','');
 SELECT 1 FROM t1 GROUP BY TRIM(LEADING RAND() FROM '');
+--skip_if_hypergraph  # Different warnings.
 SELECT 1 FROM t1 GROUP BY SUBSTRING('',SLEEP(0),'');
+--skip_if_hypergraph  # Different warnings.
 SELECT 1 FROM t1 GROUP BY SUBSTRING(SYSDATE() FROM 'K' FOR 'jxW<');
 DROP TABLE t1;
 SET BIG_TABLES=0;
@@ -1338,6 +1471,10 @@ SET BIG_TABLES=0;
 --echo #
 --echo # Bug#49771: Incorrect MIN (date) when minimum value is 0000-00-00
 --echo #
+
+SET @save_sql_mode=@@sql_mode;
+SET @@sql_mode='ONLY_FULL_GROUP_BY';
+
 CREATE TABLE t1 (f1 int, f2 DATE);
 
 INSERT INTO t1 VALUES (1,'2004-04-19'), (1,'0000-00-00'), (1,'2004-04-18'),
@@ -1356,6 +1493,9 @@ SELECT MIN(f2),MAX(f2) FROM t1;
 SELECT f1,MIN(f2),MAX(f2) FROM t1 GROUP BY 1;
 
 DROP TABLE t1;
+
+SET sql_mode=@save_sql_mode;
+
 --echo #End of test#49771
 
 --echo #
@@ -1471,11 +1611,15 @@ INSERT INTO t2 VALUES
 (91,6,'z','z'),(92,1,'t','t'),(93,7,'o','o'),(94,1,'u','u'),(95,0,'t','t'),
 (96,2,'k','k'),(97,7,'u','u'),(98,2,'b','b'),(99,1,'m','m'),(100,5,'o','o');
 
+ANALYZE TABLE t1,t2;
+
 let $query=
 SELECT SUM(alias2.col_varchar_nokey) , alias2.pk AS field2 FROM t1 AS alias1
 STRAIGHT_JOIN t2 AS alias2 ON alias2.pk = alias1.col_int_key WHERE alias1.pk
 GROUP BY field2 ORDER BY alias1.col_int_key,alias2.pk ;
+--replace_column 10 #
 eval EXPLAIN $query;
+--skip_if_hypergraph  # Different order of warnings.
 eval $query;
 
 DROP TABLE t1,t2;
@@ -1527,6 +1671,8 @@ INSERT INTO t1 VALUES (10,1),(11,7);
 CREATE TABLE t2 (col1 int, col2 int) ;
 INSERT INTO t2 VALUES (10,8);
 
+ANALYZE TABLE t1,t2;
+
 let $q_body=t2.col2 FROM t2 JOIN t1 ON t1.col1 GROUP BY t2.col2;
 
 --echo
@@ -1546,12 +1692,13 @@ DROP TABLE t1,t2;
 
 CREATE TABLE t1(
  col1 int, 
- UNIQUE INDEX idx (col1)
+ INDEX idx (col1)
 );
 
 INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),
    (11),(12),(13),(14),(15),(16),(17),(18),(19),(20);
 
+ANALYZE TABLE t1;
 let $query=SELECT SQL_BIG_RESULT col1 AS field1, col1 AS field2
            FROM t1 GROUP BY field1, field2;
 
@@ -1559,6 +1706,7 @@ let $query=SELECT SQL_BIG_RESULT col1 AS field1, col1 AS field2
 --eval EXPLAIN $query;
 FLUSH STATUS;
 --eval $query;
+--skip_if_hypergraph  # Manages to use index for GROUP BY on this query.
 SHOW SESSION STATUS LIKE 'Sort_scan%';
 
 CREATE VIEW v1 AS SELECT * FROM t1;
@@ -1569,7 +1717,8 @@ GROUP BY field1, field2;
 
 SELECT SQL_BIG_RESULT tbl1.col1 AS field1, tbl2.col1 AS field2
 FROM t1 as tbl1, t1 as tbl2 
-GROUP BY field1, field2 
+GROUP BY field1, field2
+ORDER BY field1, field2
 LIMIT 3;
 
 DROP VIEW v1;
@@ -1584,19 +1733,23 @@ CREATE TABLE it (
   pk INT NOT NULL,
   col_int_nokey INT NOT NULL,
   PRIMARY KEY (pk)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 CREATE TABLE ot (
   pk int(11) NOT NULL,
   col_int_nokey int(11) NOT NULL,
   PRIMARY KEY (pk)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 INSERT INTO ot VALUES (10,8);
+
+--source include/turn_off_only_full_group_by.inc
 
 --echo
 SELECT col_int_nokey, MAX( pk ) 
 FROM ot 
 WHERE (8, 1) IN ( SELECT pk, COUNT( col_int_nokey ) FROM it );
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 --echo
 DROP TABLE it,ot;
@@ -1605,14 +1758,18 @@ DROP TABLE it,ot;
 --echo # Bug#13430588: WRONG RESULT FROM IMPLICITLY GROUPED QUERY WITH
 --echo #               CONST TABLE AND NO MATCHING ROWS
 --echo #
-CREATE TABLE t1 (i INT) ENGINE=MyISAM;
+CREATE TABLE t1 (i INT) ENGINE=INNODB;
 INSERT INTO t1 VALUES (1);
 
-CREATE TABLE t2 (j INT) ENGINE=MyISAM;
+CREATE TABLE t2 (j INT) ENGINE=INNODB;
 INSERT INTO t2 VALUES (1),(2);
+
+--source include/turn_off_only_full_group_by.inc
 
 --echo
 SELECT i, j, COUNT(i) FROM t1 JOIN t2 WHERE j=3;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 --echo
 DROP TABLE t1,t2;
@@ -1624,16 +1781,18 @@ DROP TABLE t1,t2;
 
 CREATE TABLE t1 (
   a varchar(1)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t1 VALUES ('a'), ('b');
 
 CREATE TABLE t2 (
   a varchar(1),
   b int(11)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t2 VALUES ('a',1);
+
+ANALYZE TABLE t1,t2;
 
 let $query= 
 SELECT (SELECT MAX(b) FROM t2 WHERE t2.a != t1.a) as MAX 
@@ -1647,6 +1806,11 @@ DROP TABLE t1,t2;
 
 --echo # Bug 11923239 - ERROR WITH CORRELATED SUBQUERY IN VIEW WITH
 --echo # ONLY_FULL_GROUP_BY SQL MODE
+
+
+SET @old_sql_mode = @@sql_mode;
+SET sql_mode='';
+
 CREATE TABLE t1 (
   pk INT,
   col_int_key INT,
@@ -1680,13 +1844,14 @@ GROUP BY field1,
    WHERE alias1.col_varchar_key <= alias1.col_varchar_nokey
   );
 
+ANALYZE TABLE t1;
 --echo # In GROUP BY, aliases are printed as aliases.
 
-eval EXPLAIN EXTENDED $query_with_alias_in_group_by;
+eval EXPLAIN $query_with_alias_in_group_by;
 
 --echo # In GROUP BY, expressions are printed as expressions.
 
-eval EXPLAIN EXTENDED $query_with_no_alias_in_group_by;
+eval EXPLAIN $query_with_no_alias_in_group_by;
 
 --echo # Aliased expression in GROUP BY in a view.
 
@@ -1696,7 +1861,6 @@ eval CREATE VIEW v1 AS $query_with_alias_in_group_by;
 
 SHOW CREATE VIEW v1;
 
-SET @old_sql_mode = @@sql_mode;
 SET @@sql_mode='ONLY_FULL_GROUP_BY';
 
 eval $query_with_alias_in_group_by;
@@ -1730,14 +1894,14 @@ SET @@sql_mode = @old_sql_mode;
 
 CREATE TABLE t2(a INT);
 INSERT INTO t2 VALUES(3),(4);
-
-EXPLAIN EXTENDED SELECT
+ANALYZE TABLE t1,t2;
+EXPLAIN SELECT
 pk AS foo, col_int_key AS bar, (SELECT a FROM t2 WHERE a=t1.pk) AS baz
 FROM t1
 GROUP BY foo, col_int_key, baz ORDER BY pk, bar, (SELECT a FROM t2 WHERE a=t1.pk);
 
 # Printing the alias in GROUP/ORDER BY would introduce an ambiguity.
-EXPLAIN EXTENDED SELECT
+EXPLAIN SELECT
 pk AS foo, col_int_key AS foo, (SELECT a FROM t2 WHERE a=t1.pk) AS foo
 FROM t1
 GROUP BY pk, col_int_key, (SELECT a FROM t2 WHERE a=t1.pk)
@@ -1774,8 +1938,8 @@ CREATE TABLE t3 (
 );
 
 CREATE VIEW view1 AS SELECT * FROM t1;
-
-EXPLAIN EXTENDED
+ANALYZE TABLE t1,t2,t3;
+EXPLAIN
 SELECT
     alias1.col_datetime_key AS field1
 FROM (
@@ -1783,8 +1947,8 @@ FROM (
         t3 AS alias2
     )
 WHERE (
-    (SELECT MIN(SQ1_alias1.pk)
-     FROM t2 AS SQ1_alias1
+    (SELECT MIN(sq1_alias1.pk)
+     FROM t2 AS sq1_alias1
     )
 ) OR (alias1.col_varchar_key = alias2.col_varchar_key
   AND alias1.col_varchar_key = 'j'
@@ -1823,8 +1987,8 @@ field1
        table2.col_varchar_key >= table1.col_varchar_nokey 
 ORDER BY field1
 ;
-
-EXPLAIN EXTENDED SELECT * FROM view1;
+ANALYZE TABLE t1,t2;
+EXPLAIN SELECT * FROM view1;
 
 DROP TABLE t1,t2;
 DROP VIEW view1;
@@ -1833,8 +1997,8 @@ DROP VIEW view1;
 
 CREATE TABLE t1 (col_varchar_nokey varchar(1) DEFAULT NULL);
 INSERT INTO t1 VALUES ('v'),('c');
-
-EXPLAIN EXTENDED SELECT (SELECT 150) AS field5
+ANALYZE TABLE t1;
+EXPLAIN SELECT (SELECT 150) AS field5
 FROM (SELECT * FROM t1) AS alias1
 GROUP BY field5;
 
@@ -1883,7 +2047,6 @@ NULL, col_varchar_key varchar(1) NOT NULL, col_varchar_nokey varchar(1) NOT
 NULL, PRIMARY KEY (pk), KEY col_int_key (col_int_key), KEY col_varchar_key
 (col_varchar_key,col_int_key));
 
---error ER_WRONG_FIELD_WITH_GROUP
 SELECT SUM(alias2.col_varchar_nokey) , alias2.pk AS field2 FROM t1 AS alias1
 STRAIGHT_JOIN t2 AS alias2 ON alias2.pk = alias1.col_int_key WHERE alias1.pk
 group by field2 ORDER BY alias1.col_int_key,alias2.pk ;
@@ -1926,7 +2089,8 @@ create table t2 (a int, b int);
 # that the outer query's ORDER BY depends on a non-aggregated column,
 # which itself is not in GROUP BY.
 --error ER_WRONG_FIELD_WITH_GROUP
-select a from t2 group by a order by (select a from t1 order by t2.b);
+select a from t2 group by a
+                 order by (select a from t1 order by t2.b limit 1);
 SET @@sql_mode = @old_sql_mode;
 DROP TABLE t1,t2;
 
@@ -1934,12 +2098,16 @@ DROP TABLE t1,t2;
 
 create table t1 (branch varchar(40), id int);
 
+--source include/turn_off_only_full_group_by.inc
+
 select count(*) from t1 group by branch having
 branch<>'mumbai' order by id desc,branch desc limit 100;
 
 select branch, count(*)/max(id) from t1 group by branch
 having (branch<>'mumbai' OR count(*)<2)
 order by id desc,branch desc limit 100;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 SET @@sql_mode='ONLY_FULL_GROUP_BY';
 
@@ -1959,8 +2127,11 @@ DROP TABLE t1;
 create table t1 (a int, b int);
 insert into t1 values (1, 2), (1, 3), (null, null);
 
+--sorted_result
 select sum(a), count(*) from t1 group by a;
+--sorted_result
 select round(sum(a)), count(*) from t1 group by a;
+--sorted_result
 select ifnull(a, 'xyz') from t1 group by a;
 
 DROP TABLE t1;
@@ -1976,9 +2147,11 @@ CREATE TABLE t1 (
   a int,
   b varchar(1),
   KEY (b,a)
-);
+) charset utf8mb4;
 
 INSERT INTO t1 VALUES (1,NULL),(0,'a'),(1,NULL),(0,'a');
+INSERT INTO t1 VALUES (1,'a'),(0,'a'),(1,'a'),(0,'a');
+ANALYZE TABLE t1;
 
 let $query=
   SELECT SQL_BUFFER_RESULT MIN(a), b FROM t1 WHERE t1.b = 'a' GROUP BY b;
@@ -2005,3 +2178,1490 @@ CREATE TABLE t1(a INT);
 INSERT INTO t1 VALUES (0);
 SELECT 1 FROM t1 WHERE 1 > ALL(SELECT 1 FROM t1 WHERE a);
 DROP TABLE t1;
+
+--echo # 
+--echo # Bug#18035906: TEST_IF_SKIP_SORT_ORDER INCORRECTLY CHOSES NON-COVERING
+--echo #               INDEX FOR ORDERING
+--echo # 
+
+CREATE TABLE t1 (
+  i INT PRIMARY KEY AUTO_INCREMENT,
+  kp1 INT,
+  kp2 INT,
+  INDEX idx_noncov(kp1),
+  INDEX idx_cov(kp1,kp2)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (NULL, 1, 1);
+
+INSERT INTO t1 SELECT NULL, kp1, kp2+1 from t1;
+INSERT INTO t1 SELECT NULL, kp1, kp2+2 from t1;
+INSERT INTO t1 SELECT NULL, kp1, kp2+4 from t1;
+INSERT INTO t1 SELECT NULL, kp1, kp2 from t1;
+ANALYZE TABLE t1;
+--disable_query_log
+--disable_result_log
+ANALYZE TABLE t1;
+--enable_result_log
+--enable_query_log
+
+EXPLAIN SELECT kp1, SUM(kp2) FROM t1 GROUP BY kp1;
+
+DROP TABLE t1;
+
+--echo # Bug#72512/18694751: Non-aggregated query with set function in
+--echo # ORDER BY should be rejected
+
+CREATE TABLE t1(a INTEGER);
+INSERT INTO t1 VALUES (1), (2);
+
+--echo # Non-aggregated queries
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT a FROM t1 ORDER BY COUNT(*);
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT a FROM t1 WHERE a > 0 ORDER BY COUNT(*);
+
+--echo # Implicitly grouped query
+SELECT SUM(a) FROM t1 ORDER BY COUNT(*);
+
+SELECT COUNT(*) FROM t1 ORDER BY COUNT(*);
+
+SELECT COUNT(*) AS c FROM t1 ORDER BY COUNT(*);
+
+SELECT COUNT(*) AS c FROM t1 ORDER BY c;
+
+--echo # Explicitly grouped query
+--sorted_result
+SELECT a, COUNT(*) FROM t1 GROUP BY a ORDER BY COUNT(*);
+
+--sorted_result
+SELECT a, COUNT(*) AS c FROM t1 GROUP BY a ORDER BY COUNT(*);
+
+--sorted_result
+SELECT a, COUNT(*) AS c FROM t1 GROUP BY a ORDER BY c;
+
+--sorted_result
+SELECT a AS c FROM t1 GROUP BY a ORDER BY COUNT(*);
+
+--echo # Query with HAVING,
+SELECT 1 FROM t1 HAVING COUNT(*) > 1 ORDER BY COUNT(*);
+
+--echo # Subquery, ORDER BY contains outer reference
+SELECT (SELECT 1 AS foo ORDER BY a) AS x
+FROM t1;
+
+SELECT (SELECT 1 AS foo ORDER BY t1.a) AS x
+FROM t1;
+
+--echo # Subquery, ORDER BY contains set function with outer reference
+SELECT (SELECT 1 AS foo ORDER BY COUNT(a)) AS x
+FROM t1;
+
+SELECT (SELECT 1 AS foo ORDER BY COUNT(t1.a)) AS x
+FROM t1;
+
+--echo # Subquery, ORDER BY contains set function with local reference
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT (SELECT 1 AS foo ORDER BY COUNT(*)) AS x
+FROM t1;
+
+--echo # Subquery in ORDER BY with outer reference
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT a FROM t1 ORDER BY (SELECT COUNT(t1.a) FROM t1 AS t2);
+
+SELECT SUM(a) FROM t1 ORDER BY (SELECT COUNT(t1.a) FROM t1 AS t2);
+
+--echo # Query with ORDER BY inside UNION
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT a FROM t1 ORDER BY COUNT(*))
+UNION
+SELECT a FROM t1;
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT a FROM t1 ORDER BY COUNT(*))
+UNION ALL
+SELECT a FROM t1;
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1)
+UNION
+SELECT a FROM t1;
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1)
+UNION ALL
+SELECT a FROM t1;
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT a FROM t1
+UNION
+(SELECT a FROM t1 ORDER BY COUNT(*));
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT a FROM t1
+UNION ALL
+(SELECT a FROM t1 ORDER BY COUNT(*));
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT a FROM t1
+UNION
+(SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT a FROM t1
+UNION ALL
+(SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT a FROM t1 ORDER BY COUNT(*))
+UNION
+(SELECT a FROM t1 ORDER BY COUNT(*));
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT a FROM t1 ORDER BY COUNT(*))
+UNION ALL
+(SELECT a FROM t1 ORDER BY COUNT(*));
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1)
+UNION
+(SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1)
+UNION ALL
+(SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
+
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+(SELECT COUNT(*) FROM t1 ORDER BY a) ORDER BY COUNT(*);
+
+DROP TABLE t1;
+
+--echo # 
+--echo # Bug#18487060: ASSERTION FAILED: !TABLE || (!TABLE->READ_SET || 
+--echo #               BITMAP_IS_SET(TABLE->READ_SET,
+--echo # 
+
+CREATE TABLE r(c BLOB) ENGINE=INNODB;
+
+INSERT INTO r VALUES('');
+
+SELECT 1 FROM r GROUP BY MAKE_SET(1,c) WITH ROLLUP;
+
+DROP TABLE r;
+
+--echo #
+--echo # Bug #18921626 	DEBUG CRASH IN PLAN_CHANGE_WATCHDOG::~PLAN_CHANGE_WATCHDOG AT SQL_OPTIMIZER.CC
+--echo #
+
+SET @old_sql_mode = @@sql_mode;
+set sql_mode='';
+
+CREATE TABLE AA (
+col_varchar_1024_latin1 varchar(1024)  CHARACTER SET latin1,
+pk integer auto_increment,
+col_varchar_1024_utf8_key varchar(1024)  CHARACTER SET utf8,
+col_varchar_1024_latin1_key varchar(1024)  CHARACTER SET latin1,
+col_varchar_10_utf8_key varchar(10)  CHARACTER SET utf8,
+col_varchar_10_latin1_key varchar(10)  CHARACTER SET latin1,
+col_int int,
+col_varchar_10_latin1 varchar(10)  CHARACTER SET latin1,
+col_varchar_10_utf8 varchar(10)  CHARACTER SET utf8,
+col_varchar_1024_utf8 varchar(1024)  CHARACTER SET utf8,
+col_int_key int,
+primary key (pk),
+key (col_varchar_1024_utf8_key ),
+key (col_varchar_1024_latin1_key ),
+key (col_varchar_10_utf8_key ),
+key (col_varchar_10_latin1_key ),
+key (col_int_key )) ENGINE=innodb ROW_FORMAT=DYNAMIC;
+
+CREATE OR REPLACE VIEW view_AA AS SELECT * FROM AA;
+
+CREATE TABLE B (
+col_varchar_1024_latin1_key varchar(1024)  CHARACTER SET latin1,
+col_varchar_10_latin1 varchar(10)  CHARACTER SET latin1,
+col_varchar_10_utf8_key varchar(10)  CHARACTER SET utf8,
+col_int_key int,
+col_varchar_1024_latin1 varchar(1024)  CHARACTER SET latin1,
+col_varchar_1024_utf8_key varchar(1024)  CHARACTER SET utf8,
+col_varchar_10_utf8 varchar(10)  CHARACTER SET utf8,
+col_int int,
+pk integer auto_increment,
+col_varchar_10_latin1_key varchar(10)  CHARACTER SET latin1,
+col_varchar_1024_utf8 varchar(1024)  CHARACTER SET utf8,
+key (col_varchar_1024_latin1_key ),
+key (col_varchar_10_utf8_key ),
+key (col_int_key ),
+key (col_varchar_1024_utf8_key ),
+primary key (pk),
+key (col_varchar_10_latin1_key )) ENGINE=INNODB;
+
+INSERT INTO B VALUES  ('at', repeat('a',1000), 'the',
+-1622540288, 'as', repeat('a',1000), 'want', 1810890752, NULL, 'v', 'just');
+
+SELECT
+DISTINCT table1 . pk AS field1
+FROM  view_AA AS table1  LEFT  JOIN B AS table2
+ON  table1 . col_varchar_10_latin1_key =  table2 .
+col_varchar_1024_latin1_key
+WHERE ( ( table2 . pk > table1 . col_int_key AND table1 . pk NOT
+BETWEEN 3 AND ( 3 + 3 ) ) AND table2 . pk <> 6 )
+GROUP BY table1 . pk;
+
+DROP TABLE AA,B;
+DROP VIEW view_AA;
+
+SET @@sql_mode = @old_sql_mode;
+
+SET sql_mode = default;
+
+--echo #
+--echo # Bug#20262196 ASSERTION FAILED: !IMPLICIT_GROUPING || TMP_TABLE_PARAM.SUM_FUNC_COUNT
+--echo #
+
+CREATE TABLE t1(a INT, b INT) ENGINE=INNODB;
+INSERT INTO t1 VALUES (1,2), (3,4);
+
+SELECT
+  EXISTS
+  (
+    SELECT 1
+    FROM (SELECT a FROM t1) t_inner
+    GROUP BY t_inner.a
+    ORDER BY MIN(t_outer.b)
+  )
+FROM t1 t_outer;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#20210742 GROUP BY ON MERGE VIEW WITH ORDER BY DOES NOT WORK WITH ONLY_FULL_GROUP_BY
+--echo #
+
+CREATE TABLE t1(cc CHAR(1), n CHAR(1), d CHAR(1));
+
+CREATE OR REPLACE ALGORITHM = MERGE VIEW v1 AS
+ SELECT * FROM t1 WHERE cc = 'AUS' ORDER BY n;
+
+SELECT d, COUNT(*) FROM v1 GROUP BY d;
+
+DROP TABLE t1;
+DROP VIEW v1;
+
+--echo #
+--echo # Bug#20819199 ASSERTION FAILED IN TEST_IF_SKIP_SORT_ORDER
+--echo #
+
+CREATE TABLE t0 ( a INT );
+INSERT INTO t0 VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
+
+CREATE TABLE t1 (
+  pk INT NOT NULL AUTO_INCREMENT,
+  a INT,
+  b INT,
+  PRIMARY KEY (pk),
+  KEY idx1 (a),
+  KEY idx2 (b, a),
+  KEY idx3 (a, b)
+) ENGINE = InnoDB;
+
+INSERT INTO t1 (a, b) SELECT t01.a, t02.a FROM t0 t01, t0 t02;
+
+ANALYZE TABLE t0,t1;
+
+let $query=
+SELECT DISTINCT a, MAX(b) FROM t1 WHERE a >= 0 GROUP BY a,a;
+
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t0, t1;
+
+--echo # Bug#21753180: handle_fatal_signal (sig=11) in my_strtod_int
+
+CREATE TABLE t1(
+ a INTEGER,
+ b BLOB(1),
+ c BLOB(1),
+ PRIMARY KEY(a,b(1)),
+ UNIQUE KEY (a,c(1))
+);
+
+INSERT INTO t1 VALUES(1,2,1),(2,4,1);
+ANALYZE TABLE t1;
+let $query=
+SELECT a, (SELECT SUM(a + c) FROM (SELECT b as c FROM t1) AS v1) FROM t1;
+
+eval explain $query;
+
+eval $query;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#21761044 CONDITIONAL JUMP AT TEST_IF_ORDER_BY_KEY IN SQL_OPTIMIZER.CC
+--echo #
+--echo # Used to give ASAN error on the SELECT: addressing beyond allocated memory
+--echo #
+
+CREATE TABLE cc (pk int,  i int, c varchar(1),
+                 PRIMARY KEY (pk, i), KEY c_key(c)) ENGINE=InnoDB;
+
+SELECT c, i, pk FROM cc WHERE (cc.pk = 1)  GROUP BY c, i, pk;
+
+DROP TABLE cc;
+
+--echo #
+--echo # Bug#22132822 CRASH IN GROUP_CHECK::IS_FD_ON_SOURCE
+--echo #
+
+CREATE TABLE t1
+(
+  a INT GENERATED ALWAYS AS (1) VIRTUAL,
+  b INT GENERATED ALWAYS AS (a) VIRTUAL,
+  c INT GENERATED ALWAYS AS (1) VIRTUAL
+);
+
+# Quoted this query out for bug#25228698
+#--error ER_WRONG_FIELD_WITH_GROUP
+#SELECT a.b FROM t1 AS a
+#RIGHT JOIN t1 AS b ON 1
+#INNER JOIN t1 AS c ON 1
+#WHERE b.b = c.b
+#GROUP BY c.c;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #22186926 CONVERT_CONSTANT_ITEM(THD*, ITEM_FIELD*, ITEM**): ASSERTION `!RESULT' FAILED.
+--echo #
+
+CREATE TABLE t1
+(
+  f1 INTEGER NOT NULL,
+  f2 DATETIME NOT NULL,
+  f3 VARCHAR(1) NOT NULL,
+  KEY (f3)
+);
+
+INSERT INTO t1(f1, f2, f3) VALUES
+(5, '2001-07-25 08:40:24.058646', 'j'),
+(2, '1900-01-01 00:00:00', 's'),
+(4, '2001-01-20 12:47:23.022022', 'x');
+
+
+CREATE TABLE t2 (f1 VARCHAR(1) NOT NULL);
+
+FLUSH TABLES;
+ANALYZE TABLE t1,t2;
+EXPLAIN SELECT MIN(t1.f3 ) FROM t1
+WHERE t1.f3 IN (SELECT t2.f1 FROM t2 WHERE NOT t1.f2 IS NOT NULL) AND t1.f1 IS NULL OR
+  NOT t1 . f3 < 'q';
+
+
+DROP TABLE t1,t2;
+
+--echo #
+--echo # Bug#22275357 ORDER BY DOES NOT WORK CORRECTLY WITH GROUPED AVG()
+--echo #              VALUES EXTRACTED FROM JSON
+--echo #
+
+# The bug was only seen when grouping on a BLOB-based column type
+# (such as TEXT and JSON), and using an aggregate function based on
+# Item_sum_num_field class (AVG, VAR_*, STDEV_*), and the grouping
+# operation used a temporary table.
+
+CREATE TABLE t(txt TEXT, i INT);
+INSERT INTO t VALUES ('a', 2), ('b', 8), ('b', 0), ('c', 2);
+SELECT txt, AVG(i) a FROM t GROUP BY txt ORDER BY a, txt;
+SELECT txt, VAR_POP(i) v FROM t GROUP BY txt ORDER BY v, txt;
+SELECT txt, STDDEV_POP(i) s FROM t GROUP BY txt ORDER BY s, txt;
+# SQL_BUFFER_RESULT forces the use of a temporary table in the
+# grouping operation, in case that strategy is not chosen in the
+# queries above.
+SELECT SQL_BUFFER_RESULT txt, AVG(i) a FROM t GROUP BY txt ORDER BY a, txt;
+SELECT SQL_BUFFER_RESULT txt, VAR_POP(i) v FROM t GROUP BY txt ORDER BY v, txt;
+SELECT SQL_BUFFER_RESULT txt, STDDEV_POP(i) s FROM t
+GROUP BY txt ORDER BY s, txt;
+DROP TABLE t;
+
+--echo #
+--echo # Bug#26162009: INCORRECT RESULT WITH EXPRESSION IN HAVING CLAUSE
+--echo #
+CREATE TABLE t1 (col_varchar VARCHAR(10), col_int_key INT);
+INSERT INTO t1 VALUES('r',83);
+SELECT col_varchar as field1, MAX(col_int_key) AS field3 FROM t1
+GROUP BY col_varchar HAVING (field1 >= 'i' OR field3 <= 9);
+SELECT CONCAT(col_varchar) as field1, MAX(col_int_key) AS field3
+FROM t1 GROUP BY col_varchar HAVING (field1 >= 'i' OR field3 <= 9);
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#21974346: GROUPING ON AGGREGATED RESULTS NOT ALWAYS REJECTED
+--echo #
+
+CREATE TABLE t (a INT);
+INSERT INTO t VALUES (0), (1), (1), (2);
+
+--echo # These queries did not raise the expected error before the fix.
+
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t GROUP BY (SELECT 1 HAVING c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) + 1 AS c FROM t GROUP BY (SELECT 1 HAVING c);
+--error ER_ILLEGAL_REFERENCE
+SELECT SUM(a) AS s FROM t GROUP BY (SELECT 1 HAVING s);
+--error ER_ILLEGAL_REFERENCE
+SELECT SUM(a) + 1 AS s FROM t GROUP BY (SELECT 1 HAVING s);
+--error ER_ILLEGAL_REFERENCE
+SELECT (SELECT COUNT(*) AS c FROM t GROUP BY (SELECT 1 HAVING c));
+--error ER_ILLEGAL_REFERENCE
+SELECT (SELECT COUNT(*) AS c FROM t GROUP BY (SELECT 1 HAVING c) LIMIT 1);
+--error ER_ILLEGAL_REFERENCE
+SELECT (SELECT COUNT(*) + 1 AS c FROM t GROUP BY (SELECT 1 HAVING c));
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c1, (SELECT 1 HAVING c1) AS c2
+FROM t GROUP BY (SELECT 1 WHERE c2);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) + 1 AS c1, (SELECT 1 HAVING c1) + 1 AS c2
+FROM t GROUP BY (SELECT 1 WHERE c2);
+
+--echo # These queries were accepted before the fix, and they still are.
+
+SELECT COUNT(*) AS c FROM t ORDER BY (SELECT 1 HAVING c);
+SELECT COUNT(*) AS c FROM t ORDER BY c;
+SELECT COUNT(*) AS c FROM t ORDER BY c+1;
+SELECT COUNT(*) AS c FROM t ORDER BY c+c;
+SELECT COUNT(*) AS c FROM t HAVING (SELECT 1 HAVING c);
+SELECT COUNT(*) AS c FROM t HAVING c;
+SELECT a, COUNT(*) AS c FROM t GROUP BY a WITH ROLLUP
+HAVING (SELECT 1 HAVING c);
+SELECT a, COUNT(*) AS c FROM t GROUP BY a WITH ROLLUP HAVING c;
+SELECT (SELECT COUNT(*) AS c FROM t HAVING c <> 0);
+SELECT (SELECT COUNT(*) FROM t HAVING COUNT(*) <> 0);
+SELECT (SELECT COUNT(*) AS c FROM t ORDER BY c);
+SELECT (SELECT COUNT(*) FROM t ORDER BY COUNT(*));
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2
+                                  GROUP BY (SELECT 1 HAVING s > 0)) > 0;
+SELECT (SELECT SUM(a)) FROM t;
+SELECT SUM(a) AS s, (SELECT SUM(a)) FROM t;
+SELECT a, (SELECT SUM(a)) s FROM t GROUP BY a;
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2 HAVING s > 5);
+SELECT (SELECT SUM(t1.a) s FROM t t2 WHERE t2.a = 0 HAVING s > 3) FROM t t1;
+SELECT 1 FROM t HAVING (SELECT SUM(a)) > 0;
+SELECT (SELECT SUM(a)) FROM t;
+
+--echo # Bug #22588319: OUTER REFERENCE TO AGGREGATE INCORRECTLY 0 OR NULL IN SUBQUERY
+SELECT SUM(a) AS s, (SELECT 1 HAVING s) FROM t;
+SELECT SUM(a) AS s, (SELECT 1 HAVING s IS NULL) FROM t;
+SELECT COUNT(a) AS c, (SELECT 1 HAVING c) FROM t;
+SELECT COUNT(a) AS c, (SELECT 1 HAVING c = 0) FROM t;
+
+--echo # Shows that #22588319 isn't fixed for ORDER BY.
+--echo # Should have ordered ascending on -a, but comes out in random order
+--echo # because the ORDER BY clause always evaluates to NULL. Have to use
+--echo # the --sorted_result directive to produce stable test results.
+--sorted_result
+SELECT a, COUNT(*) c FROM t GROUP BY a ORDER BY (SELECT -a HAVING c > 0);
+
+--echo # These queries were accepted in the default sql_mode before the fix,
+--echo # and rejected in the ANSI sql_mode. Expect no change after the fix.
+
+SELECT * FROM t t1 WHERE (SELECT SUM(t1.a) s FROM t t2 HAVING s = 0);
+SELECT 1 FROM t t1 GROUP BY (SELECT SUM(t1.a) s FROM t t2 ORDER BY s);
+SELECT 1 FROM t t1 GROUP BY (SELECT SUM(t1.a) s FROM t t2 ORDER BY s + 1);
+SELECT 1 FROM t t1 GROUP BY (SELECT SUM(t1.a) s);
+SELECT 1 FROM t WHERE (SELECT SUM(a)) > 0;
+SELECT 1 FROM t GROUP BY (SELECT SUM(a));
+SET sql_mode = ANSI;
+--error ER_INVALID_GROUP_FUNC_USE
+SELECT * FROM t t1 WHERE (SELECT SUM(t1.a) s FROM t t2 HAVING s = 0);
+--error ER_INVALID_GROUP_FUNC_USE
+SELECT 1 FROM t t1 GROUP BY (SELECT SUM(t1.a) s FROM t t2 ORDER BY s);
+--error ER_INVALID_GROUP_FUNC_USE
+SELECT 1 FROM t t1 GROUP BY (SELECT SUM(t1.a) s FROM t t2 ORDER BY s + 1);
+--error ER_INVALID_GROUP_FUNC_USE
+SELECT 1 FROM t t1 GROUP BY (SELECT SUM(t1.a) s);
+--error ER_INVALID_GROUP_FUNC_USE
+SELECT 1 FROM t WHERE (SELECT SUM(a)) > 0;
+--error ER_INVALID_GROUP_FUNC_USE
+SELECT 1 FROM t GROUP BY (SELECT SUM(a));
+SET sql_mode = DEFAULT;
+
+--echo # These queries were rejected before the fix, and they still are.
+
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t GROUP BY (SELECT c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) + 1 AS c FROM t GROUP BY (SELECT c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t GROUP BY (SELECT 1 WHERE c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) + 1 AS c FROM t GROUP BY (SELECT 1 WHERE c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t GROUP BY (SELECT c HAVING c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) + 1 AS c FROM t GROUP BY (SELECT c HAVING c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t GROUP BY (SELECT c WHERE c);
+--error ER_ILLEGAL_REFERENCE
+SELECT c FROM (SELECT COUNT(*) AS c FROM t GROUP BY (SELECT 1 ORDER BY c)) tt;
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t
+GROUP BY (SELECT COUNT(*) FROM t HAVING (SELECT c));
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t
+GROUP BY (SELECT COUNT(*) FROM t ORDER BY (SELECT c));
+--error ER_WRONG_GROUP_FIELD
+SELECT (SELECT COUNT(*) AS c FROM t GROUP BY c);
+--error ER_WRONG_GROUP_FIELD
+SELECT (SELECT COUNT(*) FROM t GROUP BY COUNT(*));
+--error ER_WRONG_GROUP_FIELD
+SELECT 1 FROM t t1 WHERE (SELECT SUM(t1.a) s FROM t t2 GROUP BY s);
+--error ER_WRONG_GROUP_FIELD
+SELECT 1 FROM t t1 WHERE (SELECT SUM(t1.a) s FROM t t2 GROUP BY s+1);
+--error ER_WRONG_GROUP_FIELD
+SELECT 1 FROM t t1 ORDER BY (SELECT SUM(t1.a) s FROM t t2 GROUP BY s) > 0;
+--error ER_WRONG_GROUP_FIELD
+SELECT 1 FROM t t1 ORDER BY (SELECT SUM(t1.a) s FROM t t2 GROUP BY s+1) > 0;
+--error ER_ILLEGAL_REFERENCE
+SELECT 1 FROM t t1 ORDER BY (SELECT SUM(t1.a) s FROM t t2
+                                    GROUP BY (SELECT s)) > 0;
+--error ER_ILLEGAL_REFERENCE
+SELECT 1 FROM t t1 ORDER BY (SELECT SUM(t1.a) s FROM t t2
+                                    GROUP BY (SELECT s+1)) > 0;
+--error ER_AGGREGATE_ORDER_NON_AGG_QUERY
+SELECT 1 FROM t ORDER BY (SELECT SUM(a));
+--error ER_BAD_FIELD_ERROR
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2 WHERE s > 5);
+--error ER_WRONG_GROUP_FIELD
+SELECT a, (SELECT SUM(a)) s FROM t GROUP BY a, s;
+--error ER_WRONG_GROUP_FIELD
+SELECT EXISTS (SELECT SUM(t1.a) s FROM t t2 GROUP BY s) FROM t t1;
+--error ER_BAD_FIELD_ERROR
+SELECT SUM(a) s, s FROM t;
+--error ER_WRONG_GROUP_FIELD
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2 GROUP BY s) > 0;
+--error ER_WRONG_GROUP_FIELD
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2 GROUP BY s+1) > 0;
+--error ER_ILLEGAL_REFERENCE
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2
+                                  HAVING (SELECT 1 GROUP BY s+1)) > 0;
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t ORDER BY (SELECT c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t ORDER BY (SELECT 1 ORDER BY c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t ORDER BY (SELECT c ORDER BY c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t HAVING (SELECT c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t HAVING (SELECT 1 ORDER BY c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t HAVING (SELECT c ORDER BY c);
+--error ER_ILLEGAL_REFERENCE
+SELECT a, COUNT(*) AS c FROM t GROUP BY a WITH ROLLUP
+HAVING (SELECT c);
+--error ER_ILLEGAL_REFERENCE
+SELECT a, COUNT(*) AS c FROM t GROUP BY a WITH ROLLUP
+HAVING (SELECT 1 ORDER BY c);
+--error ER_ILLEGAL_REFERENCE
+SELECT a, COUNT(*) AS c FROM t GROUP BY a WITH ROLLUP
+HAVING (SELECT c ORDER BY c);
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t ORDER BY (SELECT COUNT(*) FROM t HAVING (SELECT c));
+--error ER_ILLEGAL_REFERENCE
+SELECT c FROM (SELECT COUNT(*) AS c FROM t ORDER BY (SELECT 1 ORDER BY c)) tt;
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t
+ORDER BY (SELECT COUNT(*) FROM t GROUP BY (SELECT c));
+--error ER_ILLEGAL_REFERENCE
+SELECT COUNT(*) AS c FROM t
+HAVING (SELECT COUNT(*) FROM t GROUP BY (SELECT c));
+--error ER_ILLEGAL_REFERENCE
+SELECT SUM(a) AS s, (SELECT s) FROM t;
+--error ER_ILLEGAL_REFERENCE
+SELECT EXISTS (SELECT SUM(t1.a) s FROM t t2 GROUP BY (SELECT s)) FROM t t1;
+--error ER_ILLEGAL_REFERENCE
+SELECT (SELECT SUM(t1.a) s FROM t t2 HAVING (SELECT s > 5)) FROM t t1;
+--error ER_ILLEGAL_REFERENCE
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2 HAVING (SELECT s) < 0);
+--error ER_ILLEGAL_REFERENCE
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2 GROUP BY (SELECT s));
+--error ER_ILLEGAL_REFERENCE
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2 HAVING (SELECT -s) > 0);
+--error ER_ILLEGAL_REFERENCE
+SELECT 1 FROM t t1 HAVING (SELECT SUM(t1.a) s FROM t t2 GROUP BY (SELECT -s));
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#25407964 GROUP BY DESC GIVES WRONG RESULT WHEN GROUPS ON DECIMAL AND SEES A NULL
+--echo #
+
+CREATE TABLE t(d DATE, i INT);
+INSERT INTO t VALUES(NULL,1),('2017-01-14',3);
+SELECT WEEK(d)/10, GROUP_CONCAT(i) FROM t GROUP BY WEEK(d)/10;
+SELECT WEEK(d)/10, GROUP_CONCAT(i) FROM t GROUP BY WEEK(d)/10 ORDER BY WEEK(d)/10 DESC;
+DROP TABLE t;
+
+--echo #
+--echo # Bug#21974696 WRONG RESULT WHEN GROUPING ON VALUE FROM SUBQUERY
+--echo #              AND USING COUNT DISTINCT
+--echo #
+
+--let $i= 0
+while ($i < 2) {
+# The bug was seen with BLOB-based types, such as TEXT and JSON. Test both.
+--let $type= `SELECT CASE $i WHEN 0 THEN 'TEXT' WHEN 1 THEN 'JSON' END`
+--eval CREATE TABLE t(a $type, b INT)
+INSERT INTO t VALUES ('1', 10), ('1', 11), ('2', 20), ('2', 20), ('3', 30);
+--source include/turn_off_only_full_group_by.inc
+# Verify that we get streaming.
+--replace_regex $elide_costs_and_rows
+--skip_if_hypergraph   # Does not use streaming (just sorts directly).
+EXPLAIN FORMAT=tree SELECT (SELECT a) AS col1, COUNT(DISTINCT b) FROM t GROUP BY -col1;
+--sorted_result
+SELECT (SELECT a) AS col1, COUNT(DISTINCT b) FROM t GROUP BY -col1;
+# This query gave the right results also before the fix:
+--sorted_result
+SELECT (SELECT a) AS col1, COUNT(b) FROM t GROUP BY -col1;
+# Same query with SQL_BIG_RESULT or WITH ROLLUP gave wrong results:
+--sorted_result
+SELECT SQL_BIG_RESULT (SELECT a) AS col1, COUNT(b) FROM t GROUP BY -col1;
+--sorted_result
+SELECT (SELECT a) AS col1, COUNT(b) FROM t GROUP BY -col1 WITH ROLLUP;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+DROP TABLE t;
+--inc $i
+}
+
+--echo #
+--echo # WL#8963: REMOVAL OF NON STANDARD GROUP BY ASC/DESC
+--echo #
+
+CREATE TABLE t1 (i INTEGER NOT NULL, j INTEGER NOT NULL, key(i,j));
+INSERT INTO t1 VALUES (1,2),(1,4),(1,3),(2,5),(5,3),(2,6),(6,2);
+
+#Check for syntax errors
+--error 1064
+SELECT i, SUM(j) FROM t1 GROUP BY i ASC;
+--error 1064
+SELECT i, SUM(j) FROM t1 GROUP BY i DESC;
+
+#Should use the index
+--replace_column 10 # 11 #
+EXPLAIN SELECT i, SUM(j) FROM t1 GROUP BY i;
+SELECT i, SUM(j) FROM t1 GROUP BY i;
+
+#Should use the index - order by in this case will be moved to group by
+--replace_column 10 # 11 #
+EXPLAIN SELECT i, SUM(j) FROM t1 GROUP BY i ORDER BY i;
+SELECT i, SUM(j) FROM t1 GROUP BY i ORDER BY i;
+
+#Should use index for group by and filesort for order by
+--replace_column 10 # 11 #
+EXPLAIN SELECT i, SUM(j) FROM t1 GROUP BY i ORDER BY SUM(j);
+SELECT i, SUM(j) FROM t1 GROUP BY i ORDER BY SUM(j);
+
+ALTER TABLE t1 ADD UNIQUE INDEX (i,j);
+
+#Test for code which removed group by when it is on unique columns
+EXPLAIN SELECT i FROM t1 GROUP BY j,i ORDER BY i,j;
+SELECT i, SUM(j) FROM t1 GROUP BY j,i ORDER BY i,j;
+
+DROP TABLE t1;
+
+--echo # End of tests for WL#8693
+
+--echo #
+--echo # Bug #29214970: WRONG RESULTS FOR GROUP EXPRESSIONS WITH THE ITERATOR EXECUTOR
+--echo #
+
+CREATE TABLE t1 (
+	f1 INTEGER,
+	f2 INTEGER,
+	KEY k1 ( f1 )
+);
+
+INSERT INTO t1 VALUES ( 1, 1 );
+INSERT INTO t1 VALUES ( 1, 2 );
+INSERT INTO t1 VALUES ( 1, 3 );
+INSERT INTO t1 VALUES ( 2, 1 );
+INSERT INTO t1 VALUES ( 2, 2 );
+INSERT INTO t1 VALUES ( 3, 5 );
+
+ANALYZE TABLE t1;
+
+#
+# The COUNT(DISTINCT ...) is to force the optimizer to use running aggregation on
+# using the f1 index, instead of aggregating into a temporary table (which doesn't
+# expose the bug). Other ways to do the same would include ROLLUP. Output the
+# plan to make sure it doesn't change in a way that would mask the bug.
+#
+--skip_if_hypergraph   # Chooses a different query plan.
+EXPLAIN FORMAT=tree SELECT f1, f1 + 1, COUNT(DISTINCT f2) AS x FROM t1 GROUP BY f1 ORDER BY x;
+SELECT f1, f1 + 1, COUNT(DISTINCT f2) AS x FROM t1 GROUP BY f1 ORDER BY x;
+
+DROP TABLE t1;
+
+--echo # Bug#29240516: Count on nullable expression may return wrong result
+
+CREATE TABLE t1 (
+  vc varchar(255) DEFAULT NULL,
+  b tinyint DEFAULT NULL
+);
+
+INSERT INTO t1 (vc, b) VALUES (1, true), (2, false), (3, true), (4, false);
+INSERT INTO t1 (vc) VALUES (5), (6), (7), (8), (9), (10);
+
+SELECT COUNT(b), COUNT(*)
+FROM t1;
+
+SELECT COUNT(b)
+FROM t1
+HAVING COUNT(1) > 0;
+
+DROP TABLE t1;
+
+--echo # Bug#28857990: Different result for COUNT with EXISTS subquery
+
+CREATE TABLE d (pk INT PRIMARY KEY);
+INSERT INTO d VALUES (1),(2),(3),(4),(5);
+
+CREATE TABLE c (col_varchar VARCHAR(1));
+INSERT INTO c VALUES ('a'),('b'),('c'),('d'),('e');
+
+SELECT COUNT(pk) FROM d WHERE EXISTS (SELECT col_varchar FROM c);
+
+DROP TABLE c, d;
+
+--echo #
+--echo # Bug #29396628: SIG 6 AT LIST<ITEM>::END | SQL_LIST.H
+--echo #
+
+#
+# This bug is not related to ROLLUP per se, and can probably be triggered
+# without it, but ROLLUP processing happens to check the validity of the
+# linked list representing all the fields, so it's the simplest way to
+# trigger the bug.
+#
+CREATE TABLE t1 (
+  f1 integer,
+  f2 integer,
+  f3 integer
+);
+SELECT * FROM t1 GROUP BY f3,f2,f1 WITH ROLLUP;
+DROP TABLE t1;
+
+--echo # Bug#23599127 Unexpected unknown column error without ONLY_FULL_GROUP_BY
+
+SET SQL_MODE = '';
+
+CREATE TABLE t1 (
+  id_aams int NOT NULL ,
+  PRIMARY KEY (id_aams)
+);
+
+CREATE TABLE t2 (
+  id int NOT NULL,
+  id_game int DEFAULT NULL,
+  code_id char(11) DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY codeid (code_id,id_game)
+);
+
+select count(distinct x.id_aams)
+from (select *
+      from (select t1.id_aams, t2.*
+            from t1 left join t2
+                 on t2.code_id='G0000000012' and
+                    t1.id_aams=t2.id_game
+            where t1.id_aams=1715000360
+            order by t2.id desc
+           ) as g
+      group by g.id_aams
+      having g.id is null
+     ) as x;
+
+DELIMITER //;
+CREATE FUNCTION f1(vlt_code_id CHAR(11)) RETURNS tinyint DETERMINISTIC
+BEGIN
+  DECLARE not_installed TINYINT DEFAULT 0;
+
+  select count(distinct x.id_aams)
+  into not_installed
+  from (select *
+        from (select t1.id_aams, t2.*
+              from t1 left join t2
+                   on t2.code_id = vlt_code_id and
+                      t1.id_aams = t2.id_game
+              where t1.id_aams = 1715000360
+              order by t2.id desc
+             ) as g
+        group by g.id_aams
+        having g.id is null
+       ) as x;
+
+RETURN TRUE;
+END //
+
+DELIMITER ;//
+
+SELECT f1('G0000000012');
+SELECT f1('G0000000012');
+
+PREPARE stmt from "
+select count(distinct x.id_aams)
+from (select g.id_aams, g.id
+      from (select t1.id_aams, t2.*
+            from t1 left join t2
+                 on t2.code_id='G0000000012' and
+                    t1.id_aams=t2.id_game
+            where t1.id_aams=1715000360
+            order by t2.id desc
+           ) as g
+      group by g.id_aams
+      having g.id is null
+     ) as x";
+
+EXECUTE stmt;
+EXECUTE stmt;
+
+DEALLOCATE PREPARE stmt;
+DROP FUNCTION f1;
+DROP TABLE t1, t2;
+
+SET SQL_MODE = DEFAULT;
+
+--echo # Bug#31562881: Crash in change_to_use_tmp_fields_except_sums
+
+CREATE TABLE w(a INTEGER);
+INSERT INTO w VALUES (1),(2),(3),(4);
+--error ER_DATA_OUT_OF_RANGE
+SELECT MAX(FROM_UNIXTIME(1536999161)),
+       GROUP_CONCAT(ST_LATFROMGEOHASH(ST_GEOHASH(POINT(115,155),201)))
+FROM w RIGHT JOIN w AS e ON TRUE
+GROUP BY w.a
+LIMIT 39;
+DROP TABLE w;
+
+--echo #
+--echo # Bug #32179240: ADDING ROLLUP BREAKS GROUP LABELS
+--echo #
+
+CREATE TABLE t1 (a DOUBLE);
+INSERT INTO t1 ( a ) VALUES ( 0.1 );
+SELECT TRUNCATE(a, 1) FROM t1 GROUP BY TRUNCATE(a, 1) WITH ROLLUP;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#32193123: DIFFERENT RESULTSET WITH HYPERGRAPH_OPTIMIZER SWITCH ENABLED
+--echo #
+CREATE TABLE t1 (a INTEGER, b VARCHAR(1));
+INSERT INTO t1 VALUES (1, 'x');
+SELECT SUM(t1.a) AS field1, CONCAT(d1.b) AS field2
+FROM (SELECT * FROM t1) AS d1, t1
+GROUP BY field2 HAVING field2 > '' AND field1 < 4;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #32234709: TEMPTABLEAGGREGATEITERATOR::INIT(): ASSERTION `!THD()->IS_ERROR()' FAILED.
+--echo #
+
+CREATE TABLE t1 (
+  a INTEGER,
+  e INTEGER
+);
+
+INSERT INTO t1 VALUES (1,0);
+INSERT INTO t1 VALUES (1,8388607);
+
+--error ER_DATA_OUT_OF_RANGE
+SELECT COUNT(*) FROM
+  t1
+  LEFT JOIN json_table(
+    '{}','$[0][1]'
+    COLUMNS(a FOR ORDINALITY)
+  ) AS t2 ON TRUE
+GROUP BY e*from_unixtime(0);
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #32244407: ASSERTION FAILURE IN `!THD()->IS_ERROR()' AT AGGREGATEITERATOR::READ()
+--echo #
+
+CREATE TABLE t1 (
+  a INTEGER,
+  b VARCHAR(1)
+);
+CREATE INDEX i1 ON t1 (b);
+
+INSERT INTO t1 VALUES (1,'0');
+INSERT INTO t1 VALUES (1,'y');
+INSERT INTO t1 VALUES (1,'Q');
+INSERT INTO t1 VALUES (1,'H');
+INSERT INTO t1 VALUES (1,'j');
+INSERT INTO t1 VALUES (1,'a');
+INSERT INTO t1 VALUES (1,'b');
+INSERT INTO t1 VALUES (1,'j');
+INSERT INTO t1 VALUES (1,'q');
+INSERT INTO t1 VALUES (1,'e');
+
+--error ER_SUBQUERY_NO_1_ROW
+SELECT AVG(a2.a)
+  FROM t1 AS a1
+  LEFT JOIN t1 AS a2 ON a2.b = ( SELECT a1.b FROM t1 );
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #32335256: COUNT(*) RETURNS NULL IN NESTED QUERY
+--echo #
+
+CREATE TABLE t1 (
+  f1 INTEGER
+);
+
+SELECT
+  (
+    SELECT COUNT(*) +
+      (
+        SELECT COUNT(*)
+        FROM t1
+        WHERE f1 = c.f2
+      )
+    FROM t1
+  )
+  FROM (SELECT 555 AS f2) AS c;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#32248291: ENABLE THE HYPERGRAPH OPTIMIZER FOR SQL_BUFFER_RESULT
+--echo #
+--echo # Verify that expressions in the SELECT list are evaluated only once
+--echo # per row.
+--echo #
+CREATE TABLE t(x INTEGER);
+INSERT INTO t VALUES (1), (2), (3);
+# The hypergraph optimizer streams the results through a temporary
+# table when a query has both GROUP BY and ORDER BY. It used to
+# evaluate RAND(1) twice per row when copying the expressions in the
+# SELECT list into the temporary table, and it therefore returned
+# different results than the old optimizer, which evaluated RAND(1)
+# once per row. Now they both evaluate it once per row and should
+# produce the same results.
+SELECT RAND(1) r, COUNT(*) FROM t GROUP BY x ORDER BY r;
+DROP TABLE t;
+
+--echo #
+--echo # Bug #32598902: WL#14325: ASSERTION `RECEIVER.HASSECONDARYENGINECOSTHOOK()' FAILED|JOIN_OPTIMIZE
+--echo #
+
+CREATE TABLE t1 (
+  a INTEGER,
+  b INTEGER
+);
+
+SELECT t1.b
+FROM t1, t1 AS t2
+WHERE t1.a = t1.b AND t1.a = t2.b
+GROUP BY t1.b
+ORDER BY t2.b;
+
+DROP TABLE t1;
+
+--echo # Bug#32717969: Wrong result of execute prepare on 'smallint'
+
+CREATE TABLE t1(
+  c1 smallint NOT NULL
+);
+INSERT INTO t1 VALUES(32767),(14742),(14743);
+SELECT COUNT(*), SUM(c1), AVG(c1), MIN(c1), MAX(c1) FROM t1 WHERE c1 > 32767;
+PREPARE stmt from
+'SELECT COUNT(*), SUM(c1), AVG(c1), MIN(c1), MAX(c1) FROM t1 WHERE c1 > ?';
+SET @a=14742;
+EXECUTE stmt USING @a;
+set @a=32767;
+EXECUTE stmt USING @a;
+SELECT BIT_AND(c1), BIT_OR(c1), BIT_XOR(c1) FROM t1 WHERE c1 > 32767;
+PREPARE stmt from
+'SELECT BIT_AND(c1), BIT_OR(c1), BIT_XOR(c1) FROM t1 WHERE c1 > ?';
+SET @a=14742;
+EXECUTE stmt USING @a;
+set @a=32767;
+EXECUTE stmt USING @a;
+SELECT GROUP_CONCAT(c1), JSON_ARRAYAGG(c1), JSON_OBJECTAGG('key', c1)
+FROM t1
+WHERE c1 > 32767;
+PREPARE stmt from
+"SELECT GROUP_CONCAT(c1), JSON_ARRAYAGG(c1), JSON_OBJECTAGG('key', c1)
+ FROM t1
+ WHERE c1 > ?";
+SET @a=14742;
+EXECUTE stmt USING @a;
+set @a=32767;
+EXECUTE stmt USING @a;
+SELECT STDDEV_POP(c1), STDDEV_SAMP(c1), VAR_POP(c1), VAR_SAMP(c1)
+FROM t1
+WHERE c1 > 32767;
+PREPARE stmt from
+'SELECT STDDEV_POP(c1), STDDEV_SAMP(c1), VAR_POP(c1), VAR_SAMP(c1)
+ FROM t1
+ WHERE c1 > ?';
+SET @a=14742;
+EXECUTE stmt USING @a;
+set @a=32767;
+EXECUTE stmt USING @a;
+DROP TABLE t1;
+
+--echo #
+--echo # Verify that ROLLUP and DISTINCT on nullable GROUP BY expressions
+--echo # work as expected (the sort is not elided).
+--echo #
+
+CREATE TABLE t1 (a INTEGER);
+INSERT INTO t1 VALUES (NULL), (1), (2);
+
+--sorted_result
+SELECT DISTINCT a, COUNT(*) FROM t1 GROUP BY a WITH ROLLUP;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #33007298: RECENT REGRESSION: CRASH IN QEP_SHARED_OWNER::TABLE
+--echo #
+
+--error ER_INVALID_JSON_TEXT_IN_PARAM
+select is_uuid(avg(distinct json_storage_free('$b*<*#]E')));
+
+--echo #
+--echo # Bug#31894023 THE RESULTS OF AGGREGATION ON BIT TYPE ARE INCONSISTENT WHEN JOIN TYPE DIFFERS
+--echo #
+
+CREATE TABLE t1(id INT, b1 BIT, b9 BIT(9), b64 BIT(64));
+INSERT INTO t1 VALUES
+(1, b'0', b'000000000', b'0000000000000000000000000000000000000000000000000000000000000000'),
+(2, b'1', b'100000000', b'1000000000000000000000000000000000000000000000000000000000000000');
+CREATE INDEX i1 ON t1(id);
+ANALYZE TABLE t1;
+
+SELECT HEX(CONCAT(MIN(b1))), HEX(CONCAT(MIN(b9))), HEX(CONCAT(MIN(b64))) FROM t1 GROUP BY id;
+SELECT HEX(CONCAT(MIN(b1))), HEX(CONCAT(MIN(b9))), HEX(CONCAT(MIN(b64))) FROM t1 IGNORE INDEX(i1) GROUP BY id;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#33515752: Data insertion exception in version 8.0.27
+--echo #
+
+CREATE TABLE t1(f1 INTEGER);
+INSERT INTO t1 VALUES(1);
+
+SELECT SQL_BUFFER_RESULT MAX(f1)+1, 1 AS f2  FROM t1 GROUP BY f2;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #33603911: Incorrect result with aggregation by temporary table
+--echo #
+
+CREATE TABLE t1 ( a INTEGER, b VARCHAR(1) );
+INSERT INTO t1 VALUES (3, 'Q'), (4, '5');
+
+CREATE TABLE t2 ( a INTEGER );
+INSERT INTO t2 VALUES (3), (4);
+
+SELECT
+  t2d.a,
+  SUM(t1.b) AS field2
+FROM
+  t1
+  JOIN ( SELECT * FROM t2 ) AS t2d ON t1.a = t2d.a
+GROUP BY t2d.a
+HAVING t2d.a <> 3 OR field2 < 5;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#33738447:
+--echo # Assertion `!(used_tabs & (~ read_tables & ~filter_for_table))' failed.
+--echo #
+
+CREATE TABLE t (i INTEGER, blobfield LONGTEXT);
+INSERT INTO t VALUES (1, '');
+
+PREPARE ps FROM '
+SELECT d.i, COUNT(*)
+FROM t, LATERAL (SELECT i, blobfield) AS d
+GROUP BY d.i
+HAVING d.i < 100
+ORDER BY d.i
+';
+
+# The second execution used to get an assert failure with the
+# hypergraph optimizer.
+EXECUTE ps;
+EXECUTE ps;
+
+DEALLOCATE PREPARE ps;
+DROP TABLE t;
+
+--echo #
+--echo # Bug#33674441: Wrong result with outer join and streaming aggregation
+--echo #
+
+CREATE TABLE t1 (a INTEGER PRIMARY KEY, b INTEGER);
+INSERT INTO t1 VALUES (1, 2), (2, 1), (3, 1);
+
+CREATE TABLE t2 (a INTEGER, b INTEGER, KEY (b));
+INSERT INTO t2 VALUES (1, 11);
+
+CREATE TABLE t3 (a INTEGER PRIMARY KEY, b INTEGER);
+INSERT INTO t3 VALUES (1, 10), (2, 11), (3, 0), (4, 0), (5, 0), (6, 0);
+
+--sorted_result
+SELECT t1.a, MAX(t2.a)
+FROM t1 LEFT JOIN (t2 JOIN t3 ON t2.b = t3.b) ON t1.b = t3.a
+GROUP BY t1.a;
+
+# The old optimizer has a separate code path for streaming aggregation when
+# SQL_BUFFER_RESULT is specified. Verify that both code paths are fixed.
+--sorted_result
+SELECT SQL_BUFFER_RESULT t1.a, MAX(t2.a)
+FROM t1 LEFT JOIN (t2 JOIN t3 ON t2.b = t3.b) ON t1.b = t3.a
+GROUP BY t1.a;
+
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug #33621358: Hypergraph: Assertion `!null_value || is_nullable()'
+--echo #                failed
+--echo #
+
+CREATE TABLE t1 (f1 INTEGER, PRIMARY KEY(f1));
+
+# This query used to get an assert failure for hypergraph optimizer.
+# The old optimizer will not process the window function because it
+# has a special code path for implicitly grouped queries. However
+# the hypergraph optimizer does because the resolver is only marking
+# the query as unordered but not removing the order by list when
+# window functions are present.
+SELECT SUM(t1.f1)
+FROM t1 JOIN t1 AS t2
+        ON t1.f1 = t2.f1
+ORDER BY RANK() OVER(), CAST(t1.f1 AS UNSIGNED);
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#34051026: mysqld uint Filesort::make_sortorder(ORDER*, bool):
+--echo #               Assertion `count > 0' failed
+--echo #
+
+CREATE TABLE t1(x INT PRIMARY KEY);
+CREATE TABLE t2(x INT PRIMARY KEY);
+CREATE TABLE t3(x INT);
+INSERT INTO t1 VALUES (1);
+SELECT t2.x
+FROM
+  t1
+  LEFT JOIN t2
+  LEFT JOIN t3 ON t3.x = t2.x ON t1.x = t3.x
+WHERE t3.x IS NULL
+GROUP BY t2.x
+ORDER BY t2.x;
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug#34341503: TPC-DS Q18 SF1 result diff old optimizer vs. hypergraph
+--echo #
+
+CREATE TABLE t1 (
+  id INT,
+  x INT,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE t2 (
+  id INT
+);
+
+INSERT INTO t1 VALUES (1, 1), (2, 2);
+INSERT INTO t2 VALUES (1), (2);
+
+--sorted_result
+SELECT t1.x
+FROM t1, t2
+WHERE t1.id = t2.id
+GROUP BY t1.x WITH ROLLUP;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#34463842: Result diff seen with hypergraph off and on
+--echo #
+
+CREATE TABLE t1 (x INT);
+INSERT INTO t1 VALUES (1), (2);
+CREATE TABLE t2 (pk INT PRIMARY KEY);
+INSERT INTO t2 VALUES (1), (2), (3), (4), (5), (6), (7), (8);
+
+SELECT t1.x FROM t1, t2 WHERE t1.x = t2.pk
+GROUP BY t1.x
+HAVING (COUNT(*) = 3 AND COUNT(*) > 6) OR t1.x = 2;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#34682586: MySQL server crash, segmentation fault: count_field_types
+--echo #
+
+CREATE TABLE t1 (pk INT PRIMARY KEY, x INT);
+INSERT INTO t1(pk) VALUES (1), (2), (3), (4), (5);
+CREATE TABLE t2 (x INT);
+
+# The second execution used to crash with the hypergraph optimizer.
+PREPARE ps FROM
+'SELECT 1 FROM t1, (SELECT DISTINCT x FROM t2) AS ot2
+ WHERE t1.pk = ot2.x GROUP BY ot2.x, t1.x';
+EXECUTE ps;
+EXECUTE ps;
+
+DEALLOCATE PREPARE ps;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#34727088: Assertion `!OrderItemsReferenceUnavailableTables(path, tables)' failed.
+--echo #
+
+CREATE TABLE t1 (pk INT PRIMARY KEY, x INT);
+INSERT INTO t1 VALUES (1, 1), (2, 2), (3, 3);
+
+CREATE TABLE t2 (pk INT PRIMARY KEY);
+INSERT INTO t2 VALUES (1), (2), (3), (4), (5);
+
+ANALYZE TABLE t1, t2;
+
+--sorted_result
+SELECT DISTINCT t1.x FROM t1, t2 WHERE t1.x = t2.pk GROUP BY t1.pk;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#34891365: MySQL 8.0.29+ is slower than MySQL 8.0.28 with
+--echo #               queries using JOINS
+--echo #
+
+CREATE TABLE t1(a INT AUTO_INCREMENT PRIMARY KEY, b INT, KEY(b));
+INSERT INTO t1(b)
+WITH RECURSIVE qn(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM qn WHERE n<250)
+SELECT n FROM qn;
+INSERT INTO t1(b) SELECT b FROM t1;
+INSERT INTO t1(b) SELECT b FROM t1;
+INSERT INTO t1(b) SELECT b FROM t1;
+INSERT INTO t1(b) SELECT b FROM t1;
+INSERT INTO t1(b) SELECT b FROM t1;
+
+CREATE TABLE t2(b INT PRIMARY KEY, c INT);
+INSERT INTO t2
+WITH RECURSIVE qn(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM qn WHERE n<250)
+SELECT n, n FROM qn;
+
+CREATE TABLE t3(b INT PRIMARY KEY, d INT);
+INSERT INTO t3
+WITH RECURSIVE qn(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM qn WHERE n<250)
+SELECT n, n FROM qn;
+
+ANALYZE TABLE t1, t2, t3;
+
+let $query =
+SELECT b, COUNT(*) FROM t1 LEFT JOIN t2 USING (b) LEFT JOIN t3 USING (b)
+GROUP BY b;
+
+--skip_if_hypergraph  # Bug#34527697.
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+
+FLUSH STATUS;
+--sorted_result
+--eval $query
+
+--echo # Expect around 500 index reads. 250 from t2 and 250 from t3.
+--echo # It used to be around 16000 index reads.
+SHOW STATUS LIKE 'Handler_read_key';
+
+DROP TABLE t1, t2, t3;
+
+# Not a reproduction for the slowdown, but a reproduction for one case
+# of wrong results seen before the fix that caused the slowdown.
+# Another case with wrong results is shown in the test case for
+# bug#33674441 above. The two cases show two different underlying
+# bugs, so we want the test suite to cover both.
+
+CREATE TABLE t1(x INT, y INT);
+CREATE TABLE t2(x INT, y INT);
+CREATE TABLE t3(id INT PRIMARY KEY, x INT, y INT);
+
+INSERT INTO t1 VALUES (1, 3), (2, 3), (3, 2), (4, 3), (5, 1), (6, 3);
+INSERT INTO t2 VALUES (1, 1), (2, 2), (1, 3);
+INSERT INTO t3 VALUES (1, 1, 0), (2, 2, 0), (3, 3, 0),
+                      (4, 4, 0), (5, 5, 0), (6, 6, 0);
+
+ANALYZE TABLE t1, t2, t3;
+
+let $query =
+SELECT t1.x, dt.* FROM t1, LATERAL (
+  SELECT SQL_BIG_RESULT t2.y, SUM(t3.x)
+  FROM t2, t3 WHERE t2.x = t3.id AND t2.y + t3.y < t1.y
+  GROUP BY t2.y
+) AS dt;
+
+# The query plan that caused wrong results was a nested loop join
+# whose inner side contained a streaming aggregation node (not
+# "Aggregation using temporary table") on top of another nested loop
+# join whose inner side was a primary key lookup on t3.
+--skip_if_hypergraph  # Does not materialize the subquery.
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+
+# Verify that the results are correct.
+--sorted_result
+--eval $query
+
+DROP TABLE t1, t2, t3;
+
+# For extra coverage, also add a simpler reproduction of the problem
+# in bug#33674441.
+CREATE TABLE t1 (a INTEGER PRIMARY KEY, b INTEGER);
+INSERT INTO t1 VALUES  (1, 1), (2, 2), (3, 2);
+
+CREATE TABLE t2 (a INTEGER PRIMARY KEY, b INTEGER);
+INSERT INTO t2 VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6);
+
+ANALYZE TABLE t1, t2;
+
+let $query =
+SELECT t1.a, MAX(t2.b) FROM t1 LEFT JOIN t2 ON t1.b = t2.a AND t1.a <> 2
+GROUP BY t1.a;
+
+# The query plan that caused wrong results was a nested loop join with
+# a primary key lookup on t2 on the inner side, and with a streaming
+# aggregation node on top (not "Aggregate using temporary table").
+--skip_if_hypergraph   # Different row estimates.
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+
+# Verify that the results are correct.
+--sorted_result
+--eval $query
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#32932749: HYPERGRAPH: FAKESINGLEROWITERATOR::SETNULLROWFLAG(BOOL):
+--echo #               ASSERTION `!IS_NULL_ROW' FAILED.
+--echo #
+
+SELECT COUNT(*) WHERE RAND() > 1;
+
+--echo #
+--echo # Bug#34959356: Poor performance when using HASH field to check unique
+--echo #
+CREATE TABLE product (
+  value INT NOT NULL AUTO_INCREMENT,
+  code VARCHAR(255),
+  name VARCHAR(255),
+  comment VARCHAR(255),
+  platform VARCHAR(50),
+  KEY idx_key (value)
+);
+
+DELIMITER //;
+CREATE PROCEDURE BatchInsert(IN row_count int)
+BEGIN
+  START TRANSACTION;
+  SET @n = 1;
+  REPEAT
+      SET @str = (CONCAT('test', CAST(@n AS CHAR)));
+      INSERT INTO product(code, name) VALUES(@str, @str);
+      SET @n = @n + 1;
+  UNTIL @n > row_count
+  END REPEAT;
+  COMMIT;
+END;
+//
+DELIMITER ;//
+
+CALL BatchInsert(200); # original repro had 20000.
+SELECT COUNT(*)
+FROM ( SELECT ANY_VALUE(value)
+       FROM product
+       GROUP BY code, name, comment, platform ) derived;
+
+DROP PROCEDURE BatchInsert;
+DROP TABLE product;
+
+--echo #
+--echo # Bug#37415167 ERROR 1022 (23000): Can't write; duplicate key in
+--echo # table '/tmp/#sqlxxxxxxx'
+--echo #
+
+CREATE TABLE tray (
+  data_cd VARCHAR(30),
+  data_from_ymd VARCHAR(8),
+  data_nm VARCHAR(200),
+  PRIMARY KEY (data_cd, data_from_ymd),
+  KEY (data_from_ymd)
+);
+
+INSERT INTO tray VALUES
+('00014', '20120801', ''),
+('00014', '20130801', ''),
+('00015', '20120801', '/');
+
+
+SELECT (
+    SELECT COUNT(data_from_ymd)
+    FROM (
+        SELECT
+            ROW_NUMBER() OVER (ORDER BY MIN(data_from_ymd) DESC) AS data_from_ymd
+        FROM tray
+        WHERE data_cd = cte.data_cd
+        GROUP BY data_cd, data_nm
+    ) a
+) AS b
+FROM (
+    SELECT *
+    FROM tray
+) AS cte;
+
+DROP TABLE tray;
+
+CREATE TABLE t (
+  x INT,
+  y INT);
+
+INSERT INTO t VALUES
+(1, 1),
+(2, 2),
+(2, 3),
+(3, 2);
+
+SELECT 1
+FROM t AS t1,
+     LATERAL (
+         SELECT ROW_NUMBER() OVER (ORDER BY MIN(y))
+         FROM t
+         WHERE x = t1.x
+         GROUP BY x
+     ) AS t2;
+
+DROP TABLE t;
+
+--echo #

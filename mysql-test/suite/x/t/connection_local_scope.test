@@ -1,0 +1,34 @@
+--echo #
+--echo ## Preamble
+--echo #
+--source include/have_ipv6.inc
+--source include/have_lo0_local_scope.inc
+--source include/xplugin_preamble.inc
+
+# In case when Your system is missing "lo0" iterface,
+# then to execute this test, You may add it by executing
+# following commands:
+#
+#    ip link add name lo0 type dummy
+#    ip addr add  fe80::1 dev lo0
+#
+
+--echo #
+--echo ## Testcase
+--echo #
+call mtr.add_suppression("Hostname '.*' does not resolve to .*");
+call mtr.add_suppression("IP address .* could not be resolved: .*");
+
+--echo
+--echo # Using MySQL client
+--let $execute_command=$MYSQL
+--let $ip=fe80::1
+--let $interface=lo0
+--source ../include/connection_local_scope.inc
+
+--echo
+--echo # Using mysqlxtest
+--let $execute_command=$MYSQLXTEST --ipv=6 --history-protocol false
+--let $ip=fe80::1
+--let $interface=lo0
+--source ../include/connection_local_scope.inc

@@ -1,214 +1,159 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2011, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1996, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+the terms of the GNU General Public License, version 2.0, as published by the
+Free Software Foundation.
+
+This program is designed to work with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have either included with
+the program or referenced in the documentation.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
+for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file include/btr0sea.ic
-The index tree adaptive search
+/** @file include/btr0sea.ic
+ The index tree adaptive search
 
-Created 2/17/1996 Heikki Tuuri
-*************************************************************************/
+ Created 2/17/1996 Heikki Tuuri
+ *************************************************************************/
 
-#include "dict0mem.h"
 #include "btr0cur.h"
 #include "buf0buf.h"
+#include "dict0mem.h"
+#include "sync0rw.h"
 
-/*********************************************************************//**
-Updates the search info. */
-UNIV_INTERN
-void
-btr_search_info_update_slow(
-/*========================*/
-	btr_search_t*	info,	/*!< in/out: search info */
-	btr_cur_t*	cursor);/*!< in: cursor which was just positioned */
+/** Updates the search info statistics following a search in B-tree that was
+performed not using or not finding row with the AHI index. It may decide to try
+to update the searched record on which the supplied cursor in positioned at, or
+add the whole page to AHI.
+@param[in]      cursor  cursor which was just positioned */
+void btr_search_info_update_slow(btr_cur_t *cursor);
 
-/********************************************************************//**
-Returns search info for an index.
-@return	search info; search mutex reserved */
-UNIV_INLINE
-btr_search_t*
-btr_search_get_info(
-/*================*/
-	dict_index_t*	index)	/*!< in: index */
-{
-	return(index->search_info);
+static inline void btr_search_info_update(btr_cur_t *cursor) {
+  const auto index = cursor->index;
+  ut_ad(!rw_lock_own(btr_get_search_latch(index), RW_LOCK_S));
+  ut_ad(!rw_lock_own(btr_get_search_latch(index), RW_LOCK_X));
+
+  if (dict_index_is_spatial(index) || !btr_search_enabled) {
+    return;
+  }
+  if (cursor->flag == BTR_CUR_HASH_NOT_ATTEMPTED) {
+    return;
+  }
+
+  const auto hash_analysis_value = ++index->search_info->hash_analysis;
+
+  if (hash_analysis_value < BTR_SEARCH_HASH_ANALYSIS) {
+    /* Do nothing */
+
+    return;
+  }
+
+  ut_ad(cursor->flag != BTR_CUR_HASH);
+
+  btr_search_info_update_slow(cursor);
 }
 
-/*********************************************************************//**
-Updates the search info. */
-UNIV_INLINE
-void
-btr_search_info_update(
-/*===================*/
-	dict_index_t*	index,	/*!< in: index of the cursor */
-	btr_cur_t*	cursor)	/*!< in: cursor which was just positioned */
-{
-	btr_search_t*	info;
-
-#ifdef UNIV_SYNC_DEBUG
-	ut_ad(!rw_lock_own(btr_search_get_latch(index), RW_LOCK_SHARED));
-	ut_ad(!rw_lock_own(btr_search_get_latch(index), RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
-
-	info = btr_search_get_info(index);
-
-	info->hash_analysis++;
-
-	if (info->hash_analysis < BTR_SEARCH_HASH_ANALYSIS) {
-
-		/* Do nothing */
-
-		return;
-
-	}
-
-	ut_ad(cursor->flag != BTR_CUR_HASH);
-
-	btr_search_info_update_slow(info, cursor);
+static inline void btr_search_x_lock(const dict_index_t *index,
+                                     ut::Location location) {
+  rw_lock_x_lock_gen(btr_get_search_latch(index), 0, location);
 }
 
-/********************************************************************//**
-Returns the adaptive hash index table for a given index key.
-@return the adaptive hash index table for a given index key */
-UNIV_INLINE
-hash_table_t*
-btr_search_get_hash_table(
-/*======================*/
-	const dict_index_t*	index)	/*!< in: index */
-{
-	ut_ad(index);
-	ut_ad(index->search_table);
-
-	return(index->search_table);
+static inline bool btr_search_x_lock_nowait(const dict_index_t *index,
+                                            ut::Location location) {
+  return rw_lock_x_lock_nowait(btr_get_search_latch(index), location);
 }
 
-/********************************************************************//**
-Returns the adaptive hash index latch for a given index key.
-@return the adaptive hash index latch for a given index key */
-UNIV_INLINE
-rw_lock_t*
-btr_search_get_latch(
-/*=================*/
-	const dict_index_t*	index)	/*!< in: index */
-{
-	ut_ad(index);
-	ut_ad(index->search_latch >= btr_search_latch_arr &&
-	      index->search_latch < btr_search_latch_arr +
-	      btr_search_index_num);
-
-	return(index->search_latch);
+static inline void btr_search_x_unlock(const dict_index_t *index) {
+  rw_lock_x_unlock(btr_get_search_latch(index));
 }
 
-/*********************************************************************//**
-Returns the AHI partition number corresponding to a give index ID. */
-UNIV_INLINE
-ulint
-btr_search_get_key(
-/*===============*/
-	index_id_t	index_id)	/*!< in: index ID */
-{
-	return(index_id % btr_search_index_num);
+static inline void btr_search_x_lock_all(ut::Location location) {
+  for (ulint i = 0; i < btr_ahi_parts; ++i) {
+    rw_lock_x_lock_gen(&btr_search_sys->parts[i].latch, 0, location);
+  }
 }
 
-/*********************************************************************//**
-Initializes AHI-related fields in a newly created index. */
-UNIV_INLINE
-void
-btr_search_index_init(
-/*===============*/
-	dict_index_t*	index)	/*!< in: index */
-{
-	ut_ad(index);
-
-	index->search_latch =
-		&btr_search_latch_arr[btr_search_get_key(index->id)];
-	index->search_table =
-		btr_search_sys->hash_tables[btr_search_get_key(index->id)];
+static inline void btr_search_x_unlock_all() {
+  for (ulint i = 0; i < btr_ahi_parts; ++i) {
+    rw_lock_x_unlock(&btr_search_sys->parts[i].latch);
+  }
 }
 
-/********************************************************************//**
-Latches all adaptive hash index latches in exclusive mode.  */
-UNIV_INLINE
-void
-btr_search_x_lock_all(void)
-/*=======================*/
-{
-	ulint	i;
-
-	for (i = 0; i < btr_search_index_num; i++) {
-		rw_lock_x_lock(&btr_search_latch_arr[i]);
-	}
+static inline void btr_search_s_lock(const dict_index_t *index,
+                                     ut::Location location) {
+  rw_lock_s_lock_gen(btr_get_search_latch(index), 0, location);
 }
 
-/********************************************************************//**
-Unlatches all adaptive hash index latches in exclusive mode.  */
-UNIV_INLINE
-void
-btr_search_x_unlock_all(void)
-/*==========================*/
-{
-	ulint	i;
-
-	for (i = 0; i < btr_search_index_num; i++) {
-		rw_lock_x_unlock(&btr_search_latch_arr[i]);
-	}
+static inline bool btr_search_s_lock_nowait(const dict_index_t *index,
+                                            ut::Location location) {
+  return rw_lock_s_lock_nowait(btr_get_search_latch(index), location);
 }
 
-#ifdef UNIV_SYNC_DEBUG
-/******************************************************************//**
-Checks if the thread has locked all the adaptive hash index latches in the
-specified mode.
-
-@return true if all latches are locked by the current thread, false
-otherwise.  */
-UNIV_INLINE
-bool
-btr_search_own_all(
-/*===============*/
-	ulint lock_type)
-{
-	ulint	i;
-
-	for (i = 0; i < btr_search_index_num; i++) {
-		if (!rw_lock_own(&btr_search_latch_arr[i], lock_type)) {
-			return(false);
-		}
-	}
-
-	return(true);
+static inline void btr_search_s_unlock(const dict_index_t *index) {
+  rw_lock_s_unlock(btr_get_search_latch(index));
 }
 
-/********************************************************************//**
-Checks if the thread owns any adaptive hash latches in either S or X mode.
-@return	true if the thread owns at least one latch in any mode. */
-UNIV_INLINE
-bool
-btr_search_own_any(void)
-/*====================*/
-{
-	ulint	i;
-
-	for (i = 0; i < btr_search_index_num; i++) {
-		if (rw_lock_own(&btr_search_latch_arr[i], RW_LOCK_SHARED) ||
-		    rw_lock_own(&btr_search_latch_arr[i], RW_LOCK_EX)) {
-			return(true);
-		}
-	}
-
-	return(false);
+static inline void btr_search_s_lock_all(ut::Location location) {
+  for (ulint i = 0; i < btr_ahi_parts; ++i) {
+    rw_lock_s_lock_gen(&btr_search_sys->parts[i].latch, 0, location);
+  }
 }
-#endif /* UNIV_SYNC_DEBUG */
+
+static inline void btr_search_s_unlock_all() {
+  for (ulint i = 0; i < btr_ahi_parts; ++i) {
+    rw_lock_s_unlock(&btr_search_sys->parts[i].latch);
+  }
+}
+
+#ifdef UNIV_DEBUG
+static inline bool btr_search_own_all(ulint mode) {
+  for (ulint i = 0; i < btr_ahi_parts; ++i) {
+    if (!rw_lock_own(&btr_search_sys->parts[i].latch, mode)) {
+      return (false);
+    }
+  }
+  return (true);
+}
+
+static inline bool btr_search_own_any(ulint mode) {
+  for (ulint i = 0; i < btr_ahi_parts; ++i) {
+    if (rw_lock_own(&btr_search_sys->parts[i].latch, mode)) {
+      return (true);
+    }
+  }
+  return (false);
+}
+#endif /* UNIV_DEBUG */
+
+static inline size_t btr_search_hash_index_id(const dict_index_t *index) {
+  return ut::hash_uint64_pair(index->space, index->id);
+}
+
+static inline btr_search_sys_t::search_part_t &btr_get_search_part(
+    const dict_index_t *index) {
+  ut_ad(index != nullptr);
+
+  const auto index_slot =
+      btr_search_hash_index_id(index) % btr_ahi_parts_fast_modulo;
+
+  return btr_search_sys->parts[index_slot];
+}
+
+static inline rw_lock_t *btr_get_search_latch(const dict_index_t *index) {
+  return &btr_get_search_part(index).latch;
+}

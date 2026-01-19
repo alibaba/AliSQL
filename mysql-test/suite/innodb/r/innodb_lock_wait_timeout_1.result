@@ -68,20 +68,11 @@ drop table t1, t2;
 #
 # Bug#41756 Strange error messages about locks from InnoDB
 #
-drop table if exists t1;
-# In the default transaction isolation mode, and/or with
-# innodb_locks_unsafe_for_binlog=OFF, handler::unlock_row()
-# in InnoDB does nothing.
-# Thus in order to reproduce the condition that led to the
-# warning, one needs to relax isolation by either
-# setting a weaker tx_isolation value, or by turning on
-# the unsafe replication switch.
-# For testing purposes, choose to tweak the isolation level,
-# since it's settable at runtime, unlike
-# innodb_locks_unsafe_for_binlog, which is
-# only a command-line switch.
-#
-set @@session.tx_isolation="read-committed";
+# In the default transaction isolation mode, ha_innodb::unlock_row()
+# does nothing.  Thus in order to reproduce the condition
+# that led to the warning, one needs to relax isolation by
+# setting a weaker transaction_isolation value
+set @@session.transaction_isolation="read-committed";
 # Prepare data. We need a table with a unique index,
 # for join_read_key to be used. The other column
 # allows to control what passes WHERE clause filter.
@@ -103,53 +94,55 @@ select 2 as a, 2 as b) as t2 for update;
 id	1
 select_type	PRIMARY
 table	<derived2>
+partitions	NULL
 type	ALL
 possible_keys	NULL
 key	NULL
 key_len	NULL
 ref	NULL
 rows	2
+filtered	100.00
 Extra	NULL
 id	1
 select_type	PRIMARY
 table	t1
+partitions	NULL
 type	eq_ref
 possible_keys	PRIMARY
 key	PRIMARY
 key_len	4
 ref	t2.a
 rows	1
+filtered	10.00
 Extra	Using where
 id	2
 select_type	DERIVED
 table	NULL
+partitions	NULL
 type	NULL
 possible_keys	NULL
 key	NULL
 key_len	NULL
 ref	NULL
 rows	NULL
+filtered	NULL
 Extra	No tables used
 id	3
 select_type	UNION
 table	NULL
+partitions	NULL
 type	NULL
 possible_keys	NULL
 key	NULL
 key_len	NULL
 ref	NULL
 rows	NULL
+filtered	NULL
 Extra	No tables used
-id	NULL
-select_type	UNION RESULT
-table	<union2,3>
-type	ALL
-possible_keys	NULL
-key	NULL
-key_len	NULL
-ref	NULL
-rows	NULL
-Extra	Using temporary
+Warnings:
+Level	Note
+Code	1003
+Message	/* select#1 */ select 1 AS `1` from `test`.`t1` join (/* select#2 */ select 2 AS `a`,1 AS `b` union all /* select#3 */ select 2 AS `a`,2 AS `b`) `t2` where ((`test`.`t1`.`a` = `t2`.`a`) and (`test`.`t1`.`b` = `t2`.`b`))
 #
 # Demonstrate that the reported SELECT statement
 # no longer produces warnings.
@@ -307,53 +300,55 @@ select 3 as a, 1 as b) as t2 for update;
 id	1
 select_type	PRIMARY
 table	<derived2>
+partitions	NULL
 type	ALL
 possible_keys	NULL
 key	NULL
 key_len	NULL
 ref	NULL
 rows	2
+filtered	100.00
 Extra	NULL
 id	1
 select_type	PRIMARY
 table	t1
+partitions	NULL
 type	eq_ref
 possible_keys	PRIMARY
 key	PRIMARY
 key_len	4
 ref	t2.a
 rows	1
+filtered	10.00
 Extra	Using where
 id	2
 select_type	DERIVED
 table	NULL
+partitions	NULL
 type	NULL
 possible_keys	NULL
 key	NULL
 key_len	NULL
 ref	NULL
 rows	NULL
+filtered	NULL
 Extra	No tables used
 id	3
 select_type	UNION
 table	NULL
+partitions	NULL
 type	NULL
 possible_keys	NULL
 key	NULL
 key_len	NULL
 ref	NULL
 rows	NULL
+filtered	NULL
 Extra	No tables used
-id	NULL
-select_type	UNION RESULT
-table	<union2,3>
-type	ALL
-possible_keys	NULL
-key	NULL
-key_len	NULL
-ref	NULL
-rows	NULL
-Extra	Using temporary
+Warnings:
+Level	Note
+Code	1003
+Message	/* select#1 */ select 1 AS `1` from `test`.`t1` join (/* select#2 */ select 3 AS `a`,2 AS `b` union all /* select#3 */ select 3 AS `a`,1 AS `b`) `t2` where ((`test`.`t1`.`a` = `t2`.`a`) and (`test`.`t1`.`b` = `t2`.`b`))
 # Lock the record.
 select 1 from t1 natural join (select 3 as a, 2 as b union all
 select 3 as a, 1 as b) as t2 for update;
@@ -368,7 +363,7 @@ delete from t1 where a=3;
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 # Switching to connection default
 commit;
-set @@session.tx_isolation=default;
+set @@session.transaction_isolation=default;
 drop table t1;
 #
 # End of 5.1 tests

@@ -1,0 +1,104 @@
+--echo #
+--echo # Test the limits of a file-per-table tablespace name.  MySQL combines
+--echo # the database name with the table name to make a unique table name.
+--echo #
+
+# There is no use in testing the maximum expanded filename using "#" or
+# some other character that is expanded by MySQL to "@0023" because
+# Windows imposes a maximum absolute path length of 260 bytes. So the
+# results will depend upon what local directory this test is run in.
+# See https://msdn.microsoft.com/en-us/library/aa365247.aspx
+# "Maximum Path Length Limitation
+# In the Windows API, the maximum length for a path is MAX_PATH, which is
+# defined as 260 characters. A local path is structured in the following
+# order: drive letter, colon, backslash, name components separated by
+# backslashes, and a terminating null character. For example, the maximum
+# path on drive D is "D:\some 256-character path string<NUL>" where
+# "<NUL>" represents the invisible terminating null character for the
+# current system codepage. (The characters < > are used here for visual
+# clarity and cannot be part of a valid path string.)"
+
+--source include/windows.inc
+# This will test the limit of a filename in MySQL at 512 bytes.
+# We control that by making it a relative path starting with "./".
+
+SET default_storage_engine=InnoDB;
+LET $MYSQLD_DATADIR = `select @@datadir`;
+
+--echo #
+--echo # MySQL limits each database and tablename identifier to 64 characters
+--echo # of up to 3 bytes per character, corresponding to 192 bytes.
+--echo #
+LET $too_long_name  = this_sixty_five_byte_name_is_too_long____________________________;
+--error ER_TOO_LONG_IDENT
+--eval CREATE DATABASE `$too_long_name`
+
+LET $long_name      = this_sixty_four_byte_name_is_not_too_long_______________________;
+--eval CREATE DATABASE `$long_name`
+--eval USE `$long_name`
+
+--echo #
+--echo # A 64 character tablename can be created in a 64 character database name
+--echo #
+--eval CREATE TABLE `$long_name`.`$long_name` (a SERIAL)
+
+--echo #
+--echo # A 65 character tablename is too long.
+--echo #
+--error ER_TOO_LONG_IDENT
+--eval CREATE TABLE `test`.`$too_long_name` (a SERIAL)
+--error ER_TOO_LONG_IDENT
+--eval CREATE TABLE `$long_name`.`$too_long_name` (a SERIAL)
+
+--echo #
+--echo # Show the successfully created database and table
+--echo #
+--eval SHOW CREATE TABLE `$long_name`.`$long_name`
+
+--echo ---- list_files MYSQLD_DATADIR/$long_name
+--list_files $MYSQLD_DATADIR/$long_name
+
+SELECT name FROM information_schema.innodb_tables WHERE name LIKE '%long%';
+SELECT name FROM information_schema.innodb_tablespaces WHERE name LIKE '%long%';
+--replace_result $MYSQLD_DATADIR MYSQLD_DATADIR
+SELECT path FROM information_schema.innodb_datafiles WHERE path LIKE '%long%';
+--vertical_results
+--replace_regex /innodb_file_per_table.[0-9]*/innodb_file_per_table.##/
+--replace_result $MYSQLD_DATADIR MYSQLD_DATADIR
+SELECT file_name, tablespace_name FROM information_schema.files WHERE file_name LIKE '%long%';
+--horizontal_results
+
+--echo #
+--echo # A 64 character tablename can cause a partitioned table
+--echo # to have a path that is too long.
+--echo #
+
+--error ER_TABLE_NAME_CAUSES_TOO_LONG_PATH
+CREATE TABLE TH6EDXFX5D1U5BLB3I50LN5DFO415JIRP9XKUC0H9O2IONKQL3IOMFYW4ZVOCFPP (a INT NOT NULL, b INT)
+  PARTITION BY RANGE (a) PARTITIONS 3 SUBPARTITION BY KEY (b)
+   (PARTITION O8W7066AGXADOMYWHT89TWMBJOMTFDMDC74WJ7IUPKD75LVU1ENOV1J008SJBKKF VALUES LESS THAN (200)
+     (SUBPARTITION YWKQ987ZTKDJ33ZBMLW526153X86VXL4X44R15SPF8JQS92665MT0QI6BSNKAZY5,
+      SUBPARTITION OSYA45V7KKPJ840E4CZ7CKFXDT3J1NNM8QTT9BQOF896CAZVWFY4K236VHYD1WXN,
+      SUBPARTITION M6YGLCVSKPSVF1RYZA4XJNP7HP9P7OKBP0268T2HKJ0005BW3LLSALQJ94UE5ZSV),
+    PARTITION F3HRUC798U6YIBQFSC9BDKOAUH2SD6B0A3IA7J4P2V8M5U84AAVCR27NNQGM8NI3 VALUES LESS THAN (600)
+     (SUBPARTITION YKWIEPEMRMG097FJ0D8WBJC9TF93GW7GVSU8H0MXYSX940JYO0RNVR4W7YYEZDSF,
+      SUBPARTITION WDJZ36D1IMDRB4ZABLZXWE7J00OP1WR028V1PREZN46PK9L3Y3ERVTWKXYTMC08W,
+      SUBPARTITION KRR0PI4ZBU50X4YVWKDA65PFYRNB69EV5LMM3CMBUVUEIHN2MPY30O8J8WEOOG2Q),
+    PARTITION UYZ1675BEXI942ED7EUYLK03GM90QG3ZGYBLBKGLNWVYNVYUZ70J78BJWYLGS6CV VALUES LESS THAN (1800)
+     (SUBPARTITION XIYZDGAOHPZH1R6RTKURMSUENS8VIN1U1CL7T2594FWR1ELS55UDVDWVX65K3WPE,
+      SUBPARTITION J64S0S338J2AV273XIHW1QHFRK9ZVLSIGSXFF4E22RYCLAG2J3H04PN6M70OB39Y,
+      SUBPARTITION XRL60IN1WNLR4YQAIILJTB9XCDP7Z4CUXRCY9Y2ES55W6UQERG51QV1UYTMZW673));
+
+--echo #
+--echo # Cleanup
+--echo #
+
+USE test;
+--eval DROP DATABASE `$long_name`
+
+--disable_query_log
+call mtr.add_suppression("\\[ERROR\\] .* Operating system error number 3 in a file operation");
+call mtr.add_suppression("\\[ERROR\\] .* The error means the system cannot find the path specified. It might be too long or it might not exist");
+call mtr.add_suppression("\\[ERROR\\] .* Cannot create file '.*ibd'");
+call mtr.add_suppression("\\[ERROR\\] .* Cannot create tablespace '.*ibd'. The filepath is too long for this OS");
+--enable_query_log

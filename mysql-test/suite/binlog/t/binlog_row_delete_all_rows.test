@@ -1,0 +1,20 @@
+#
+# ==== Purpose ====
+#
+# This test will check if the optimized delete (delete_all_rows) was
+# used or not in a set of configurations for binlog_format = 'ROW'.
+#
+# Set set of configurations vary:
+# - Table engine: InnoDB
+#
+# ==== Related Bugs and Worklogs ====
+#
+# WL#8313: Set ROW based binary log format by default
+#
+--source include/have_binlog_format_row.inc
+
+--let $storage_engine=InnoDB
+--echo #
+--echo # InnoDB, binlog_format= 'ROW'
+--echo #
+--source include/delete_all_rows.inc

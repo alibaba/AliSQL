@@ -1,5 +1,5 @@
 
-create table t1(a int);
+create table t1(a int) charset utf8mb4;
 show create table t1;
 insert into t1 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
 create table t2(a int);
@@ -59,15 +59,18 @@ alter table t3 add primary key(b);
 
 ##  PK scan tests
 # 6. Split is between 'unique' PK ranges
+--sorted_result
 select b,filler from t3 where (b>='c-1011=w' and b<= 'c-1018=w') or 
                               b IN ('c-1019=w', 'c-1020=w', 'c-1021=w', 
                                     'c-1022=w', 'c-1023=w', 'c-1024=w');
 
 # 7. Between non-uniq and uniq range
+--sorted_result
 select b,filler from t3 where (b>='c-1011=w' and b<= 'c-1020=w') or 
                               b IN ('c-1021=w', 'c-1022=w', 'c-1023=w');
 
 # 8. Between uniq and non-uniq range
+--sorted_result
 select b,filler from t3 where (b>='c-1011=w' and b<= 'c-1018=w') or 
                               b IN ('c-1019=w', 'c-1020=w') or 
                               (b>='c-1021=w' and b<= 'c-1023=w');
@@ -77,7 +80,7 @@ select b,filler from t3 where (b>='c-1011=w' and b<= 'c-1018=w') or
 # Now try different keypart types and special values
 #
 create table t4 (a varchar(10), b int, c char(10), filler char(200),
-                 key idx1 (a, b, c));
+                 key idx1 (a, b, c)) charset utf8mb4;
 
 # insert buffer_size * 1.5 all-NULL tuples
 insert into t4 (filler) select concat('NULL-', 15-a) from t2 order by a limit 15;
@@ -179,7 +182,7 @@ ANALYZE TABLE t2;
 -- enable_result_log
 -- enable_query_log
 
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT MIN(t1.pk)
 FROM t1 WHERE EXISTS (
  SELECT t2.pk
@@ -206,7 +209,7 @@ ANALYZE TABLE t1;
 -- enable_query_log
 
 --echo This must show range + using index condition:
---replace_column 9 x
+--replace_column 10 x 11 x
 explain select * from t1 where a < 10 and b = repeat(char(65+a), 20);
 select * from t1 where a < 10 and b = repeat(char(65+a), 20);
 drop table t0,t1;
@@ -238,7 +241,7 @@ set read_rnd_buffer_size=64;
 # replaced by using the table's read_set bitmap.
 create table t1(a int);
 insert into t1 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
-create table t2(a char(8), b char(8), c char(8), filler char(100), key k1(a,b,c) );
+create table t2(a char(8), b char(8), c char(8), filler char(100), key k1(a,b,c) ) charset utf8mb4;
 
 insert into t2 select 
   concat('a-', 1000 + A.a, '-a'),
@@ -255,8 +258,6 @@ select count(length(a) + length(filler))
 from t2 force index (k1)
 where a>='a-1000-a' and a <'a-1001-a';
 
-# The expected rows differs a bit with different page sizes
---replace_result 98 ROWS 99 ROWS
 eval EXPLAIN $query;
 eval $query;
 
@@ -264,14 +265,14 @@ drop table t2;
 
 # Try a very big rowid
 create table t2 (a char(100), b char(100), c char(100), d int, 
-                 filler char(10), key(d), primary key (a,b,c));
+                 filler char(10), key(d), primary key (a,b,c)) charset latin1;
 insert into t2 select A.a, B.a, B.a, A.a, 'filler' from t1 A, t1 B;
 -- disable_query_log
 -- disable_result_log
 ANALYZE TABLE t2;
 -- enable_result_log
 -- enable_query_log
---replace_column 9 #
+--replace_column 10 #
 explain select * from t2 force index (d) where d < 10;
 drop table t2;
 
@@ -322,7 +323,7 @@ CREATE TABLE t1 (
   KEY `varchar_key` (`varchar_key`)
 );
 
-INSERT INTO t1 VALUES 
+INSERT IGNORE INTO t1 VALUES 
 (1,5,5,'2009-10-16','2009-10-16','09:28:15','09:28:15','2007-09-14 05:34:08','2007-09-14 05:34:08','qk','qk'),
 (2,6,6,'0000-00-00','0000-00-00','23:06:39','23:06:39','0000-00-00 00:00:00','0000-00-00 00:00:00','j','j'),
 (3,10,10,'2000-12-18','2000-12-18','22:16:19','22:16:19','2006-11-04 15:42:50','2006-11-04 15:42:50','aew','aew'),
@@ -360,6 +361,7 @@ ANALYZE TABLE t1;
 
 SELECT id FROM t1 WHERE parent_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 --echo This must show type=index, extra=Using where
+# The filtering effect of IS NOT NULL is from stats of the range optimizer.
 explain SELECT * FROM t1 WHERE parent_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 SELECT * FROM t1 WHERE parent_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 drop table t1;
@@ -386,49 +388,6 @@ INSERT INTO t2 VALUES (11,'r');
  
 SELECT t1.c2  
 FROM t2 STRAIGHT_JOIN t1 ON t1.c1 < t2.c1;
-
-DROP TABLE t1, t2;
-
---echo #
---echo # Bug#58463: Error Can't find record on SELECT with JOIN and ORDER BY
---echo #
-
-# To produce the same query plan as in the bug report the first table
-# must be stored in MyISAM.
-CREATE TABLE t1 (
-  pk INT NOT NULL,
-  PRIMARY KEY (pk)
-) ENGINE=MyISAM;
-
-INSERT INTO t1 VALUES (2);
-
-CREATE TABLE t2 (
-  pk INT NOT NULL,
-  i1 INT NOT NULL,
-  i2 INT NOT NULL,
-  c1 VARCHAR(1024) CHARACTER SET utf8,
-  PRIMARY KEY (pk),
-  KEY k1 (i1)
-);
-
-INSERT INTO t2 VALUES (3, 9, 1, NULL);
-
--- disable_query_log
--- disable_result_log
-ANALYZE TABLE t1;
-ANALYZE TABLE t2;
--- enable_result_log
--- enable_query_log
-
-let query=
-SELECT i1
-FROM t1 LEFT JOIN t2 ON t1.pk = t2.i2
-WHERE t2.i1 > 5
-AND t2.pk IS  NULL
-ORDER BY i1;
-
-eval EXPLAIN $query;
-eval $query;
 
 DROP TABLE t1, t2;
 
@@ -521,7 +480,7 @@ CREATE TABLE t1 (
   i1 INTEGER NOT NULL,
   c1 VARCHAR(10) NOT NULL,
   PRIMARY KEY (pk)
-);
+) charset latin1;
 
 INSERT INTO t1
   SELECT a, 1, 'MySQL' FROM ten;
@@ -531,7 +490,7 @@ CREATE TABLE t2 (
   c1 VARCHAR(10) NOT NULL,
   c2 varchar(10) NOT NULL,
   PRIMARY KEY (pk)
-);
+) charset latin1;
 
 INSERT INTO t2
   SELECT a, 'MySQL', 'MySQL' FROM ten;
@@ -540,7 +499,7 @@ CREATE TABLE t3 (
   pk INTEGER NOT NULL,
   c1 VARCHAR(10) NOT NULL,
   PRIMARY KEY (pk)
-);
+) charset latin1;
 
 INSERT INTO t3
   SELECT a, 'MySQL' FROM ten;
@@ -552,7 +511,7 @@ CREATE TABLE t4 (
   c3 varchar(10) NOT NULL,
   PRIMARY KEY (pk),
   KEY k1 (c1_key)
-);
+) charset latin1;
 
 # t4 is empty
 
@@ -560,7 +519,7 @@ CREATE TABLE t5 (
   pk INTEGER NOT NULL,
   c1 VARCHAR(10) NOT NULL,
   PRIMARY KEY (pk)
-);
+) charset latin1;
 
 INSERT INTO t5
   SELECT a, 'MySQL' FROM ten;
@@ -591,3 +550,52 @@ eval $query;
 
 DROP TABLE ten, t1, t2, t3, t4, t5;
 
+--echo #
+--echo # Bug 18172819 CRASH ON DSMRR_IMPL::CHOOSE_MRR_IMPL IN SQL/HANDLER.CC 
+--echo #
+
+# Test needs to run with big_tables ON
+set @big_tables_save= @@big_tables;
+set @optimizer_switch_save=@@optimizer_switch;
+set big_tables=ON;
+set optimizer_switch='derived_merge=off';
+SELECT @@big_tables;
+
+CREATE TABLE t1 (
+  i1 INTEGER NOT NULL,
+  c1 VARCHAR(1)
+) charset utf8mb4;
+
+INSERT INTO t1 VALUES (1,'a'), (2, NULL);
+
+CREATE TABLE t2 (
+  c1 VARCHAR(1),
+  i1 INTEGER NOT NULL,
+  KEY (c1)
+) charset utf8mb4;
+
+INSERT INTO t2 VALUES ('a', 1), (NULL, 2);
+
+-- disable_query_log
+-- disable_result_log
+ANALYZE TABLE t1;
+ANALYZE TABLE t2;
+-- enable_result_log
+-- enable_query_log
+
+let query=
+SELECT *
+FROM
+  ( SELECT * FROM  t1 ) AS d1
+WHERE d1.c1 IN ( SELECT c1 FROM t2 )
+  AND d1.c1 IS NULL
+ORDER BY d1.i1;
+
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t1, t2;
+
+# Restore the configuration for big_tables
+set big_tables=@big_tables_save;
+set optimizer_switch=@optimizer_switch_save;

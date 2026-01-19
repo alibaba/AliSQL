@@ -1,15 +1,23 @@
 /*
-  Copyright 2010 Sun Microsystems, Inc.
-  All rights reserved. Use is subject to license terms.
+  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+  Use is subject to license terms.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -48,27 +56,27 @@ public class NdbIndexScanOperation extends NdbScanOperation implements NdbIndexS
     public final native int get_range_no();
     public interface /*_struct_*/ IndexBoundConst
     {
-        String/*_const char *_*/ low_key();
+        ByteBuffer/*_const char *_*/ low_key();
         int/*_Uint32_*/ low_key_count();
         boolean low_inclusive();
-        String/*_const char *_*/ high_key();
+        ByteBuffer/*_const char *_*/ high_key();
         int/*_Uint32_*/ high_key_count();
         boolean high_inclusive();
         int/*_Uint32_*/ range_no();
     }
     static public class /*_struct_*/ IndexBound extends Wrapper implements IndexBoundConst
     {
-        public final native String/*_const char *_*/ low_key();
+        public final native ByteBuffer/*_const char *_*/ low_key();
         public final native int/*_Uint32_*/ low_key_count();
         public final native boolean low_inclusive();
-        public final native String/*_const char *_*/ high_key();
+        public final native ByteBuffer/*_const char *_*/ high_key();
         public final native int/*_Uint32_*/ high_key_count();
         public final native boolean high_inclusive();
         public final native int/*_Uint32_*/ range_no();
-        public final native void low_key(String/*_const char *_*/ p0);
+        public final native void low_key(ByteBuffer/*_const char *_*/ p0);
         public final native void low_key_count(int/*_Uint32_*/ p0);
         public final native void low_inclusive(boolean p0);
-        public final native void high_key(String/*_const char *_*/ p0);
+        public final native void high_key(ByteBuffer/*_const char *_*/ p0);
         public final native void high_key_count(int/*_Uint32_*/ p0);
         public final native void high_inclusive(boolean p0);
         public final native void range_no(int/*_Uint32_*/ p0);

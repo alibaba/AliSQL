@@ -22,7 +22,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/have_innodb.inc
 
 --echo '#---------------------BS_STVARS_036_01----------------------#'
 ####################################################################
@@ -52,17 +51,21 @@ SELECT COUNT(@@GLOBAL.innodb_log_group_home_dir);
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 
+--disable_warnings
 SELECT @@GLOBAL.innodb_log_group_home_dir = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_log_group_home_dir';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.innodb_log_group_home_dir);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='innodb_log_group_home_dir';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -96,7 +99,7 @@ SELECT COUNT(@@GLOBAL.innodb_log_group_home_dir);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_log_group_home_dir = @@SESSION.innodb_log_group_home_dir;
---echo Expected error 'Readonly variable'
+SELECT innodb_log_group_home_dir;
+--echo Expected error 'Unknown column'
 
 

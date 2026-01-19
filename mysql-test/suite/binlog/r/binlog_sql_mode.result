@@ -1,5 +1,7 @@
 SET @old_sql_mode=  @@global.sql_mode;
 SET @old_binlog_format=@@session.binlog_format;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SET SESSION sql_mode=8;
 Initialization 
 RESET MASTER;
@@ -27,6 +29,8 @@ select
 is not null AS Loaded;
 Loaded
 1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 *** String sql_mode=0 is found: 0 ***
 Clean Up
 DROP PROCEDURE testProc;
@@ -37,6 +41,8 @@ DROP VIEW testView;
 DROP TABLE t1;
 SET @@global.sql_mode= @old_sql_mode;
 SET @@session.binlog_format=@old_binlog_format;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 
 #
 # Test for Bug#12601974 - STORED PROCEDURE SQL_MODE=NO_BACKSLASH_ESCAPES
@@ -147,5 +153,6 @@ wxyz\_ef
 DROP DATABASE mysqltest_db;
 SET @@sql_mode= @org_mode;
 use test;
+RESET MASTER;
 
 #End of Test for Bug#12601974 

@@ -22,7 +22,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/have_innodb.inc
 
 --echo '#---------------------BS_STVARS_035_01----------------------#'
 ####################################################################
@@ -31,6 +30,9 @@
 SELECT COUNT(@@GLOBAL.innodb_log_file_size);
 --echo 1 Expected
 
+SELECT @@GLOBAL.innodb_log_file_size;
+
+
 
 --echo '#---------------------BS_STVARS_035_02----------------------#'
 ####################################################################
@@ -38,12 +40,23 @@ SELECT COUNT(@@GLOBAL.innodb_log_file_size);
 ####################################################################
 
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET @@local.innodb_log_file_size=1;
+--echo Expected error 'Read only variable'
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET @@session.innodb_log_file_size=1;
+--echo Expected error 'Read only variable'
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
 SET @@GLOBAL.innodb_log_file_size=1;
+--echo Expected error 'Read only variable'
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET @@GLOBAL.innodb_log_file_size=DEFAULT;
 --echo Expected error 'Read only variable'
 
 SELECT COUNT(@@GLOBAL.innodb_log_file_size);
 --echo 1 Expected
-
 
 
 
@@ -52,17 +65,21 @@ SELECT COUNT(@@GLOBAL.innodb_log_file_size);
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 
+--disable_warnings
 SELECT @@GLOBAL.innodb_log_file_size = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_log_file_size';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.innodb_log_file_size);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_log_file_size';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -96,7 +113,6 @@ SELECT COUNT(@@GLOBAL.innodb_log_file_size);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT innodb_log_file_size = @@SESSION.innodb_log_file_size;
---echo Expected error 'Readonly variable'
-
+SELECT innodb_log_file_size;
+--echo Expected error 'Unknown column'
 

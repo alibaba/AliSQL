@@ -1,11 +1,11 @@
 ###############################################################################
 # Description: Checks if DDL and DML statements are correctly logged by
-#              servers and slave servers according to log-slave-updates,
+#              servers and slave servers according to log-replica-updates,
 #              and independent of their settings on the particular MySQLD
 #              acting in the slave role
 #
 # Testing scenario: Cluster 1 replicates to Cluster 2
-#   Key : BL = log-bin, LSU = log-slave-updates
+#   Key : BL = log-bin, LSU = log-replica-updates
 #
 #                       BL                        BL
 #  cluster 1 [  srv_master  srv_master1  srv_master2  ]
@@ -223,3 +223,5 @@ RESET MASTER;
 # they where when test started
 --let $rpl_topology= none
 --source include/rpl_change_topology.inc
+
+--source include/rpl_end.inc

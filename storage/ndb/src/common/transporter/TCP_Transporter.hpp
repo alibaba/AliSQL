@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,61 +28,63 @@
 
 #include "Transporter.hpp"
 
-#include <NdbTCP.h>
-
 struct ReceiveBuffer {
-  Uint32 *startOfBuffer;    // Pointer to start of the receive buffer 
-  Uint32 *readPtr;          // Pointer to start reading data
-  
-  char   *insertPtr;        // Pointer to first position in the receiveBuffer
-                            // in which to insert received data. Earlier
-                            // received incomplete messages (slack) are 
-                            // copied into the first part of the receiveBuffer
+  Uint32 *startOfBuffer;  // Pointer to start of the receive buffer
+  Uint32 *readPtr;        // Pointer to start reading data
 
-  Uint32 sizeOfData;        // In bytes
+  char *insertPtr;  // Pointer to first position in the receiveBuffer
+                    // in which to insert received data. Earlier
+                    // received incomplete messages (slack) are
+                    // copied into the first part of the receiveBuffer
+
+  Uint32 sizeOfData;  // In bytes
   Uint32 sizeOfBuffer;
-  
+
   ReceiveBuffer() {}
   bool init(int bytes);
   void destroy();
-  
+
   void clear();
   void incompleteMessage();
 };
 
 class TCP_Transporter : public Transporter {
+  friend struct TransporterReceiveData;
   friend class TransporterRegistry;
   friend class Loopback_Transporter;
-private:
+
+ private:
   // Initialize member variables
-  TCP_Transporter(TransporterRegistry&, const TransporterConfiguration* conf);
+  TCP_Transporter(TransporterRegistry &, const TransporterConfiguration *conf);
+  TCP_Transporter(TransporterRegistry &, const TCP_Transporter *);
 
   // Disconnect, delete send buffers and receive buffer
-  virtual ~TCP_Transporter();
+  ~TCP_Transporter() override;
 
-  virtual bool configure_derived(const TransporterConfiguration* conf);
+  /**
+   * Clear any data buffered in the transporter.
+   * Should only be called in a disconnected state.
+   */
+  void resetBuffers() override;
+
+  bool configure_derived(const TransporterConfiguration *conf) override;
 
   /**
    * Allocate buffers for sending and receiving
    */
-  bool initTransporter();
+  bool initTransporter() override;
 
   /**
    * Retrieves the contents of the send buffers and writes it on
    * the external TCP/IP interface.
    */
-  int doSend();
-  
-  /**
-   * It reads the external TCP/IP interface once 
-   * and puts the data in the receiveBuffer
-   */
-  int doReceive(); 
+  bool doSend(bool need_wakeup = true) override;
 
   /**
-   * Returns socket (used for select)
+   * It reads the external TCP/IP interface once
+   * and puts the data in the receiveBuffer
    */
-  NDB_SOCKET_TYPE getSocket() const;
+  int doReceive(TransporterReceiveHandle &);
 
   /**
    * Get Receive Data
@@ -82,38 +92,50 @@ private:
    *  Returns - no of bytes to read
    *            and set ptr
    */
-  virtual Uint32 getReceiveData(Uint32 ** ptr);
-  
+  virtual Uint32 getReceiveData(Uint32 **ptr);
+
   /**
    * Update receive data ptr
    */
   virtual void updateReceiveDataPtr(Uint32 bytesRead);
 
-  inline bool hasReceiveData () const {
-    return receiveBuffer.sizeOfData > 0;
-  }
-protected:
+  /**
+   * Check if we have available data in our internal receiveBuffer.
+   * Use getReceiveData() to fetch and updateReceiveDataPtr() to consume.
+   */
+  bool hasReceiveData() const { return receiveBuffer.sizeOfData > 0; }
+
+  /**
+   * Check if the NdbSocket has more data immediately available.
+   * Need to doReceive() it into the receiveBuffer.
+   */
+  bool hasPending() const { return theSocket.has_pending(); }
+
+ protected:
   /**
    * Setup client/server and perform connect/accept
    * Is used both by clients and servers
    * A client connects to the remote server
    * A server accepts any new connections
    */
-  virtual bool connect_server_impl(NDB_SOCKET_TYPE sockfd);
-  virtual bool connect_client_impl(NDB_SOCKET_TYPE sockfd);
-  bool connect_common(NDB_SOCKET_TYPE sockfd);
-  
+  bool connect_server_impl(NdbSocket &&sockfd) override;
+  bool connect_client_impl(NdbSocket &&sockfd) override;
+  bool connect_common(NdbSocket &&sockfd);
+
   /**
-   * Disconnects a TCP/IP node. Empty receivebuffer.
+   * Disconnects a TCP/IP node, possibly blocking.
    */
-  virtual void disconnectImpl();
-  
-private:
-  // Sending/Receiving socket used by both client and server
-  NDB_SOCKET_TYPE theSocket;   
-  
+  // void disconnectImpl() override;  // No need to override
+
+  /**
+   * Release resorces after disconnectImpl() has brought
+   * transporter into DISCONNECTED state.
+   */
+  void releaseAfterDisconnect() override;
+
+ private:
   Uint32 maxReceiveSize;
-  
+
   /**
    * Socket options
    */
@@ -122,91 +144,65 @@ private:
   int sockOptNodelay;
   int sockOptTcpMaxSeg;
 
-  void setSocketOptions(NDB_SOCKET_TYPE socket);
+  void setSocketOptions(ndb_socket_t socket);
 
-  static bool setSocketNonBlocking(NDB_SOCKET_TYPE aSocket);
-  virtual int pre_connect_options(NDB_SOCKET_TYPE aSocket);
-  
-  bool send_is_possible(int timeout_millisec) const;
-  bool send_is_possible(NDB_SOCKET_TYPE fd, int timeout_millisec) const;
+  static bool setSocketNonBlocking(ndb_socket_t aSocket);
+  int pre_connect_options(ndb_socket_t aSocket) override;
 
-  /**
-   * Statistics
-   */
-  Uint32 reportFreq;
-  Uint32 receiveCount;
-  Uint64 receiveSize;
-  Uint32 sendCount;
-  Uint64 sendSize;
+  bool send_is_possible(int timeout_millisec) const override;
+  bool send_is_possible(ndb_socket_t fd, int timeout_millisec) const;
 
   ReceiveBuffer receiveBuffer;
 
-  bool send_limit_reached(int bufsize) { return bufsize > TCP_SEND_LIMIT; }
+  bool send_limit_reached(int bufsize) override {
+    return bufsize > TCP_SEND_LIMIT;
+  }
 };
 
-inline
-NDB_SOCKET_TYPE
-TCP_Transporter::getSocket() const {
-  return theSocket;
-}
-
-inline
-Uint32
-TCP_Transporter::getReceiveData(Uint32 ** ptr){
-  (* ptr) = receiveBuffer.readPtr;
+inline Uint32 TCP_Transporter::getReceiveData(Uint32 **ptr) {
+  (*ptr) = receiveBuffer.readPtr;
   return receiveBuffer.sizeOfData;
 }
 
-inline
-void
-TCP_Transporter::updateReceiveDataPtr(Uint32 bytesRead){
-  char * ptr = (char *)receiveBuffer.readPtr;
+inline void TCP_Transporter::updateReceiveDataPtr(Uint32 bytesRead) {
+  char *ptr = (char *)receiveBuffer.readPtr;
+  assert(receiveBuffer.sizeOfData >= bytesRead);
   ptr += bytesRead;
-  receiveBuffer.readPtr = (Uint32*)ptr;
+  receiveBuffer.readPtr = (Uint32 *)ptr;
   receiveBuffer.sizeOfData -= bytesRead;
   receiveBuffer.incompleteMessage();
 }
 
-inline
-bool
-ReceiveBuffer::init(int bytes){
+inline bool ReceiveBuffer::init(int bytes) {
 #ifdef DEBUG_TRANSPORTER
   ndbout << "Allocating " << bytes << " bytes as receivebuffer" << endl;
 #endif
 
   startOfBuffer = new Uint32[((bytes + 0) >> 2) + 1];
-  sizeOfBuffer  = bytes + sizeof(Uint32);
+  sizeOfBuffer = bytes + sizeof(Uint32);
   clear();
   return true;
 }
 
-inline
-void
-ReceiveBuffer::destroy(){
+inline void ReceiveBuffer::destroy() {
   delete[] startOfBuffer;
-  sizeOfBuffer  = 0;
-  startOfBuffer = 0;
+  sizeOfBuffer = 0;
+  startOfBuffer = nullptr;
   clear();
 }
 
-inline
-void
-ReceiveBuffer::clear(){
-  readPtr    = startOfBuffer;
-  insertPtr  = (char *)startOfBuffer;
+inline void ReceiveBuffer::clear() {
+  readPtr = startOfBuffer;
+  insertPtr = (char *)startOfBuffer;
   sizeOfData = 0;
 }
 
-inline
-void
-ReceiveBuffer::incompleteMessage() {
-  if(startOfBuffer != readPtr){
-    if(sizeOfData != 0)
-      memmove(startOfBuffer, readPtr, sizeOfData);
-    readPtr   = startOfBuffer;
+inline void ReceiveBuffer::incompleteMessage() {
+  if (startOfBuffer != readPtr) {
+    if (sizeOfData != 0) memmove(startOfBuffer, readPtr, sizeOfData);
+    readPtr = startOfBuffer;
     insertPtr = ((char *)startOfBuffer) + sizeOfData;
   }
 }
 
-
-#endif // Define of TCP_Transporter_H
+#endif  // Define of TCP_Transporter_H

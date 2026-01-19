@@ -1,12 +1,9 @@
 # Tests for PERFORMANCE_SCHEMA
 
---source include/not_embedded.inc
---source include/have_perfschema.inc
-
 --disable_warnings
 drop table if exists test.setup_objects;
 --enable_warnings
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 # Save the setup
 create table test.setup_objects as
   select * from performance_schema.setup_objects;
@@ -28,26 +25,26 @@ select * from performance_schema.setup_objects
 
 --error ER_NO_REFERENCED_ROW_2
 insert into performance_schema.setup_objects
-  set object_type='ILLEGAL', object_schema='FOO', object_name='BAR',
+  set object_type='ILLEGAL', object_schema='foo', object_name='bar',
   enabled='YES', timed='YES';
 
 insert into performance_schema.setup_objects
-  set object_type='TABLE', object_schema='FOO', object_name='BAR',
+  set object_type='TABLE', object_schema='foo', object_name='bar',
   enabled='YES', timed='YES';
 
 --error ER_DUP_KEY
 insert into performance_schema.setup_objects
-  set object_type='TABLE', object_schema='FOO', object_name='BAR',
+  set object_type='TABLE', object_schema='foo', object_name='bar',
   enabled='YES', timed='NO';
 
 delete from performance_schema.setup_objects
-  where object_type='TABLE' and object_schema='FOO';
+  where object_type='TABLE' and object_schema='foo';
 
 select * from performance_schema.setup_objects
   order by object_type, object_schema, object_name;
 
 insert into performance_schema.setup_objects
-  set object_type='TABLE', object_schema='FOO', object_name='BAR',
+  set object_type='TABLE', object_schema='foo', object_name='bar',
   enabled='NO', timed='YES';
 
 select * from performance_schema.setup_objects
@@ -90,4 +87,4 @@ truncate table performance_schema.setup_objects;
 insert into performance_schema.setup_objects
   select * from test.setup_objects;
 drop table test.setup_objects;
-
+SET sql_mode = default;

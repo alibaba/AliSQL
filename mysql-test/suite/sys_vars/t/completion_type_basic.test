@@ -119,13 +119,15 @@ SET @@session.completion_type = ON;
 #   Check if the value in GLOBAL & SESSION Tables matches value in variable   #
 ###############################################################################
 
+--disable_warnings
 SELECT @@global.completion_type = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='completion_type';
 
 SELECT @@session.completion_type = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='completion_type';
+--enable_warnings
 
 
 --echo '#------------------FN_DYNVARS_017_07-----------------------#'

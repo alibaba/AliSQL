@@ -7,25 +7,25 @@ drop table if exists t1, t2;
 --enable_warnings
 
 create table t1 (a date, b date, c date not null, d date);
-load data infile '../../std_data/loaddata1.dat' into table t1 fields terminated by ',';
+load data infile '../../std_data/loaddata1.dat' ignore into table t1 fields terminated by ',';
 load data infile '../../std_data/loaddata1.dat' into table t1 fields terminated by ',' IGNORE 2 LINES;
 SELECT * from t1;
 truncate table t1;
 
-load data infile '../../std_data/loaddata1.dat' into table t1 fields terminated by ',' LINES STARTING BY ',' (b,c,d);
+load data infile '../../std_data/loaddata1.dat' ignore into table t1 fields terminated by ',' LINES STARTING BY ',' (b,c,d);
 SELECT * from t1;
 drop table t1;
 
 create table t1 (a text, b text);
-load data infile '../../std_data/loaddata2.dat' into table t1 fields terminated by ',' enclosed by '''';
+load data infile '../../std_data/loaddata2.dat' ignore into table t1 fields terminated by ',' enclosed by '''';
 select concat('|',a,'|'), concat('|',b,'|') from t1;
 drop table t1;
 
-create table t1 (a int, b char(10));
-load data infile '../../std_data/loaddata3.dat' into table t1 fields terminated by '' enclosed by '' ignore 1 lines;
+create table t1 (a int, b char(10)) charset latin1;
+load data infile '../../std_data/loaddata3.dat' ignore into table t1 fields terminated by '' enclosed by '' ignore 1 lines;
 select * from t1;
 truncate table t1;
-load data infile '../../std_data/loaddata4.dat' into table t1 fields terminated by '' enclosed by '' lines terminated by '' ignore 1 lines;
+load data infile '../../std_data/loaddata4.dat' ignore into table t1 fields terminated by '' enclosed by '' lines terminated by '' ignore 1 lines;
 
 # The empty line last comes from the end line field in the file
 select * from t1;
@@ -127,7 +127,7 @@ select * from t1;
 select @a, @b;
 truncate table t1;
 # Reading of all columns with set
-load data infile '../../std_data/rpl_loaddata.dat' into table t1 set c=b;
+load data infile '../../std_data/rpl_loaddata.dat' ignore into table t1 set c=b;
 select * from t1;
 truncate table t1;
 # now going to test fixed field-row file format
@@ -196,8 +196,10 @@ create table t2(f1 int);
 insert into t2 values(1),(2);
 disable_query_log;
 eval select * into outfile '$MYSQLTEST_VARDIR/tmp/t2' from t2;
-eval load data infile '$MYSQLTEST_VARDIR/tmp/t2' into table t1;
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t2' ignore into table t1;
 enable_query_log;
+SET @previous_sql_mode = @@sql_mode;
+SET sql_mode = 'ALLOW_INVALID_DATES';
 select f1 from t1 where f2 <> '0000-00-00 00:00:00' order by f1;
 remove_file $MYSQLTEST_VARDIR/tmp/t2;
 delete from t1;
@@ -205,10 +207,11 @@ disable_query_log;
 eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/t2'
 FIELDS TERMINATED BY '' OPTIONALLY ENCLOSED BY '' LINES TERMINATED BY '\r\n'
 FROM t2;
-eval load data infile '$MYSQLTEST_VARDIR/tmp/t2' into table t1
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t2' ignore into table t1
 FIELDS TERMINATED BY '' OPTIONALLY ENCLOSED BY '' LINES TERMINATED BY '\r\n';
 enable_query_log;
 select f1 from t1 where f2 <> '0000-00-00 00:00:00' order by f1;
+SET sql_mode = @previous_sql_mode;
 remove_file $MYSQLTEST_VARDIR/tmp/t2;
 drop table t1,t2;
 
@@ -292,7 +295,7 @@ SELECT * FROM v2;
 DELETE FROM t1;
 
 --echo
---error ER_LOAD_DATA_INVALID_COLUMN
+--error ER_NONUPDATEABLE_COLUMN
 LOAD DATA INFILE '../../std_data/bug35469.dat' INTO TABLE v2
   FIELDS ESCAPED BY '\\'
   TERMINATED BY ','
@@ -363,7 +366,7 @@ SET sql_mode = '';
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --eval SELECT '1 \\\\aa\n' INTO DUMPFILE '$file'
 
-CREATE TABLE t1 (id INT, val1 CHAR(3)) ENGINE=MyISAM;
+CREATE TABLE t1 (id INT, val1 CHAR(3));
 
 SET sql_mode = 'NO_BACKSLASH_ESCAPES';
 
@@ -517,7 +520,7 @@ select load_file(0x0A9FB76C661B409C4BEC88098C5DD71B1072F9691F2E827D7EC8F092B2998
 CREATE TABLE t1 (a int);
 INSERT INTO t1 VALUES (1);
 SET NAMES latin1;
-SET character_set_filesystem=filename;
+SET character_set_filesystem=binary;
 select @@character_set_filesystem;
 SELECT * INTO OUTFILE 't-1' FROM t1;
 DELETE FROM t1;
@@ -526,11 +529,11 @@ SELECT * FROM t1;
 DELETE FROM t1;
 SET character_set_filesystem=latin1;
 select @@character_set_filesystem;
-LOAD DATA INFILE 't@002d1' INTO TABLE t1;
+LOAD DATA INFILE 't-1' INTO TABLE t1;
 SELECT * FROM t1;
 DROP TABLE t1;
 let $MYSQLD_DATADIR= `select @@datadir`;
-remove_file $MYSQLD_DATADIR/test/t@002d1;
+remove_file $MYSQLD_DATADIR/test/t-1;
 SET character_set_filesystem=default;
 select @@character_set_filesystem;
 
@@ -637,30 +640,42 @@ drop table t1;
 --echo End of 5.1 tests
 
 --echo #
+--echo # Bug#17834434: sql/table.h: Assertion tbl->updatable &&
+--echo #               !tbl->multitable_view failed
+--echo #
+
+CREATE TABLE t1(a INTEGER);
+
+CREATE VIEW v1 AS SELECT t1.a FROM t1, t1 AS t2;
+
+--error ER_NON_UPDATABLE_TABLE
+LOAD DATA LOCAL INFILE '' REPLACE INTO TABLE v1;
+
+DROP VIEW v1;
+DROP TABLE t1;
+
+--echo #
 --echo # Bug#11759519 INFINITE HANG WITH 100% CPU USAGE WITH LOAD DATA LOCAL AND IMPORT ERRORS
 --echo #
 SET @old_mode= @@sql_mode;
 CREATE TABLE t1 (fld1 INT);
+SET sql_mode=default;
+
 --copy_file $EXE_MYSQL $MYSQLTEST_VARDIR/mysql
 
-SET sql_mode='strict_all_tables';
-
 --echo # Without fix, load data hangs forever.
+# The actual error code depends on character set
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,1000
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,ER_INVALID_CHARACTER_STRING
 eval LOAD DATA LOCAL INFILE '$MYSQLTEST_VARDIR/mysql' REPLACE INTO TABLE t1
      FIELDS TERMINATED BY 't' LINES TERMINATED BY '';
 
 SET @@sql_mode= @old_mode;
-
---remove_file $MYSQLTEST_VARDIR/mysql
 DROP TABLE t1;
 
---echo
 --echo #
---echo #  Bug#23080148 - Backport of Bug#20683959.
---echo #  Bug#20683959 LOAD DATA INFILE IGNORES A SPECIFIC ROW SILENTLY
---echo #               UNDER DB CHARSET IS UTF8.
+--echo # Bug#20683959 LOAD DATA INFILE IGNORES A SPECIFIC ROW SILENTLY
+--echo #              UNDER DB CHARSET IS UTF8
 --echo #
 
 CREATE DATABASE d1 CHARSET latin1;
@@ -673,9 +688,240 @@ SELECT HEX(val) FROM t1;
 CREATE DATABASE d2 CHARSET utf8;
 USE d2;
 CREATE TABLE t1 (val TEXT);
---error ER_INVALID_CHARACTER_STRING
 LOAD DATA INFILE '../../std_data/bug20683959loaddata.txt' INTO TABLE t1;
+SELECT COUNT(*) FROM t1;
+SELECT HEX(val) FROM t1;
+
 
 DROP TABLE d1.t1, d2.t1;
 DROP DATABASE d1;
 DROP DATABASE d2;
+USE test;
+
+--echo # Bug#21097485 *insert_table_ref && (insert_table_ref)->is_insertable
+
+CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER, c INTEGER);
+CREATE VIEW v AS SELECT a, b+c AS d FROM t;
+
+--error ER_NONUPDATEABLE_COLUMN
+LOAD DATA INFILE 'test.dat' INTO TABLE v(a, d);
+
+--error ER_NONUPDATEABLE_COLUMN
+LOAD DATA INFILE 'test.dat' INTO TABLE v(@a, @d) SET a= @a, d= @d;
+
+DROP VIEW v;
+DROP TABLE t;
+
+--echo #
+--echo # Bug #25147988: LOAD DATA INFILE FAILS WITH AN ESCAPE CHARACTER
+--echo #                FOLLOWED BY A MULTI-BYTE ONE
+--echo #
+# Test escape mark followed by multibyte character
+CREATE TABLE t1(a VARCHAR(20)) CHARSET utf8mb4;
+LOAD DATA INFILE '../../std_data/loaddata_utf8.dat' INTO TABLE t1 CHARACTER SET utf8mb4;
+SELECT HEX(a) FROM t1;
+DROP TABLE t1;
+# Test multibyte character whose second byte is 0x5C
+CREATE TABLE t1(a VARCHAR(20)) CHARSET gb18030;
+LOAD DATA INFILE '../../std_data/loaddata7.dat' INTO TABLE t1 CHARACTER SET gb18030;
+SELECT HEX(a) FROM t1;
+DROP TABLE t1;
+
+
+--echo #
+--echo # Regression test added in WL#8063
+--echo #
+
+--error ER_TOO_LONG_IDENT
+LOAD DATA INFILE '../../std_data/loaddata_utf8.dat' INTO TABLE t1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890;
+
+CREATE TABLE t1(a VARCHAR(20));
+
+LOAD DATA INFILE '../../std_data/loaddata_utf8.dat' INTO TABLE t1 ();
+LOAD DATA INFILE '../../std_data/loaddata_incomplete_mb.dat' INTO TABLE t1 IGNORE 20 LINES;
+LOAD DATA INFILE '../../std_data/loaddata_incomplete_escape.dat' INTO TABLE t1 IGNORE 20 LINES;
+
+--error ER_SP_BADSTATEMENT
+CREATE PROCEDURE p1() LOAD DATA INFILE '../../std_data/loaddata_utf8.dat' INTO TABLE t1;
+
+
+SET @save_local_infile = @@local_infile;
+SET GLOBAL local_infile = OFF;
+
+--error ER_CLIENT_LOCAL_FILES_DISABLED
+LOAD DATA LOCAL INFILE '../../std_data/loaddata_utf8.dat' INTO TABLE t1;
+
+SET GLOBAL local_infile = @save_local_infile;
+
+
+DROP TABLE t1;
+
+CREATE TABLE t2(a BLOB);
+
+--error ER_BLOBS_AND_NO_TERMINATED
+LOAD DATA INFILE '../../std_data/loaddata_utf8.dat' INTO TABLE t2 FIELDS TERMINATED BY '' LINES TERMINATED BY '';
+
+DROP TABLE t2;
+
+
+CREATE TABLE t3(a VARCHAR(20), i INT NOT NULL);
+
+--error ER_BAD_NULL_ERROR
+LOAD DATA INFILE '../../std_data/loaddata_utf8.dat' INTO TABLE t3 (a) SET i = NULL;
+
+DROP TABLE t3;
+--remove_file $MYSQLTEST_VARDIR/mysql
+--remove_file $file
+
+--echo #
+--echo # Bug#28460369 LOAD DATA INFILE THROWS ERROR WITH NOT NULL COLUMN DEFINED
+--echo #              VIA SET
+--echo #
+--echo # Verify that LOAD DATA rejects rows with no data for GEOMETRY NOT NULL
+--echo # columns. However, if the column is set using the SET clause,
+--echo # LOAD DATA should succeed.
+CREATE TABLE t1 (x DOUBLE, y DOUBLE, g GEOMETRY NOT NULL SRID 4326);
+
+--error ER_NO_DEFAULT_FOR_FIELD
+LOAD DATA INFILE '../../std_data/x_y_data.csv'
+  INTO TABLE t1
+  FIELDS TERMINATED BY ','
+  (x, y);
+
+LOAD DATA INFILE '../../std_data/x_y_data.csv'
+  INTO TABLE t1
+  FIELDS TERMINATED BY ','
+  (x, y) SET g = ST_SRID(POINT(x, y), 4326);
+SELECT x, y, ST_AsText(g), ST_SRID(g) FROM t1;
+
+DROP TABLE t1;
+
+
+--echo #-----------------------------------------------------------------------
+--echo # Bug#30126375 - LOAD DATA WITH SET CLAUSE IGNORES NO_AUTO_VALUE_ON_ZERO
+--echo #                MODE
+--echo #-----------------------------------------------------------------------
+SET @old_sql_mode = @@sql_mode;
+SET @@sql_mode = 'NO_AUTO_VALUE_ON_ZERO';
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, j INT);
+INSERT INTO t1 VALUES (0, 1);
+--echo # NO_AUTO_VALUE_ON_ZERO should prevent generation of new
+--echo # auto-increment value. So row should get 0 as id.
+SELECT * FROM t1;
+
+--echo # LOAD DATA from file with separators.
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT * FROM t1 INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/t1.txt'
+DELETE FROM t1;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t1.txt' INTO TABLE t1 SET j = 2;
+--echo # The above LOAD DATA should preserve id (i.e. 0) for the row.
+SELECT * FROM t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+
+--echo # LOAD DATA from file in fixed row format.
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT * FROM t1 INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/t1.txt' FIELDS TERMINATED BY '' ENCLOSED BY ''
+DELETE FROM t1;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t1.txt' INTO TABLE t1 FIELDS TERMINATED BY '' ENCLOSED BY '' SET j = 3;
+--echo # The above LOAD DATA should preserve id (i.e. 0) for the row too.
+SELECT * FROM t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+
+--echo # LOAD DATA from XML file.
+--echo # Use mysqldump --xml to produce t1.xml file.
+--exec $MYSQL_DUMP --xml test t1 > "$MYSQLTEST_VARDIR/tmp/t1.xml" 2>&1
+DELETE FROM t1;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD XML INFILE "$MYSQLTEST_VARDIR/tmp/t1.xml" IGNORE INTO TABLE t1 SET j = 4;
+--echo # The above LOAD DATA should preserve id (i.e. 0) for the row as well.
+SELECT * FROM t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.xml
+
+--echo # Clean up.
+DROP TABLE t1;
+SET sql_mode=@old_sql_mode;
+
+--echo #
+--echo # Bug#31024266 LOAD DATA INFILE FAILS IF THERE IS A FUNCTIONAL INDEX.
+--echo #
+
+CREATE TABLE t1 (
+ json_col JSON , KEY json_col ((CAST(json_col -> '$' AS UNSIGNED ARRAY)))
+);
+INSERT INTO t1 VALUES('[]');
+
+--echo # LOAD DATA from file with separators.
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/t1.txt' from t1;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t1.txt' INTO TABLE t1;
+SELECT * FROM t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+
+--echo # LOAD DATA from file in fixed row format.
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT * FROM t1 INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/t1.txt' FIELDS TERMINATED BY '' ENCLOSED BY '';
+DELETE FROM t1;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t1.txt' INTO TABLE t1 FIELDS TERMINATED BY '' ENCLOSED BY '';
+SELECT * FROM t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+
+--echo # LOAD DATA from XML file.
+--exec $MYSQL_DUMP --xml test t1 > "$MYSQLTEST_VARDIR/tmp/t1.xml" 2>&1
+DELETE FROM t1;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD XML INFILE "$MYSQLTEST_VARDIR/tmp/t1.xml" INTO TABLE t1;
+SELECT * FROM t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.xml
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug 33714885 - LOAD DATA INFILE fails with ERROR 1054 :
+--echo #   Unknown column XXXX in 'where clause'
+--echo #
+
+CREATE TABLE t1 (c1 varchar(5), c2 varchar(5));
+INSERT INTO t1 VALUES ('a','a');
+CREATE TABLE t2 (d1 varchar(5), d2 varchar(5));
+INSERT INTO t2 VALUES ('a','a'), ('b','b');
+# dump t2 into a file
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT * FROM t2 INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/t2.csv' FIELDS TERMINATED BY ',';
+DELETE FROM t2;
+
+# load data back into t2 with a condition
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t2.csv' INTO TABLE t2 FIELDS TERMINATED BY ',' SET d1=(SELECT 1 FROM t1 WHERE c1=d2);
+SELECT * FROM t2;
+--remove_file $MYSQLTEST_VARDIR/tmp/t2.csv
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug 34336033 - LOAD DATA INFILE with a subquery returns incorrect 'Subquery returns more than 1 row'
+--echo #
+
+CREATE TABLE t1 (c1 CHAR(10) NOT NULL);
+INSERT INTO t1 VALUES ('236451');
+CREATE TABLE t2(c1 SMALLINT, c2 CHAR(10));
+INSERT INTO t2 VALUES (0,'236451');
+INSERT INTO t2 VALUES (1,'236451');
+CREATE TABLE t3(c1 SMALLINT, c2 CHAR(10));
+INSERT INTO t3 VALUES (0,'236451');
+
+# dump t1 into a file
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT * FROM t1 INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/t1.csv';
+DELETE FROM t1;
+
+# load data back into t1
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA LOCAL INFILE '$MYSQLTEST_VARDIR/tmp/t1.csv' INTO TABLE t1 FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n' SET c1 = (SELECT t2.c2 FROM t2 INNER JOIN t3 ON t3.c1=t2.c1 where t3.c2='236451');
+SELECT * FROM t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.csv
+
+DROP TABLE t1,t2,t3;

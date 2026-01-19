@@ -1,0 +1,74 @@
+--source include/have_debug.inc
+# Bug scenario:
+# When DDL is on-going and hits an error (for example when row log is full or
+# duplicate key entry is found); it must rollback and cleanup correctly.
+# The error handling code must call m_btr_load->finish and ensure that all pages
+# buffer fixed are released.
+
+--echo # Create big enough table to ensure another call to Builder::insert_direct
+CREATE TABLE t1 (c1 INT);
+
+--disable_query_log
+DELIMITER |;
+CREATE PROCEDURE populate_t1(IN BASE INT, IN SIZE INT)
+BEGIN
+  DECLARE i INT DEFAULT BASE;
+  WHILE (i + 10 <= SIZE) DO
+    INSERT INTO t1 values (i), (i+1), (i+2), (i+3), (i+4), (i+5), (i+6), (i+7), (i+8), (i+9);
+    SET i = i + 10;
+  END WHILE;
+END|
+DELIMITER ;|
+
+# Note that inserting anything less than 10700 doesn't cause key_buffer to
+# overflow on 32 bit platforms - this causes a single call to
+# Builder::insert_direct. In case of 64 bit platforms, this number is 9892. The
+# reason for this difference is because of different values for sizeof the
+# Key_sort_buffer::m_dtuples on different architecture. Kept at 11000 just to be
+# ensure second call to Builder::insert_direct
+CALL populate_t1(0, 11000);
+DROP PROCEDURE populate_t1;
+--enable_query_log
+
+SELECT COUNT(*) FROM t1;
+
+--echo # Builder::insert_direct returns DB_ONLINE_LOG_TOO_BIG
+SET DEBUG="+d,builder_insert_direct_trigger_error";
+--error ER_INNODB_ONLINE_LOG_TOO_BIG
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 20, ALGORITHM=INPLACE;
+SET DEBUG="-d,builder_insert_direct_trigger_error";
+
+--echo # Builder::add_row returns DB_ONLINE_LOG_TOO_BIG
+SET DEBUG="+d,builder_add_row_trigger_error";
+--error ER_INNODB_ONLINE_LOG_TOO_BIG
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 20, ALGORITHM=INPLACE;
+SET DEBUG="-d,builder_add_row_trigger_error";
+
+call mtr.add_suppression("\\[InnoDB\\] DDL failed as Builder is already freed");
+
+--echo # Builder::bulk_add_row returns DB_DUPLICATE_KEY
+SET DEBUG="+d,builder_bulk_add_row_trigger_error_1";
+OPTIMIZE TABLE t1;
+SET DEBUG="-d,builder_bulk_add_row_trigger_error_1";
+
+--echo # Builder::bulk_add_row returns DB_INVALID_NULL
+SET DEBUG="+d,builder_bulk_add_row_trigger_error_2";
+OPTIMIZE TABLE t1;
+SET DEBUG="-d,builder_bulk_add_row_trigger_error_2";
+
+--echo # Builder::bulk_add_row returns DB_IO_ERROR
+SET DEBUG="+d,builder_bulk_add_row_trigger_error_3";
+OPTIMIZE TABLE t1;
+SET DEBUG="-d,builder_bulk_add_row_trigger_error_3";
+
+--echo # ddl::pwrite returns DB_IO_ERROR
+SET DEBUG="+d,builder_bulk_add_row_trigger_error_4";
+OPTIMIZE TABLE t1;
+SET DEBUG="-d,builder_bulk_add_row_trigger_error_4";
+
+--echo # Pages still buffer fixed should assert during shutdown
+--source include/shutdown_mysqld.inc
+--source include/start_mysqld.inc
+
+--echo # Cleanup
+DROP TABLE t1;

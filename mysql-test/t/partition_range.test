@@ -1,9 +1,7 @@
 #--disable_abort_on_error
 #
-# Simple test for the partition storage engine
-# Focuses on range partitioning tests
+# Simple test of range partitioning
 # 
--- source include/have_partition.inc
 
 --disable_warnings
 drop table if exists t1, t2;
@@ -23,6 +21,7 @@ PARTITION BY HASH (a) PARTITIONS 1;
 INSERT INTO t1 VALUES (0, 580092), (3, 894076), (4, 805483), (4, 913540), (6, 611137), (8, 171602), (9, 599495), (9, 746305), (10, 272829), (10, 847519), (12, 258869), (12, 929028), (13, 288970), (15, 20971), (15, 105839), (16, 788272), (17, 76914), (18, 827274), (19, 802258), (20, 123677), (20, 587729), (22, 701449), (25, 31565), (25, 230782), (25, 442887), (25, 733139), (25, 851020);
 
 # Before the fix the 'Extra' column showed 'Using index for group-by'
+analyze table t1;
 EXPLAIN SELECT a, MAX(b) FROM t1 WHERE a IN (10, 100, 3) GROUP BY a;
 
 DROP TABLE t1;
@@ -49,15 +48,17 @@ create table t1 (a datetime not null)
 partition by range (TO_SECONDS(a))
 ( partition p0 VALUES LESS THAN (TO_SECONDS('2007-03-08 00:00:00')),
   partition p1 VALUES LESS THAN (TO_SECONDS('2007-04-01 00:00:00')));
+--sorted_result
 select partition_method, partition_expression, partition_description
   from information_schema.partitions where table_name = "t1";
 INSERT INTO t1 VALUES ('2007-03-01 12:00:00'), ('2007-03-07 12:00:00');
 INSERT INTO t1 VALUES ('2007-03-08 12:00:00'), ('2007-03-15 12:00:00');
-explain partitions select * from t1 where a < '2007-03-08 00:00:00';
-explain partitions select * from t1 where a < '2007-03-08 00:00:01';
-explain partitions select * from t1 where a <= '2007-03-08 00:00:00';
-explain partitions select * from t1 where a <= '2007-03-07 23:59:59';
-explain partitions select * from t1 where a < '2007-03-07 23:59:59';
+analyze table t1;
+explain select * from t1 where a < '2007-03-08 00:00:00';
+explain select * from t1 where a < '2007-03-08 00:00:01';
+explain select * from t1 where a <= '2007-03-08 00:00:00';
+explain select * from t1 where a <= '2007-03-07 23:59:59';
+explain select * from t1 where a < '2007-03-07 23:59:59';
 show create table t1;
 drop table t1;
 #
@@ -69,9 +70,10 @@ partition by range(to_seconds(a))
  partition p1 values less than (to_seconds('2005-01-01')));
 insert into t1 values ('2003-12-30'),('2004-12-31');
 select * from t1;
-explain partitions select * from t1 where a <= '2003-12-31';
+analyze table t1;
+explain select * from t1 where a <= '2003-12-31';
 select * from t1 where a <= '2003-12-31';
-explain partitions select * from t1 where a <= '2005-01-01';
+explain select * from t1 where a <= '2005-01-01';
 select * from t1 where a <= '2005-01-01';
 show create table t1;
 drop table t1;
@@ -82,9 +84,10 @@ partition by range(to_seconds(a))
  partition p1 values less than (to_seconds('2005-01-01 12:00:00')));
 insert into t1 values ('2004-01-01 11:59:29'),('2005-01-01 11:59:59');
 select * from t1;
-explain partitions select * from t1 where a <= '2004-01-01 11:59.59';
+analyze table t1;
+explain select * from t1 where a <= '2004-01-01 11:59.59';
 select * from t1 where a <= '2004-01-01 11:59:59';
-explain partitions select * from t1 where a <= '2005-01-01';
+explain select * from t1 where a <= '2005-01-01';
 select * from t1 where a <= '2005-01-01';
 show create table t1;
 drop table t1;
@@ -215,11 +218,12 @@ select * from t1 where a >= 0;
 select * from t1 where a < 0;
 select * from t1 where a <= 0;
 select * from t1 where a > 1;
-explain partitions select * from t1 where a is null;
-explain partitions select * from t1 where a >= 0;
-explain partitions select * from t1 where a < 0;
-explain partitions select * from t1 where a <= 0;
-explain partitions select * from t1 where a > 1;
+analyze table t1;
+explain select * from t1 where a is null;
+explain select * from t1 where a >= 0;
+explain select * from t1 where a < 0;
+explain select * from t1 where a <= 0;
+explain select * from t1 where a > 1;
 drop table t1;
 
 create table t1 (a int unsigned, b int unsigned)
@@ -236,11 +240,12 @@ select * from t1 where a >= 0;
 select * from t1 where a < 0;
 select * from t1 where a <= 0;
 select * from t1 where a > 1;
-explain partitions select * from t1 where a is null;
-explain partitions select * from t1 where a >= 0;
-explain partitions select * from t1 where a < 0;
-explain partitions select * from t1 where a <= 0;
-explain partitions select * from t1 where a > 1;
+analyze table t1;
+explain select * from t1 where a is null;
+explain select * from t1 where a >= 0;
+explain select * from t1 where a < 0;
+explain select * from t1 where a <= 0;
+explain select * from t1 where a > 1;
 
 drop table t1;
 
@@ -254,9 +259,9 @@ c int not null,
 primary key(a,b))
 partition by range (a)
 partitions 3
-(partition x1 values less than (5) tablespace ts1,
- partition x2 values less than (10) tablespace ts2,
- partition x3 values less than maxvalue tablespace ts3);
+(partition x1 values less than (5),
+ partition x2 values less than (10),
+ partition x3 values less than maxvalue);
 
 # Simple insert and verify test
 INSERT into t1 values (1, 1, 1);
@@ -270,9 +275,9 @@ show create table t1;
 ALTER TABLE t1
 partition by range (a)
 partitions 3
-(partition x1 values less than (5) tablespace ts1,
- partition x2 values less than (10) tablespace ts2,
- partition x3 values less than maxvalue tablespace ts3);
+(partition x1 values less than (5),
+ partition x2 values less than (10),
+ partition x3 values less than maxvalue);
 
 select * from t1;
 show create table t1;
@@ -289,9 +294,9 @@ b int not null,
 c int not null)
 partition by range (a)
 partitions 3
-(partition x1 values less than (5) tablespace ts1,
- partition x2 values less than (10) tablespace ts2,
- partition x3 values less than maxvalue tablespace ts3);
+(partition x1 values less than (5),
+ partition x2 values less than (10),
+ partition x3 values less than maxvalue);
 
 # Simple insert and verify test
 INSERT into t1 values (1, 1, 1);
@@ -300,16 +305,18 @@ INSERT into t1 values (10, 1, 1);
 INSERT into t1 values (15, 1, 1);
 
 select * from t1;
+SHOW CREATE TABLE t1;
 
 ALTER TABLE t1
 partition by range (a)
 partitions 3
-(partition x1 values less than (5) tablespace ts1,
- partition x2 values less than (10) tablespace ts2,
- partition x3 values less than maxvalue tablespace ts3);
+(partition x1 values less than (5),
+ partition x2 values less than (10),
+ partition x3 values less than maxvalue);
 
 select * from t1;
 
+SHOW CREATE TABLE t1;
 drop table if exists t1;
 
 #
@@ -323,9 +330,9 @@ c int not null,
 primary key(a,b))
 partition by range (a)
 partitions 3
-(partition x1 values less than (5) tablespace ts1,
- partition x2 values less than (10) tablespace ts2,
- partition x3 values less than (15) tablespace ts3);
+(partition x1 values less than (5),
+ partition x2 values less than (10),
+ partition x3 values less than (15));
 
 
 # Simple insert and verify test
@@ -336,16 +343,18 @@ INSERT into t1 values (10, 1, 1);
 INSERT into t1 values (15, 1, 1);
 
 select * from t1;
+SHOW CREATE TABLE t1;
 
 ALTER TABLE t1
 partition by range (a)
 partitions 3
-(partition x1 values less than (5) tablespace ts1,
- partition x2 values less than (10) tablespace ts2,
- partition x3 values less than (15) tablespace ts3);
+(partition x1 values less than (5),
+ partition x2 values less than (10),
+ partition x3 values less than (15));
 
 select * from t1;
 
+SHOW CREATE TABLE t1;
 drop table t1;
 
 #
@@ -399,11 +408,11 @@ primary key (a,b))
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 tablespace t1 engine myisam nodegroup 0,
-    subpartition x12 tablespace t2 engine myisam nodegroup 1),
+  ( subpartition x11 engine innodb nodegroup 0,
+    subpartition x12 engine innodb nodegroup 1),
    partition x2 values less than (5)
-   ( subpartition x21 tablespace t1 engine myisam nodegroup 0,
-     subpartition x22 tablespace t2 engine myisam nodegroup 1)
+   ( subpartition x21 engine innodb nodegroup 0,
+     subpartition x22 engine innodb nodegroup 1)
 );
 
 SELECT * from t1;
@@ -422,14 +431,15 @@ primary key (a,b))
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 tablespace t1 nodegroup 0,
-    subpartition x12 tablespace t2 nodegroup 1),
+  ( subpartition x11 nodegroup 0,
+    subpartition x12 nodegroup 1),
    partition x2 values less than (5)
-   ( subpartition x21 tablespace t1 nodegroup 0,
-     subpartition x22 tablespace t2 nodegroup 1)
+   ( subpartition x21 nodegroup 0,
+     subpartition x22 nodegroup 1)
 );
 
 SELECT * from t1;
+SHOW CREATE TABLE t1;
 
 drop table t1;
 
@@ -445,11 +455,11 @@ primary key (a,b))
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 engine myisam nodegroup 0,
-    subpartition x12 engine myisam nodegroup 1),
+  ( subpartition x11 engine innodb nodegroup 0,
+    subpartition x12 engine innodb nodegroup 1),
    partition x2 values less than (5)
-   ( subpartition x21 engine myisam nodegroup 0,
-     subpartition x22 engine myisam nodegroup 1)
+   ( subpartition x21 engine innodb nodegroup 0,
+     subpartition x22 engine innodb nodegroup 1)
 );
 
 INSERT into t1 VALUES (1,1,1);
@@ -463,11 +473,11 @@ ALTER TABLE t1
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 engine myisam nodegroup 0,
-    subpartition x12 engine myisam nodegroup 1),
+  ( subpartition x11 engine innodb nodegroup 0,
+    subpartition x12 engine innodb nodegroup 1),
    partition x2 values less than (5)
-   ( subpartition x21 engine myisam nodegroup 0,
-     subpartition x22 engine myisam nodegroup 1)
+   ( subpartition x21 engine innodb nodegroup 0,
+     subpartition x22 engine innodb nodegroup 1)
 );
 
 SELECT * from t1;
@@ -486,11 +496,11 @@ primary key (a,b))
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 tablespace t1 engine myisam,
-    subpartition x12 tablespace t2 engine myisam),
+  ( subpartition x11 engine innodb,
+    subpartition x12 engine innodb),
   partition x2 values less than (5)
-  ( subpartition x21 tablespace t1 engine myisam,
-    subpartition x22 tablespace t2 engine myisam)
+  ( subpartition x21 engine innodb,
+    subpartition x22 engine innodb)
 );
 
 INSERT into t1 VALUES (1,1,1);
@@ -504,11 +514,11 @@ ALTER TABLE t1
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 tablespace t1 engine myisam,
-    subpartition x12 tablespace t2 engine myisam),
+  ( subpartition x11 engine innodb,
+    subpartition x12 engine innodb),
   partition x2 values less than (5)
-  ( subpartition x21 tablespace t1 engine myisam,
-    subpartition x22 tablespace t2 engine myisam)
+  ( subpartition x21 engine innodb,
+    subpartition x22 engine innodb)
 );
 
 SELECT * from t1;
@@ -527,11 +537,11 @@ primary key (a,b))
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 tablespace t1,
-    subpartition x12 tablespace t2),
+  ( subpartition x11 engine innodb,
+    subpartition x12 engine innodb),
    partition x2 values less than (5)
-  ( subpartition x21 tablespace t1,
-    subpartition x22 tablespace t2)
+  ( subpartition x21 engine innodb,
+    subpartition x22 engine innodb)
 );
 
 INSERT into t1 VALUES (1,1,1);
@@ -545,11 +555,11 @@ ALTER TABLE t1
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 tablespace t1 engine myisam,
-    subpartition x12 tablespace t2 engine myisam),
+  ( subpartition x11 engine innodb,
+    subpartition x12 engine innodb),
   partition x2 values less than (5)
-  ( subpartition x21 tablespace t1 engine myisam,
-    subpartition x22 tablespace t2 engine myisam)
+  ( subpartition x21 engine innodb,
+    subpartition x22 engine innodb)
 );
 
 SELECT * from t1;
@@ -568,11 +578,11 @@ primary key (a,b))
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 engine myisam,
-    subpartition x12 engine myisam),
+  ( subpartition x11 engine innodb,
+    subpartition x12 engine innodb),
   partition x2 values less than (5)
-  ( subpartition x21 engine myisam,
-    subpartition x22 engine myisam)
+  ( subpartition x21 engine innodb,
+    subpartition x22 engine innodb)
 );
 
 INSERT into t1 VALUES (1,1,1);
@@ -586,11 +596,11 @@ ALTER TABLE t1
 partition by range (a)
 subpartition by hash (a+b)
 ( partition x1 values less than (1)
-  ( subpartition x11 engine myisam,
-    subpartition x12 engine myisam),
+  ( subpartition x11 engine innodb,
+    subpartition x12 engine innodb),
   partition x2 values less than (5)
-  ( subpartition x21 engine myisam,
-    subpartition x22 engine myisam)
+  ( subpartition x21 engine innodb,
+    subpartition x22 engine innodb)
 );
 
 SELECT * from t1;
@@ -601,7 +611,7 @@ drop table t1;
 # Bug #17894 Comparison with "less than" operator fails with Range partition 
 #
 CREATE TABLE t1 (c1 int default NULL, c2 varchar(30) default NULL, 
-c3 date default NULL) engine=myisam
+c3 date default NULL)
 PARTITION BY RANGE (year(c3)) (PARTITION p0 VALUES LESS THAN (1995),
 PARTITION p1 VALUES LESS THAN (1996) , PARTITION p2 VALUES LESS THAN (1997) ,
 PARTITION p3 VALUES LESS THAN (1998) , PARTITION p4 VALUES LESS THAN (1999) ,
@@ -683,7 +693,7 @@ drop table t1;
 create table t1 (a int DEFAULT NULL,
                  b varchar(30) DEFAULT NULL,
                  c date DEFAULT NULL)
-ENGINE=MYISAM DEFAULT CHARSET=latin1;
+DEFAULT CHARSET=latin1;
 
 insert into t1 values (1, 'abc', '1995-01-01');
 insert into t1 values (1, 'abc', '1995-01-02');
@@ -868,12 +878,13 @@ INSERT INTO t1 VALUES ('2006-07-13'),('2006-07-20'),('2006-07-30');
 
 SELECT * FROM t1
 WHERE a >= '2004-07-01' AND a <= '2004-09-30';
-EXPLAIN PARTITIONS SELECT * FROM t1
+analyze table t1;
+EXPLAIN SELECT * FROM t1
 WHERE a >= '2004-07-01' AND a <= '2004-09-30';
 SELECT * from t1
 WHERE (a >= '2004-07-01' AND a <= '2004-09-30') OR
       (a >= '2005-07-01' AND a <= '2005-09-30');
-EXPLAIN PARTITIONS SELECT * from t1
+EXPLAIN SELECT * from t1
 WHERE (a >= '2004-07-01' AND a <= '2004-09-30') OR
       (a >= '2005-07-01' AND a <= '2005-09-30');
 DROP TABLE t1;
@@ -892,12 +903,12 @@ DROP TABLE t1;
 #insert into t1 values ("1234567890123456789");
 #insert into t1 values ("1234567890123456");
 #select * from t1;
-#explain partitions select * from t1 where a = "12345678901234567890";
-#explain partitions select * from t1 where a = "12345678901234567890" OR
+#explain select * from t1 where a = "12345678901234567890";
+#explain select * from t1 where a = "12345678901234567890" OR
 #                                          a = "A2345678901234567890" OR
 #                                          a = "B2345678901234567890" OR
 #                                          a = "C2345678901234567890";
-#explain partitions select * from t1 where a = "01234567890123456";
+#explain select * from t1 where a = "01234567890123456";
 #select * from t1 where a = "01234567890123456";
 #select * from t1 where a = "12345678901234567890" OR
 #                       a = "A2345678901234567890" OR
@@ -958,17 +969,21 @@ INSERT INTO t1 SELECT a + 40, b + 40 FROM t1;
 INSERT INTO t2 SELECT * FROM t1;
 
 --echo # plans should be identical
+analyze table t1;
+analyze table t2;
 EXPLAIN SELECT a, MAX(b) FROM t1 WHERE a IN (10,100) GROUP BY a;
 EXPLAIN SELECT a, MAX(b) FROM t2 WHERE a IN (10,100) GROUP BY a;
 
 FLUSH status;
 SELECT a, MAX(b) FROM t1 WHERE a IN (10, 100) GROUP BY a;
---echo # Should be no more than 4 reads.
+--echo # Should be no more than 2 reads.
+--skip_if_hypergraph  # Does not support this access method yet.
 SHOW status LIKE 'handler_read_key';
 
 FLUSH status;
 SELECT a, MAX(b) FROM t2 WHERE a IN (10, 100) GROUP BY a;
---echo # Should be no more than 4 reads.
+--echo # Should be no more than 2 reads.
+--skip_if_hypergraph  # Does not support this access method yet.
 SHOW status LIKE 'handler_read_key';
 
 DROP TABLE t1, t2;

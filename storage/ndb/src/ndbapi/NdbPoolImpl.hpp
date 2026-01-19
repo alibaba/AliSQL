@@ -1,15 +1,23 @@
 /*
-   Copyright (C) 2003, 2005, 2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
+    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -74,9 +82,9 @@
 #ifndef NdbPool_H
 #define NdbPool_H
 
-#include <Ndb.hpp>
-#include <NdbMutex.h>
 #include <NdbCondition.h>
+#include <NdbMutex.h>
+#include <Ndb.hpp>
 #include <NdbOut.hpp>
 
 class NdbPool {
@@ -85,7 +93,7 @@ class NdbPool {
 #define POOL_HASH_TABLE_SIZE 32
 #define MAX_NDB_OBJECTS 240
   struct POOL_STRUCT {
-    Ndb* ndb_reference;
+    Ndb *ndb_reference;
     bool in_use;
     bool free_entry;
     Uint16 next_free_object;
@@ -93,23 +101,24 @@ class NdbPool {
     Uint16 next_db_object;
     Uint16 prev_db_object;
   };
-  public:
-    static NdbPool* create_instance(Ndb_cluster_connection*,
-				    Uint32 max_ndb_objects = 240,
-                                    Uint32 no_conn_obj = 4,
-                                    Uint32 init_no_ndb_objects = 8);
-    static void drop_instance();
-    Ndb* get_ndb_object(Uint32 &hint_id,
-                        const char* a_catalog_name,
-                        const char* a_schema_name);
-    void return_ndb_object(Ndb* returned_object, Uint32 id);
-  private:
-    bool init(Uint32 initial_no_of_ndb_objects = 8);
-    void release_all();
-    static bool initPoolMutex();
-    NdbPool(Ndb_cluster_connection*, 
-	    Uint32 max_no_of_ndb_objects, Uint32 no_conn_objects);
-    ~NdbPool();
+
+ public:
+  static NdbPool *create_instance(Ndb_cluster_connection *,
+                                  Uint32 max_ndb_objects = 240,
+                                  Uint32 no_conn_obj = 4,
+                                  Uint32 init_no_ndb_objects = 8);
+  static void drop_instance();
+  Ndb *get_ndb_object(Uint32 &hint_id, const char *a_catalog_name,
+                      const char *a_schema_name);
+  void return_ndb_object(Ndb *returned_object, Uint32 id);
+
+ private:
+  bool init(Uint32 initial_no_of_ndb_objects = 8);
+  void release_all();
+  static bool initPoolMutex();
+  NdbPool(Ndb_cluster_connection *, Uint32 max_no_of_ndb_objects,
+          Uint32 no_conn_objects);
+  ~NdbPool();
   /*
   We have three lists:
   1) A list for entries not in use
@@ -121,48 +130,45 @@ class NdbPool {
   implementation have not yet any handling of dropping Ndb objects
   until all Ndb objects are dropped.
   */
-    void add_free_list(Uint32 id);
-    void remove_free_list(Uint32 id);
-    Ndb* get_free_list(Uint32 &id, Uint32 hash_entry);
+  void add_free_list(Uint32 id);
+  void remove_free_list(Uint32 id);
+  Ndb *get_free_list(Uint32 &id, Uint32 hash_entry);
 
-    void add_db_hash(Uint32 id);
-    void remove_db_hash(Uint32 id, Uint32 hash_entry);
-    Ndb* get_db_hash(Uint32 &id,
-                     Uint32 hash_entry,
-                     const char* a_catalog_name,
-                     const char* a_schema_name);
+  void add_db_hash(Uint32 id);
+  void remove_db_hash(Uint32 id, Uint32 hash_entry);
+  Ndb *get_db_hash(Uint32 &id, Uint32 hash_entry, const char *a_catalog_name,
+                   const char *a_schema_name);
 
-    bool allocate_ndb(Uint32 &id,
-                      const char* a_catalog_name,
-                      const char* a_schema_name);
-    Ndb* get_hint_ndb(Uint32 id, Uint32 hash_entry);
-    Ndb* wait_free_ndb(Uint32 &id);
-    Uint32 compute_hash(const char *a_schema_name);
-    void add_wait_list(Uint32 id);
-    void remove_wait_list();
-    void switch_condition_queue();
+  bool allocate_ndb(Uint32 &id, const char *a_catalog_name,
+                    const char *a_schema_name);
+  Ndb *get_hint_ndb(Uint32 id, Uint32 hash_entry);
+  Ndb *wait_free_ndb(Uint32 &id);
+  Uint32 compute_hash(const char *a_schema_name);
+  void add_wait_list(Uint32 id);
+  void remove_wait_list();
+  void switch_condition_queue();
 
-    static NdbMutex     *pool_mutex;
-    struct NdbCondition *input_pool_cond;
-    struct NdbCondition *output_pool_cond;
+  static NdbMutex *pool_mutex;
+  struct NdbCondition *input_pool_cond;
+  struct NdbCondition *output_pool_cond;
 
-    POOL_STRUCT *m_pool_reference;
-    Uint8       *m_hash_entry;
+  POOL_STRUCT *m_pool_reference;
+  Uint8 *m_hash_entry;
 
-    bool        m_inited;
-    Uint32      m_no_of_conn_objects;
+  bool m_inited;
+  Uint32 m_no_of_conn_objects;
 
-    Uint16      m_no_of_objects;
-    Uint16      m_max_ndb_objects;
-    Uint16      m_first_free;
-    Uint16      m_last_free;
-    Uint16      m_first_not_in_use;
-    Uint16      m_waiting;
-    Uint16      m_first_wait;
-    Uint16      m_input_queue;
-    Uint16      m_output_queue;
-    Uint16      m_signal_count;
+  Uint16 m_no_of_objects;
+  Uint16 m_max_ndb_objects;
+  Uint16 m_first_free;
+  Uint16 m_last_free;
+  Uint16 m_first_not_in_use;
+  Uint16 m_waiting;
+  Uint16 m_first_wait;
+  Uint16 m_input_queue;
+  Uint16 m_output_queue;
+  Uint16 m_signal_count;
 
-  Ndb_cluster_connection * m_cluster_connection;
+  Ndb_cluster_connection *m_cluster_connection;
 };
 #endif

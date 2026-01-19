@@ -1,0 +1,224 @@
+Allocation Counts for Horner Evaluation:
+Allocation count for type mpfr_float_50 = 3
+Allocation count for type mpfr_float_50 - no expression templates = 1
+Allocation Counts for boost::math::tools::evaluate_polynomial:
+Allocation count for type mpfr_float_50 = 13
+Allocation count for type mpfr_float_50 - no expression templates = 9
+Time for double = 0.000688113 seconds
+Total allocations for double = 14
+Time for real_concept = 0.00149196 seconds
+Total allocations for real_concept = 0
+Time for arithmetic_backend<double> = 0.00133409 seconds
+Total allocations for arithmetic_backend<double> = 0
+Time for arithmetic_backend<double> - no expression templates = 0.000637403 seconds
+Total allocations for arithmetic_backend<double> - no expression templates = 0
+Time for double = 0.0366824 seconds
+Total allocations for double = 0
+Time for real_concept = 0.0867356 seconds
+Total allocations for real_concept = 0
+Time for arithmetic_backend<double> = 0.0956691 seconds
+Total allocations for arithmetic_backend<double> = 0
+Time for arithmetic_backend<double> - no expression templates = 0.040428 seconds
+Total allocations for arithmetic_backend<double> - no expression templates = 0
+Testing Bessel Functions at 50 digits.....
+Time for mpfr_float_50 = 0.204043 seconds
+Total allocations for mpfr_float_50 = 813605
+Time for mpfr_float_50 (3 theads) = 0.238272 seconds
+Total allocations for mpfr_float_50 = 3255602
+Time for mpfr_float_50 (no expression templates = 0.216221 seconds
+Total allocations for mpfr_float_50 (no expression templates = 1001796
+Time for mpfr_float_50 (no expression templates (3 theads) = 0.267326 seconds
+Total allocations for mpfr_float_50 (no expression templates = 4008534
+Time for static_mpfr_float_50 = 0.146508 seconds
+Total allocations for static_mpfr_float_50 = 18685
+Time for static_mpfr_float_50 (3 theads) = 0.180008 seconds
+Total allocations for static_mpfr_float_50 = 75946
+Time for static_mpfr_float_50 (no expression templates) = 0.143153 seconds
+Total allocations for static_mpfr_float_50 (no expression templates) = 46826
+Time for static_mpfr_float_50 (no expression templates) (3 theads) = 0.161564 seconds
+Total allocations for static_mpfr_float_50 (no expression templates) = 189191
+Time for mpf_float_50 = 0.167874 seconds
+Total allocations for mpf_float_50 = 870726
+Time for mpf_float_50 (3 theads) = 0.205629 seconds
+Total allocations for mpf_float_50 = 3482852
+Time for mpf_float_50 (no expression templates = 0.171495 seconds
+Total allocations for mpf_float_50 (no expression templates = 1071229
+Time for mpf_float_50 (no expression templates (3 theads) = 0.22507 seconds
+Total allocations for mpf_float_50 (no expression templates = 4284874
+Time for cpp_dec_float_50 = 0.377193 seconds
+Total allocations for cpp_dec_float_50 = 3
+Time for cpp_dec_float_50 (3 theads) = 0.410275 seconds
+Total allocations for cpp_dec_float_50 = 36
+Time for cpp_bin_float_50 = 0.315701 seconds
+Total allocations for cpp_bin_float_50 = 4
+Time for cpp_bin_float_50 (3 theads) = 0.338848 seconds
+Total allocations for cpp_bin_float_50 = 43
+Testing Bessel Functions at 100 digits.....
+Time for mpfr_float_100 = 0.504992 seconds
+Total allocations for mpfr_float_100 = 1666200
+Time for mpfr_float_100 (no expression templates = 0.503061 seconds
+Total allocations for mpfr_float_100 (no expression templates = 2120706
+Time for static_mpfr_float_100 = 0.375447 seconds
+Total allocations for static_mpfr_float_100 = 19391
+Time for mpf_float_100 = 0.406251 seconds
+Total allocations for mpf_float_100 = 1817791
+Time for mpf_float_100 (no expression templates = 0.418247 seconds
+Total allocations for mpf_float_100 (no expression templates = 2221056
+Time for cpp_dec_float_100 = 1.13054 seconds
+Total allocations for cpp_dec_float_100 = 3
+Time for cpp_bin_float_100 = 1.19595 seconds
+Total allocations for cpp_bin_float_100 = 6
+Testing Polynomial Evaluation at 50 digits.....
+Time for mpfr_float_50 = 0.00172618 seconds
+Total allocations for mpfr_float_50 = 12976
+Time for mpfr_float_50 (no expression templates = 0.00140102 seconds
+Total allocations for mpfr_float_50 (no expression templates = 8984
+Time for static_mpfr_float_50 = 0.000774017 seconds
+Total allocations for static_mpfr_float_50 = 0
+Time for mpf_float_50 = 0.00122821 seconds
+Total allocations for mpf_float_50 = 12976
+Time for mpf_float_50 (no expression templates = 0.000938302 seconds
+Total allocations for mpf_float_50 (no expression templates = 8984
+Time for cpp_dec_float_50 = 0.000761543 seconds
+Total allocations for cpp_dec_float_50 = 0
+Time for cpp_bin_float_50 = 0.00100391 seconds
+Total allocations for cpp_bin_float_50 = 0
+Testing Polynomial Evaluation at 100 digits.....
+Time for mpfr_float_100 = 0.00198759 seconds
+Total allocations for mpfr_float_100 = 12976
+Time for mpfr_float_100 (no expression templates = 0.00197391 seconds
+Total allocations for mpfr_float_100 (no expression templates = 8984
+Time for static_mpfr_float_100 = 0.00115947 seconds
+Total allocations for static_mpfr_float_100 = 0
+Time for mpf_float_100 = 0.00130242 seconds
+Total allocations for mpf_float_100 = 12976
+Time for mpf_float_100 (no expression templates = 0.000967883 seconds
+Total allocations for mpf_float_100 (no expression templates = 8984
+Time for cpp_dec_float_100 = 0.00110386 seconds
+Total allocations for cpp_dec_float_100 = 0
+Time for cpp_bin_float_100 = 0.00144396 seconds
+Total allocations for cpp_bin_float_100 = 0
+Testing Non-Central T at 50 digits.....
+Time for mpfr_float_50 = 45.8621 seconds
+Total allocations for mpfr_float_50 = 196986977
+Time for mpfr_float_50 (no expression templates = 41.5062 seconds
+Total allocations for mpfr_float_50 (no expression templates = 194554719
+Time for static_mpfr_float_50 = 31.1014 seconds
+Total allocations for static_mpfr_float_50 = 1798554
+Time for mpf_float_50 = 28.2162 seconds
+Total allocations for mpf_float_50 = 162346817
+Time for mpf_float_50 (no expression templates = 24.8611 seconds
+Total allocations for mpf_float_50 (no expression templates = 154896018
+Time for cpp_dec_float_50 = 61.5326 seconds
+Total allocations for cpp_dec_float_50 = 4
+Time for cpp_bin_float_50 = 59.0179 seconds
+Total allocations for cpp_bin_float_50 = 1
+Time for cpp_bin_float_50 (3 theads) = 79.9276 seconds
+Total allocations for cpp_bin_float_50 = 28
+Testing Non-Central T at 100 digits.....
+Time for mpfr_float_100 = 92.8415 seconds
+Total allocations for mpfr_float_100 = 333396307
+Time for mpfr_float_100 (no expression templates = 84.5783 seconds
+Total allocations for mpfr_float_100 (no expression templates = 325676494
+Time for static_mpfr_float_100 = 69.8614 seconds
+Total allocations for static_mpfr_float_100 = 15326962
+Time for mpf_float_100 = 60.903 seconds
+Total allocations for mpf_float_100 = 280052298
+Time for mpf_float_100 (no expression templates = 52.3144 seconds
+Total allocations for mpf_float_100 (no expression templates = 265239868
+Time for cpp_dec_float_100 = 184.481 seconds
+Total allocations for cpp_dec_float_100 = 5
+Time for cpp_bin_float_100 = 180.534 seconds
+Total allocations for cpp_bin_float_100 = 2
+[table Bessel Functions (100 digit precision)
+[[Type][Time][# Allocations]]
+[[cpp_bin_float_100][3.18541 (1.19595s)][6]]
+[[cpp_dec_float_100][3.01119 (1.13054s)][3]]
+[[mpf_float_100][1.08204 (0.406251s)][1817791]]
+[[mpf_float_100 (no expression templates][1.114 (0.418247s)][2221056]]
+[[mpfr_float_100][1.34504 (0.504992s)][1666200]]
+[[mpfr_float_100 (no expression templates][1.3399 (0.503061s)][2120706]]
+[[static_mpfr_float_100][1 (0.375447s)][19391]]
+]
+
+[table Bessel Functions (16 digit precision)
+[[Type][Time][# Allocations]]
+[[arithmetic_backend<double>][2.09301 (0.00133409s)][0]]
+[[arithmetic_backend<double> - no expression templates][1 (0.000637403s)][0]]
+[[double][1.07956 (0.000688113s)][14]]
+[[real_concept][2.34069 (0.00149196s)][0]]
+]
+
+[table Bessel Functions (50 digit precision)
+[[Type][Time][# Allocations]]
+[[cpp_bin_float_50][2.20534 (0.315701s)][4]]
+[[cpp_bin_float_50 (3 concurrent threads)][2.36703 (0.338848s)][44]]
+[[cpp_dec_float_50][2.6349 (0.377193s)][3]]
+[[cpp_dec_float_50 (3 concurrent threads)][2.86599 (0.410275s)][37]]
+[[mpf_float_50][1.17269 (0.167874s)][870726]]
+[[mpf_float_50 (3 concurrent threads)][1.43643 (0.205629s)][3482853]]
+[[mpf_float_50 (no expression templates][1.19799 (0.171495s)][1071229]]
+[[mpf_float_50 (no expression templates (3 concurrent threads)][1.57224 (0.22507s)][4284875]]
+[[mpfr_float_50][1.42535 (0.204043s)][813605]]
+[[mpfr_float_50 (3 concurrent threads)][1.66446 (0.238272s)][3255603]]
+[[mpfr_float_50 (no expression templates][1.51042 (0.216221s)][1001796]]
+[[mpfr_float_50 (no expression templates (3 concurrent threads)][1.86742 (0.267326s)][4008535]]
+[[static_mpfr_float_50][1.02344 (0.146508s)][18685]]
+[[static_mpfr_float_50 (3 concurrent threads)][1.25745 (0.180008s)][75947]]
+[[static_mpfr_float_50 (no expression templates)][1 (0.143153s)][46826]]
+[[static_mpfr_float_50 (no expression templates) (3 concurrent threads)][1.12861 (0.161564s)][189192]]
+]
+
+[table Non-central T (16 digit precision)
+[[Type][Time][# Allocations]]
+[[arithmetic_backend<double>][2.60804 (0.0956691s)][0]]
+[[arithmetic_backend<double> - no expression templates][1.10211 (0.040428s)][0]]
+[[double][1 (0.0366824s)][0]]
+[[real_concept][2.3645 (0.0867356s)][0]]
+]
+
+[table Non-central T Distribution (100 digit precision)
+[[Type][Time][# Allocations]]
+[[cpp_bin_float_100][3.45094 (180.534s)][2]]
+[[cpp_dec_float_100][3.52639 (184.481s)][5]]
+[[mpf_float_100][1.16417 (60.903s)][280052298]]
+[[mpf_float_100 (no expression templates][1 (52.3144s)][265239868]]
+[[mpfr_float_100][1.77469 (92.8415s)][333396307]]
+[[mpfr_float_100 (no expression templates][1.61673 (84.5783s)][325676494]]
+[[static_mpfr_float_100][1.33541 (69.8614s)][15326962]]
+]
+
+[table Non-central T Distribution (50 digit precision)
+[[Type][Time][# Allocations]]
+[[cpp_bin_float_50][2.3739 (59.0179s)][1]]
+[[cpp_bin_float_50 (3 concurrent threads)][3.21496 (79.9276s)][29]]
+[[cpp_dec_float_50][2.47505 (61.5326s)][4]]
+[[mpf_float_50][1.13495 (28.2162s)][162346817]]
+[[mpf_float_50 (no expression templates][1 (24.8611s)][154896018]]
+[[mpfr_float_50][1.84473 (45.8621s)][196986977]]
+[[mpfr_float_50 (no expression templates][1.66952 (41.5062s)][194554719]]
+[[static_mpfr_float_50][1.25101 (31.1014s)][1798554]]
+]
+
+[table Polynomial Evaluation (100 digit precision)
+[[Type][Time][# Allocations]]
+[[cpp_bin_float_100][1.49187 (0.00144396s)][0]]
+[[cpp_dec_float_100][1.14049 (0.00110386s)][0]]
+[[mpf_float_100][1.34564 (0.00130242s)][12976]]
+[[mpf_float_100 (no expression templates][1 (0.000967883s)][8984]]
+[[mpfr_float_100][2.05354 (0.00198759s)][12976]]
+[[static_mpfr_float_100][1.19794 (0.00115947s)][0]]
+]
+
+[table Polynomial Evaluation (50 digit precision)
+[[Type][Time][# Allocations]]
+[[cpp_bin_float_50][1.31826 (0.00100391s)][0]]
+[[cpp_dec_float_50][1 (0.000761543s)][0]]
+[[mpf_float_50][1.61279 (0.00122821s)][12976]]
+[[mpf_float_50 (no expression templates][1.23211 (0.000938302s)][8984]]
+[[mpfr_float_100 (no expression templates][2.59199 (0.00197391s)][8984]]
+[[mpfr_float_50][2.26669 (0.00172618s)][12976]]
+[[mpfr_float_50 (no expression templates][1.83971 (0.00140102s)][8984]]
+[[static_mpfr_float_50][1.01638 (0.000774017s)][0]]
+]
+

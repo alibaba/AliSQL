@@ -1,9 +1,3 @@
--- source include/have_utf32.inc
-
---disable_warnings
-DROP TABLE IF EXISTS t1;
---enable_warnings
-
 --echo #
 --echo # Start of 5.5 tests
 --echo #
@@ -101,7 +95,7 @@ SELECT * FROM t1 WHERE a LIKE 'фЫва%' COLLATE utf32_bin ORDER BY BINARY a;
 DROP TABLE t1;
 
 CREATE TABLE t1 (word varchar(64) NOT NULL, PRIMARY KEY (word))
-ENGINE=MyISAM CHARACTER SET utf32;
+CHARACTER SET utf32;
 INSERT INTO t1 (word) VALUES ("cat");
 SELECT * FROM t1 WHERE word LIKE "c%";
 SELECT * FROM t1 WHERE word LIKE "ca_";
@@ -116,107 +110,6 @@ DROP TABLE t1;
 # This invokes charpos() function.
 select insert(_utf32 0x000000610000006200000063,10,2,_utf32 0x000000640000006500000066);
 select insert(_utf32 0x000000610000006200000063,1,2,_utf32 0x000000640000006500000066);
-
-#######################################################
-
-#
-# Bug 1264
-#
-# Description: 
-#
-# When using a ucs2 table in MySQL, 
-# either with ucs2_general_ci or ucs2_bin collation,
-# words are returned in an incorrect order when using ORDER BY
-# on an _indexed_ CHAR or VARCHAR column. They are sorted with
-# the longest word *first* instead of last. I.E. The word "aardvark"
-# is in the results before the word "a".
-#
-# If there is no index for the column, the problem does not occur.
-#
-# Interestingly, if there is no second column, the words are returned
-# in the correct order. 
-#
-# According to EXPLAIN, it looks like when the output includes columns that
-# are not part of the index sorted on, it does a filesort, which fails. 
-# Using a straight index yields correct results.
-
-SET NAMES latin1;
-
-#
-# Two fields, index
-#
-
-CREATE TABLE t1 (
-   word VARCHAR(64),
-   bar INT(11) default 0,
-   PRIMARY KEY (word))
-   ENGINE=MyISAM
-   CHARSET utf32
-   COLLATE utf32_general_ci ;
-
-INSERT INTO t1 (word) VALUES ("aar");
-INSERT INTO t1 (word) VALUES ("a");
-INSERT INTO t1 (word) VALUES ("aardvar");
-INSERT INTO t1 (word) VALUES ("aardvark");
-INSERT INTO t1 (word) VALUES ("aardvara");
-INSERT INTO t1 (word) VALUES ("aardvarz");
-EXPLAIN SELECT * FROM t1 ORDER BY word;
-SELECT * FROM t1 ORDER BY word;
-EXPLAIN SELECT word FROM t1 ORDER BY word;
-SELECT word FROM t1 ORDER by word;
-DROP TABLE t1;
-
-
-#
-# One field, index
-# 
-
-CREATE TABLE t1 (
-   word VARCHAR(64) ,
-   PRIMARY KEY (word))
-   ENGINE=MyISAM
-   CHARSET utf32
-   COLLATE utf32_general_ci;
-
-INSERT INTO t1 (word) VALUES ("aar");
-INSERT INTO t1 (word) VALUES ("a");
-INSERT INTO t1 (word) VALUES ("aardvar");
-INSERT INTO t1 (word) VALUES ("aardvark");
-INSERT INTO t1 (word) VALUES ("aardvara");
-INSERT INTO t1 (word) VALUES ("aardvarz");
-EXPLAIN SELECT * FROM t1 ORDER BY WORD;
-SELECT * FROM t1 ORDER BY word;
-DROP TABLE t1;
-
-
-#
-# Two fields, no index
-#
-
-CREATE TABLE t1 (
-   word TEXT,
-   bar INT(11) AUTO_INCREMENT,
-   PRIMARY KEY (bar))
-   ENGINE=MyISAM
-   CHARSET utf32
-   COLLATE utf32_general_ci ;
-INSERT INTO t1 (word) VALUES ("aar");
-INSERT INTO t1 (word) VALUES ("a" );
-INSERT INTO t1 (word) VALUES ("aardvar");
-INSERT INTO t1 (word) VALUES ("aardvark");
-INSERT INTO t1 (word) VALUES ("aardvara");
-INSERT INTO t1 (word) VALUES ("aardvarz");
-EXPLAIN SELECT * FROM t1 ORDER BY word;
-SELECT * FROM t1 ORDER BY word;
-EXPLAIN SELECT word FROM t1 ORDER BY word;
-SELECT word FROM t1 ORDER BY word;
-DROP TABLE t1;
-
-#
-# END OF Bug 1264 test
-#
-########################################################
-
 
 #
 # Check alignment for from-binary-conversion with CAST and CONVERT
@@ -275,6 +168,7 @@ drop table t1;
 #
 # Check prepare statement from an UTF32 string
 #
+set names latin1;
 set @ivar= 1234;
 set @str1 = 'select ?';
 set @str2 = convert(@str1 using utf32);
@@ -371,18 +265,6 @@ select hex(substr(_utf32 0x000000e4000000e500000068,-3));
 #SELECT CONVERT(-103, CHAR(50) UNICODE);
 #SELECT CONVERT(-103.0, CHAR(50) UNICODE);
 
-#
-# Bug#9557 MyISAM utf8 table crash
-#
-CREATE TABLE t1 (
-  a varchar(250) NOT NULL default '',
-  KEY a (a)
-) ENGINE=MyISAM DEFAULT CHARSET=utf32 COLLATE utf32_general_ci;
-insert into t1 values (0x803d);
-insert into t1 values (0x005b);
-select hex(a) from t1;
-drop table t1;
-
 ##
 ## Bug #14583 Bug on query using a LIKE on indexed field with ucs2_bin collation
 ##
@@ -407,23 +289,6 @@ execute stmt using @param1;
 select utext from t1 where utext like '%%';
 drop table t1;
 deallocate prepare stmt;
-
-#
-# Bug#22052 Trailing spaces are not removed from UNICODE fields in an index
-#
-create table t1 (
-  a char(10) character set utf32 not null, 
-  index a (a)
-) engine=myisam;
-insert into t1 values (repeat(0x0000201f, 10));
-insert into t1 values (repeat(0x00002020, 10));
-insert into t1 values (repeat(0x00002021, 10));
-# make sure "index read" is used
-explain select hex(a) from t1 order by a;
-select hex(a) from t1 order by a;
-alter table t1 drop index a;
-select hex(a) from t1 order by a;
-drop table t1;
 
 #
 # Bug #20076: server crashes for a query with GROUP BY if MIN/MAX aggregation
@@ -481,17 +346,6 @@ DROP TABLE t1;
 #select password(name) from bug20536;
 #select old_password(name) from bug20536;
 #
-## Disable test case as encrypt relies on 'crypt' function.
-## "decrypt" is noramlly tested in func_crypt.test which have a
-## "have_crypt.inc" test
-#--disable_parsing
-## ENCRYPT relies on OS function crypt() which takes a NUL-terminated string; it
-## doesn't return good results for strings with embedded 0 bytes.  It won't be
-## fixed unless we choose to re-implement the crypt() function ourselves to take
-## an extra size_t string_length argument.
-#select encrypt(name, 'SALT') from bug20536;
-#--enable_parsing
-#
 ## QUOTE doesn't work with UCS2 data.  It would require a total rewrite
 ## of Item_func_quote::val_str(), which isn't worthwhile until UCS2 is
 ## supported fully as a client character set.
@@ -543,6 +397,7 @@ set names latin1;
 # Bug #14290: character_maximum_length for text fields
 #
 create table t1(a blob, b text charset utf32);
+--sorted_result
 select data_type, character_octet_length, character_maximum_length
   from information_schema.columns where table_name='t1';
 drop table t1;
@@ -587,12 +442,14 @@ insert into t1 values (_utf32 0x00110101);
 insert into t1 values (_utf32 0x01000101);
 --error ER_INVALID_CHARACTER_STRING
 insert into t1 values (_utf32 0x11000101);
+--sorted_result
 select hex(a) from t1;
 drop table t1;
 
 #
 # Bug#32914 Character sets: illegal characters in utf8 and utf32 columns
 #
+SET sql_mode = '';
 create table t1 (utf32 varchar(2) character set utf32);
 --echo Wrong character with pad
 insert into t1 values (0x110000);
@@ -609,7 +466,7 @@ insert into t1 values (0x00800037);
 --echo Wrong character with pad with the second byte higher than 0x10
 insert into t1 values (0x00800037);
 drop table t1;
-
+SET sql_mode = default;
 #
 # Bug#32394 Character sets: crash if comparison with 0xfffd
 #
@@ -626,6 +483,7 @@ drop table t1;
 #
 create table t1 (a char(10)) character set utf32;
 insert into t1 values ('a   ');
+--sorted_result
 select hex(a) from t1;
 drop table t1;
 
@@ -696,7 +554,7 @@ select left('aaa','1');
 #
 create table t1 (a int);
 insert into t1 values ('-1234.1e2');
-insert into t1 values ('-1234.1e2xxxx');
+insert ignore into t1 values ('-1234.1e2xxxx');
 insert into t1 values ('-1234.1e2    ');
 select * from t1;
 drop table t1;
@@ -706,35 +564,40 @@ drop table t1;
 #
 create table t1 (a int);
 insert into t1 values ('1 ');
-insert into t1 values ('1 x');
+insert ignore into t1 values ('1 x');
 select * from t1;
 drop table t1;
 
 #
 # Testing auto-conversion to TEXT
 #
+SET sql_mode = '';
 create table t1 (a varchar(17000) character set utf32);
 show create table t1;
 drop table t1;
+SET sql_mode = default;
 
 #
-# Testing that maximim possible key length is 1332 bytes
+# Testing that maximim possible key length is 767 for InnoDB
 #
-create table t1 (a varchar(250) character set utf32 primary key);
+#Minimized the varchar length for InnoDB so that it does not throw max keylength exceeded error
+create table t1 (a varchar(150) character set utf32 primary key);
 show create table t1;
 drop table t1;
 --error ER_TOO_LONG_KEY
-create table t1 (a varchar(334) character set utf32 primary key);
+create table t1 (a varchar(334) character set utf32 primary key) ROW_FORMAT=COMPACT;
 
 #
 # Testing mi_check with long key values
 #
-create table t1 (a varchar(333) character set utf32, key(a));
+SET sql_mode = '';
+create table t1 (a varchar(333) character set utf32, key(a))
+row_format=dynamic;
 insert into t1 values (repeat('a',333)), (repeat('b',333));
 flush tables;
 check table t1;
 drop table t1;
-
+SET sql_mode = default;
 #
 # Test how character set works with date/time
 #
@@ -815,10 +678,10 @@ DROP TABLE t1;
 --echo #
 CREATE TABLE t1 (utf32 CHAR(5) CHARACTER SET utf32, latin1 CHAR(5) CHARACTER SET latin1);
 INSERT INTO t1 (utf32) VALUES (0xc581);
-UPDATE t1 SET latin1 = utf32;
+UPDATE IGNORE t1 SET latin1 = utf32;
 DELETE FROM t1;
 INSERT INTO t1 (utf32) VALUES (0x100cc);
-UPDATE t1 SET latin1 = utf32;
+UPDATE IGNORE t1 SET latin1 = utf32;
 DROP TABLE t1;
 
 --echo #
@@ -828,17 +691,6 @@ SET collation_connection=utf32_general_ci;
 CREATE TABLE t1 AS SELECT format(123,2,'no_NO');
 SHOW CREATE TABLE t1;
 SELECT * FROM t1;
-DROP TABLE t1;
-
---echo #
---echo # Bug#42511 mysqld: ctype-ucs2.c:2044: my_strnncollsp_utf32: Assertion (tlen % 4) == 0' faied
---echo #
-CREATE TABLE t1 (
- b char(250) CHARACTER SET utf32,
- key (b)
-) ENGINE=MYISAM;
-INSERT INTO t1 VALUES ('d'),('f');
-SELECT * FROM t1 WHERE b BETWEEN 'a' AND 'z';
 DROP TABLE t1;
 
 --echo #
@@ -882,15 +734,72 @@ set collation_connection=utf32_general_ci;
 --source include/weight_string_euro.inc
 select hex(weight_string(_utf32 0x10000));
 select hex(weight_string(_utf32 0x10001));
---source include/weight_string_l1.inc
 
 set collation_connection=utf32_bin;
 --source include/weight_string.inc
 --source include/weight_string_euro.inc
---source include/weight_string_l1.inc
 
 --echo #
 --echo # End of 5.6 tests
 --echo #
 
+--echo #
+--echo # Start of 8.0 tests
+--echo #
 
+--echo #
+--echo # Bug#28275881: ASSERT `RC == TYPE_OK' IN CREATE TABLE WITH CHARSET UTF32
+--echo #
+
+--error ER_TOO_LONG_SET_ENUM_VALUE
+CREATE TABLE  table425 (b1
+SET('wgrpqu','Oklahoma','grpquarwkazzjeiwvdmdivjqsxmhjwagewclcfykywlcnemiuaabr
+rifnhuufzasunkrcpvasdqkxbwptigbpnesqigwegcnfeuvrgnecpthmhffqbythjwpukqubzpomnt
+rddrwhzjtqvbjiklcekxqyoxsolbxthdcprswpjxixmvfwmsyseblwcvumvyvbitxqjxdzdytunqvv
+rmpyxrencqhuyrfluezqekmqpwutxnzddrbjycyoyqbzsoxvillooqxuvoxcgohdbytybwcqxdwtqr
+ebgjzbycekyjgbpmqadutrqluyxhrdodxqqjwasfkvetfobocgpftrhvxugmmszwpoglvarsfiljrz
+imqeplevleqdhepkhcfrahcpjj') NULL ) DEFAULT CHARACTER SET = utf32;
+
+--error ER_TOO_LONG_SET_ENUM_VALUE
+CREATE FUNCTION hello (s SET('wgrpqu','Oklahoma','grpquarwkazzjeiwvdmdivjqsxmh
+jwagewclcfykywlcnemiuaabrrifnhuufzasunkrcpvasdqkxbwptigbpnesqigwegcnfeuvrgnecp
+thmhffqbythjwpukqubzpomntrddrwhzjtqvbjiklcekxqyoxsolbxthdcprswpjxixmvfwmsysebl
+wcvumvyvbitxqjxdzdytunqvvrmpyxrencqhuyrfluezqekmqpwutxnzddrbjycyoyqbzsoxvilloo
+qxuvoxcgohdbytybwcqxdwtqrebgjzbycekyjgbpmqadutrqluyxhrdodxqqjwasfkvetfobocgpft
+rhvxugmmszwpoglvarsfiljrzimqeplevleqdhepkhcfrahcpjj') CHARACTER SET utf32)
+RETURNS CHAR(50) DETERMINISTIC RETURN CONCAT('Hello, ',s,'!');
+
+--echo # Bug#32745294: my_well_formed_len_utf32: assertion `(length % 4) == 0'
+--echo #               failed.
+
+--error ER_CANNOT_CONVERT_STRING
+DO REPLACE(CONVERT(1 USING utf32),BIT_XOR(1),SHA1(@d));
+
+--echo #
+--echo # Bug #33810558 Invalid Unicode characters can be inserted in
+--echo #               column with UTF32 character set
+--echo #
+
+CREATE TABLE t1 (v VARCHAR(10) CHARACTER SET utf32);
+INSERT INTO t1 VALUES(x'D7FF');
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1 VALUES(x'D800');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1 VALUES(x'D83C');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1 VALUES(x'DFFF');
+
+INSERT INTO t1 VALUES(x'E000');
+INSERT INTO t1 VALUES(x'10FFFF');
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1 VALUES(x'110000');
+
+SELECT HEX(v) FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # End of 8.0 tests
+--echo #

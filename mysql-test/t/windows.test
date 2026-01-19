@@ -18,17 +18,6 @@ create table nu (a int);
 drop table nu;
 
 #
-# Bug17489: ailed to put data file in custom directory use "data directory" option
-#
---disable_warnings
-drop table if exists t1;
---enable_warnings
-CREATE TABLE t1 ( `ID` int(6) ) data directory 'c:/tmp/' index directory 'c:/tmp/' engine=MyISAM;
-drop table t1;
-
-# End of 4.1 tests
-
-#
 # Bug #27811: The variable 'join_tab' is being used without being defined
 #
 CREATE TABLE t1 (a int, b int); INSERT INTO t1 VALUES (1,1);
@@ -95,22 +84,34 @@ deallocate prepare abc;
 --echo #
 --echo # Bug#45498: Socket variable not available on Windows
 --echo #
-
-SELECT VARIABLE_NAME FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+--disable_warnings
+SELECT VARIABLE_NAME FROM performance_schema.global_variables
   WHERE VARIABLE_NAME = 'socket';
+--enable_warnings
 
 --echo #
---echo # Bug#16581605: REPLACE.EXE UTILITY IS BROKEN IN 5.5
+--echo # BUG#28206667 -- INVALID IP ADDRESS REJECTED WITH "BIND ON TCP/IP PORT: UNKNOWN ERROR" ON WINDOWS
 --echo #
 
-# Creating a temporary text file.
---write_file $MYSQL_TMP_DIR/bug16581605.txt
-abc
-def
-EOF
+--let $MYSQLD_LOG= $MYSQL_TMP_DIR/server.log
+--let $MYSQLD_DATADIR= `SELECT @@datadir`
 
-#REPLACE.EXE UTILITY will work fine after the fix.
---exec $REPLACE abc xyz < $MYSQL_TMP_DIR/bug16581605.txt
+--echo # Stop DB server which was created by MTR default
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/shutdown_mysqld.inc
 
-#Cleanup
-remove_file $MYSQL_TMP_DIR/bug16581605.txt;
+--echo #
+--echo # Start mysqld with not existent IP address as a vaule of --bind-address option
+--echo #
+
+--error 1
+--exec $MYSQLD --log-error=$MYSQLD_LOG --datadir=$MYSQLD_DATADIR --no-defaults --secure-file-priv="" --bind-address=128.0.0.1
+
+--let SEARCH_FILE=$MYSQLD_LOG
+--let SEARCH_PATTERN= Bind on TCP/IP port: The requested address is not valid in its context.
+--source include/search_pattern.inc
+
+--remove_file $MYSQLD_LOG
+
+--let $restart_parameters =
+--source include/start_mysqld.inc

@@ -1,214 +1,53 @@
 # Non-windows specific partition tests.
 --source include/not_windows.inc
---source include/have_partition.inc
-# DATA DIRECTORY/INDEX DIRECTORY require symbolic link support
---source include/have_symlink.inc
 
-# The test for Bug 20770 is disabled on Windows due to BUG#19107; it
-# should be moved into partition.test once the bug has been resolved.
+--disable_query_log
+CALL mtr.add_suppression("\\[ERROR\\].* Operating system error number");
+CALL mtr.add_suppression("\\[ERROR\\].* The error means mysqld does not have the access");
+CALL mtr.add_suppression("\\[ERROR\\].* Cannot create a tablespace for table .* because the directory is not a valid location. The DATA DIRECTORY location must be in a known directory");
+# Different error messages on MacOS
+CALL mtr.add_suppression("\\[ERROR\\].* Error number 30 means 'Read-only file system'");
+CALL mtr.add_suppression("\\[ERROR\\].* 'mkdir' returned OS error 130");
+--enable_query_log
 
-#
-# Bug 20770 Partitions: DATA DIRECTORY clause change in reorganize
-#                       doesn't remove old directory
-
-let $MYSQLD_DATADIR= `select @@datadir`;
-let $data_directory = DATA DIRECTORY = '$MYSQLTEST_VARDIR/tmp';
-let $inx_directory = INDEX DIRECTORY = '$MYSQLTEST_VARDIR/tmp';
-
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
-eval create table t1 (a int) engine myisam
-partition by range (a)
-subpartition by hash (a)
-(partition p0 VALUES LESS THAN (1) $data_directory $inx_directory
- (SUBPARTITION subpart00, SUBPARTITION subpart01));
-
---echo # Checking if file exists before alter
---file_exists $MYSQLD_DATADIR/test/t1.frm
---file_exists $MYSQLD_DATADIR/test/t1.par
---file_exists $MYSQLD_DATADIR/test/t1#P#p0#SP#subpart00.MYD
---file_exists $MYSQLD_DATADIR/test/t1#P#p0#SP#subpart00.MYI
---file_exists $MYSQLD_DATADIR/test/t1#P#p0#SP#subpart01.MYD
---file_exists $MYSQLD_DATADIR/test/t1#P#p0#SP#subpart01.MYI
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p0#SP#subpart00.MYD
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p0#SP#subpart01.MYD
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p0#SP#subpart00.MYI
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p0#SP#subpart01.MYI
-
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
-eval ALTER TABLE t1 REORGANIZE PARTITION p0 INTO
-(partition p1 VALUES LESS THAN (1) $data_directory $inx_directory
- (SUBPARTITION subpart10, SUBPARTITION subpart11),
- partition p2 VALUES LESS THAN (2) $data_directory $inx_directory
- (SUBPARTITION subpart20, SUBPARTITION subpart21));
-
---echo # Checking if file exists after alter
---file_exists $MYSQLD_DATADIR/test/t1.frm
---file_exists $MYSQLD_DATADIR/test/t1.par
---file_exists $MYSQLD_DATADIR/test/t1#P#p1#SP#subpart10.MYD
---file_exists $MYSQLD_DATADIR/test/t1#P#p1#SP#subpart10.MYI
---file_exists $MYSQLD_DATADIR/test/t1#P#p1#SP#subpart11.MYD
---file_exists $MYSQLD_DATADIR/test/t1#P#p1#SP#subpart11.MYI
---file_exists $MYSQLD_DATADIR/test/t1#P#p2#SP#subpart20.MYD
---file_exists $MYSQLD_DATADIR/test/t1#P#p2#SP#subpart20.MYI
---file_exists $MYSQLD_DATADIR/test/t1#P#p2#SP#subpart21.MYD
---file_exists $MYSQLD_DATADIR/test/t1#P#p2#SP#subpart21.MYI
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p1#SP#subpart10.MYD
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p1#SP#subpart11.MYD
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p2#SP#subpart20.MYD
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p2#SP#subpart21.MYD
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p1#SP#subpart10.MYI
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p1#SP#subpart11.MYI
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p2#SP#subpart20.MYI
---file_exists $MYSQLTEST_VARDIR/tmp/t1#P#p2#SP#subpart21.MYI
-
-drop table t1;
-
-#
-# Bug #24633 SQL MODE "NO_DIR_IN_CREATE" does not work with partitioned tables
-#
-disable_query_log;
-eval create table t2 (i int )
-partition by range (i)
-(
- partition p01 values less than (1000)
- data directory="$MYSQLTEST_VARDIR/tmp/"
- index directory="$MYSQLTEST_VARDIR/tmp/"
-);
-enable_query_log;
-          
-set @org_mode=@@sql_mode;
-set @@sql_mode='NO_DIR_IN_CREATE';
-select @@sql_mode;
-create table t1 (i int )
-partition by range (i)
-(
-  partition p01 values less than (1000)
-  data directory='/not/existing'
-  index directory='/not/existing'
-);
-show create table t2;
-DROP TABLE t1, t2;
-set @@sql_mode=@org_mode;
-
-#
-# Bug#32167: another privilege bypass with DATA/INDEX DIRECTORY
-#
-
-let $MYSQLD_DATADIR= `select @@datadir`;
-
---replace_result $MYSQLD_DATADIR MYSQLD_DATADIR
---error ER_WRONG_ARGUMENTS
-eval CREATE TABLE t1(a INT)
-PARTITION BY KEY (a)
-(PARTITION p0 DATA DIRECTORY '$MYSQLD_DATADIR/test');
-
---replace_result $MYSQLD_DATADIR MYSQLD_DATADIR
---error ER_WRONG_ARGUMENTS
-eval CREATE TABLE t1(a INT)
-PARTITION BY KEY (a)
-(PARTITION p0 INDEX DIRECTORY '$MYSQLD_DATADIR/test');
-
---replace_result $MYSQLD_DATADIR MYSQLD_DATADIR
---error ER_WRONG_ARGUMENTS
-eval CREATE TABLE ts (id INT, purchased DATE)
-PARTITION BY RANGE(YEAR(purchased))
-SUBPARTITION BY HASH(TO_DAYS(purchased)) (
-PARTITION p0 VALUES LESS THAN (1990) (
-SUBPARTITION s0a
-  DATA DIRECTORY = '$MYSQLD_DATADIR/test',
-SUBPARTITION s0b
-  DATA DIRECTORY = '$MYSQLD_DATADIR/test'
-));
-
---replace_result $MYSQLD_DATADIR MYSQLD_DATADIR
---error ER_WRONG_ARGUMENTS
-eval CREATE TABLE ts (id INT, purchased DATE)
-PARTITION BY RANGE(YEAR(purchased))
-SUBPARTITION BY HASH(TO_DAYS(purchased)) (
-PARTITION p0 VALUES LESS THAN (1990) (
-SUBPARTITION s0a
-  INDEX DIRECTORY = '$MYSQLD_DATADIR/test',
-SUBPARTITION s0b
-  INDEX DIRECTORY = '$MYSQLD_DATADIR/test'
-));
-
-# End Windows specific test failures.
-
-# These tests contain non-Windows specific directory/file format.
-
-#
-# Bug 25141: Crash Server on Partitioning command
-#
-
---disable_warnings
-DROP TABLE IF EXISTS `example`;
---enable_warnings
-
---mkdir $MYSQLTEST_VARDIR/p0Data
---mkdir $MYSQLTEST_VARDIR/p1Data
---mkdir $MYSQLTEST_VARDIR/p2Data
---mkdir $MYSQLTEST_VARDIR/p3Data
---mkdir $MYSQLTEST_VARDIR/p0Index
---mkdir $MYSQLTEST_VARDIR/p1Index
---mkdir $MYSQLTEST_VARDIR/p2Index
---mkdir $MYSQLTEST_VARDIR/p3Index
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
-eval CREATE TABLE `example` (
-  `ID_EXAMPLE` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `DESCRIPTION` varchar(30) NOT NULL,
-  `LEVEL` smallint(5) unsigned DEFAULT NULL,
-  PRIMARY KEY (`ID_EXAMPLE`)
-) ENGINE = MYISAM 
-PARTITION BY HASH(ID_EXAMPLE)(
-PARTITION p0 DATA DIRECTORY = '$MYSQLTEST_VARDIR/p0Data'
-INDEX DIRECTORY = '$MYSQLTEST_VARDIR/p0Index',
-PARTITION p1 DATA DIRECTORY = '$MYSQLTEST_VARDIR/p1Data'
-INDEX DIRECTORY = '$MYSQLTEST_VARDIR/p1Index',
-PARTITION p2 DATA DIRECTORY = '$MYSQLTEST_VARDIR/p2Data'
-INDEX DIRECTORY = '$MYSQLTEST_VARDIR/p2Index',
-PARTITION p3 DATA DIRECTORY = '$MYSQLTEST_VARDIR/p3Data'
-INDEX DIRECTORY = '$MYSQLTEST_VARDIR/p3Index'
-);
-
-let $MYSQLD_DATADIR= `select @@datadir`;
-
---echo # Checking that MyISAM .MYD and .MYI are in test db and data/idx dir
---file_exists $MYSQLD_DATADIR/test/example#P#p0.MYI
---file_exists $MYSQLD_DATADIR/test/example#P#p0.MYD
---file_exists $MYSQLTEST_VARDIR/p0Data/example#P#p0.MYD
---file_exists $MYSQLTEST_VARDIR/p0Index/example#P#p0.MYI
---file_exists $MYSQLD_DATADIR/test/example#P#p1.MYI
---file_exists $MYSQLD_DATADIR/test/example#P#p1.MYD
---file_exists $MYSQLTEST_VARDIR/p1Data/example#P#p1.MYD
---file_exists $MYSQLTEST_VARDIR/p1Index/example#P#p1.MYI
---file_exists $MYSQLD_DATADIR/test/example#P#p2.MYI
---file_exists $MYSQLD_DATADIR/test/example#P#p2.MYD
---file_exists $MYSQLTEST_VARDIR/p2Data/example#P#p2.MYD
---file_exists $MYSQLTEST_VARDIR/p2Index/example#P#p2.MYI
---file_exists $MYSQLD_DATADIR/test/example#P#p3.MYI
---file_exists $MYSQLD_DATADIR/test/example#P#p3.MYD
---file_exists $MYSQLTEST_VARDIR/p3Data/example#P#p3.MYD
---file_exists $MYSQLTEST_VARDIR/p3Index/example#P#p3.MYI
-DROP TABLE example;
---rmdir $MYSQLTEST_VARDIR/p0Data
---rmdir $MYSQLTEST_VARDIR/p1Data
---rmdir $MYSQLTEST_VARDIR/p2Data
---rmdir $MYSQLTEST_VARDIR/p3Data
---rmdir $MYSQLTEST_VARDIR/p0Index
---rmdir $MYSQLTEST_VARDIR/p1Index
---rmdir $MYSQLTEST_VARDIR/p2Index
---rmdir $MYSQLTEST_VARDIR/p3Index
-
---error ER_CANT_CREATE_TABLE,1
+--error ER_GET_ERRNO,1,ER_WRONG_FILE_NAME
 CREATE TABLE `example` (
-  `ID_EXAMPLE` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `ID_EXAMPLE` int unsigned NOT NULL AUTO_INCREMENT,
   `DESCRIPTION` varchar(30) NOT NULL,
-  `LEVEL` smallint(5) unsigned DEFAULT NULL,
+  `LEVEL` smallint unsigned DEFAULT NULL,
   PRIMARY KEY (`ID_EXAMPLE`)
-) ENGINE = MYISAM 
+)
 PARTITION BY HASH(ID_EXAMPLE)(
 PARTITION p0 DATA DIRECTORY = '/not/existent/p0Data',
 PARTITION p1 DATA DIRECTORY = '/not/existent/p1Data',
 PARTITION p2 DATA DIRECTORY = '/not/existent/p2Data',
 PARTITION p3 DATA DIRECTORY = '/not/existent/p3Data'
 );
+SHOW WARNINGS;
+
+--echo #
+--echo # Bug#29053560 ERROR WHEN CREATING A TABLE WITH LONG PARTITION NAMES
+--echo #
+
+CREATE DATABASE
+MC5NOGLQ9OFY7YM76Z1T758ZTPTJ6IPLVSLDHMSEXT63MLVHCPEW4DNU2OPQDRRE;
+USE MC5NOGLQ9OFY7YM76Z1T758ZTPTJ6IPLVSLDHMSEXT63MLVHCPEW4DNU2OPQDRRE;
+CREATE TABLE TH6EDXFX5D1U5BLB3I50LN5DFO415JIRP9XKUC0H9O2IONKQL3IOMFYW4ZVOCFPP (a INT NOT
+NULL, b INT)
+PARTITION BY RANGE (a) PARTITIONS 3 SUBPARTITION BY KEY (b) (
+PARTITION O8W7066AGXADOMYWHT89TWMBJOMTFDMDC74WJ7IUPKD75LVU1ENOV1J008SJBKKF VALUES LESS
+THAN (200) (
+  SUBPARTITION YWKQ987ZTKDJ33ZBMLW526153X86VXL4X44R15SPF8JQS92665MT0QI6BSNKAZY5,
+  SUBPARTITION OSYA45V7KKPJ840E4CZ7CKFXDT3J1NNM8QTT9BQOF896CAZVWFY4K236VHYD1WXN,
+  SUBPARTITION M6YGLCVSKPSVF1RYZA4XJNP7HP9P7OKBP0268T2HKJ0005BW3LLSALQJ94UE5ZSV),
+PARTITION F3HRUC798U6YIBQFSC9BDKOAUH2SD6B0A3IA7J4P2V8M5U84AAVCR27NNQGM8NI3 VALUES LESS
+THAN (600) (
+  SUBPARTITION YKWIEPEMRMG097FJ0D8WBJC9TF93GW7GVSU8H0MXYSX940JYO0RNVR4W7YYEZDSF,
+  SUBPARTITION WDJZ36D1IMDRB4ZABLZXWE7J00OP1WR028V1PREZN46PK9L3Y3ERVTWKXYTMC08W,
+  SUBPARTITION KRR0PI4ZBU50X4YVWKDA65PFYRNB69EV5LMM3CMBUVUEIHN2MPY30O8J8WEOOG2Q),
+PARTITION UYZ1675BEXI942ED7EUYLK03GM90QG3ZGYBLBKGLNWVYNVYUZ70J78BJWYLGS6CV VALUES LESS
+THAN (1800) (
+  SUBPARTITION XIYZDGAOHPZH1R6RTKURMSUENS8VIN1U1CL7T2594FWR1ELS55UDVDWVX65K3WPE,
+  SUBPARTITION J64S0S338J2AV273XIHW1QHFRK9ZVLSIGSXFF4E22RYCLAG2J3H04PN6M70OB39Y,
+  SUBPARTITION XRL60IN1WNLR4YQAIILJTB9XCDP7Z4CUXRCY9Y2ES55W6UQERG51QV1UYTMZW673));
+DROP DATABASE MC5NOGLQ9OFY7YM76Z1T758ZTPTJ6IPLVSLDHMSEXT63MLVHCPEW4DNU2OPQDRRE;

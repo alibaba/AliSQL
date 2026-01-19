@@ -1,0 +1,80 @@
+--source include/have_fips.inc
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=0;
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=1;
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=2;
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=off;
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=on;
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=strict;
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode='oFf';
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode='oN';
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode='Strict';
+SELECT @@GLOBAL.ssl_fips_mode;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode='';
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=3;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=-1;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET SESSION ssl_fips_mode=1;
+
+CREATE USER u1 IDENTIFIED BY 'pwd';
+
+--echo ##Test: User without admin/super privilege
+connect(con1,localhost,u1,pwd,test,,,);
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=ON;
+
+connection default;
+
+--echo ##Test: User with admin privilege
+GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO u1;
+disconnect con1;
+connect(con1,localhost,u1,pwd,test,,,);
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=ON;
+connection default;
+REVOKE SYSTEM_VARIABLES_ADMIN ON *.* FROM u1;
+
+--echo ##Test: User with SUPER privilege
+GRANT SUPER ON *.* TO u1;
+disconnect con1;
+connect(con1,localhost,u1,pwd,test,,,);
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL ssl_fips_mode=ON;
+
+--echo CLEANUP
+disconnect con1;
+connection default;
+DROP USER u1;
+

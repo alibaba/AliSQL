@@ -98,6 +98,9 @@ SELECT @@global.max_connections;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_connections = 'test';
 SELECT @@global.max_connections;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.max_connections = ' ';
+SELECT @@global.max_connections;
 
 
 --echo '#-------------------FN_DYNVARS_074_05----------------------------#'
@@ -116,13 +119,15 @@ SELECT @@session.max_connections;
 # Check if the value in GLOBAL & SESSION Tables matches values in variable   #
 ##############################################################################
 
+--disable_warnings
 SELECT @@global.max_connections = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='max_connections';
 
 SELECT @@max_connections = VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='max_connections';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_074_07----------------------#'
@@ -162,7 +167,9 @@ SET global.max_connections = 8000;
 --Error ER_UNKNOWN_TABLE
 SELECT global.max_connections;
 --Error ER_BAD_FIELD_ERROR
-SELECT max_connections = @@session.max_connections;
+SELECT max_connections;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.max_connections;
 
 
 ##############################  

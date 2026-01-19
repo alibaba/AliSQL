@@ -1,10 +1,10 @@
 #### suite/funcs_1/views/views_master.test
-#
-# Last Change:
-# 2007-10-05 mleich
-#    1. Fix for Bug#31237 Test "ndb_views" fails because of differing order ...
-#    2. Cleanup of test
-# 2007-11-15 hhunger WL#4084: Review and fix all disabled tests ...
+
+# See BUG#18404149
+set optimizer_switch='condition_fanout_filter=off';
+
+--replace_result $engine_type <storage_engine>
+eval SET SESSION default_storage_engine = $engine_type;
 
 let $message= ! Attention: The file with the expected results is not
               |            thoroughly checked.
@@ -197,12 +197,12 @@ Insert into t1  values (500,9866);
 
 #(10)
     CREATE or REPLACE VIEW v1 AS select f59
-    from tb2 group by f59 asc;
+    from tb2 group by f59 order by f59;
     select * FROM v1 order by f59 limit 0,10;
 
 #(11)
     CREATE or REPLACE VIEW v1 AS select f59
-    from tb2 group by f59 desc;
+    from tb2 group by f59 order by f59 desc;
     select * FROM v1 order by f59 limit 0,10;
 
 #(12)
@@ -273,10 +273,10 @@ SET @x=0;
 CREATE or REPLACE VIEW v1 AS Select 1 INTO @x;
 Select @x;
 
-# Subquery in the FROM clause is illegal
---error ER_VIEW_SELECT_DERIVED
+# Subquery in the FROM clause is legal
 CREATE or REPLACE VIEW v1 AS Select 1
 FROM (SELECT 1 FROM t1) my_table;
+DROP VIEW v1;
 
 # Triggers cannot be associated with VIEWs
 CREATE VIEW v1 AS SELECT f1 FROM t1;
@@ -288,7 +288,7 @@ SET @a:=0 ;
 SELECT @a ;
 INSERT INTO v1 VALUES (1) ;
 SELECT @a ;
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY 1;
 DROP TRIGGER tr1 ;
 SET @a:=0 ;
 --error ER_WRONG_OBJECT
@@ -309,7 +309,7 @@ DROP TABLE IF EXISTS t1, t2 ;
 DROP VIEW  IF EXISTS v1 ;
 DROP VIEW  IF EXISTS v2 ;
 --enable_warnings
-CREATE TABLE t1 ( f1 DATE, f2 BLOB, f3 DOUBLE );
+CREATE TABLE t1 ( f1 DATE, f2 VARCHAR(30), f3 DOUBLE );
 CREATE VIEW  v1 AS SELECT f1, f2, f3 FROM t1;
 ALTER  TABLE t1 ADD PRIMARY KEY(f1);
 --error ER_WRONG_OBJECT
@@ -545,7 +545,7 @@ let $message= Testcase 3.3.1.7 ;
 #                   view names are accepted, at creation time, alteration time,
 #                   and drop time.
 ###############################################################################
-# Note(mleich): non-qualified view name means a view name without preceeding
+# Note(mleich): non-qualified view name means a view name without preceding
 #               database name
 --disable_warnings
 DROP VIEW  IF EXISTS v1 ;
@@ -581,7 +581,7 @@ CREATE VIEW v1 AS SELECT * FROM t1 WHERE f1 = 1111;
 # - ER_TABLE_EXISTS_ERROR on OS without cases sensitive view names (Example: WINDOWS)
 --error 0,ER_TABLE_EXISTS_ERROR
 CREATE VIEW V1 AS SELECT * FROM t1 WHERE f1 = 2222;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # SELECT * FROM V1;
 --disable_warnings
 DROP TABLE IF EXISTS t1 ;
@@ -644,7 +644,7 @@ CREATE VIEW v2 AS SELECT *  FROM v1;
 # Only negative cases, positive cases will be checked later:
 DROP TABLE t1;
 --error ER_VIEW_INVALID
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 --error ER_VIEW_INVALID
 DELETE FROM v1;
 --error ER_VIEW_INVALID
@@ -653,7 +653,7 @@ UPDATE v1 SET f1 = 'aaaaa';
 INSERT INTO v1 SET f1 = "fffff";
 # v2 is based on v1, which is now invalid
 --error ER_VIEW_INVALID
-SELECT * FROM v2;
+SELECT * FROM v2 ORDER BY 1;
 --error ER_VIEW_INVALID
 DELETE FROM v2;
 --error ER_VIEW_INVALID
@@ -663,7 +663,7 @@ INSERT INTO v2 SET f1 = "fffff";
 DROP VIEW v1;
 # v2 is based on v1, which is now dropped
 --error ER_VIEW_INVALID
-SELECT * FROM v2;
+SELECT * FROM v2 ORDER BY 1;
 --error ER_VIEW_INVALID
 DELETE FROM v2;
 --error ER_VIEW_INVALID
@@ -785,15 +785,15 @@ INSERT INTO  t1 VALUES('test2.t1 - 2');
 INSERT INTO  v1 VALUES('test2.v1 - 2');
 INSERT INTO  t0 VALUES('test2.t0 - 2');
 # SELECTs with full qualified table
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY 1;
 SELECT * FROM t2;
-SELECT * FROM v1;
-SELECT * FROM v2;
+SELECT * FROM v1 ORDER BY 1;
+SELECT * FROM v2 ORDER BY 1;
 USE test;
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY 1;
 SELECT * FROM t2;
-SELECT * FROM v1;
-SELECT * FROM v2;
+SELECT * FROM v1 ORDER BY 1;
+SELECT * FROM v2 ORDER BY 1;
 
 
 let $message= Testcase 3.3.1.13 ;
@@ -868,6 +868,7 @@ if ($have_bug_32285)
 {
 --disable_ps_protocol
 }
+--replace_regex /\x00/#/
 --sorted_result
 SELECT * FROM test.v1;
 --enable_ps_protocol
@@ -903,24 +904,24 @@ INSERT INTO t1 VALUES(8.8);
 # 1. no explicit column in VIEW definition or SELECT
 CREATE VIEW v1 AS SELECT * FROM t1;
 SHOW CREATE VIEW v1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # 2. no explicit column in VIEW definition, but in SELECT column_list
 CREATE OR REPLACE VIEW v1 AS SELECT f1 FROM t1;
 SHOW CREATE VIEW v1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # 3. no explicit column in VIEW definition, but alias from SELECT column_list
 CREATE OR REPLACE VIEW v1 AS SELECT f1 As my_column FROM t1;
 SHOW CREATE VIEW v1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # 4. Finally the requirement: explicit column_list in VIEW definition
 CREATE OR REPLACE VIEW v1(column1,column2)
 AS SELECT f1 As my_column, f1 FROM t1;
 SHOW CREATE VIEW v1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 CREATE OR REPLACE VIEW test.v1(column1,column2)
 AS SELECT f1 As my_column, f1 FROM test.t1;
 SHOW CREATE VIEW v1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 
 
 let $message= Testcase 3.3.1.18 ;
@@ -970,15 +971,15 @@ CREATE TABLE t2( f1 BIGINT, f2 DECIMAL(5,2));
 INSERT INTO t2 VALUES(6, 6.6);
 # positive testcases
 CREATE VIEW v1 AS SELECT * FROM t1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 CREATE OR REPLACE VIEW v1 AS SELECT f1, f2 FROM t1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 CREATE OR REPLACE VIEW v1 AS SELECT f1 AS my_f1, f2 AS my_f2 FROM t1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 CREATE OR REPLACE VIEW v1 (my_f1, my_f2) AS SELECT f1, f2 FROM t1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 CREATE OR REPLACE VIEW v1 (my_f1, my_f2) AS SELECT t1.f1, t2.f2 FROM t1, t2;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # negative testcases (sometimes including the underlying SELECT)
 # duplicate via alias in SELECT
 SELECT f1, f2 AS f1 FROM t1;
@@ -1556,18 +1557,15 @@ let $message= Testcase 3.3.1.39 ;
 # Testcase 3.3.1.39: Ensure that a view definition that includes a subquery in
 #                    a FROM clause is rejected with an appropriate error
 #                    message at create time.
+#                    Restriction lifted with bug#11865600
 ###############################################################################
 --disable_warnings
 Drop view if exists test.v1 ;
 --enable_warnings
---error ER_VIEW_SELECT_DERIVED
 CREATE VIEW test.v1
 AS Select f59 from (Select * FROM tb2 limit 20) tx ;
---error ER_NO_SUCH_TABLE
 SELECT * FROM test.v1 order by f59 ;
---disable_warnings
-Drop view if exists test.v1 ;
---enable_warnings
+DROP VIEW test.v1 ;
 
 
 let $message= Testcase 3.3.1.40 ;
@@ -1984,18 +1982,11 @@ let $message= Testcase 3.3.1.49A ;
 #    --> The WHERE qualifications of all nested VIEWs have to be fulfilled.
 #        The CHECK OPTIONS of underlying VIEWs have no effect.
 # 2. Top VIEW   WITH LOCAL CHECK OPTION
-#    --> Only the WHERE qualification of this VIEW has to be fulfilled.
-#        The CHECK OPTIONS of underlying VIEWs have no effect.
+#    --> The WHERE qualification of this VIEW has to be fulfilled.
+#        The CHECK OPTIONS of underlying VIEWs have effect.
 # 3. Top VIEW   without any CHECK OPTION
-#    --> The WHERE qualifications of all nested VIEWs need not to be fulfilled.
-#        The CHECK OPTIONS of underlying VIEWs have no effect.
-#
-# v3        | v2        | v1        | Qualifications to be checked
-# ------------------------------------------------------------------------
-# CASCADED  | <any>     | <any>     | qual_v3 + qual_v2 + qual_v3
-# <default> | <any>     | <any>     | qual_v3 + qual_v2 + qual_v3
-# LOCAL     | <any>     | <any>     | qual_v3
-# <without> | <any>     | <any>     |
+#    --> The WHERE qualification of this VIEW need not be fulfilled.
+#        The CHECK OPTIONS of underlying VIEWs have effect.
 #
 # Note: The CHECK OPTION does not influence the retrieval of rows
 #       (SELECT/DELETE/UPDATE). All WHERE qualifications will be applied
@@ -2054,8 +2045,11 @@ while ($num1)
       eval SET @v3_part= @part$num3;
       let $aux= `SELECT CONCAT('CREATE VIEW v3 (my_col1,my_col2) AS SELECT *
       FROM v2 WHERE col1 MOD 2 = 0 ', @v3_part)` ;
+      --enable_query_log
       eval $aux ;
+      --disable_query_log
       --vertical_results
+      # Present CHECK OPTION clauses from v3 to v1:
       SELECT CONCAT(IF(@v3_part = '','        <nothing>         ',
                                      @v3_part), ' - ',
                     IF(@v2_part = '','        <nothing>         ',
@@ -2083,10 +2077,10 @@ while ($num1)
       # Inside v1 (0 to 10), Inside v2 ((0 to 10) AND (6 to 16) -> (6 to 10))
       # Inside v3 ( value MOD 2 = 0 )
       INSERT INTO t1 VALUES(8, 'eight');
-      SELECT * FROM v1;
-      SELECT * FROM v2;
-      SELECT * FROM v3;
-      SELECT * FROM t1;
+      SELECT * FROM v1 ORDER BY 1;
+      SELECT * FROM v2 ORDER BY 1;
+      SELECT * FROM v3 ORDER BY 1;
+      SELECT * FROM t1 ORDER BY 1;
       DELETE FROM t1;
     # 2. DELETEs within v3
       # Outside v1 (0 to 10)
@@ -2111,7 +2105,7 @@ while ($num1)
       # Inside v3 ( value MOD 2 = 0 )
       DELETE FROM v3 WHERE my_col1 = 8;
       --disable_info
-      SELECT * FROM t1;
+      SELECT * FROM t1 ORDER BY 1;
       DELETE FROM t1;
     # 3. UPDATEs within v3 (modify my_col2, which is not part of any
     #    WHERE qualification)
@@ -2138,7 +2132,7 @@ while ($num1)
       # Inside v3 ( value MOD 2 = 0 )
       UPDATE v3 SET my_col2 = 'whatever' WHERE my_col1 = 8;
       --disable_info
-      SELECT * FROM t1;
+      SELECT * FROM t1 ORDER BY 1;
       DELETE FROM t1;
     # 4. UPDATEs within v3 (modify my_col1 to values inside and outside
     #    of the WHERE qualifications)
@@ -2157,7 +2151,7 @@ while ($num1)
       eval INSERT INTO t1_results VALUES (@v3_to_v1_options,@statement,
                                           @v3_to_v1_violation,$mysql_errno);
       --enable_query_log
-      SELECT * FROM t1;
+      SELECT * FROM t1 ORDER BY 1;
       DELETE FROM t1;
       INSERT INTO t1 VALUES(8, 'eight');
       # Alter to value outside of v2
@@ -2171,7 +2165,7 @@ while ($num1)
       eval INSERT INTO t1_results VALUES (@v3_to_v1_options,@statement,
                                           @v3_to_v1_violation,$mysql_errno);
       --enable_query_log
-      SELECT * FROM t1;
+      SELECT * FROM t1 ORDER BY 1;
       DELETE FROM t1;
       INSERT INTO t1 VALUES(8, 'eight');
       # Alter to value outside of v1
@@ -2185,7 +2179,7 @@ while ($num1)
       eval INSERT INTO t1_results VALUES (@v3_to_v1_options,@statement,
                                           @v3_to_v1_violation,$mysql_errno);
       --enable_query_log
-      SELECT * FROM t1;
+      SELECT * FROM t1 ORDER BY 1;
       DELETE FROM t1;
       INSERT INTO t1 VALUES(8, 'eight');
       # Alter to value inside of v1
@@ -2199,7 +2193,7 @@ while ($num1)
       eval INSERT INTO t1_results VALUES (@v3_to_v1_options,@statement,
                                           @v3_to_v1_violation,$mysql_errno);
       --enable_query_log
-      SELECT * FROM t1;
+      SELECT * FROM t1 ORDER BY 1;
       DELETE FROM t1;
     # 5. INSERTs into v3
       --disable_query_log
@@ -2247,7 +2241,7 @@ while ($num1)
       eval INSERT INTO t1_results VALUES (@v3_to_v1_options,@statement,
                                           @v3_to_v1_violation,$mysql_errno);
       --enable_query_log
-      SELECT * FROM t1;
+      SELECT * FROM t1 ORDER BY 1;
       DELETE FROM t1;
 
       DROP VIEW v3;
@@ -2265,38 +2259,36 @@ while ($num1)
 SELECT * FROM t1_results ORDER BY v3_to_v1_options, statement, v3_to_v1_violation, errno;
 
 let $message=
-Plausibility checks for INSERTs and UPDATEs ( 4. and 5. above).
-All following SELECTs must give ROW NOT FOUND ;
+Plausibility checks for INSERTs and UPDATEs ( 4. and 5. above). ;
 --source include/show_msg80.inc
 
 # Plausibility checks for INSERTs and UPDATEs ( 4. and 5. above):
 # 1. There must be NO denied INSERT/UPDATE, when no WHERE qualification
-#    is violated. Expect ROW NOT FUND
-SELECT * FROM t1_results
+#    is violated. Expect ROW NOT FOUND
+SELECT COUNT(*) FROM t1_results
 WHERE v3_to_v1_violation = '  _  _  ' AND errno <> 0
 ORDER BY v3_to_v1_options;
-# 2. There must be NO denied INSERT/UPDATE, when the toplevel VIEW v3 is
-#    defined without any CHECK OPTION. Expect ROW NOT FUND
-SELECT * FROM t1_results
+# 2. There must be denied INSERT/UPDATE, if any CHECK OPTION is violated.
+SELECT COUNT(*) FROM t1_results
 WHERE v3_to_v1_options LIKE '  %' AND errno <> 0
 ORDER BY v3_to_v1_options;
 # 3. There must be NO successful INSERT/UPDATE, when the toplevel VIEW v3 is
 #    defined with any CHECK OPTION and the WHERE qualification of this VIEW is
-#    violated. Expect ROW NOT FUND
-SELECT * FROM t1_results
+#    violated. Expect ROW NOT FOUND
+SELECT COUNT(*) FROM t1_results
 WHERE v3_to_v1_options LIKE 'WITH %'
   AND v3_to_v1_violation LIKE 'v3_%' AND errno = 0
 ORDER BY v3_to_v1_options;
 # 4. There must be NO successful INSERT/UPDATE, when the toplevel VIEW v3 is
-#    defined with any CHECK OPTION and the CHECK OPTION does not contain LOCAL
-#    and the WHERE qualification of any VIEW is violated. Expect ROW NOT FUND
-SELECT * FROM t1_results
+#    defined with any CHECK OPTION and the CHECK OPTION of any VIEW is
+#    violated. Expect ROW NOT FOUND
+SELECT COUNT(*) FROM t1_results
 WHERE v3_to_v1_options LIKE 'WITH %' AND v3_to_v1_options NOT LIKE 'WITH LOCAL %'
   AND v3_to_v1_violation NOT LIKE '  _  _  ' AND errno = 0
 ORDER BY v3_to_v1_options;
 # 5. There must be NO failing INSERT/UPDATE getting a
 #    sql_errno <> 1369 (ER_VIEW_CHECK_FAILED).
-SELECT * FROM t1_results
+SELECT COUNT(*) FROM t1_results
 WHERE errno <> 0 AND errno <> 1369
 ORDER BY v3_to_v1_options;
 let $message= End of plausibility checks;
@@ -2426,16 +2418,16 @@ INSERT INTO t1 VALUES(2, 'two',   2.2);
 INSERT INTO t1 VALUES(3, 'three', 3.3);
 # 3.3.1.50
 CREATE OR REPLACE VIEW v1 AS SELECT * FROM t1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # 3.3.1.51
 CREATE OR REPLACE VIEW v1 AS SELECT f2 FROM t1;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # 3.3.1.52
 CREATE OR REPLACE VIEW v1 AS SELECT * FROM t1 WHERE f3 = 2.2;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # 3.3.1.53
 CREATE OR REPLACE VIEW v1 AS SELECT f2 FROM t1 WHERE f3 = 2.2;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 # 3.3.1.54
 --vertical_results
 SET sql_mode = 'traditional,ansi';
@@ -2454,7 +2446,7 @@ SELECT f3 AS "pure column f3: ", f1 + f3 AS "sum of columns f1 + f3 = ",
        '->' || CAST(f3 AS CHAR) || '<-'
          AS "expression with '||'=CONCAT and CAST(DECIMAL column AS CHAR): "
 FROM t1 WHERE f1 = 2;
-SELECT * FROM v1;
+SELECT * FROM v1 ORDER BY 1;
 SET sql_mode = '';
 --horizontal_results
 
@@ -2510,6 +2502,7 @@ Create or replace view test.v1 as
 Select t1.f59 AS t1_f59, t2.f59 AS t2_f59
 FROM t2 cross join t1;
 Select * from v1 order by t1_f59,t2_f59;
+--sorted_result
 Select t1.f59 AS t1_f59, t2.f59 AS t2_f59
 FROM t2 cross join t1;
 
@@ -2518,6 +2511,7 @@ Create or replace view test.v1 as
 Select straight_join t1.f59 AS t1_f59, t2.f59 AS t2_f59
 FROM t2,t1;
 Select * from v1 order by t1_f59,t2_f59;
+--sorted_result
 Select straight_join t1.f59 AS t1_f59, t2.f59 AS t2_f59
 FROM t2,t1;
 
@@ -3337,7 +3331,7 @@ CREATE VIEW v1 AS SELECT f1, f2, f3 FROM t1;
 # - PRIMARY KEY f1 included
 #           f2 gets the default NULL
 INSERT INTO v1 SET f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 # Incomplete INSERT 2
@@ -3349,7 +3343,7 @@ INSERT INTO v1 SET f2 = 'ABC';
 # OBN change for 5.1.21 --error ER_DUP_ENTRY_WITH_KEY_NAME
 --error ER_DUP_ENTRY
 INSERT INTO v1 SET f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 # Testplan for DELETE:
@@ -3362,15 +3356,15 @@ DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE f1
 DELETE FROM v1 WHERE f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE f2
 DELETE FROM v1 WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE none
 DELETE FROM v1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 
 # Testplan for UPDATE:
 # Column to modify         Column within WHERE qualification
@@ -3386,42 +3380,42 @@ SELECT * from t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1 - f1
 UPDATE v1 SET f1 = 2 WHERE f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1 - f2
 UPDATE v1 SET f1 = 2 WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1 - none
 UPDATE v1 SET f1 = 2;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - f1
 UPDATE v1 SET f2 = 'NNN' WHERE f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - f2
 UPDATE v1 SET f2 = 'NNN' WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - f3
 UPDATE v1 SET f2 = 'NNN' WHERE f3 = -1.2E-3;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - none
 UPDATE v1 SET f2 = 'NNN';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1,f2 - f1,f2
 UPDATE v1 SET f1 = 2, f2 = 'NNN' WHERE f1 = 1 AND f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 
@@ -3438,7 +3432,7 @@ INSERT INTO v1 SET f2 = 'ABC';
 # OBN change for 5.1.21 --error ER_DUP_ENTRY_WITH_KEY_NAME
 --error ER_DUP_ENTRY
 INSERT INTO v1 SET f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 # Testplan for DELETE:
@@ -3450,11 +3444,11 @@ DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE f2
 DELETE FROM v1 WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE none
 DELETE FROM v1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 
 # Testplan for UPDATE:
 #
@@ -3465,17 +3459,17 @@ SELECT * from t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - f2
 UPDATE v1 SET f2 = 'NNN' WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - f3
 UPDATE v1 SET f2 = 'NNN' WHERE f3 = -1.2E-3;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - none
 UPDATE v1 SET f2 = 'NNN';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 
@@ -3488,12 +3482,12 @@ CREATE VIEW v1 AS SELECT f1, f2, f3, 'HELLO' AS my_greeting FROM t1;
 # But it would be a very sophisticated DBMS.
 --error ER_NON_INSERTABLE_TABLE
 INSERT INTO v1 SET f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
-# The next INSERTs should never work, because my_greeting is a constant.
---error ER_NON_INSERTABLE_TABLE
+# The next INSERTs should never work, because my_greeting is not a column.
+--error ER_NONUPDATEABLE_COLUMN
 INSERT INTO v1 SET f1 = 1, my_greeting = 'HELLO';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 # Testplan for DELETE:
@@ -3507,19 +3501,19 @@ DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE f1
 DELETE FROM v1 WHERE f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE f2
 DELETE FROM v1 WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE my_greeting
 DELETE FROM v1 WHERE my_greeting = 'HELLO';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # DELETE none
 DELETE FROM v1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 
 
 # Testplan for UPDATE:
@@ -3543,79 +3537,79 @@ SELECT * from t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1 - f1
 UPDATE v1 SET f1 = 2 WHERE f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1 - f2
 UPDATE v1 SET f1 = 2 WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1 - my_greeting
 UPDATE v1 SET f1 = 2 WHERE my_greeting = 'HELLO';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1 - none
 UPDATE v1 SET f1 = 2;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 #------------------------------------------------
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - f1
 UPDATE v1 SET f2 = 'NNN' WHERE f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - f2
 UPDATE v1 SET f2 = 'NNN' WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - f3
 UPDATE v1 SET f2 = 'NNN' WHERE f3 = -1.2E-3;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - my_greeting
 UPDATE v1 SET f2 = 'NNN' WHERE my_greeting = 'HELLO';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f2 - none
 UPDATE v1 SET f2 = 'NNN';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 #------------------------------------------------
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE my_greeting - f1
 --error ER_NONUPDATEABLE_COLUMN
 UPDATE v1 SET my_greeting = 'Hej' WHERE f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE my_greeting - f2
 --error ER_NONUPDATEABLE_COLUMN
 UPDATE v1 SET my_greeting = 'Hej' WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE my_greeting - my_greeting
 --error ER_NONUPDATEABLE_COLUMN
 UPDATE v1 SET my_greeting = 'Hej' WHERE my_greeting = 'HELLO';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE my_greeting - none
 --error ER_NONUPDATEABLE_COLUMN
 UPDATE v1 SET my_greeting = 'Hej';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 #------------------------------------------------
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1, f2 - f1, f2
 UPDATE v1 SET f1 = 2, f2 = 'NNN' WHERE f1 = 1 AND f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 
@@ -3632,7 +3626,7 @@ CREATE VIEW v1 AS SELECT f1, f2, f4 FROM t1;
 # This INSERT must fail
 --error ER_NO_DEFAULT_FOR_VIEW_FIELD
 INSERT INTO v1 SET f1 = 1;
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
@@ -3642,7 +3636,7 @@ DELETE FROM v1 WHERE f1 = 1;
 INSERT INTO t1 VALUES(1, 'ABC', -1.2E-3, 'X');
 # UPDATE f1 - f2
 UPDATE v1 SET f4 = 'Y' WHERE f2 = 'ABC';
-SELECT * from t1;
+SELECT * FROM t1 ORDER BY 1;
 DELETE FROM t1;
 
 # Switch back to the native SQL mode
@@ -3816,15 +3810,16 @@ SET @variant4= 'CREATE VIEW v1 AS SELECT f61 FROM t1 GROUP BY f61';
 # For HAVING                         3.3.2.16
 SET @variant5= 'CREATE VIEW v1 AS SELECT f61 FROM t1 HAVING f61 > 0';
 # For a sub query in the select list 3.3.2.17
-SET @variant6= 'CREATE VIEW v1 AS SELECT (SELECT f60 FROM t2 WHERE f59=19) AS f61 FROM t1';
+# This restriction has been lifted
+# SET @variant6= 'CREATE VIEW v1 AS SELECT (SELECT f60 FROM t2 WHERE f59=19) AS f61 FROM t1';
 # For a WHERE clause sub query that refers to a table also referenced in a
 # FROM clause 3.3.2.18
-SET @variant7= 'CREATE VIEW v1 AS SELECT f61 FROM v2';
-SET @variant8= 'CREATE VIEW v1 AS SELECT f59 AS f61 FROM t1 WHERE f60 IN (SELECT f59 FROM t1)';
+SET @variant6= 'CREATE VIEW v1 AS SELECT f61 FROM v2';
+SET @variant7= 'CREATE VIEW v1 AS SELECT f59 AS f61 FROM t1 WHERE f60 IN (SELECT f59 FROM t1)';
 # For ALGORITHM = TEMPTABLE          3.3.2.20
-SET @variant9= 'CREATE ALGORITHM = TEMPTABLE VIEW v1 (f61) AS select f60 from t1';
+SET @variant8= 'CREATE ALGORITHM = TEMPTABLE VIEW v1 (f61) AS select f60 from t1';
 
-let $num= 9;
+let $num= 8;
 while ($num)
 {
    --disable_abort_on_error
@@ -3889,7 +3884,7 @@ ALTER TABLE t1 CHANGE COLUMN f4 f4x CHAR(5);
 INSERT INTO t1 SET f1 = 0, f4x = 'ABC', report = 't1 1';
 --error ER_VIEW_INVALID
 INSERT INTO v1 SET f1 = 0, f4  = 'ABC', report = 'v1 1';
---error ER_BAD_FIELD_ERROR
+--error ER_VIEW_INVALID
 INSERT INTO v1 SET f1 = 0, f4x = 'ABC', report = 'v1 1a';
 --error ER_VIEW_INVALID
 INSERT INTO v1 SET f1 = 0, report = 'v1 1b';
@@ -3933,7 +3928,7 @@ SELECT * FROM t1 order by f1, report;
 SELECT * FROM v1 order by f1, report;
 #
 # 5. Type of one base table column altered   numeric -> string
-ALTER TABLE t1 CHANGE COLUMN f1 f1 VARCHAR(30);
+ALTER TABLE t1 CHANGE COLUMN f1 f1 VARCHAR(30) charset latin1;
 INSERT INTO t1 SET f1 = '<------------- 30 ----------->',
                    f4 = '<------ 20 -------->', report = 't1 5';
 INSERT INTO v1 SET f1 = '<------------- 30 ----------->',

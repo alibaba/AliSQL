@@ -8,19 +8,12 @@
 
 # Includes
 -- source include/have_binlog_format_row.inc
+-- source include/set_privilege_checks_user_as_system_user.inc
 -- source include/master-slave.inc
 
 
 # Begin clean up test section
 connection master;
---disable_warnings
-DROP PROCEDURE IF EXISTS test.p1;
-DROP PROCEDURE IF EXISTS test.p2;
-DROP PROCEDURE IF EXISTS test.p3;
-DROP PROCEDURE IF EXISTS test.p4;
-DROP TABLE IF EXISTS test.t1;
-DROP TABLE IF EXISTS test.t2;
-
 
 # Begin test section 1 
 delimiter |;

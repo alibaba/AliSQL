@@ -1,0 +1,39 @@
+-- source include/have_ndb.inc
+-- source suite/ndb/include/backup_restore_setup.inc
+
+CREATE TABLE t1 (a int, b int, c int, PRIMARY KEY(a,b))
+  ENGINE = NDB
+  PARTITION BY KEY (a);
+
+insert into t1 values 
+       (1,1,3),(1,2,3),(1,3,3),(1,4,3),(1,5,3),(1,6,3),
+       (1,7,3),(1,8,3),(1,9,3),(1,10,3),(1,11,3),(1,12,3);
+
+select * from t1 order by b;
+
+disable_query_log ONCE;
+let $max1=`SELECT max_rows from ndbinfo.dictionary_tables
+   WHERE table_name = "t1"`;
+echo Checking MAX_ROWS is unchanged;
+assert($max1 == 0);
+
+--source include/ndb_backup.inc
+drop table t1;
+--exec $NDB_RESTORE -b $the_backup_id -n 1 -m -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 -r --print --print_meta $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+disable_query_log ONCE;
+let $max2=`SELECT max_rows from ndbinfo.dictionary_tables
+   WHERE table_name = "t1"`;
+echo Checking MAX_ROWS is unchanged;
+assert($max2 == 0);
+
+select * from t1 order by b;
+
+# Trigger assert from bug#22904640 with an alter table
+# not actually doing any changes to partitioniong
+ALTER TABLE t1 algorithm=inplace, REORGANIZE PARTITION;
+
+DROP TABLE t1;
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_file $NDB_TOOLS_OUTPUT

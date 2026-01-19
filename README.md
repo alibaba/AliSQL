@@ -1,35 +1,95 @@
 # AliSQL
-AliSQL is a MySQL branch originated from Alibaba Group. It is based on the MySQL official release and has many feature and performance enhancements. AliSQL has proven to be very stable and efficient in production environment. It can be used as a free, fully compatible, enhanced and open source drop-in replacement for MySQL.
 
-AliSQL has been an open source project since August 2016. It is being actively developed by engineers from Alibaba Group. Moreover, it includes patches from Percona, WebScaleSQL, and MariaDB. AliSQL is a fruit of community effort. Everyone is welcomed to get involved.
-# AliSQL Release Notes
+AliSQL is Alibaba's MySQL branch, forked from official MySQL and used extensively in Alibaba Group's production environment. It includes various performance optimizations, stability improvements, and features tailored for large-scale applications.
 
-[Repository AliSQL 8.0 ](https://github.com/ApsaraDB/galaxyengine)
+- [AliSQL](#alisql)
+  - [Version Information](#version-information)
+  - [Features](#features)
+  - [Roadmap](#roadmap)
+  - [Getting Started](#getting-started)
+  - [Support](#support)
+  - [Contributing](#contributing)
+  - [License](#license)
+  - [See Also](#see-also)
 
-[Changes in AliSQL 5.6.32 (2018-05-01) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2018-05-01))  
-[Changes in AliSQL 5.6.32 (2018-01-24) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2018-01-24))  
-[Changes in AliSQL 5.6.32 (2017-10-10) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2017-10-10))  
-[Changes in AliSQL 5.6.32 (2017-07-16) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2017-07-16))  
-[Changes in AliSQL 5.6.32 (2017-05-04) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2017-05-04))  
-[Changes in AliSQL 5.6.32 (2017-02-14) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2017-02-14))  
-[Changes in AliSQL 5.6.32 (2016-12-25) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2016-12-25))  
-[Changes in AliSQL 5.6.32 (2016-11-11) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2016-11-11))  
-[Changes in AliSQL 5.6.32 (2016-10-14) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2016-10-14))  
-[Changes in AliSQL 5.6.32 (2016-09-15) ](https://github.com/alibaba/AliSQL/wiki/Changes-in-AliSQL-5.6.32-(2016-09-15))  
+## Version Information
 
-## AliSQL Compiler Guide
-[AliSQL-Compiler-Guide](http://blog.fungo.me/2016/10/compile-alisql-from-source/)
+- **AliSQL Version**: 8.0.44 (LTS)
+- **Based on**: MySQL 8.0.44
 
-# AliSQL benchmark
-[Performance benchmark ](https://github.com/alibaba/AliSQL/wiki/AliSQL-Performance-benchmark)  
-[Performance benchmark for inventory ](https://github.com/alibaba/AliSQL/wiki/AliSQL-Performance-benchmark-for-inventory)  
+## Features
 
-# AliSQL wiki
-[Wiki](https://github.com/alibaba/AliSQL/wiki)
+- **[DuckDB Storage Engine](./wiki/duckdb/duckdb.md)**:AliSQL integrates DuckDB as a native storage engine, allowing users to operate DuckDB with the same experience as MySQL. By leveraging AliSQL for rapid deployment of DuckDB service nodes, users can easily achieve lightweight analytical capabilities.
 
-# AliSQLBackup
-[AliSQLBackup](https://github.com/alibaba/AliSQLBackup)  
-[AliSQLBackup.wiki](https://github.com/alibaba/AliSQLBackup/wiki)  
+## Roadmap
+- **[Vector Storage](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/vector-storage-1?spm=a2c63.p38356.help-menu-26090.d_3_3_0.6bb8d111D06xOW)** *(planned)*:AliSQL natively supports enterprise-grade vector processing for up to 16,383 dimensions. By integrating a highly optimized HNSW algorithm for high-performance Approximate Nearest Neighbor (ANN) search, AliSQL empowers users to build AI-driven applications—such as semantic search and recommendation systems—seamlessly using standard SQL interfaces.
 
-## AliSQL Sequence Engine
-[AliSQL-Sequence-Doc](https://github.com/alibaba/AliSQL/wiki/AliSQL-Sequence-Doc_C)
+- **[DDL Optimization](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/alisql-ddl-best-practices?spm=a2c63.p38356.help-menu-26090.d_2_8_0.1f7a28a5F1ZVeK)** *(planned)*:AliSQL delivers a faster, safer, and lighter DDL experience through innovations such as enhanced Instant DDL, parallel B+tree construction, a non-blocking lock mechanism, and real-time DDL apply—significantly improving schema change efficiency and virtually eliminating replication lag.
+
+- **[RTO Optimization](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/best-practices-for-rto-optimization-in-alisql?spm=a3c0i.36496430.J_TlTAa0s_LXHOq4tuiO-gv.1.43c56e9bd5YdDQ&scm=20140722.S_help@@%E6%96%87%E6%A1%A3@@2880006._.ID_help@@%E6%96%87%E6%A1%A3@@2880006-RL_RDSMySQLRTO-LOC_2024SPAllResult-OR_ser-PAR1_0bc3b4af17685488697221621e29f2-V_4-PAR3_r-RE_new5-P0_0-P1_0)** *(planned)*:AliSQL deeply optimizes the end-to-end crash recovery path to accelerate instance startup, shorten RTO, and restore service quickly.
+
+- **[Replication Optimization](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/replication-optimization/?spm=a2c63.p38356.help-menu-26090.d_2_6.48a125033Ze9gw)** *(palned)*: AliSQL significantly boosts replication throughput and minimizes lag by implementing Binlog Parallel Flush, Binlog in Redo, and specialized optimizations for large transactions and DDL operations.
+
+## Getting Started
+**Prerequisites**:
+- [CMake](https://cmake.org) 3.x or higher
+- Python3
+- C++17 compliant compiler (GCC 7+ or Clang 5+)
+
+**Build Instructions**:
+
+```bash
+# Clone the repository
+git clone https://github.com/alibaba/AliSQL.git
+cd AliSQL
+
+# Build the project (release build)
+sh build.sh -t release -d /path/to/install/dir
+
+# For development/debugging (debug build)
+sh build.sh -t debug -d /path/to/install/dir
+
+# Install the built MySQL server
+make install
+```
+
+**Build Options**:
+- `-t release|debug`: Build type (default: debug)
+- `-d <dest_dir>`: Installation directory (default: /usr/local/alisql or $HOME/alisql)
+- `-s <server_suffix>`: Server suffix (default: alisql-dev)
+- `-g asan|tsan`: Enable sanitizer
+- `-c`: Enable GCC coverage (gcov)
+- `-h, --help`: Show help
+
+## Support
+- **GitHub Issues**: [https://github.com/alibaba/AliSQL/issues](https://github.com/alibaba/AliSQL/issues)
+- **Alibaba Cloud RDS**: [DuckDB-based Analytical Instance](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-based-analytical-instance/)
+
+> For DuckDB-specific support, see the [DuckDB Support Options](https://duckdblabs.com/support/).
+
+## Contributing
+
+AliSQL 8.0 became an open-source project in December 2025 and is actively maintained by engineers at Alibaba Group.
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with appropriate tests
+4. Submit a pull request
+
+For bug reports and feature requests, please use the [GitHub Issues](https://github.com/alibaba/AliSQL/issues) page.
+
+## License
+
+This project is licensed under the GPL-2.0 license. See the [LICENSE](LICENSE) file for details.
+
+AliSQL is based on MySQL, which is licensed under GPL-2.0. The DuckDB integration follows the same licensing terms.
+
+## See Also
+- [AliSQL Release Notes](./wiki/changes-in-alisql-8.0.44.md)
+- [DuckDB Storage Engine in AliSQL](./wiki/duckdb/duckdb.md)
+- [MySQL 8.0 Documentation](https://dev.mysql.com/doc/refman/8.0/en/)
+- [MySQL 8.0 Github Repository](https://github.com/mysql/mysql-server)
+- [DuckDB Official Documentation](https://duckdb.org/docs/stable/)
+- [DuckDB GitHub Repository](https://github.com/duckdb/duckdb)
+- [Detailed Article (Chinese)](https://mp.weixin.qq.com/s/_YmlV3vPc9CksumXvXWBEw)

@@ -1,28 +1,71 @@
 reset master;
 set @saved_binlog_format = @@global.binlog_format;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 create user mysqltest_1@localhost;
 show grants for mysqltest_1@localhost;
 Grants for mysqltest_1@localhost
-GRANT USAGE ON *.* TO 'mysqltest_1'@'localhost'
+GRANT USAGE ON *.* TO `mysqltest_1`@`localhost`
 **** Variable SQL_LOG_BIN ****
 [root]
 set session sql_log_bin = 1;
 [plain]
 set session sql_log_bin = 1;
-ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+ERROR 42000: Access denied; you need (at least one of) the SUPER, SYSTEM_VARIABLES_ADMIN or SESSION_VARIABLES_ADMIN privilege(s) for this operation
 **** Variable BINLOG_FORMAT ****
 [root]
-set global binlog_format = row;
-set session binlog_format = row;
+set global binlog_format = 'row';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+set session binlog_format = 'row';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 [plain]
-set global binlog_format = row;
-ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
-set session binlog_format = row;
-ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+set global binlog_format = 'row';
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+set session binlog_format = 'row';
+ERROR 42000: Access denied; you need (at least one of) the SUPER, SYSTEM_VARIABLES_ADMIN or SESSION_VARIABLES_ADMIN privilege(s) for this operation
 **** Clean up ****
 set global binlog_format = @saved_binlog_format;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 drop user mysqltest_1@localhost;
+CREATE USER 'mysqltest_1'@'localhost';
 GRANT REPLICATION CLIENT ON *.* TO 'mysqltest_1'@'localhost';
 SHOW MASTER LOGS;
 SHOW BINARY LOGS;
 DROP USER 'mysqltest_1'@'localhost';
+#
+# Bug #31869146: 'GRANT SELECT, GRANT OPTION ON *.* ' WOULD NOT WRITE
+#   THE PRIVILEGES TO BINLOG
+#
+CREATE USER b31869146@localhost;
+CREATE DATABASE b31869146_db;
+CREATE TABLE b31869146_db.t1 (a INT);
+GRANT SELECT,GRANT OPTION ON *.* TO b31869146@localhost AS 'root'@'localhost' WITH ROLE NONE;
+GRANT SELECT,GRANT OPTION ON b31869146_db.* TO b31869146@localhost;
+GRANT SELECT,GRANT OPTION ON b31869146_db.t1 TO b31869146@localhost;
+GRANT SELECT (a),GRANT OPTION ON b31869146_db.t1 TO b31869146@localhost;
+GRANT SELECT ON *.* TO b31869146@localhost WITH GRANT OPTION AS 'root'@'localhost' WITH ROLE NONE;
+GRANT SELECT ON b31869146_db.* TO b31869146@localhost WITH GRANT OPTION;
+GRANT SELECT ON b31869146_db.t1 TO b31869146@localhost WITH GRANT OPTION;
+GRANT SELECT (a) ON b31869146_db.t1 TO b31869146@localhost WITH GRANT OPTION;
+# Success must contain SELECT for all of the GRANTS
+# Show binlog events
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+binlog.000001	#	Query	#	#	use `test`; CREATE USER 'b31869146'@'localhost' IDENTIFIED WITH 'caching_sha2_password'
+binlog.000001	#	Query	#	#	CREATE DATABASE b31869146_db
+binlog.000001	#	Query	#	#	use `test`; CREATE TABLE b31869146_db.t1 (a INT)
+binlog.000001	#	Query	#	#	use `test`; GRANT SELECT, GRANT OPTION ON *.* TO 'b31869146'@'localhost' WITH GRANT OPTION AS 'root'@'localhost' WITH ROLE NONE
+binlog.000001	#	Query	#	#	use `test`; GRANT SELECT, GRANT OPTION ON `b31869146_db`.* TO 'b31869146'@'localhost' WITH GRANT OPTION
+binlog.000001	#	Query	#	#	use `test`; GRANT SELECT, GRANT OPTION ON `b31869146_db`.`t1` TO 'b31869146'@'localhost' WITH GRANT OPTION
+binlog.000001	#	Query	#	#	use `test`; GRANT SELECT (`a`), GRANT OPTION ON `b31869146_db`.`t1` TO 'b31869146'@'localhost' WITH GRANT OPTION
+binlog.000001	#	Query	#	#	use `test`; GRANT SELECT ON *.* TO 'b31869146'@'localhost' WITH GRANT OPTION AS 'root'@'localhost' WITH ROLE NONE
+binlog.000001	#	Query	#	#	use `test`; GRANT SELECT ON `b31869146_db`.* TO 'b31869146'@'localhost' WITH GRANT OPTION
+binlog.000001	#	Query	#	#	use `test`; GRANT SELECT ON `b31869146_db`.`t1` TO 'b31869146'@'localhost' WITH GRANT OPTION
+binlog.000001	#	Query	#	#	use `test`; GRANT SELECT (`a`) ON `b31869146_db`.`t1` TO 'b31869146'@'localhost' WITH GRANT OPTION
+# cleanup
+DROP USER b31869146@localhost;
+DROP DATABASE b31869146_db;
+# End of 8.0 tests

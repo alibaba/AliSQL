@@ -1,14 +1,22 @@
 /*
- *  Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+ *  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
+ *  it under the terms of the GNU General Public License, version 2.0,
+ *  as published by the Free Software Foundation.
+ *
+ *  This program is designed to work with certain software (including
+ *  but not limited to OpenSSL) that is licensed under separate terms,
+ *  as designated in a particular file or component or in included license
+ *  documentation.  The authors of MySQL hereby grant you an additional
+ *  permission to link the program and your derivative works with the
+ *  separately licensed software that they have either included with
+ *  the program or referenced in the documentation.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  GNU General Public License, version 2.0, for more details.
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
@@ -17,11 +25,12 @@
 
 package com.mysql.clusterj.tie;
 
+import com.mysql.ndbjtie.ndbapi.NdbDictionary.Dictionary;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.DictionaryConst;
-import com.mysql.ndbjtie.ndbapi.NdbDictionary.IndexConst;
-import com.mysql.ndbjtie.ndbapi.NdbDictionary.TableConst;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.DictionaryConst.ListConst.Element;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.DictionaryConst.ListConst.ElementArray;
+import com.mysql.ndbjtie.ndbapi.NdbDictionary.IndexConst;
+import com.mysql.ndbjtie.ndbapi.NdbDictionary.TableConst;
 
 import com.mysql.clusterj.core.store.Index;
 import com.mysql.clusterj.core.store.Table;
@@ -43,10 +52,13 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
     static final Logger logger = LoggerFactoryService.getFactory()
             .getInstance(DictionaryImpl.class);
 
-    private DictionaryConst ndbDictionary;
+    private Dictionary ndbDictionary;
 
-    public DictionaryImpl(DictionaryConst ndbDictionary) {
+    private ClusterConnectionImpl clusterConnection;
+
+    public DictionaryImpl(Dictionary ndbDictionary, ClusterConnectionImpl clusterConnection) {
         this.ndbDictionary = ndbDictionary;
+        this.clusterConnection = clusterConnection;
     }
 
     public Table getTable(String tableName) {
@@ -120,6 +132,20 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
         } else {
             Utility.throwError(null, ndbDictionary.getNdbError(), extra);
         }
+    }
+
+    /** Remove cached table from this ndb dictionary. This allows schema change to work.
+     * @param tableName the name of the table
+     */
+    public void removeCachedTable(String tableName) {
+        // remove the cached table from this dictionary
+        ndbDictionary.removeCachedTable(tableName);
+        // also remove the cached NdbRecord associated with this table
+        clusterConnection.unloadSchema(tableName);
+    }
+
+    public Dictionary getNdbDictionary() {
+        return ndbDictionary;
     }
 
 }

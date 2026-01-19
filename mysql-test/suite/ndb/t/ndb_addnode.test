@@ -1,9 +1,22 @@
---source include/ndb_have_online_alter.inc
 -- source include/have_ndb.inc
--- source include/not_embedded.inc
---result_format 2
+--source include/not_windows.inc
 
---exec $NDB_MGM -e show
+
+--echo "Create nodegroup with out-of-range node ID"
+--error 255
+--exec $NDB_MGM -e "create nodegroup 147,148"
+--error 255
+--exec $NDB_MGM -e "create nodegroup 4,147"
+
+--echo "Create nodegroup with in-range but inactive node ID"
+--error 255
+--exec $NDB_MGM -e "create nodegroup 48,3"
+--error 255
+--exec $NDB_MGM -e "create nodegroup 4,48"
+--error 255
+--exec $NDB_MGM -e "create nodegroup 3,3"
+
+--source ndb_mgm_show_table.inc
 
 CREATE LOGFILE GROUP lg_1
     ADD UNDOFILE 'undo_1.dat'
@@ -14,26 +27,90 @@ CREATE LOGFILE GROUP lg_1
 CREATE TABLESPACE ts_1
     ADD DATAFILE 'data_1.dat'
     USE LOGFILE GROUP lg_1
-    INITIAL_SIZE 4M
+    INITIAL_SIZE 16M
     ENGINE NDB;
 
-create table t1(id int NOT NULL PRIMARY KEY, data char(8)) engine=ndb;
+# Using a pk bigger than 80 bytes, see bug#25152165.
+create table t1(id int, data char(8), id2 binary(80), primary key (id, id2)) engine=ndb;
 create table t2(id int NOT NULL PRIMARY KEY, data char(8))
 TABLESPACE ts_1 STORAGE DISK engine=ndb;
+# BUG#13714648
+create table t5(id int NOT NULL PRIMARY KEY, data char(8)) max_rows=50000000 engine=ndb;
+create table t6(id int not null primary key, dat blob, txt text) engine=ndb;
+create table t10 (id int primary key, data int, other int, unique(other)) engine=ndb;
 
-load data local infile 'suite/ndb/data/table_data10000.dat' into table t1 fields terminated by ' ' lines terminated by '\n';
+# Get blob tables
+let $bt_test_t6_dat=`SELECT blob_table_name FROM ndbinfo.blobs
+                     WHERE table_name="t6" AND column_name="dat"`;
+let $bt_test_t6_txt=`SELECT blob_table_name FROM ndbinfo.blobs
+                     WHERE table_name="t6" AND column_name="txt"`;
+
+load data local infile 'suite/ndb/data/table_data10000.dat' into table t1 fields terminated by ' ' lines terminated by '\n' (id, @data) set data = @data, id2 = repeat(@data,10);
 load data local infile 'suite/ndb/data/table_data10000.dat' into table t2 fields terminated by ' ' lines terminated by '\n';
+load data local infile 'suite/ndb/data/table_data10000.dat' into table t5 fields terminated by ' ' lines terminated by '\n';
+load data local infile 'suite/ndb/data/table_data10000.dat' into table t6 fields terminated by ' ' lines terminated by '\n' (id, @data) set dat = repeat(@data, 100), txt = repeat(@data,100);
 
+insert into t10 values (1,1,1), (2,2,2), (3,3,3), (4,4,4), (5,5,5), (6,6,6),(7,7,7), (8,8,8);
+
+## Check details of t1 partitioning
+--echo "Table t1 Partition info"
+let ndb_table= t1;
+--source show_partition_info.inc
+select count(0) as row_count from t1;
+
+## Check details of t2 partitioning
+--echo "Table t2 Partition info"
+let ndb_table= t2;
+--source show_partition_info.inc
+select count(0) as row_count from t2;
+
+## Check details of t5 partitioning
+--echo "Table t5 Partition info"
+let ndb_table= t5;
+--source show_partition_info.inc
+select count(0) as row_count from t5;
+
+## Check details of t6 partitioning
+--echo "Table t6 Partition info"
+let ndb_table= t6;
+--source show_partition_info.inc
+select count(0) as row_count from t6;
+
+## Check details of t6 blob table partitioning
+--echo "Table t6 blob dat Partition info"
+let $ndb_table= $bt_test_t6_dat;
+--source show_partition_info.inc
+
+--echo "Table t6 blob txt Partition info"
+let $ndb_table= $bt_test_t6_txt;
+--source show_partition_info.inc
+
+# Verify that the Unique hash index fragments are balanced across all data nodes
+select parent_fq_name, type, table_id, node_id, block_instance, fragment_num
+    from ndbinfo.memory_per_fragment where parent_fq_name like '%t10%';
 ## Create nodegroup for "new" nodes
 --exec $NDB_MGM -e "create nodegroup 3,4"
-
+--sleep 5
 # Cluster running after adding two ndbd nodes
---exec $NDB_MGM -e show
+--source ndb_mgm_show_table.inc
 
 ## Drop
 --exec $NDB_MGM -e "drop nodegroup 1"
 ## and create
 --exec $NDB_MGM -e "create nodegroup 3,4"
+
+set @@new = 1;
+
+#create table t7(id int primary key, uk int, unique key (uk)) engine=ndb
+create table t7(id int primary key, uk int) engine=ndb
+  partition by list(id) (
+    partition p0 values in (0),
+    partition p1 values in (1),
+    partition p2 values in (2),
+    partition p3 values in (3),
+    partition p4 values in (4)
+  );
+drop table t7;
 
 create table t3(id int NOT NULL PRIMARY KEY, data char(8)) engine=ndb;
 create table t4(id int NOT NULL PRIMARY KEY, data char(8))
@@ -46,8 +123,74 @@ insert into t4(id, data) VALUES
 (1,'new'), (2,'new'),(3,'new'),(4,'new'),(5,'new'),
 (6,'new'),(7,'new'),(8,'new'),(9,'new'),(10,'new');
 
-alter online table t1 reorganize partition;
-alter online table t2 reorganize partition;
+alter table t1 algorithm=inplace, add column c int unsigned default null;
+alter table t1 reorganize partition;
+alter table t2 reorganize partition;
+alter table t5 algorithm=inplace, max_rows=300000000;
+alter table t6 reorganize partition;
+alter table t10 reorganize partition;
+# Verify that the Unique hash index fragments are balanced across all data nodes
+select parent_fq_name, type, table_id, node_id, block_instance, fragment_num
+    from ndbinfo.memory_per_fragment where parent_fq_name like '%t10%';
+show create table t10;
+alter table t10 add unique(other);
+alter table t10 drop index other;
+
+# Verify that the Unique hash index fragments are balanced across all data nodes
+select parent_fq_name, type, table_id, node_id, block_instance, fragment_num
+    from ndbinfo.memory_per_fragment where parent_fq_name like '%t10%';
+
+## Check details of t1 partitioning
+--echo "Table t1 Partition info"
+let ndb_table= t1;
+--source show_partition_info.inc
+select count(0) as row_count from t1;
+
+## Check details of t2 partitioning
+--echo "Table t2 Partition info"
+let ndb_table= t2;
+--source show_partition_info.inc
+select count(0) as row_count from t2;
+
+## Check details of t3 partitioning
+--echo "Table t3 Partition info"
+let ndb_table= t3;
+--source show_partition_info.inc
+
+## Check details of t4 partitioning
+--echo "Table t4 Partition info"
+let ndb_table= t4;
+--source show_partition_info.inc
+
+## Check details of t5 partitioning
+--echo "Table t5 Partition info"
+let ndb_table= t5;
+--source show_partition_info.inc
+select count(0) as row_count from t5;
+
+## Simple blob usage of t6
+select count(0) as row_count from t6;
+
+## Check details of t6 partitioning
+--echo "Table t6 Partition info"
+let ndb_table= t6;
+--source show_partition_info.inc
+
+## Check details of t6 blob table partitioning
+--echo "Table t6 blob dat Partition info"
+let ndb_table= $bt_test_t6_dat;
+--source show_partition_info.inc
+
+--echo "Table t6 blob txt Partition info"
+let ndb_table= $bt_test_t6_txt;
+--source show_partition_info.inc
+
+# Check that main table and blob tables have same hashmap.
+let ndb_database= test;
+let ndb_table= t6;
+let ndb_die_on_error= 1;
+--replace_regex /.* BT=.*//
+--source suite/ndb/include/ndb_check_blob_tables.inc
 
 ## Drop nodegroup with "new" nodes is not allowed with data one those nodes
 # NOTE: --error=0 is due to return codes doesnt work on windoze
@@ -55,19 +198,18 @@ alter online table t2 reorganize partition;
 --exec $NDB_MGM -e "drop nodegroup 1"
 
 ## Nodegroup with "new" nodes still exist after dropping it as shown:
---exec $NDB_MGM -e show
+--source ndb_mgm_show_table.inc
 
-drop table t1,t2,t3,t4;
+drop table t1,t2,t3,t4,t5,t6,t10;
 
 ## Drop nodegroup with "new" nodes
 --exec $NDB_MGM -e "drop nodegroup 1"
 
 ## Nodegroup with "new" nodes still exists after dropping it as shown:
---exec $NDB_MGM -e show
+--source ndb_mgm_show_table.inc
 
 # Cleanup
-ALTER TABLESPACE ts_1 DROP DATAFILE 'data_1.dat' ENGINE NDB;
-DROP TABLESPACE ts_1 ENGINE NDB;
+ALTER TABLESPACE ts_1 DROP DATAFILE 'data_1.dat';
+DROP TABLESPACE ts_1;
 DROP LOGFILE GROUP lg_1 ENGINE NDB;
 
-exit;

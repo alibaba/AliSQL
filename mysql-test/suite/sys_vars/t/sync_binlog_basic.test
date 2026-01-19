@@ -23,7 +23,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/not_embedded.inc
 --source include/load_sysvars.inc
 
 ##################################################################
@@ -55,7 +54,7 @@ SELECT @@global.sync_binlog;
 ############################################### 
 
 SET @@global.sync_binlog = @start_value;
-SELECT @@global.sync_binlog = 0;
+SELECT @@global.sync_binlog = 1;
 
 
 --echo '#--------------------FN_DYNVARS_168_03------------------------#'
@@ -117,11 +116,11 @@ SELECT @@sync_binlog;
 # Check if the value in GLOBAL & SESSION Tables matches values in variable   #
 ##############################################################################
 
+--disable_warnings
 SELECT @@global.sync_binlog = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='sync_binlog';
-
-
+--enable_warnings
 
 --echo '#---------------------FN_DYNVARS_168_07----------------------#'
 ##########################################################################  
@@ -140,7 +139,9 @@ SET global.sync_binlog = 1;
 --Error ER_UNKNOWN_TABLE
 SELECT global.sync_binlog;
 --Error ER_BAD_FIELD_ERROR
-SELECT sync_binlog = @@session.sync_binlog;
+SELECT sync_binlog;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.sync_binlog;
 
 
 ##############################  

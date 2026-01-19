@@ -1,3 +1,6 @@
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 #
 # Test of ansi mode
 #
@@ -6,8 +9,6 @@
 drop table if exists t1;
 --enable_warnings
 
-set sql_mode="MySQL40";
-select @@sql_mode;
 set @@sql_mode="ANSI";
 select @@sql_mode;
 
@@ -19,23 +20,9 @@ SELECT 'A' || 'B';
 
 CREATE TABLE t1 (id INT, id2 int);
 SELECT id,NULL,1,1.1,'a' FROM t1 GROUP BY id;
-#No --error 1055 error due to temporary fix for BUG#8510:
-#ONLY_FULL_GROUP_BY is overly restrictive, so remove it from ANSI mode.
+# ONLY_FULL_GROUP_BY is included in ANSI:
+--error ER_WRONG_FIELD_WITH_GROUP
 SELECT id FROM t1 GROUP BY id2;
 drop table t1;
 
 SET @@SQL_MODE="";
-
-# Bug#14515
-
-CREATE TABLE t1 (i int auto_increment NOT NULL, PRIMARY KEY (i));
-SHOW CREATE TABLE t1;
-SET @@SQL_MODE="MYSQL323";
-SHOW CREATE TABLE t1;
-SET @@SQL_MODE="MYSQL40";
-SHOW CREATE TABLE t1;
-SET @@SQL_MODE="NO_FIELD_OPTIONS";
-SHOW CREATE TABLE t1;
-DROP TABLE t1;
-
-# End of 4.1 tests

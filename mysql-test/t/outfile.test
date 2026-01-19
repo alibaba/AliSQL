@@ -1,9 +1,10 @@
-disable_query_log;
--- source include/test_outfile.inc
-# Server are started in "var/master-data", so "../../tmp" will be "var/tmp"
-eval set @tmpdir="../../tmp";
-enable_query_log;
--- source include/have_outfile.inc
+
+--disable_query_log
+--eval SELECT "Outfile OK" INTO OUTFILE "$MYSQLTEST_VARDIR/tmp/outfile.test"
+# Server is started in "var/master-data", so "../../tmp" will be "var/tmp"
+--eval set @tmpdir="../../tmp"
+--enable_query_log
+--source include/have_outfile.inc
 
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
@@ -30,7 +31,7 @@ select load_file(concat(@tmpdir,"/outfile-test.2"));
 disable_query_log;
 eval select * into dumpfile "../../tmp/outfile-test.3" from t1 where a is null;
 enable_query_log;
-select load_file(concat(@tmpdir,"/outfile-test.3"));
+select length(load_file(concat(@tmpdir,"/outfile-test.3")));
 
 # the following should give errors
 
@@ -62,8 +63,13 @@ select load_file(concat(@tmpdir,"/outfile-test.4"));
 #
 
 CREATE TABLE t1 (a INT);
+# The hypergraph optimizer does not support the traditional explain
+# format yet. Automatic filtering of hypergraph errors is broken for
+# this test on some platforms due to older versions of diff getting
+# confused by binary characters in the result file. Force the use of
+# the old optimizer with a hint for now.
 EXPLAIN
-  SELECT *
+  SELECT /*+ SET_VAR(optimizer_switch='hypergraph_optimizer=off') */ *
   INTO OUTFILE '/tmp/t1.txt'
   FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\r\n'
   FROM t1;
@@ -109,7 +115,7 @@ create user user_1@localhost;
 grant all on mysqltest.* to user_1@localhost;
 connect (con28181_1,localhost,user_1,,mysqltest);
 
---error ER_ACCESS_DENIED_ERROR
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
 eval select schema_name
 into outfile "../../tmp/outfile-test.4"
 fields terminated by ',' optionally enclosed by '"'

@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,52 +26,155 @@
 #ifndef NDB_IMPL_HPP
 #define NDB_IMPL_HPP
 
-#include <ndb_global.h>
-#include "API.hpp"
-#include <NdbOut.hpp>
-#include <kernel/ndb_limits.h>
 #include <NdbTick.h>
+#include <kernel/ndb_limits.h>
+#include <ndb_global.h>
+#include <NdbOut.hpp>
+#include <stat_utils.hpp>
+#include "my_config.h"
 
-#include "NdbQueryOperationImpl.hpp"
-#include "ndb_cluster_connection_impl.hpp"
+#include "AssembleFragments.hpp"
 #include "NdbDictionaryImpl.hpp"
+#include "NdbQueryOperationImpl.hpp"
+#include "NdbWaiter.hpp"
 #include "ObjectMap.hpp"
+#include "WakeupHandler.hpp"
+#include "kernel/signaldata/TcKeyConf.hpp"
+#include "ndb_cluster_connection_impl.hpp"
 #include "trp_client.hpp"
 #include "trp_node.hpp"
-#include "NdbWaiter.hpp"
 
 template <class T>
-struct Ndb_free_list_t 
-{
+struct Ndb_free_list_t {
   Ndb_free_list_t();
   ~Ndb_free_list_t();
-  
-  int fill(Ndb*, Uint32 cnt);
-  T* seize(Ndb*);
-  void release(T*);
-  void release(Uint32 cnt, T* head, T* tail);
-  void clear();
+
+  int fill(Ndb *, Uint32 cnt);
+  T *seize(Ndb *);
+  void release(T *);
+  void release(Uint32 cnt, T *head, T *tail);
   Uint32 get_sizeof() const { return sizeof(T); }
-  T * m_free_list;
-  Uint32 m_alloc_cnt, m_free_cnt;
+
+  /** Total number of objects currently in use (seized) */
+  Uint32 m_used_cnt;
+
+  /** Addition, currently unused, objects in 'm_free_list' */
+  Uint32 m_free_cnt;
+
+ private:
+  /** No copying.*/
+  Ndb_free_list_t(const Ndb_free_list_t &);
+  Ndb_free_list_t &operator=(const Ndb_free_list_t &);
+
+  /**
+   * update_stats() is called whenever a new local peak of 'm_used_cnt'
+   * objects has been observed.
+   *
+   * The high usage peaks are most interesting as we want to scale the
+   * free-list to accommodate these - The smaller peaks in between are mostly
+   * considered as 'noise' in this statistics. Which may cause a too low
+   * usage statistics to be collected, such that the high usage peaks could
+   * not be served from the free-list.
+   *
+   * In order to implement this we use a combination of statistics and
+   * heuristics. Heuristics is based on observing free-list behavior of
+   * an instrumented version of this code.
+   *
+   * 1) A 'high peak' is any peak value above or equal to the current
+   *    sampled mean value. -> Added to the statistics immediately .
+   * 2) A sampled peak value of 2 or less is considered as 'noise' and
+   *    just ignored.
+   * 3) Other peak values, less than the current mean:
+   *    These are observed over a period of such smaller peaks, and their
+   *    max value collected in 'm_sample_max'. When the windows size has
+   *    expired, the 'm_sample_max' value is sampled. Intention with this
+   *    heuristic is that temporary reduced usage of objects should be
+   *    ignored, but longer term changes should be acounted for.
+   *
+   * When we have taken a valid sample, we use the statistics to calculate the
+   * 95% percentile for max objects in use of 'class T'.
+   */
+  void update_stats() {
+    const Uint32 mean = m_stats.getMean();
+    if (m_used_cnt >= mean)
+      // 1) A high-peak value, sample it
+      m_stats.update(m_used_cnt);
+    else if (m_used_cnt <= 2)
+      // 2) Ignore very low sampled values, is 'noise'
+      return;
+    else {
+      // 3) A local peak, less than current 'mean'
+      if (m_sample_max < m_used_cnt) m_sample_max = m_used_cnt;
+
+      // Use a decay function of current 'mean' to decide how many small samples
+      // we may ignore - Smaller samples are ignored for a longer time.
+      const Uint32 max_skipped = (mean * 5) / m_used_cnt;
+      m_samples_skipped++;
+      if (m_samples_skipped < max_skipped && m_samples_skipped < 10) return;
+
+      // Expired low-value observation period, sample max value seen.
+      m_stats.update(m_sample_max);
+    }
+    m_sample_max = 0;
+    m_samples_skipped = 0;
+
+    // Calculate upper 95% percentile from sampled values
+    const double upper = m_stats.getMean() + (2 * m_stats.getStdDev());
+    m_estm_max_used = (Uint32)(upper + 0.999);
+  }
+
+  /** Shrink m_free_list such that m_used_cnt+'free' <= 'm_estm_max_used' */
+  void shrink();
+
+  /** List of recycable free objects */
+  T *m_free_list;
+
+  /** Last operation allocated, or grabbed a free object */
+  bool m_is_growing;
+
+  /** Number of consecuitive 'low-peak' values skipped */
+  Uint32 m_samples_skipped;
+
+  /** Max sample value seen in the 'm_samples_skipped' period */
+  Uint32 m_sample_max;
+
+  /** Statistics of peaks in number of obj 'T' in use */
+  NdbStatistics m_stats;
+
+  /** Snapshot of last calculated 95% percentile of max 'm_used_cnt' */
+  Uint32 m_estm_max_used;
 };
 
 /**
  * Private parts of the Ndb object (corresponding to Ndb.hpp in public API)
  */
-class NdbImpl : public trp_client
-{
-public:
-  NdbImpl(Ndb_cluster_connection *, Ndb&);
-  ~NdbImpl();
+class NdbImpl : public trp_client {
+ public:
+  NdbImpl(Ndb_cluster_connection *, Ndb &);
+  ~NdbImpl() override;
 
-  int send_event_report(bool has_lock, Uint32 *data, Uint32 length);
+  int send_event_report(bool is_poll_owner, Uint32 *data, Uint32 length);
+  int send_dump_state_all(Uint32 *dumpStateCodeArray, Uint32 len);
+  void set_TC_COMMIT_ACK_immediate(bool flag);
 
+ private:
+  /**
+   * Implementation methods for
+   * send_event_report
+   * send_dump_state_all
+   */
+  void init_dump_state_signal(NdbApiSignal *aSignal, Uint32 *dumpStateCodeArray,
+                              Uint32 len);
+  int send_to_nodes(NdbApiSignal *aSignal, bool is_poll_owner,
+                    bool send_to_all);
+  int send_to_node(NdbApiSignal *aSignal, Uint32 tNode, bool is_poll_owner);
+
+ public:
   Ndb &m_ndb;
-  Ndb * m_next_ndb_object, * m_prev_ndb_object;
-  
+  Ndb *m_next_ndb_object, *m_prev_ndb_object;
+
   Ndb_cluster_connection_impl &m_ndb_cluster_connection;
-  TransporterFacade * const m_transporter_facade;
+  TransporterFacade *const m_transporter_facade;
 
   NdbDictionaryImpl m_dictionary;
 
@@ -73,106 +184,100 @@ public:
 
   NdbObjectIdMap theNdbObjectIdMap;
 
-  Uint32 theNoOfDBnodes; // The number of DB nodes  
-  Uint8 theDBnodes[MAX_NDB_NODES]; // The node number of the DB nodes
+  Uint32 theNoOfDBnodes;            // The number of DB nodes
+  Uint8 theDBnodes[MAX_NDB_NODES];  // The node number of the DB nodes
 
- // 1 indicates to release all connections to node 
+  // 1 indicates to release all connections to node
   Uint32 the_release_ind[MAX_NDB_NODES];
 
-  NdbWaiter             theWaiter;
+  NdbWaiter theWaiter;
 
+  WakeupHandler *wakeHandler;
+
+  AssembleBatchedFragments m_suma_fragmented_signals[MAX_NDB_NODES];
   NdbEventOperationImpl *m_ev_op;
 
   int m_optimized_node_selection;
 
-  BaseString m_dbname; // Database name
-  BaseString m_schemaname; // Schema name
+  BaseString m_ndbObjectName;  // Ndb name
+  BaseString m_dbname;         // Database name
+  BaseString m_schemaname;     // Schema name
 
-  BaseString m_prefix; // Buffer for preformatted internal name <db>/<schema>/
-
-  int update_prefix()
-  {
-    if (!m_prefix.assfmt("%s%c%s%c", m_dbname.c_str(), table_name_separator,
-                         m_schemaname.c_str(), table_name_separator))
-    {
-      return -1;
-    }
-    return 0;
-  }
-
-/*
-  We need this friend accessor function to work around a HP compiler problem,
-  where template class friends are not working.
-*/
-  static inline void setNdbError(Ndb &ndb,int code){
+  /*
+    We need this friend accessor function to work around a HP compiler problem,
+    where template class friends are not working.
+  */
+  static inline void setNdbError(Ndb &ndb, int code) {
     ndb.theError.code = code;
     return;
   }
 
   bool forceShortRequests;
+  bool forceAccTableScans;
 
-  static inline void setForceShortRequests(Ndb* ndb, bool val)
-  {
+  static inline void setForceShortRequests(Ndb *ndb, bool val) {
     ndb->theImpl->forceShortRequests = val;
   }
 
   Uint32 get_waitfor_timeout() const {
-    return m_ndb_cluster_connection.m_config.m_waitfor_timeout;
+    DBUG_EXECUTE_IF("ndb_reduced_api_protocol_timeout", {
+      // Value > 1000 millis as check_send_timeout() has coarse
+      // resolution optimisation
+      DBUG_PRINT("info", ("Reducing timeout base to 2000 millis"));
+      return 2000;
+    });
+    return m_ndb_cluster_connection.m_ndbapiconfig.m_waitfor_timeout;
   }
-  const NdbApiConfig& get_ndbapi_config_parameters() const {
-    return m_ndb_cluster_connection.m_config;
+  const NdbApiConfig &get_ndbapi_config_parameters() const {
+    return m_ndb_cluster_connection.m_ndbapiconfig;
   }
 
-  BaseString m_systemPrefix; // Buffer for preformatted for <sys>/<def>/
-  
-  void* customDataPtr;
+  Uint64 customData;
 
-  Uint64 clientStats[ Ndb::NumClientStatistics ];
-  
-  inline void incClientStat(const Ndb::ClientStatistics stat, const Uint64 inc) {
-    assert(stat < Ndb::NumClientStatistics);
-    if (likely(stat < Ndb::NumClientStatistics))
-      clientStats[ stat ] += inc;
-  };
+  Uint64 clientStats[Ndb::NumClientStatistics];
 
-  inline void decClientStat(const Ndb::ClientStatistics stat, const Uint64 dec) {
+  inline void incClientStat(const Ndb::ClientStatistics stat,
+                            const Uint64 inc) {
     assert(stat < Ndb::NumClientStatistics);
-    if (likely(stat < Ndb::NumClientStatistics))
-      clientStats[ stat ] -= dec;
-  };
-  
-  inline void setClientStat(const Ndb::ClientStatistics stat, const Uint64 val) {
-    assert(stat < Ndb::NumClientStatistics);
-    if (likely(stat < Ndb::NumClientStatistics))
-      clientStats[ stat ] = val;
-  };
+    if (likely(stat < Ndb::NumClientStatistics)) clientStats[stat] += inc;
+  }
 
-  /* We don't record the sent/received bytes of some GSNs as they are 
-   * generated constantly and are not targetted to specific
+  inline void decClientStat(const Ndb::ClientStatistics stat,
+                            const Uint64 dec) {
+    assert(stat < Ndb::NumClientStatistics);
+    if (likely(stat < Ndb::NumClientStatistics)) clientStats[stat] -= dec;
+  }
+
+  inline void setClientStat(const Ndb::ClientStatistics stat,
+                            const Uint64 val) {
+    assert(stat < Ndb::NumClientStatistics);
+    if (likely(stat < Ndb::NumClientStatistics)) clientStats[stat] = val;
+  }
+
+  /* We don't record the sent/received bytes of some GSNs as they are
+   * generated constantly and are not targeted to specific
    * Ndb instances.
    * See also TransporterFacade::TRACE_GSN
    */
-  static bool recordGSN(Uint32 gsn)
-  {
-    switch(gsn)
-    {
-    case GSN_API_REGREQ:
-    case GSN_API_REGCONF:
-    case GSN_SUB_GCP_COMPLETE_REP:
-    case GSN_SUB_GCP_COMPLETE_ACK:
-      return false;
-    default:
-      return true;
+  static bool recordGSN(Uint32 gsn) {
+    switch (gsn) {
+      case GSN_API_REGREQ:
+      case GSN_API_REGCONF:
+      case GSN_SUB_GCP_COMPLETE_REP:
+      case GSN_SUB_GCP_COMPLETE_ACK:
+        return false;
+      default:
+        return true;
     }
   }
-  
+
   /**
    * NOTE free lists must be _after_ theNdbObjectIdMap take
    *   assure that destructors are run in correct order
    * NOTE these has to be in this specific order to make destructor run in
    *      correct order
    */
-  Ndb_free_list_t<NdbRecAttr> theRecAttrIdleList;  
+  Ndb_free_list_t<NdbRecAttr> theRecAttrIdleList;
   Ndb_free_list_t<NdbApiSignal> theSignalIdleList;
   Ndb_free_list_t<NdbLabel> theLabelList;
   Ndb_free_list_t<NdbBranch> theBranchList;
@@ -182,36 +287,61 @@ public:
   Ndb_free_list_t<NdbReceiver> theScanList;
   Ndb_free_list_t<NdbLockHandle> theLockHandleList;
   Ndb_free_list_t<NdbIndexScanOperation> theScanOpIdleList;
-  Ndb_free_list_t<NdbOperation>  theOpIdleList;  
+  Ndb_free_list_t<NdbOperation> theOpIdleList;
   Ndb_free_list_t<NdbIndexOperation> theIndexOpIdleList;
-  Ndb_free_list_t<NdbTransaction> theConIdleList; 
+  Ndb_free_list_t<NdbTransaction> theConIdleList;
+
+  /**
+   * For some test cases it is necessary to flush out the TC_COMMIT_ACK
+   * immediately since we immediately will check that the commit ack
+   * marker resource is released.
+   */
+  bool send_TC_COMMIT_ACK_immediate_flag;
 
   /**
    * trp_client interface
    */
-  virtual void trp_deliver_signal(const NdbApiSignal*,
-                                  const LinearSectionPtr p[3]);
-  virtual void recordWaitTimeNanos(Uint64 nanos);
+  void trp_deliver_signal(const NdbApiSignal *,
+                          const LinearSectionPtr p[3]) override;
+  void trp_wakeup() override;
+  void recordWaitTimeNanos(Uint64 nanos) override;
+
+  void drop_batched_fragments(AssembleBatchedFragments *batched_fragments);
+  Int32 assemble_data_event_signal(AssembleBatchedFragments *batched_fragments,
+                                   NdbApiSignal *signal,
+                                   LinearSectionPtr ptr[3]);
   // Is node available for running transactions
-  bool   get_node_alive(NodeId nodeId) const;
-  bool   get_node_stopping(NodeId nodeId) const;
-  bool   getIsDbNode(NodeId nodeId) const;
-  bool   getIsNodeSendable(NodeId nodeId) const;
+  bool get_node_alive(NodeId nodeId) const;
+  bool get_node_stopping(NodeId nodeId) const;
+  bool get_node_available(NodeId nodeId) const;
+  bool getIsDbNode(NodeId nodeId) const;
+  bool getIsNodeSendable(NodeId nodeId) const;
   Uint32 getNodeGrp(NodeId nodeId) const;
   Uint32 getNodeSequence(NodeId nodeId) const;
   Uint32 getNodeNdbVersion(NodeId nodeId) const;
   Uint32 getMinDbNodeVersion() const;
-  bool check_send_size(Uint32 node_id, Uint32 send_size) const { return true;}
+  bool check_send_size(Uint32 /*node_id*/, Uint32 /*send_size*/) const {
+    return true;
+  }
 
-  int sendSignal(NdbApiSignal*, Uint32 nodeId);
-  int sendSignal(NdbApiSignal*, Uint32 nodeId,
-                 const LinearSectionPtr ptr[3], Uint32 secs);
-  int sendSignal(NdbApiSignal*, Uint32 nodeId,
-                 const GenericSectionPtr ptr[3], Uint32 secs);
-  int sendFragmentedSignal(NdbApiSignal*, Uint32 nodeId,
+  int sendSignal(NdbApiSignal *, Uint32 nodeId);
+  int sendSignal(NdbApiSignal *, Uint32 nodeId, const LinearSectionPtr ptr[3],
+                 Uint32 secs);
+  int sendSignal(NdbApiSignal *, Uint32 nodeId, const GenericSectionPtr ptr[3],
+                 Uint32 secs);
+  int sendFragmentedSignal(NdbApiSignal *, Uint32 nodeId,
                            const LinearSectionPtr ptr[3], Uint32 secs);
-  int sendFragmentedSignal(NdbApiSignal*, Uint32 nodeId,
+  int sendFragmentedSignal(NdbApiSignal *, Uint32 nodeId,
                            const GenericSectionPtr ptr[3], Uint32 secs);
+
+  Uint32 mapRecipient(void *object);
+  void *unmapRecipient(Uint32 id, void *object);
+
+  void *int2void(Uint32 val);
+  static NdbReceiver *void2rec(void *val);
+  static NdbTransaction *void2con(void *val);
+  NdbTransaction *lookupTransactionFromOperation(const TcKeyConf *conf);
+  Uint32 select_node(NdbTableImpl *table_impl, const Uint16 *nodes, Uint32 cnt);
 };
 
 #ifdef VM_TRACE
@@ -220,219 +350,227 @@ public:
 #define TRACE_DEBUG(x)
 #endif
 
-#define CHECK_STATUS_MACRO \
-   {if (checkInitState() == -1) { theError.code = 4100; DBUG_RETURN(-1);}}
-#define CHECK_STATUS_MACRO_VOID \
-   {if (checkInitState() == -1) { theError.code = 4100; DBUG_VOID_RETURN;}}
-#define CHECK_STATUS_MACRO_ZERO \
-   {if (checkInitState() == -1) { theError.code = 4100; DBUG_RETURN(0);}}
-#define CHECK_STATUS_MACRO_NULL \
-   {if (checkInitState() == -1) { theError.code = 4100; DBUG_RETURN(NULL);}}
+#define CHECK_STATUS_MACRO        \
+  {                               \
+    if (checkInitState() == -1) { \
+      theError.code = 4100;       \
+      DBUG_RETURN(-1);            \
+    }                             \
+  }
+#define CHECK_STATUS_MACRO_VOID   \
+  {                               \
+    if (checkInitState() == -1) { \
+      theError.code = 4100;       \
+      DBUG_VOID_RETURN;           \
+    }                             \
+  }
+#define CHECK_STATUS_MACRO_ZERO   \
+  {                               \
+    if (checkInitState() == -1) { \
+      theError.code = 4100;       \
+      DBUG_RETURN(0);             \
+    }                             \
+  }
+#define CHECK_STATUS_MACRO_NULL   \
+  {                               \
+    if (checkInitState() == -1) { \
+      theError.code = 4100;       \
+      DBUG_RETURN(NULL);          \
+    }                             \
+  }
 
-inline
-void *
-Ndb::int2void(Uint32 val){
-  return theImpl->theNdbObjectIdMap.getObject(val);
+/**
+ * theNdbObjectIdMap offers the translation between the object id
+ * used in the API protocol, and the object which a received signal
+ * should be delivered into.
+ * Objects are mapped using mapRecipient() function below and can be unmapped
+ * by calling unmapRecipient().
+ */
+
+inline Uint32 NdbImpl::mapRecipient(void *object) {
+  return theNdbObjectIdMap.map(object);
 }
 
-inline
-NdbReceiver *
-Ndb::void2rec(void* val){
-  return (NdbReceiver*)val;
+inline void *NdbImpl::unmapRecipient(Uint32 id, void *object) {
+  return theNdbObjectIdMap.unmap(id, object);
 }
 
-inline
-NdbTransaction *
-Ndb::void2con(void* val){
-  return (NdbTransaction*)val;
+/**
+ * Lookup of a previous mapped 'receiver'
+ */
+inline void *NdbImpl::int2void(Uint32 val) {
+  return theNdbObjectIdMap.getObject(val);
 }
 
-inline
-NdbOperation*
-Ndb::void2rec_op(void* val){
-  return (NdbOperation*)(void2rec(val)->getOwner());
+inline NdbReceiver *NdbImpl::void2rec(void *val) { return (NdbReceiver *)val; }
+
+inline NdbTransaction *NdbImpl::void2con(void *val) {
+  return (NdbTransaction *)val;
 }
 
-inline
-NdbIndexOperation*
-Ndb::void2rec_iop(void* val){
-  return (NdbIndexOperation*)(void2rec(val)->getOwner());
-}
-
-inline 
-NdbTransaction * 
-NdbReceiver::getTransaction() const {
-  switch(getType()){
-  case NDB_UNINITIALIZED:
-    assert(false);
-    return NULL;
-  case NDB_QUERY_OPERATION:
-    return &((NdbQueryOperationImpl*)m_owner)->getQuery().getNdbTransaction();
-  default:
-    return ((NdbOperation*)m_owner)->theNdbCon;
+inline NdbTransaction *NdbReceiver::getTransaction(ReceiverType type) const {
+  switch (type) {
+    case NDB_UNINITIALIZED:
+      assert(false);
+      return nullptr;
+    case NDB_QUERY_OPERATION:
+      return &((NdbQueryOperationImpl *)m_owner)
+                  ->getQuery()
+                  .getNdbTransaction();
+    default:
+      return ((NdbOperation *)m_owner)->theNdbCon;
   }
 }
 
-
-inline
-int
-Ndb::checkInitState()
-{
+inline int Ndb::checkInitState() {
   theError.code = 0;
 
-  if (theInitState != Initialised)
-    return -1;
+  if (theInitState != Initialised) return -1;
   return 0;
 }
 
 Uint32 convertEndian(Uint32 Data);
 
-enum LockMode { 
-  Read, 
-  Update,
-  Insert,
-  Delete 
-};
+enum LockMode { Read, Update, Insert, Delete };
 
-template<class T>
-inline
-Ndb_free_list_t<T>::Ndb_free_list_t()
-{
-  m_free_list= 0; 
-  m_alloc_cnt= m_free_cnt= 0; 
+template <class T>
+inline Ndb_free_list_t<T>::Ndb_free_list_t()
+    : m_used_cnt(0),
+      m_free_cnt(0),
+      m_free_list(nullptr),
+      m_is_growing(false),
+      m_samples_skipped(0),
+      m_sample_max(0),
+      m_stats(),
+      m_estm_max_used(0) {}
+
+template <class T>
+inline Ndb_free_list_t<T>::~Ndb_free_list_t() {
+  T *obj = m_free_list;
+  while (obj) {
+    T *curr = obj;
+    obj = static_cast<T *>(obj->next());
+    delete curr;
+    assert(m_free_cnt-- > 0);
+  }
+  assert(m_free_cnt == 0);
+  assert(m_used_cnt == 0);
 }
 
-template<class T>
-inline
-Ndb_free_list_t<T>::~Ndb_free_list_t()
-{
-  clear();
-}
-    
-template<class T>
-inline
-int
-Ndb_free_list_t<T>::fill(Ndb* ndb, Uint32 cnt)
-{
-#ifndef HAVE_purify
-  if (m_free_list == 0)
-  {
-    m_free_cnt++;
-    m_alloc_cnt++;
+template <class T>
+inline int Ndb_free_list_t<T>::fill(Ndb *ndb, Uint32 cnt) {
+#ifndef HAVE_VALGRIND
+  m_is_growing = true;
+  if (m_free_list == nullptr) {
     m_free_list = new T(ndb);
-    if (m_free_list == 0)
-    {
+    if (m_free_list == nullptr) {
       NdbImpl::setNdbError(*ndb, 4000);
       assert(false);
       return -1;
     }
+    m_free_cnt++;
   }
-  while(m_alloc_cnt < cnt)
-  {
-    T* obj= new T(ndb);
-    if(obj == 0)
-    {
+  while (m_free_cnt < cnt) {
+    T *obj = new T(ndb);
+    if (obj == nullptr) {
       NdbImpl::setNdbError(*ndb, 4000);
       assert(false);
       return -1;
     }
     obj->next(m_free_list);
     m_free_cnt++;
-    m_alloc_cnt++;
     m_free_list = obj;
   }
   return 0;
 #else
+  // Older versions of gcc do not like [[maybe_unused]] in templates.
+  // So disable the maybe-unused warning like this instead:
+  (void)ndb;
+  (void)cnt;
   return 0;
 #endif
 }
 
-template<class T>
-inline
-T*
-Ndb_free_list_t<T>::seize(Ndb* ndb)
-{
-#ifndef HAVE_purify
-  T* tmp = m_free_list;
-  if (tmp)
-  {
-    m_free_list = (T*)tmp->next();
-    tmp->next(NULL);
+template <class T>
+inline T *Ndb_free_list_t<T>::seize(Ndb *ndb) {
+#ifndef HAVE_VALGRIND
+  T *tmp = m_free_list;
+  m_is_growing = true;
+  if (likely(tmp != nullptr)) {
+    m_free_list = (T *)tmp->next();
+    tmp->next(nullptr);
     m_free_cnt--;
-    return tmp;
-  }
-  
-  if((tmp = new T(ndb)))
-  {
-    m_alloc_cnt++;
-  }
-  else
-  {
+  } else if (unlikely((tmp = new T(ndb)) == nullptr)) {
     NdbImpl::setNdbError(*ndb, 4000);
     assert(false);
   }
+  m_used_cnt++;
   return tmp;
 #else
   return new T(ndb);
 #endif
 }
 
-template<class T>
-inline
-void
-Ndb_free_list_t<T>::release(T* obj)
-{
-#ifndef HAVE_purify
-  obj->next(m_free_list);
-  m_free_list = obj;
-  m_free_cnt++;
+template <class T>
+inline void Ndb_free_list_t<T>::release(T *obj) {
+#ifndef HAVE_VALGRIND
+  if (m_is_growing) {
+    /* Reached a usage peak, sample it, and possibly shrink free_list */
+    m_is_growing = false;
+    update_stats();
+    shrink();
+  }
+
+  /* Use statistics to decide delete or recycle of 'obj' */
+  if (m_used_cnt + m_free_cnt > m_estm_max_used) {
+    delete obj;
+  } else {
+    obj->next(m_free_list);
+    m_free_list = obj;
+    m_free_cnt++;
+  }
+  assert(m_used_cnt > 0);
+  m_used_cnt--;
 #else
   delete obj;
 #endif
 }
 
-
-template<class T>
-inline
-void
-Ndb_free_list_t<T>::clear()
-{
-  T* obj = m_free_list;
-  while(obj)
-  {
-    T* curr = obj;
-    obj = (T*)obj->next();
-    delete curr;
-    m_alloc_cnt--;
-  }
-}
-
-template<class T>
-inline
-void
-Ndb_free_list_t<T>::release(Uint32 cnt, T* head, T* tail)
-{
-#ifndef HAVE_purify
-  if (cnt)
-  {
+template <class T>
+inline void Ndb_free_list_t<T>::release(Uint32 cnt, T *head, T *tail) {
 #ifdef VM_TRACE
-    {
-      T* tmp = head;
-      while (tmp != 0 && tmp != tail) tmp = (T*)tmp->next();
-      assert(tmp == tail);
+  {
+    T *tmp = head;
+    Uint32 tmp_cnt = 0;
+    while (tmp != nullptr && tmp != tail) {
+      tmp = (T *)tmp->next();
+      tmp_cnt++;
     }
+    assert(tmp == tail);
+    assert((tail == nullptr && tmp_cnt == 0) || tmp_cnt + 1 == cnt);
+  }
 #endif
+
+#ifndef HAVE_VALGRIND
+  if (cnt) {
+    if (m_is_growing) {
+      /* Reached a usage peak, sample it (shrink after lists merged) */
+      m_is_growing = false;
+      update_stats();
+    }
+
     tail->next(m_free_list);
     m_free_list = head;
     m_free_cnt += cnt;
+    assert(m_used_cnt >= cnt);
+    m_used_cnt -= cnt;
+    shrink();
   }
 #else
-  if (cnt)
-  {
-    T* tmp = head;
-    while (tmp != 0 && tmp != tail)
-    {
-      T * next = (T*)tmp->next();
+  if (cnt) {
+    T *tmp = head;
+    while (tmp != 0 && tmp != tail) {
+      T *next = (T *)tmp->next();
       delete tmp;
       tmp = next;
     }
@@ -441,79 +579,71 @@ Ndb_free_list_t<T>::release(Uint32 cnt, T* head, T* tail)
 #endif
 }
 
-inline
-bool
-NdbImpl::getIsDbNode(NodeId n) const {
-  return
-    getNodeInfo(n).defined &&
-    getNodeInfo(n).m_info.m_type == NodeInfo::DB;
+template <class T>
+inline void Ndb_free_list_t<T>::shrink() {
+  T *obj = m_free_list;
+  while (obj && m_used_cnt + m_free_cnt > m_estm_max_used) {
+    T *curr = obj;
+    obj = static_cast<T *>(obj->next());
+    delete curr;
+    m_free_cnt--;
+  }
+  m_free_list = obj;
 }
 
-inline
-Uint32
-NdbImpl::getNodeGrp(NodeId n) const {
+inline bool NdbImpl::getIsDbNode(NodeId n) const {
+  return getNodeInfo(n).defined && getNodeInfo(n).m_info.m_type == NodeInfo::DB;
+}
+
+inline Uint32 NdbImpl::getNodeGrp(NodeId n) const {
   return getNodeInfo(n).m_state.nodeGroup;
 }
 
-
-inline
-bool
-NdbImpl::get_node_alive(NodeId n) const {
+inline bool NdbImpl::get_node_alive(NodeId n) const {
   return getNodeInfo(n).m_alive;
 }
 
-inline
-bool
-NdbImpl::get_node_stopping(NodeId n) const {
-  const trp_node & node = getNodeInfo(n);
+inline bool NdbImpl::get_node_available(NodeId n) const {
+  const trp_node &node = getNodeInfo(n);
+  assert(node.m_info.getType() == NodeInfo::DB);
+  return (node.m_alive && !node.m_state.getSingleUserMode() &&
+          node.m_state.startLevel == NodeState::SL_STARTED);
+}
+
+inline bool NdbImpl::get_node_stopping(NodeId n) const {
+  const trp_node &node = getNodeInfo(n);
   assert(node.m_info.getType() == NodeInfo::DB);
   return (!node.m_state.getSingleUserMode() &&
           node.m_state.startLevel >= NodeState::SL_STOPPING_1);
 }
 
-inline
-bool
-NdbImpl::getIsNodeSendable(NodeId n) const {
-  const trp_node & node = getNodeInfo(n);
+inline bool NdbImpl::getIsNodeSendable(NodeId n) const {
+  const trp_node &node = getNodeInfo(n);
   const Uint32 startLevel = node.m_state.startLevel;
   const NodeInfo::NodeType node_type = node.m_info.getType();
-  assert(node_type == NodeInfo::DB ||
-         node_type == NodeInfo::MGM);
+  assert(node_type == NodeInfo::DB || node_type == NodeInfo::MGM);
 
-  return node.compatible && (startLevel == NodeState::SL_STARTED ||
-                             startLevel == NodeState::SL_STOPPING_1 ||
-                             node.m_state.getSingleUserMode() ||
-                             node_type == NodeInfo::MGM);
+  return node.compatible &&
+         (startLevel == NodeState::SL_STARTED ||
+          startLevel == NodeState::SL_STOPPING_1 ||
+          node.m_state.getSingleUserMode() || node_type == NodeInfo::MGM);
 }
 
-inline
-Uint32
-NdbImpl::getNodeSequence(NodeId n) const {
+inline Uint32 NdbImpl::getNodeSequence(NodeId n) const {
   return getNodeInfo(n).m_info.m_connectCount;
 }
 
-inline
-Uint32
-NdbImpl::getNodeNdbVersion(NodeId n) const
-{
+inline Uint32 NdbImpl::getNodeNdbVersion(NodeId n) const {
   return getNodeInfo(n).m_info.m_version;
 }
 
-inline
-void
-NdbImpl::recordWaitTimeNanos(Uint64 nanos)
-{
-  incClientStat( Ndb::WaitNanosCount, nanos );
+inline void NdbImpl::recordWaitTimeNanos(Uint64 nanos) {
+  incClientStat(Ndb::WaitNanosCount, nanos);
 }
 
-inline
-int
-NdbImpl::sendSignal(NdbApiSignal * signal, Uint32 nodeId)
-{
-  if (getIsNodeSendable(nodeId))
-  {
-    if (likely(recordGSN(signal->theVerId_signalNumber)))
-    {
+inline int NdbImpl::sendSignal(NdbApiSignal *signal, Uint32 nodeId) {
+  if (getIsNodeSendable(nodeId)) {
+    if (likely(recordGSN(signal->theVerId_signalNumber))) {
       incClientStat(Ndb::BytesSentCount, signal->getLength() << 2);
     }
     return raw_sendSignal(signal, nodeId);
@@ -521,84 +651,64 @@ NdbImpl::sendSignal(NdbApiSignal * signal, Uint32 nodeId)
   return -1;
 }
 
-inline
-int
-NdbImpl::sendSignal(NdbApiSignal * signal, Uint32 nodeId,
-                    const LinearSectionPtr ptr[3], Uint32 secs)
-{
-  if (getIsNodeSendable(nodeId))
-  {
-    if (likely(recordGSN(signal->theVerId_signalNumber)))
-    {
-      incClientStat(Ndb::BytesSentCount,
-                    ((signal->getLength() << 2) +
-                     ((secs > 2)? ptr[2].sz << 2: 0) + 
-                     ((secs > 1)? ptr[1].sz << 2: 0) +
-                     ((secs > 0)? ptr[0].sz << 2: 0)));
+inline int NdbImpl::sendSignal(NdbApiSignal *signal, Uint32 nodeId,
+                               const LinearSectionPtr ptr[3], Uint32 secs) {
+  if (getIsNodeSendable(nodeId)) {
+    if (likely(recordGSN(signal->theVerId_signalNumber))) {
+      incClientStat(Ndb::BytesSentCount, ((signal->getLength() << 2) +
+                                          ((secs > 2) ? ptr[2].sz << 2 : 0) +
+                                          ((secs > 1) ? ptr[1].sz << 2 : 0) +
+                                          ((secs > 0) ? ptr[0].sz << 2 : 0)));
     }
     return raw_sendSignal(signal, nodeId, ptr, secs);
   }
   return -1;
 }
 
-inline
-int
-NdbImpl::sendSignal(NdbApiSignal * signal, Uint32 nodeId,
-                    const GenericSectionPtr ptr[3], Uint32 secs)
-{
-  if (getIsNodeSendable(nodeId))
-  {  
-    if (likely(recordGSN(signal->theVerId_signalNumber)))
-    { 
-      incClientStat(Ndb::BytesSentCount, 
-                    ((signal->getLength() << 2) +
-                     ((secs > 2)? ptr[2].sz << 2 : 0) + 
-                     ((secs > 1)? ptr[1].sz << 2: 0) +
-                     ((secs > 0)? ptr[0].sz << 2: 0)));
+inline int NdbImpl::sendSignal(NdbApiSignal *signal, Uint32 nodeId,
+                               const GenericSectionPtr ptr[3], Uint32 secs) {
+  if (getIsNodeSendable(nodeId)) {
+    if (likely(recordGSN(signal->theVerId_signalNumber))) {
+      incClientStat(Ndb::BytesSentCount, ((signal->getLength() << 2) +
+                                          ((secs > 2) ? ptr[2].sz << 2 : 0) +
+                                          ((secs > 1) ? ptr[1].sz << 2 : 0) +
+                                          ((secs > 0) ? ptr[0].sz << 2 : 0)));
     }
     return raw_sendSignal(signal, nodeId, ptr, secs);
   }
   return -1;
 }
 
-inline
-int
-NdbImpl::sendFragmentedSignal(NdbApiSignal * signal, Uint32 nodeId,
-                              const LinearSectionPtr ptr[3], Uint32 secs)
-{
-  if (getIsNodeSendable(nodeId))
-  {
-    if (likely(recordGSN(signal->theVerId_signalNumber)))
-    {
-      incClientStat(Ndb::BytesSentCount, 
-                    ((signal->getLength() << 2) +
-                     ((secs > 2)? ptr[2].sz << 2 : 0) + 
-                     ((secs > 1)? ptr[1].sz << 2: 0) +
-                     ((secs > 0)? ptr[0].sz << 2: 0)));
+inline int NdbImpl::sendFragmentedSignal(NdbApiSignal *signal, Uint32 nodeId,
+                                         const LinearSectionPtr ptr[3],
+                                         Uint32 secs) {
+  if (getIsNodeSendable(nodeId)) {
+    if (likely(recordGSN(signal->theVerId_signalNumber))) {
+      incClientStat(Ndb::BytesSentCount, ((signal->getLength() << 2) +
+                                          ((secs > 2) ? ptr[2].sz << 2 : 0) +
+                                          ((secs > 1) ? ptr[1].sz << 2 : 0) +
+                                          ((secs > 0) ? ptr[0].sz << 2 : 0)));
     }
     return raw_sendFragmentedSignal(signal, nodeId, ptr, secs);
   }
   return -1;
 }
 
-inline
-int
-NdbImpl::sendFragmentedSignal(NdbApiSignal * signal, Uint32 nodeId,
-                              const GenericSectionPtr ptr[3], Uint32 secs)
-{
-  if (getIsNodeSendable(nodeId))
-  {
-    if (likely(recordGSN(signal->theVerId_signalNumber)))
-    {
-      incClientStat(Ndb::BytesSentCount,
-                    ((signal->getLength() << 2) +
-                     ((secs > 2)? ptr[2].sz << 2 : 0) + 
-                     ((secs > 1)? ptr[1].sz << 2 : 0) +
-                     ((secs > 0)? ptr[0].sz << 2 : 0)));
+inline int NdbImpl::sendFragmentedSignal(NdbApiSignal *signal, Uint32 nodeId,
+                                         const GenericSectionPtr ptr[3],
+                                         Uint32 secs) {
+  if (getIsNodeSendable(nodeId)) {
+    if (likely(recordGSN(signal->theVerId_signalNumber))) {
+      incClientStat(Ndb::BytesSentCount, ((signal->getLength() << 2) +
+                                          ((secs > 2) ? ptr[2].sz << 2 : 0) +
+                                          ((secs > 1) ? ptr[1].sz << 2 : 0) +
+                                          ((secs > 0) ? ptr[0].sz << 2 : 0)));
     }
     return raw_sendFragmentedSignal(signal, nodeId, ptr, secs);
   }
   return -1;
 }
+
+inline void NdbImpl::trp_wakeup() { wakeHandler->notifyWakeup(); }
 
 #endif

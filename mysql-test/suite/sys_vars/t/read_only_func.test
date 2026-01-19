@@ -26,7 +26,6 @@
 # Setup
 #
 
---source include/not_embedded.inc
 
 SET @default_read_only = @@read_only;
 
@@ -148,4 +147,3 @@ DROP TABLE t2;
 SET global read_only = @default_read_only;
 
 --disable_info
---enable_warnings

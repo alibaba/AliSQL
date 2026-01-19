@@ -1,6 +1,7 @@
 #
 # Test of unions
 #
+--source include/elide_costs.inc
 
 --disable_warnings
 drop table if exists t1,t2,t3,t4,t5,t6;
@@ -10,31 +11,49 @@ CREATE TABLE t1 (a int not null, b char (10) not null);
 insert into t1 values(1,'a'),(2,'b'),(3,'c'),(3,'c');
 CREATE TABLE t2 (a int not null, b char (10) not null);
 insert into t2 values (3,'c'),(4,'d'),(5,'f'),(6,'e');
+analyze table t1;
+analyze table t2;
 
+--sorted_result
 select a,b from t1 union distinct select a,b from t2;
+--sorted_result
 select a,b from t1 union all select a,b from t2;
 select a,b from t1 union all select a,b from t2 order by b;
+--sorted_result
 select a,b from t1 union all select a,b from t2 union select 7,'g';
+--sorted_result
 select 0,'#' union select a,b from t1 union all select a,b from t2 union select 7,'gg';
+--sorted_result
 select a,b from t1 union select a,b from t1;
+--sorted_result
 select 't1',b,count(*) from t1 group by b UNION select 't2',b,count(*) from t2 group by b;
 
-# Test alternate syntax for unions 
+# Test alternate syntax for unions
 (select a,b from t1 limit 2)  union all (select a,b from t2 order by a) limit 4;
 (select a,b from t1 limit 2)  union all (select a,b from t2 order by a limit 1);
+--replace_column 10 # 11 #
 (select a,b from t1 limit 2)  union all (select a,b from t2 order by a limit 1) order by b desc;
 --error 1250
 (select a,b from t1 limit 2)  union all (select a,b from t2 order by a limit 1) order by t1.b;
-explain extended (select a,b from t1 limit 2)  union all (select a,b from t2 order by a limit 1) order by b desc;
+--replace_column 10 # 11 #
+explain (select a,b from t1 limit 2)  union all (select a,b from t2 order by a limit 1) order by b desc;
+select count(*) from (
+(select                      a,b from t1 limit 2)  union all (select a,b from t2 order by a)) q;
 (select sql_calc_found_rows  a,b from t1 limit 2)  union all (select a,b from t2 order by a) limit 2;
 select found_rows();
+select count(*) from (
+select                      a,b from t1  union all select a,b from t2) q;
 select sql_calc_found_rows  a,b from t1  union all select a,b from t2 limit 2;
 select found_rows();
-
+--replace_column 10 # 11 #
+explain
+  select * from t1 where a in
+    (select a from t1 union select a from t1 order by (select a))
+  union select * from t1 order by (select a);
 #
 # Test some error conditions with UNION
 #
-
+--replace_column 10 # 11 #
 explain select a,b from t1 union all select a,b from t2;
 
 --error  1054
@@ -46,14 +65,17 @@ explain select 1 union select a,b from t1 union select 1;
 --error 1222
 explain select a,b from t1 union select 1 limit 0;
 
---error 1221
+--error ER_PARSE_ERROR
 select a,b from t1 into outfile 'skr' union select a,b from t2;
 
---error 1221
+--error ER_PARSE_ERROR
 select a,b from t1 order by a union select a,b from t2;
 
---error 1221
+--error ER_PARSE_ERROR
 insert into t3 select a from t1 order by a union select a from t2;
+
+--error ER_PARSE_ERROR
+INSERT INTO t3 SELECT a FROM t1 LIMIT 1 UNION SELECT a FROM t2;
 
 --error 1222
 create table t3 select a,b from t1 union select a from t2;
@@ -91,26 +113,6 @@ SELECT @a:=1 UNION SELECT @a:=@a+1;
 (SELECT 1) UNION (SELECT 2) ORDER BY (SELECT a);
 (SELECT 1,3) UNION (SELECT 2,1) ORDER BY (SELECT 2);
 
-#
-# Test bug reported by joc@presence-pc.com
-#
-
-CREATE TABLE t1 (
-  `pseudo` char(35) NOT NULL default '',
-  `pseudo1` char(35) NOT NULL default '',
-  `same` tinyint(1) unsigned NOT NULL default '1',
-  PRIMARY KEY  (`pseudo1`),
-  KEY `pseudo` (`pseudo`)
-) ENGINE=MyISAM;
-INSERT INTO t1 (pseudo,pseudo1,same) VALUES ('joce', 'testtt', 1),('joce', 'tsestset', 1),('dekad', 'joce', 1);
-SELECT pseudo FROM t1 WHERE pseudo1='joce' UNION SELECT pseudo FROM t1 WHERE pseudo='joce';
-SELECT pseudo1 FROM t1 WHERE pseudo1='joce' UNION SELECT pseudo1 FROM t1 WHERE pseudo='joce';
-SELECT * FROM t1 WHERE pseudo1='joce' UNION SELECT * FROM t1 WHERE pseudo='joce' order by pseudo desc,pseudo1 desc;
-SELECT pseudo1 FROM t1 WHERE pseudo='joce' UNION SELECT pseudo FROM t1 WHERE pseudo1='joce';
-SELECT pseudo1 FROM t1 WHERE pseudo='joce' UNION ALL SELECT pseudo FROM t1 WHERE pseudo1='joce';
-SELECT pseudo1 FROM t1 WHERE pseudo='joce' UNION SELECT 1;
-drop table t1;
-
 create table t1 (a int);
 create table t2 (a int);
 insert into t1 values (1),(2),(3),(4),(5);
@@ -120,6 +122,8 @@ insert into t2 values (11),(12),(13),(14),(15);
 (select * from t1 limit 2) union (select * from t2 limit 20,3);
 set SQL_SELECT_LIMIT=2;
 (select * from t1 limit 1) union (select * from t2 limit 3);
+(select * from t1 limit 3) intersect (select * from t1 limit 3);
+(select * from t1 limit 4) except (select * from t1 limit 1);
 set SQL_SELECT_LIMIT=DEFAULT;
 drop table t1,t2;
 
@@ -206,41 +210,77 @@ create table t2 (a int);
 insert into t2 values (3),(4),(5);
 
 # Test global limits
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1) UNION all (SELECT * FROM t2)) q;
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1) UNION all (SELECT * FROM t2) LIMIT 1;
 select found_rows();
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1 LIMIT 1) UNION all (SELECT * FROM t2)) q;
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION all (SELECT * FROM t2) LIMIT 2;
 select found_rows();
 
 # Test cases where found_rows() should return number of returned rows
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1 LIMIT 1) UNION all (SELECT * FROM t2)) q;
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION all (SELECT * FROM t2);
 select found_rows();
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1) UNION all (SELECT * FROM t2 LIMIT 1)) q;
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1) UNION all (SELECT * FROM t2 LIMIT 1);
 select found_rows();
-# This used to work in 4.0 but not anymore in 4.1
---error 1064
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1 LIMIT 1) UNION SELECT * FROM t2) q;
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION SELECT * FROM t2 LIMIT 1;
-#select found_rows();
+select found_rows();
 
 # In these case found_rows() should work
+--error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1 UNION all SELECT * FROM t2 LIMIT 2;
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1 LIMIT 1) UNION all SELECT * FROM t2) q;
+(SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION all SELECT * FROM t2 LIMIT 2;
 select found_rows();
+SELECT COUNT(*) FROM (
+SELECT                     * FROM t1 UNION all SELECT * FROM t2) q;
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION all SELECT * FROM t2 LIMIT 2;
 select found_rows();
 
 # The following examples will not be exact
+SELECT COUNT(*) FROM (
+SELECT                     * FROM t1 UNION SELECT * FROM t2) q;
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION SELECT * FROM t2 LIMIT 2;
 select found_rows();
+SELECT COUNT(*) FROM (
+SELECT                     * FROM t1 UNION SELECT * FROM t2) q;
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION SELECT * FROM t2 LIMIT 100;
 select found_rows();
+--error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 100 UNION SELECT * FROM t2;
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1 LIMIT 100) UNION SELECT * FROM t2) q;
+(SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 100) UNION SELECT * FROM t2;
 select found_rows();
+--error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1 UNION SELECT * FROM t2;
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1 LIMIT 1) UNION SELECT * FROM t2) q;
+(SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION SELECT * FROM t2;
 select found_rows();
+--error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1 UNION SELECT * FROM t2 LIMIT 2;
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1 LIMIT 1) UNION SELECT * FROM t2) q;
+(SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION SELECT * FROM t2 LIMIT 2;
 select found_rows();
+SELECT COUNT(*) FROM (
+SELECT                     * FROM t1 UNION SELECT * FROM t2) q;
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION SELECT * FROM t2 LIMIT 2,2;
 select found_rows();
+--error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 limit 2,2 UNION SELECT * FROM t2;
+SELECT COUNT(*) FROM (
+(SELECT                     * FROM t1 limit 2,2) UNION SELECT * FROM t2) q;
+(SELECT SQL_CALC_FOUND_ROWS * FROM t1 limit 2,2) UNION SELECT * FROM t2;
 select found_rows();
 
 # Test some limits with ORDER BY
@@ -253,9 +293,11 @@ SELECT * FROM t1 UNION SELECT * FROM t2 ORDER BY a desc LIMIT 1;
 
 create temporary table t1 select a from t1 union select a from t2;
 drop temporary table t1;
+create temporary table temp1 select a from t1 union select a from t2;
+drop temporary table temp1;
 --error ER_TABLE_EXISTS_ERROR
 create table t1 select a from t1 union select a from t2;
---error 1054
+--error ER_TABLENAME_NOT_ALLOWED_HERE
 select a from t1 union select a from t2 order by t2.a;
 drop table t1,t2;
 
@@ -271,25 +313,10 @@ select length(version()) > 1 as `*` UNION select 2;
 
 create table t1 (a int);
 insert into t1 values (0), (3), (1), (2);
+analyze table t1;
+--replace_column 10 # 11 #
 explain (select * from t1) union (select * from t1) order by a;
 drop table t1;
-#
-# Test for another bug with UNION and LEFT JOIN
-#
-CREATE TABLE t1 (  id int(3) unsigned default '0') ENGINE=MyISAM;
-INSERT INTO t1 (id) VALUES("1");
-CREATE TABLE t2 ( id int(3) unsigned default '0',  id_master int(5) default '0',  text1 varchar(5) default NULL,  text2 varchar(5) default NULL) ENGINE=MyISAM;
-INSERT INTO t2 (id, id_master, text1, text2) VALUES("1", "1",
-"foo1", "bar1");
-INSERT INTO t2 (id, id_master, text1, text2) VALUES("2", "1",
-"foo2", "bar2");
-INSERT INTO t2 (id, id_master, text1, text2) VALUES("3", "1", NULL,
-"bar3");
-INSERT INTO t2 (id, id_master, text1, text2) VALUES("4", "1",
-"foo4", "bar4");
-SELECT 1 AS id_master, 1 AS id, NULL AS text1, 'ABCDE' AS text2 UNION SELECT id_master, t2.id, text1, text2 FROM t1 LEFT JOIN t2 ON t1.id = t2.id_master;
-SELECT 1 AS id_master, 1 AS id, 'ABCDE' AS text1, 'ABCDE' AS text2 UNION SELECT id_master, t2.id, text1, text2 FROM t1 LEFT JOIN t2 ON t1.id = t2.id_master;
-drop table if exists t1,t2;
 
 #
 # Test of bug when using the same table multiple times
@@ -298,24 +325,30 @@ create table t1 (a int not null primary key auto_increment, b int, key(b));
 create table t2 (a int not null primary key auto_increment, b int);
 insert into t1 (b) values (1),(2),(2),(3);
 insert into t2 (b) values (10),(11),(12),(13);
+analyze table t1;
 
-explain extended (select * from t1 where a=1) union (select * from t2 where a=1);
+explain (select * from t1 where a=1) union (select * from t2 where a=1);
+--skip_if_hypergraph  # No support for const tables.
+explain format=tree (select * from t1 where a=5) union (select * from t2 where a=1);  # Tests printing of ZeroRowsIterator.
 (select * from t1 where a=5) union (select * from t2 where a=1);
 (select * from t1 where a=5 and a=6) union (select * from t2 where a=1);
 (select t1.a,t1.b from t1,t2 where t1.a=5) union (select * from t2 where a=1);
 (select * from t1 where a=1) union (select t1.a,t2.a from t1,t2 where t1.a=t2.a);
+--replace_column 10 #
 explain (select * from t1 where a=1 and b=10) union (select straight_join t1.a,t2.a from t1,t2 where t1.a=t2.a);
+--replace_column 10 # 11 #
 explain (select * from t1 where a=1) union (select * from t1 where b=1);
 drop table t1,t2;
-create table t1 (   id int not null auto_increment, primary key (id)   ,user_name text );
-create table t2 (    id int not null auto_increment, primary key (id)   ,group_name text );
-create table t3 (    id int not null auto_increment, primary key (id)   ,user_id int   ,index user_idx (user_id)   ,foreign key (user_id) references users(id)   ,group_id int   ,index group_idx (group_id)   ,foreign key (group_id) references groups(id) );
-insert into t1 (user_name) values ('Tester');
-insert into t2 (group_name) values ('Group A');
-insert into t2 (group_name) values ('Group B');
+create table `groups` (id int not null auto_increment, primary key (id) ,user_name text );
+create table users (id int not null auto_increment, primary key (id) ,group_name text );
+create table t3 (id int not null auto_increment, primary key (id),user_id int,index user_idx (user_id),foreign key (user_id) references users(id),group_id int,index group_idx (group_id),foreign key (group_id) references `groups`(id) );
+insert into `groups` (user_name) values ('Tester');
+insert into users (group_name) values ('Group A');
+insert into users (group_name) values ('Group B');
 insert into t3 (user_id, group_id) values (1,1);
-select 1 'is_in_group', a.user_name, c.group_name, b.id from t1 a, t3 b, t2 c where a.id = b.user_id and b.group_id = c.id UNION  select 0 'is_in_group', a.user_name, c.group_name, null from t1 a, t2 c;
-drop table t1, t2, t3;
+--sorted_result
+select 1 'is_in_group', a.user_name, c.group_name, b.id from `groups` a, t3 b, users c where a.id = b.user_id and b.group_id = c.id UNION  select 0 'is_in_group', a.user_name, c.group_name, null from `groups` a, users c;
+drop table t3, users, `groups`;
 
 #
 # fix_fields problem
@@ -461,29 +494,26 @@ insert t1 select a+1, a+b from t1;
 insert t1 select a+1, a+b from t1;
 insert t1 select a+1, a+b from t1;
 FLUSH STATUS;
+--skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
 select count(*) from t1 where a=7;
+--skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
 select count(*) from t1 where b=13;
+--skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
 select count(*) from t1 where b=13 union select count(*) from t1 where a=7;
+--skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
 select count(*) from t1 where a=7 union select count(*) from t1 where b=13;
+--skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
 # additional test for examined rows
 flush status;
-select a from t1 where b not in (1,2,3) union select a from t1 where b not in (4,5,6); 
+select a from t1 where b not in (1,2,3) union select a from t1 where b not in (4,5,6);
+--skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
 drop table t1;
-
-#
-# Column 'name' cannot be null (error with union and left join) (bug #2508)
-#
-create table t1 (   RID int(11) not null default '0',   IID int(11) not null default '0',    nada varchar(50)  not null,NAME varchar(50) not null,PHONE varchar(50) not null) engine=MyISAM;
-insert into t1 ( RID,IID,nada,NAME,PHONE) values (1, 1, 'main', 'a', '111'), (2, 1, 'main', 'b', '222'), (3, 1, 'main', 'c', '333'), (4, 1, 'main', 'd', '444'), (5, 1, 'main', 'e', '555'), (6, 2, 'main', 'c', '333'), (7, 2, 'main', 'd', '454'), (8, 2, 'main', 'e', '555'), (9, 2, 'main', 'f', '666'), (10, 2, 'main', 'g', '777');
---sorted_result
-select A.NAME, A.PHONE, B.NAME, B.PHONE from t1 A left join t1 B on A.NAME = B.NAME and B.IID = 2 where A.IID = 1 and (A.PHONE <> B.PHONE or B.NAME is null) union select A.NAME, A.PHONE, B.NAME, B.PHONE from t1 B left join t1 A on B.NAME = A.NAME and A.IID = 1 where B.IID = 2 and (A.PHONE <> B.PHONE or A.NAME is null);
-drop  table t1;
 
 #
 # Bug #2809 (UNION fails on MyIsam tables when index on second column from
@@ -545,6 +575,7 @@ drop table t1;
 #
 # parser stack overflow
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 ( ID1 int(10) unsigned NOT NULL DEFAULT '0' , ID2 datetime NOT NULL DEFAULT '0000-00-00 00:00:00' , DATA1 varchar(10) , DATA2 double(5,4) , DATA3 datetime , PRIMARY KEY (ID1,ID2));
 
 CREATE TABLE t2 ( ID int(3) unsigned NOT NULL DEFAULT '0' , DATA1 timestamp DEFAULT '0000-00-00 00:00:00' , PRIMARY KEY (ID));
@@ -573,7 +604,7 @@ PARTITIONED_B WHERE PARTITIONED_B.ID=PARTITIONED.ID1) UNION
 (SELECT * FROM t1 AS PARTITIONED, t2 AS
 PARTITIONED_B WHERE PARTITIONED_B.ID=PARTITIONED.ID1);
 drop table t1,t2;
-
+SET sql_mode = default;
 #
 # merging ENUM and SET fields in one UNION
 #
@@ -594,6 +625,8 @@ select a as a from t4 union select a from t3;
 select a as a from t1 union select a from t4;
 drop table t1,t2,t3,t4;
 
+--character_set latin1
+set names latin1;
 #
 # Bug #6139 UNION doesn't understand collate in the column of second select
 #
@@ -693,8 +726,8 @@ drop table t1, t2, t3, t4;
 #
 # Bug #2435 UNION with parentheses not supported
 #
-create table t1 (a int not null, b char (10) not null); 
-insert into t1 values(1,'a'),(2,'b'),(3,'c'),(3,'c'); 
+create table t1 (a int not null, b char (10) not null);
+insert into t1 values(1,'a'),(2,'b'),(3,'c'),(3,'c');
 select * from ((select * from t1 limit 1)) a;
 select * from ((select * from t1 limit 1) union (select * from t1 limit 1)) a;
 select * from ((select * from t1 limit 1) union (select * from t1 limit 1) union (select * from t1 limit 1)) a;
@@ -742,7 +775,7 @@ create table t2 select a from t1 union select b from t1;
 show columns from t2;
 drop table t2, t1;
 
-# 
+#
 # Bug #14216: UNION + DECIMAL wrong values in result
 #
 create table t1 (f1 decimal(60,25), f2 decimal(60,25));
@@ -764,10 +797,13 @@ drop table t1;
 # Test that union with VARCHAR produces dynamic row tables
 #
 
+# Following scenario is to test the functionality of InnoDB
+
 create table t1 (a varchar(5));
 create table t2 select * from t1 union select 'abcdefghijkl';
 show create table t2;
 select row_format from information_schema.TABLES where table_schema="test" and table_name="t2";
+--error ER_ILLEGAL_HA_CREATE_OPTION
 alter table t2 ROW_FORMAT=fixed;
 show create table t2;
 drop table t1,t2;
@@ -847,10 +883,12 @@ drop table t1;
 #
 # Bug#12185: Data type aggregation may produce wrong result
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1(f1 char(1), f2 char(5), f3 binary(1), f4 binary(5), f5 timestamp NOT NULL DEFAULT '0000-00-00 00:00:00', f6 varchar(1) character set utf8 collate utf8_general_ci, f7 text);
 create table t2 as select *, f6 as f8 from t1 union select *, f7 from t1;
 show create table t2;
 drop table t1, t2;
+SET sql_mode = default;
 
 #
 # Bug#18175: Union select over 129 tables with a sum function fails.
@@ -913,7 +951,7 @@ CREATE TABLE t1 (a int);
 INSERT INTO t1 VALUES (3),(1),(2),(4),(1);
 
 SELECT a FROM (SELECT a FROM t1 UNION SELECT a FROM t1 ORDER BY a) AS test;
---error 1054 
+--error 1054
 SELECT a FROM (SELECT a FROM t1 UNION SELECT a FROM t1 ORDER BY c) AS test;
 
 DROP TABLE t1;
@@ -921,11 +959,11 @@ DROP TABLE t1;
 #
 # Bug#23345: Wrongly allowed INTO in a non-last select of a UNION.
 #
---error 1221
+--error ER_MISPLACED_INTO
 (select 1 into @var) union (select 1);
 (select 1) union (select 1 into @var);
 select @var;
---error 1172
+--error ER_TOO_MANY_ROWS
 (select 2) union (select 1 into @var);
 
 #
@@ -937,32 +975,32 @@ INSERT INTO t1 VALUES (10), (20);
 CREATE TABLE t2 (b int);
 INSERT INTO t2 VALUES (10), (50), (50);
 
-SELECT a,1 FROM t1 
+SELECT a,1 FROM t1
 UNION
 SELECT b, COUNT(*) FROM t2 GROUP BY b WITH ROLLUP
 ORDER BY a;
 
-SELECT a,1 FROM t1 
+SELECT a,1 FROM t1
 UNION
 SELECT b, COUNT(*) FROM t2 GROUP BY b WITH ROLLUP
 ORDER BY a DESC;
 
-SELECT a,1 FROM t1 
+SELECT a,1 FROM t1
 UNION
 SELECT b, COUNT(*) FROM t2 GROUP BY b WITH ROLLUP
 ORDER BY a ASC LIMIT 3;
 
-SELECT a,1 FROM t1 
-UNION ALL 
+SELECT a,1 FROM t1
+UNION ALL
 SELECT b, COUNT(*) FROM t2 GROUP BY b WITH ROLLUP
 ORDER BY a DESC;
 
---error ER_WRONG_USAGE
+--error ER_BAD_FIELD_ERROR
 SELECT a,1 FROM t1
-UNION 
+UNION
 (SELECT b, COUNT(*) FROM t2 GROUP BY b WITH ROLLUP ORDER BY a);
 
---error ER_WRONG_USAGE
+--error ER_PARSE_ERROR
 SELECT a,1 FROM t1
 UNION ALL
 SELECT b, COUNT(*) FROM t2 GROUP BY b WITH ROLLUP ORDER BY a
@@ -988,7 +1026,7 @@ DESC t4;
 CREATE TABLE t5 SELECT NULL UNION SELECT NULL;
 DESC t5;
 
-CREATE TABLE t6 
+CREATE TABLE t6
 SELECT * FROM (SELECT * FROM (SELECT NULL)a) b UNION SELECT a FROM t1;
 DESC t6;
 
@@ -1009,10 +1047,10 @@ SHOW FIELDS FROM t2;
 DROP TABLE t1, t2;
 
 #
-# Bug#43612 crash with explain extended, union, order by
+# Bug#43612 crash with explain, union, order by
 #
 CREATE TABLE t1(a INT);
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT a FROM t1
 UNION
 SELECT a FROM t1
@@ -1022,7 +1060,7 @@ DROP TABLE t1;
 
 --echo End of 5.0 tests
 -- echo #
--- echo # Bug#32858: Error: "Incorrect usage of UNION and INTO" does not take 
+-- echo # Bug#32858: Error: "Incorrect usage of UNION and INTO" does not take
 -- echo # subselects into account
 -- echo #
 CREATE TABLE t1 (a INT);
@@ -1050,11 +1088,11 @@ SELECT a INTO DUMPFILE 'union.out.file2' FROM (
 SELECT a FROM t1 UNION SELECT a INTO @v FROM t1;
 SELECT a FROM t1 UNION SELECT a INTO OUTFILE 'union.out.file5' FROM t1;
 SELECT a FROM t1 UNION SELECT a INTO OUTFILE 'union.out.file6' FROM t1;
---error ER_WRONG_USAGE
+--error ER_MISPLACED_INTO
 SELECT a INTO @v FROM t1 UNION SELECT a FROM t1;
---error ER_WRONG_USAGE
+--error ER_MISPLACED_INTO
 SELECT a INTO OUTFILE 'union.out.file7' FROM t1 UNION SELECT a FROM t1;
---error ER_WRONG_USAGE
+--error ER_MISPLACED_INTO
 SELECT a INTO DUMPFILE 'union.out.file8' FROM t1 UNION SELECT a FROM t1;
 
 -- echo # Tests fix in parser rule query_expression_body.
@@ -1065,10 +1103,10 @@ SELECT ( SELECT a UNION SELECT a ) INTO DUMPFILE 'union.out.file4' FROM t1;
 DROP TABLE t1;
 remove_files_wildcard $MYSQLTEST_VARDIR/mysqld.1/data/test union.out.fil*;
 
---echo # 
---echo # Bug #49734: Crash on EXPLAIN EXTENDED UNION ... ORDER BY 
+--echo #
+--echo # Bug #49734: Crash on EXPLAIN UNION ... ORDER BY
 --echo #   <any non-const-function>
---echo # 
+--echo #
 
 CREATE TABLE t1 (a VARCHAR(10), FULLTEXT KEY a (a));
 INSERT INTO t1 VALUES (1),(2);
@@ -1076,31 +1114,38 @@ CREATE TABLE t2 (b INT);
 INSERT INTO t2 VALUES (1),(2);
 
 --echo # Should not crash
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT * FROM t1 UNION SELECT * FROM t1 ORDER BY a + 12;
 
 --echo # Should not crash
 SELECT * FROM t1 UNION SELECT * FROM t1 ORDER BY a + 12;
 
-
 --echo # Should not crash
---error ER_CANT_USE_OPTION_HERE
-EXPLAIN EXTENDED
+--error ER_TABLE_CANT_HANDLE_FT
+EXPLAIN
 SELECT * FROM t1 UNION SELECT * FROM t1
   ORDER BY MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE);
 
 --echo # Should not crash
---error ER_CANT_USE_OPTION_HERE
+--error ER_TABLE_CANT_HANDLE_FT
+WITH cte AS (
+SELECT * FROM t1 UNION SELECT * FROM t1
+  ORDER BY MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE)
+) SELECT * FROM cte;
+
+--echo # Should not crash
+--error ER_TABLE_CANT_HANDLE_FT
 SELECT * FROM t1 UNION SELECT * FROM t1
   ORDER BY MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE);
 
 --echo # Should not crash
+--error ER_TABLE_CANT_HANDLE_FT
 (SELECT * FROM t1) UNION (SELECT * FROM t1)
   ORDER BY MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE);
 
 
 --echo # Should not crash
-EXPLAIN EXTENDED
+EXPLAIN
 SELECT * FROM t1 UNION SELECT * FROM t1
   ORDER BY (SELECT a FROM t2 WHERE b = 12);
 
@@ -1133,11 +1178,11 @@ select 4
 order by max(42) + max(1) + max(1) + max(1) + max(1) + max(1)
 ;
 
+--error ER_AGGREGATE_ORDER_FOR_UNION
 eval $my_stmt;
 
+--error ER_AGGREGATE_ORDER_FOR_UNION
 eval prepare stmt1 from '$my_stmt';
-execute stmt1;
-execute stmt1;
 
 let $my_stmt=
 select 1 as foo
@@ -1150,18 +1195,16 @@ union
 order by max(42) + max(1) + max(1) + max(1) + max(1) + max(1)
 ;
 
+--error ER_AGGREGATE_ORDER_FOR_UNION
 eval $my_stmt;
 
+--error ER_AGGREGATE_ORDER_FOR_UNION
 eval prepare stmt1 from '$my_stmt';
-execute stmt1;
-execute stmt1;
-
-deallocate prepare stmt1;
 
 --echo End of 5.1 tests
 
 --echo #
---echo # Bug#57986 ORDER BY clause is not used after a UNION, 
+--echo # Bug#57986 ORDER BY clause is not used after a UNION,
 --echo #           if embedded in a SELECT
 --echo #
 
@@ -1199,7 +1242,7 @@ SELECT c1, c2 FROM (
 SELECT c1, c2 FROM (
   SELECT c1, c2 FROM t1
   UNION
-  SELECT c1, c2 FROM t2 
+  SELECT c1, c2 FROM t2
   ORDER BY c2 DESC, c1 DESC LIMIT 1
 ) AS res;
 
@@ -1215,7 +1258,7 @@ SELECT c1, c2 FROM (
 DROP TABLE t1, t2;
 
 --echo #
---echo # Bug #58970 Problem Subquery (without referencing a table) 
+--echo # Bug #58970 Problem Subquery (without referencing a table)
 --echo #            and Order By
 --echo #
 
@@ -1228,31 +1271,1548 @@ SELECT(SELECT 1 AS a LIMIT 1) AS dev;
 SELECT(SELECT 1 AS a FROM dual ORDER BY a DESC LIMIT 1) AS dev;
 
 --echo #
---echo # Bug #17059925 : UNIONS COMPUTES ROWS_EXAMINED INCORRECTLY
+--echo # Bug#11886060: SELECT .. UNION SELECT .. ORDER BY IS WRONGLY PARSED
+--echo #
+create table t1(b int) engine=innodb;
+--echo All 3 should be parsed without errors.
+select b as z from t1 union select b from t1 order by z;
+select b as z from t1 union select b from t1 order by (select z);
+select b as z from t1 union (select b from t1) order by (select z);
+drop table t1;
+
+--echo #
+--echo # WL#1763 Avoid creating temporary table in UNION ALL
 --echo #
 
-## Save current state of slow log variables
-SET @old_slow_query_log= @@global.slow_query_log;
-SET @old_log_output= @@global.log_output;
-SET @old_long_query_time= @@long_query_time;
-SET GLOBAL log_output= "TABLE";
-SET GLOBAL slow_query_log= ON;
-SET SESSION long_query_time= 0;
+EXPLAIN SELECT 1 UNION ALL SELECT 1 LIMIT 1 OFFSET 1;
 
-CREATE TABLE t17059925 (a INT);
-CREATE TABLE t2 (b INT);
-CREATE TABLE t3 (c INT);
-INSERT INTO t17059925 VALUES (1), (2), (3);
-INSERT INTO t2 VALUES (4), (5), (6);
-INSERT INTO t3 VALUES (7), (8), (9);
-TRUNCATE table mysql.slow_log;
---sorted_result
-SELECT * FROM t17059925 UNION SELECT * FROM t2 UNION SELECT * FROM t3;
-SELECT sql_text, rows_examined FROM mysql.slow_log WHERE sql_text LIKE '%SELECT%t17059925%';
-DROP TABLE t17059925, t2, t3;
+--echo # Bug #17579498 CHANGES IN DATATYPE OF THE RESULT QUERY IN UNION.
 
-## Reset to initial values
-SET @@long_query_time= @old_long_query_time;
-SET @@global.log_output= @old_log_output;
-SET @@global.slow_query_log= @old_slow_query_log;
+CREATE TABLE t1 (a TIME);
+CREATE TABLE t2 (b DATETIME);
 
+CREATE TABLE t3
+SELECT a FROM t1 UNION ALL SELECT b FROM t2;
+
+SELECT column_name, column_type
+FROM information_schema.columns
+WHERE TABLE_NAME='t3';
+
+DROP TABLE t1, t2, t3;
+
+--echo # Bug #17602922 RESULT DIFFERENCES IN UNION QUERIES WITH IN
+--echo # (SUBQUERY-UNION ALL)
+
+CREATE TABLE t1 (a VARCHAR(1));
+INSERT INTO t1 VALUES (NULL);
+INSERT INTO t1 VALUES (NULL);
+INSERT INTO t1 VALUES ('j');
+INSERT INTO t1 VALUES ('k');
+INSERT INTO t1 VALUES ('r');
+INSERT INTO t1 VALUES ('r');
+INSERT INTO t1 VALUES ('h');
+
+SELECT a FROM t1 WHERE a IN (SELECT 'r' FROM t1 UNION ALL SELECT 'j');
+
+CREATE TABLE t2
+SELECT a FROM t1 WHERE a IN (SELECT 'r' FROM t1 UNION ALL SELECT 'j');
+
+SELECT * FROM t2;
+
+DROP TABLE t1, t2;
+
+--echo # Bug #17580869 FOUND_ROWS() VALUE DO NOT MATCH WITH
+--echo # UNION-LIMIT QUERIES
+
+CREATE TABLE t1 (a INT PRIMARY KEY);
+CREATE TABLE t2 (a INT PRIMARY KEY);
+INSERT INTO t2 VALUES (1);
+
+--source include/turn_off_only_full_group_by.inc
+--skip_if_hypergraph  # Depends on the query plan.
+EXPLAIN FORMAT=tree SELECT a, SUM(a) FROM t2 UNION ALL SELECT a, MIN(a) FROM t1 ;  # Tests printing of ZeroRowsAggregatedIterator.
+SELECT a, SUM(a) FROM t2 UNION ALL SELECT a, MIN(a) FROM t1 ;
+
+SELECT FOUND_ROWS();
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+DROP TABLE t1, t2;
+
+--echo # Bug #17669551 CRASH/ASSERT AT SELECT_CREATE::PREPARE2 AT
+--echo # SQL_INSERT.CC
+
+CREATE TABLE t1 (a INT);
+
+--error ER_DUP_FIELDNAME
+CREATE TABLE t2 SELECT a, a FROM t1 UNION ALL SELECT a, a FROM t1;
+
+DROP TABLE t1;
+
+--echo # Bug #17694956 RESULT DIFFERENCES IN UNION ALL QUERIES WITH LIMIT
+
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1);
+
+(SELECT a FROM t1 ORDER BY a LIMIT 0) UNION ALL SELECT a FROM t1;
+
+DROP TABLE t1;
+
+--echo # Bug #17708480 FOUND_ROWS() VALUE DO NOT MATCH WITH UNION ALL QUERIES
+
+CREATE TABLE t1 (a INT) ENGINE=MEMORY;
+CREATE TABLE t2 (a INT) ENGINE=MEMORY;
+INSERT INTO t2 VALUES (1);
+
+SELECT COUNT(*) FROM (
+SELECT                     * FROM t2 UNION ALL SELECT * FROM t1) q;
+SELECT SQL_CALC_FOUND_ROWS * FROM t2 UNION ALL SELECT * FROM t1;
+SELECT FOUND_ROWS();
+
+SELECT COUNT(*) FROM (
+SELECT                     * FROM t1 UNION ALL SELECT * FROM t2) q;
+SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION ALL SELECT * FROM t2;
+SELECT FOUND_ROWS();
+
+DROP TABLE t1, t2;
+
+--echo # End of WL1763 tests
+
+--echo # Bug#18503515 UNION with set function in ORDER BY should be rejected
+
+--echo # UNIONed queries are non-aggregated:
+let $query=
+SELECT 1 AS foo
+UNION
+SELECT 2
+ORDER BY MAX(1);
+
+--error ER_AGGREGATE_ORDER_FOR_UNION
+eval $query;
+
+--error ER_AGGREGATE_ORDER_FOR_UNION
+eval prepare stmt from '$query';
+
+let $query=
+SELECT MAX(1) AS foo
+UNION
+SELECT MAX(2)
+ORDER BY foo;
+
+eval $query;
+
+let $query=
+SELECT MAX(1) AS foo
+UNION
+SELECT MAX(2)
+ORDER BY 1 DESC;
+
+eval $query;
+
+--echo # UNIONed queries are aggregated:
+let $query=
+SELECT MAX(1) AS foo
+UNION
+SELECT MAX(2)
+ORDER BY MAX(1);
+
+--error ER_AGGREGATE_ORDER_FOR_UNION
+eval $query;
+
+CREATE TABLE t1(a INTEGER);
+INSERT INTO t1 VALUES (1), (2);
+
+--echo # Subquery, ORDER BY contains outer reference
+let $query=
+SELECT (SELECT 1 AS foo
+        UNION
+        SELECT 2
+        ORDER BY a) AS x
+FROM t1;
+
+--error ER_SUBQUERY_NO_1_ROW
+eval $query;
+
+--echo # Subquery, ORDER BY contains outer reference
+let $query=
+SELECT (SELECT 1 AS foo
+        UNION
+        SELECT 2
+        ORDER BY t1.a) AS x
+FROM t1;
+
+--error ER_TABLENAME_NOT_ALLOWED_HERE
+eval $query;
+
+--echo # Subquery, ORDER BY contains set function with outer reference
+let $query=
+SELECT (SELECT 1 AS foo
+        UNION
+        SELECT 2
+        ORDER BY COUNT(a)
+        LIMIT 1) AS x
+FROM t1;
+
+eval $query;
+
+--echo # Subquery, ORDER BY contains set function with outer reference
+let $query=
+SELECT (SELECT 1 AS foo
+        UNION
+        SELECT 2
+        ORDER BY COUNT(t1.a)) AS x
+FROM t1;
+
+--error ER_TABLENAME_NOT_ALLOWED_HERE
+eval $query;
+
+--echo # Subquery, ORDER BY contains set function
+let $query=
+SELECT (SELECT 1 AS foo
+        UNION
+        SELECT 2
+        ORDER BY COUNT(*)) AS x
+FROM t1;
+
+--error ER_AGGREGATE_ORDER_FOR_UNION
+eval $query;
+
+CREATE TABLE t2(a INTEGER, b INTEGER);
+INSERT INTO t2 VALUES (1,10), (2,20);
+
+let $query=
+SELECT MAX(a) FROM t2 GROUP BY b
+UNION
+SELECT MAX(a) FROM t2 GROUP BY b
+ORDER BY max(a);
+
+--error ER_BAD_FIELD_ERROR
+eval $query;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug #19471564 WL#6737:IN-CONSISTENT DATA-TYPE FOR GEOMETRY TYPES WHILE
+--echo # PROJECTING DERIVED TBL.
+--echo #
+
+CREATE TABLE t1(g GEOMETRY, p POINT, l LINESTRING);
+INSERT INTO t1 (p, l) VALUES (ST_GeomFromText('POINT(1 1)'),
+                              ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'));
+
+SELECT ST_AsText(a) FROM (SELECT p AS a FROM t1 UNION SELECT l FROM t1) t;
+CREATE TABLE t2 ENGINE=InnoDB SELECT a FROM
+  (SELECT p AS a FROM t1 UNION SELECT l FROM t1) t;
+SHOW CREATE TABLE t2;
+
+DROP TABLE t1, t2;
+
+CREATE TABLE geometries (
+  g GEOMETRY,
+  pt POINT,
+  ls LINESTRING,
+  py POLYGON,
+  mpt MULTIPOINT,
+  mls MULTILINESTRING,
+  mpy MULTIPOLYGON,
+  gc GEOMETRYCOLLECTION);
+INSERT INTO geometries VALUES (
+  ST_GeomFromText('POLYGON((0 0, 9 0, 9 9, 0 9, 0 0), (2 2, 4 2, 4 4, 2 2))'),
+  ST_GeomFromText('POINT(0 0)'),
+  ST_GeomFromText('LINESTRING(0 0, 10 10)'),
+  ST_GeomFromText('POLYGON((0 0, 9 0, 9 9, 0 9, 0 0), (2 2, 4 2, 4 4, 2 2))'),
+  ST_GeomFromText('MULTIPOINT(0 0, 1 1, 2 2)'),
+  ST_GeomFromText('MULTILINESTRING((0 0, 10 10), (10 0, 0 10))'),
+  ST_GeomFromText('MULTIPOLYGON(((0 0, 9 0, 9 9, 0 0)), '
+                               '((2 2, 3 2, 3 3, 2 2)))'),
+  ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 1), LINESTRING(2 2, 3 3), '
+                                     'POLYGON((0 0, 9 0, 9 9, 0 9, 0 0)))'));
+
+# Union between something and GEOMETRY
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT g AS a FROM geometries UNION SELECT g FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT pt AS a FROM geometries UNION SELECT g FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT ls AS a FROM geometries UNION SELECT g FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT py AS a FROM geometries UNION SELECT g FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpt AS a FROM geometries UNION SELECT g FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mls AS a FROM geometries UNION SELECT g FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpy AS a FROM geometries UNION SELECT g FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT gc AS a FROM geometries UNION SELECT g FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+# Union between something and POINT
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT g AS a FROM geometries UNION SELECT pt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT pt AS a FROM geometries UNION SELECT pt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT ls AS a FROM geometries UNION SELECT pt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT py AS a FROM geometries UNION SELECT pt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpt AS a FROM geometries UNION SELECT pt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mls AS a FROM geometries UNION SELECT pt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpy AS a FROM geometries UNION SELECT pt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT gc AS a FROM geometries UNION SELECT pt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+# Union between something and LINESTRING
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT g AS a FROM geometries UNION SELECT ls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT pt AS a FROM geometries UNION SELECT ls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT ls AS a FROM geometries UNION SELECT ls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT py AS a FROM geometries UNION SELECT ls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpt AS a FROM geometries UNION SELECT ls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mls AS a FROM geometries UNION SELECT ls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpy AS a FROM geometries UNION SELECT ls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT gc AS a FROM geometries UNION SELECT ls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+# Union between something and POLYGON
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT g AS a FROM geometries UNION SELECT py FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT pt AS a FROM geometries UNION SELECT py FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT ls AS a FROM geometries UNION SELECT py FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT py AS a FROM geometries UNION SELECT py FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpt AS a FROM geometries UNION SELECT py FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mls AS a FROM geometries UNION SELECT py FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpy AS a FROM geometries UNION SELECT py FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT gc AS a FROM geometries UNION SELECT py FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+# Union between something and MULTIPOINT
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT g AS a FROM geometries UNION SELECT mpt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT pt AS a FROM geometries UNION SELECT mpt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT ls AS a FROM geometries UNION SELECT mpt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT py AS a FROM geometries UNION SELECT mpt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpt AS a FROM geometries UNION SELECT mpt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mls AS a FROM geometries UNION SELECT mpt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpy AS a FROM geometries UNION SELECT mpt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT gc AS a FROM geometries UNION SELECT mpt FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+# Union between something and MULTILINESTRING
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT g AS a FROM geometries UNION SELECT mls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT pt AS a FROM geometries UNION SELECT mls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT ls AS a FROM geometries UNION SELECT mls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT py AS a FROM geometries UNION SELECT mls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpt AS a FROM geometries UNION SELECT mls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mls AS a FROM geometries UNION SELECT mls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpy AS a FROM geometries UNION SELECT mls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT gc AS a FROM geometries UNION SELECT mls FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+# Union between something and MULTIPOLYGON
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT g AS a FROM geometries UNION SELECT mpy FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT pt AS a FROM geometries UNION SELECT mpy FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT ls AS a FROM geometries UNION SELECT mpy FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT py AS a FROM geometries UNION SELECT mpy FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpt AS a FROM geometries UNION SELECT mpy FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mls AS a FROM geometries UNION SELECT mpy FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpy AS a FROM geometries UNION SELECT mpy FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT gc AS a FROM geometries UNION SELECT mpy FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+# Union between something and GEOMETRYCOLLECTION
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT g AS a FROM geometries UNION SELECT gc FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT pt AS a FROM geometries UNION SELECT gc FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT ls AS a FROM geometries UNION SELECT gc FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT py AS a FROM geometries UNION SELECT gc FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpt AS a FROM geometries UNION SELECT gc FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mls AS a FROM geometries UNION SELECT gc FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT mpy AS a FROM geometries UNION SELECT gc FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 ENGINE=InnoDB SELECT a FROM
+  (SELECT gc AS a FROM geometries UNION SELECT gc FROM geometries) t;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+DROP TABLE geometries;
+
+--echo #
+--echo # Bug#20456178 ASSERTION FAILED:
+--echo #     (ENUM_SET_TYPELIB && GET_REAL_TYPE(ITEM) == MYSQL_TYPE_NULL)
+
+CREATE TABLE t1(a INT) engine=innodb;
+CREATE TABLE t2(a SET('a'))engine=innodb;
+
+INSERT INTO t1 VALUES (1);
+INSERT INTO t2 VALUES (1);
+
+SELECT a FROM (SELECT a FROM t2) t1
+UNION ALL
+SELECT 1 FROM t1;
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug #21156155 UNION GEOMETRY TYPE: UNITIALIZED VALUE IN
+--echo # ITEM_TYPE_HOLDER::JOIN_TYPES
+--echo #
+
+SELECT COUNT(*) FROM (SELECT NULL UNION SELECT POINT(1,1)) AS dt;
+
+--echo #
+--echo # Bug#22602381 FOUND_ROWS() IS NOT WORKING AS EXPECTED WITHOUT
+--echo #              SQL_CALC_FOUND_ROWS
+--echo #
+
+CREATE TABLE t1(c1 INT);
+INSERT INTO t1 VALUES(1),(2),(3);
+
+(SELECT c1 FROM t1) UNION ALL
+(SELECT c1 FROM t1) LIMIT 2;
+SELECT FOUND_ROWS();
+
+(SELECT SQL_CALC_FOUND_ROWS c1 FROM t1) UNION ALL
+(SELECT c1 FROM t1) LIMIT 2;
+SELECT FOUND_ROWS();
+
+(SELECT c1 FROM t1 LIMIT 1) UNION ALL
+(SELECT c1 FROM t1 LIMIT 3) LIMIT 2;
+SELECT FOUND_ROWS();
+
+(SELECT c1 FROM t1 LIMIT 1) UNION ALL
+(SELECT c1 FROM t1 LIMIT 1) LIMIT 3;
+SELECT FOUND_ROWS();
+
+(SELECT c1 FROM t1 LIMIT 3) UNION ALL
+(SELECT c1 FROM t1 LIMIT 3) LIMIT 1 OFFSET 4;
+SELECT FOUND_ROWS();
+
+(SELECT c1 FROM t1 LIMIT 1) UNION ALL
+(SELECT c1 FROM t1 LIMIT 1) LIMIT 1 OFFSET 2;
+SELECT FOUND_ROWS();
+
+DROP TABLE t1;
+
+--echo #End of test for Bug#22602381
+
+--echo # INSERT SELECT using UNION ALL:
+--echo # UNION should create no tmp table if not at the top level.
+
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1),(2);
+CREATE TABLE t2 LIKE t1;
+FLUSH STATUS;
+SELECT * FROM t1 UNION ALL SELECT * FROM t1;
+SHOW STATUS LIKE "handler_write";
+FLUSH STATUS;
+INSERT INTO t2
+SELECT * FROM t1 UNION ALL SELECT * FROM t1;
+SHOW STATUS LIKE "handler_write";
+SELECT * FROM t2;
+DELETE FROM t2;
+FLUSH STATUS;
+INSERT INTO t2
+SELECT * FROM (SELECT * FROM t1 UNION ALL SELECT * FROM t1) AS dt;
+SHOW STATUS LIKE "handler_write";
+SELECT * FROM t2;
+
+DROP TABLE t1,t2;
+
+--echo #
+--echo # Bug#24808970 CREATED_TMP_TABLES STATISTIC IS WRONG
+--echo #
+
+FLUSH STATUS;
+SELECT 1 UNION ALL SELECT 2;
+
+# We properly report: 0 tables
+SHOW STATUS LIKE 'Created_tmp_%tables';
+
+FLUSH STATUS;
+SELECT 1 UNION DISTINCT SELECT 2;
+
+# In normal mode, the query above creates one tmp table, so SHOW
+# STATUS reports 1;
+# in PS mode, the preparation phase creates one, and the execution
+# phase does, too. So SHOW reports 2. To have a single result in both
+# modes, we use this complex query instead of SHOW.
+
+--disable_query_log
+eval select variable_name,
+            variable_value -
+            (case when variable_name not like "%disk%" and ($PS_PROTOCOL > 0)
+             then 1 else 0 end)
+            as tweaked_value
+from performance_schema.session_status
+where variable_name like 'created_tmp_%tables';
+--enable_query_log
+
+--echo #
+--echo # Bug#11747567: INTEGER CONSTANTS CASTED TO BIGINTS BY UNIONS
+--echo #
+
+CREATE TABLE t1(
+  a tinyint(4) DEFAULT NULL,
+  b int(11) DEFAULT NULL,
+  c bigint(20) DEFAULT NULL
+);
+
+CREATE VIEW v1 AS SELECT t1.a AS a, t1.b AS b,t1.c AS c, 1 AS
+`1`, 1 AS `Name_exp_1`, 1 AS `Name_exp_1_1` FROM t1 UNION SELECT -(1) AS `-1`,
+-(1) AS `-1`, -(1) AS `-1`, -(1) AS `-1`, -(1) AS `-1`, -(1) AS `-1`;
+
+CREATE VIEW v2 AS SELECT 1 AS `1`, 1 AS `Name_exp_1`, 1 AS `Name_exp_1_1`,
+-(1) AS `-1`, -(1) AS `Name_exp_-1`, -(1) AS `Name_exp_1_-1`;
+
+CREATE VIEW v3 AS SELECT t1.a AS a, t1.b AS b, t1.c AS c FROM t1;
+
+DESCRIBE v1;
+DESCRIBE v2;
+DESCRIBE v3;
+
+DROP TABLE t1;
+DROP VIEW v1,v2,v3;
+
+--echo # End of test for Bug#11747567
+
+--echo #
+--echo # Bug #27068222 CREATE TABLE USING SELECT WITH UNION
+--echo #               FAILS FOR DATE COLUMN
+--echo #
+
+CREATE TABLE `t1` (`date` date NOT NULL);
+
+INSERT INTO t1 VALUES ('2017-03-02'), ('2017-06-22');
+
+CREATE TABLE IF NOT EXISTS t2 AS
+SELECT * FROM t1
+UNION
+SELECT * FROM t1;
+
+DESC t2;
+SELECT * FROM t2;
+
+DROP TABLE t1, t2;
+
+# Compare INT and DATE
+
+CREATE TABLE t1 (
+i1 INT NOT NULL,
+i2 INT NOT NULL DEFAULT '1234',
+# non-specified nullability => i3 is nullable
+i3 INT,
+i4 INT DEFAULT NULL,
+i5 INT DEFAULT '5678',
+d1 date NOT NULL,
+d2 date NOT NULL DEFAULT '2018-01-25',
+d3 date,
+d4 date DEFAULT NULL,
+d5 date DEFAULT '2017-11-14',
+g1 geometry
+);
+
+SHOW CREATE TABLE t1;
+
+# We'll test non-strict then strict mode
+let $c=2;
+
+SET SQL_MODE='';
+
+while ($c)
+{
+
+  dec $c;
+
+  SELECT @@SQL_MODE;
+
+  CREATE TEMPORARY TABLE t2 AS
+  SELECT * FROM t1;
+
+--echo # we see that with CREATE SELECT (no UNION), defaults are inherited.
+
+  SHOW CREATE TABLE t2;
+
+  DROP TEMPORARY TABLE t2;
+
+  CREATE TEMPORARY TABLE t2 AS
+  SELECT * FROM t1
+  UNION
+  SELECT * FROM t1;
+
+  SHOW CREATE TABLE t2;
+
+  DROP TEMPORARY TABLE t2;
+
+  CREATE TEMPORARY TABLE t2 AS
+  SELECT * FROM t1
+  UNION ALL
+  SELECT * FROM t1;
+
+  SHOW CREATE TABLE t2;
+
+--echo # With UNION and UNION ALL, defaults are not inherited; every
+--echo # column gets, as default, NULL (if nullable) or 0 (if not
+--echo # nullable). Exception: if strict mode and a date type,
+--echo # 0000-00-00 isn't given as default
+
+# In strict mode, t2.d1 has no DEFAULT, so cannot insert;
+# in non-strict mode, no problem.
+  if ($c)
+  {
+    INSERT INTO t2 VALUES();
+  }
+
+  SELECT * FROM t2;
+
+  DROP TEMPORARY TABLE t2;
+
+  SET SQL_MODE=DEFAULT;
+
+}
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #27903792 [MYSQL 8.0 GA DEBUG BUILD] ASSERTION `DATA_TYPE() ==
+--echo # MYSQL_TYPE_GEOMETRY' FAILED
+--echo #
+
+# We're not interested in the result, just that it doesn't fail any assertions.
+--disable_result_log
+SELECT ST_GEOMFROMTEXT('POINT(0 0)')
+UNION
+SELECT * FROM (SELECT NULL) AS a;
+--enable_result_log
+
+--echo #
+--echo # Bug#28237675: ASSERTION IN UNION QUERY WHEN MIXING CHARACTER SETS
+--echo #
+CREATE TABLE t(a VARCHAR(10) CHARSET ASCII);
+# When the literal was convertible to ASCII, the query was successful.
+SELECT _utf8mb4 'a' UNION SELECT a FROM t;
+# When the literal was not convertible to ASCII, it hit an assertion.
+--error ER_CANT_AGGREGATE_2COLLATIONS
+SELECT _utf8mb4 0xC3A6 UNION SELECT a FROM t;
+DROP TABLE t;
+
+--echo #
+--echo # Bug#27849293 INVALID WRITE IN SYSSCHEMA.PR_DIAGNOSTICS
+--echo #
+--echo # Note that this bug can only be seen when running with valgrind.
+PREPARE stmt FROM "SELECT 'foo' UNION ALL SELECT ?";
+SET @param = CONVERT('bar' USING utf8mb3);
+EXECUTE stmt USING @param;
+SET @param = CONVERT('BAR' USING utf8mb4);
+EXECUTE stmt USING @param;
+SET @param = CONVERT('foo' USING ucs2);
+EXECUTE stmt USING @param;
+DEALLOCATE PREPARE stmt;
+
+PREPARE stmt FROM 'SELECT "foo", "foo2" UNION SELECT CONVERT("bar" USING utf8mb3), "bar2" UNION SELECT "foobar", CONVERT("foobar2" USING utf8mb3)';
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+CREATE PROCEDURE p1() SELECT "foo", "foo2" UNION SELECT CONVERT("bar" USING utf8mb3), "bar2" UNION SELECT "foobar", CONVERT("foobar2" USING utf8mb3);
+CALL p1();
+DROP PROCEDURE p1;
+
+--echo #
+--echo # Verify that non-nullable columns are properly treated as nullable
+--echo # during implicit aggregation, even in UNIONs, even when involving
+--echo # views. The non-view case is tested by the test for bug #17580869,
+--echo # above.
+--echo #
+CREATE TABLE t1 (a INT PRIMARY KEY);
+CREATE TABLE t2 (a INT PRIMARY KEY);
+INSERT INTO t2 VALUES (1);
+CREATE VIEW v1 AS SELECT * FROM t1;
+--source include/turn_off_only_full_group_by.inc
+SELECT a, a, SUM(a) FROM t2 UNION ALL SELECT a, a+0, MIN(a) FROM v1;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+DROP TABLE t1, t2;
+DROP VIEW v1;
+
+--echo #
+--echo # Bug #29645319: WL#13000: SIG 6 AT AGGREGATOR_DISTINCT::SETUP | SQL/ITEM_SUM.CC
+--echo #
+--echo # Tests that when executing a UNION query during optimization, lex->current_select
+--echo # is properly restored.
+--echo #
+
+CREATE TABLE t1 (f1 VARCHAR(1));
+INSERT INTO t1 VALUES ('t'),('a');
+
+SELECT COUNT(DISTINCT f1) FROM t1 WHERE (
+	SELECT MAX(f1) FROM t1 WHERE f1 NOT IN ( SELECT 5 UNION SELECT 5 )
+) IS NOT NULL;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #29687893: WL#13000: SIG 6 AT HANDLER::START_PSI_BATCH_MODE() AT SQL/HANDLER.CC
+--echo #
+--echo # Verify that performance schema batch mode is properly disabled even in non-materialized
+--echo # UNIONs.
+--echo #
+
+CREATE TABLE t1 (f1 varchar(1));
+CREATE INDEX i1 ON t1 (f1);
+CREATE TABLE t2 (f1 varchar(1));
+
+INSERT INTO t1 VALUES ('d');
+INSERT INTO t2 VALUES ('d');
+ANALYZE TABLE t1, t2;
+
+SELECT t1.f1 FROM t1 LEFT JOIN t2 ON EXISTS ( SELECT * FROM t1, t2 )
+UNION ALL
+SELECT t1.f1 FROM t1;
+
+FLUSH TABLES;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#22292995 UNION ALL ... LIMIT 1 EVALUATES TOO MANY ROWS IN 5.5/6 AND TWICE MORE IN 5.7
+--echo #
+
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES(1);
+INSERT INTO t1 SELECT a+1 FROM t1;
+INSERT INTO t1 SELECT a+1 FROM t1;
+INSERT INTO t1 SELECT a+1 FROM t1;
+INSERT INTO t1 SELECT a+1 FROM t1;
+INSERT INTO t1 SELECT a+1 FROM t1;
+SELECT COUNT(*) FROM t1;
+FLUSH STATUS;
+SELECT * FROM t1 LIMIT 1;
+--skip_if_hypergraph  # Depends on the query plan.
+SHOW STATUS LIKE "HANDLER_READ%";
+FLUSH STATUS;
+SELECT * FROM t1 UNION ALL SELECT * FROM t1 LIMIT 1;
+--skip_if_hypergraph  # Depends on the query plan.
+SHOW STATUS LIKE "HANDLER_READ%";
+FLUSH STATUS;
+SELECT * FROM t1 UNION DISTINCT SELECT * FROM t1 LIMIT 1;
+--skip_if_hypergraph  # Depends on the query plan.
+SHOW STATUS LIKE "HANDLER_READ%";
+
+let $query=
+( SELECT *, 'a' FROM t1 LIMIT 10 )
+ UNION ALL ( SELECT *, 'b' FROM t1 LIMIT 10 ) LIMIT 3;
+--replace_regex /  \(cost.*//
+eval EXPLAIN FORMAT=TREE $query;
+FLUSH STATUS;
+eval $query;
+--skip_if_hypergraph  # Depends on the query plan.
+SHOW STATUS LIKE "HANDLER_READ%";
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #30655712: EMPTY RESULTSET FOR SUBQUERY WITH UNION AND TEXT COLUMN WITH CONSTANT EXPRESSION
+--echo #
+
+CREATE TABLE t1 (
+  pk INTEGER NOT NULL,
+  b BLOB,
+  PRIMARY KEY (pk)
+);
+
+INSERT INTO t1 VALUES (1,'');
+
+let $query =
+  SELECT * FROM ( SELECT * FROM t1 WHERE pk=1 UNION SELECT * FROM t1 WHERE FALSE ) d1;
+--skip_if_hypergraph   # No support for const tables.
+eval EXPLAIN FORMAT=tree $query;
+eval $query;
+
+DROP TABLE t1;
+
+--echo # Bug#29698617: UNION ALL signed and unsigned int display wrong result
+
+CREATE TABLE t1(id INTEGER SIGNED);
+CREATE TABLE t2(id INTEGER UNSIGNED);
+
+INSERT INTO t1(id) VALUES (2000000000);
+INSERT INTO t2(id) VALUES (4000000000);
+
+SELECT id FROM t2 UNION ALL SELECT id FROM t1;
+SELECT MAX(id) FROM t2 UNION ALL SELECT MAX(id) FROM t1;
+SELECT id FROM t1 UNION ALL SELECT id FROM t2;
+SELECT MAX(id) FROM t1 UNION ALL SELECT MAX(id) FROM t2;
+
+DROP TABLE t1, t2;
+
+CREATE TABLE t1(
+  ts TINYINT SIGNED,
+  tu TINYINT UNSIGNED,
+  ss SMALLINT SIGNED,
+  su SMALLINT UNSIGNED,
+  ms MEDIUMINT SIGNED,
+  mu MEDIUMINT UNSIGNED,
+  ls INTEGER SIGNED,
+  lu INTEGER UNSIGNED,
+  bs BIGINT SIGNED,
+  bu BIGINT UNSIGNED
+);
+
+INSERT INTO t1 VALUES
+ (-128, 0, -32768, 0, -8388608, 0, -2147483648, 0, -9223372036854775808, 0),
+ (127, 255, 32767, 65535, 8388607, 16777215, 2147483647, 4294967295,
+  9223372036854775807, 18446744073709551615);
+
+let $query=
+SELECT ts, ss, ms, ls, bs, tu, su, mu, lu, bu,
+       ts AS a, ss AS b, ms AS c, ls AS d, bs AS e,
+       tu AS f, su AS g, mu AS h, lu AS i, bu AS j
+FROM t1
+UNION ALL
+SELECT ts, ss, ms, ls, bs, tu, su, mu, lu, bu,
+       tu, su, mu, lu, bu, ts, ss, ms, ls, bs
+FROM t1;
+
+eval $query;
+
+eval CREATE TABLE t2 AS $query;
+
+DESCRIBE t2;
+
+DROP TABLE t1, t2;
+
+--echo # Bug#31348202: Wrong result is returned with UNION syntax
+
+let $query = SELECT 19 AS c UNION ALL SELECT 2.9;
+eval $query;
+eval CREATE TABLE t1 AS $query;
+DESCRIBE t1;
+DROP TABLE t1;
+let $query = SELECT 19 AS c UNION ALL SELECT 'XX';
+eval $query;
+eval CREATE TABLE t1 AS $query;
+DESCRIBE t1;
+DROP TABLE t1;
+let $query = SELECT -19 AS c UNION ALL SELECT 'XX';
+eval $query;
+eval CREATE TABLE t1 AS $query;
+DESCRIBE t1;
+DROP TABLE t1;
+let $query = SELECT 19.0 AS c UNION ALL SELECT 'XX';
+eval $query;
+eval CREATE TABLE t1 AS $query;
+DESCRIBE t1;
+DROP TABLE t1;
+let $query = SELECT -19.0 AS c UNION ALL SELECT 'XX';
+eval $query;
+eval CREATE TABLE t1 AS $query;
+DESCRIBE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#33066455: REGRESSION: ACCESSPATH*
+--echo #               MOVECOMPOSITEITERATORSFROMTABLEPATH(ACCESSPATH*):
+--echo #               ASSERTION `FALSE' FAILED.
+--echo #
+
+EXPLAIN FORMAT=TREE SELECT 1 UNION SELECT 1 LIMIT 0;
+SELECT 1 UNION SELECT 1 LIMIT 0;
+
+--echo #
+--echo # WL#11350 extensions:
+--echo #    a) multi-level set operations
+--echo #    b) right side DISTINCT restriction lifted
+--echo #    c) arbitrary combination with unary, cf. also
+--echo #       unary.test
+--echo # This is a mix of coverage for refactoring parts of the WL and
+--echo # for new capabilities, marked [NEW].
+
+CREATE TABLE r(a INT);
+INSERT INTO r VALUES (1), (2), (-1), (-2);
+CREATE TABLE s(a INT);
+INSERT INTO s VALUES (1), (10), (20), (-10), (-20);
+CREATE TABLE t(a INT);
+INSERT INTO t VALUES (10), (100), (200), (-100), (-200);
+ANALYZE TABLE r, s, t;
+
+--echo # UNION ALL
+let $query = SELECT * FROM r UNION ALL
+             SELECT * FROM s UNION ALL
+             SELECT * FROM t;
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval EXPLAIN $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # UNION ALL w/ ORDER BY
+let $query = SELECT * FROM r UNION ALL
+             SELECT * FROM s UNION ALL
+             SELECT * FROM t ORDER BY a;
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # UNION mixed with ORDER BY
+let $query = SELECT * FROM r UNION DISTINCT
+             SELECT * FROM s UNION ALL
+             SELECT * FROM t ORDER BY a;
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # UNION mixed with ORDER BY and LIMIT
+let $query = SELECT * FROM r UNION DISTINCT
+             SELECT * FROM s UNION ALL
+             SELECT * FROM t ORDER BY a LIMIT 11;
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # UNION ALL with ORDER BY and LIMIT
+let $query = SELECT * FROM r UNION ALL
+             SELECT * FROM s UNION ALL
+             SELECT * FROM t ORDER BY a LIMIT 11;
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW] UNION ALL with wrapped in unary query: ORDER BY
+let $query = ( SELECT * FROM r UNION
+               SELECT * FROM s ORDER BY a LIMIT 11)
+             ORDER BY -a;
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW] UNION ALL with wrapped in unary query: ORDER BY + offset
+let $query = ( SELECT * FROM r UNION
+               SELECT * FROM s ORDER BY a LIMIT 11)
+             ORDER BY -a LIMIT 4 OFFSET 1;
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # from derived table which is a union
+let $query = SELECT * FROM ( (SELECT * FROM r LIMIT 1) UNION
+                             (SELECT * FROM s LIMIT 1) ) a;
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # SQL_CALC_FOUND_ROWS with unary terms. Semantics gets
+--echo # a little weird here: it collects number of rows if we strip
+--echo # off the outermost LIMIT... but SQL_CALC_FOUND_ROWS is
+--echo # deprecated anyways.
+--echo #
+((SELECT SQL_CALC_FOUND_ROWS * FROM r ORDER BY a LIMIT 5) ORDER BY -a LIMIT 4) ORDER BY a LIMIT 3;
+SELECT FOUND_ROWS();
+
+--echo # [NEW] Multi-level set ops
+let $query =
+(((SELECT * FROM t ORDER BY a LIMIT 5) ORDER BY -a LIMIT 3) ORDER BY a LIMIT 2) UNION ALL
+(((SELECT * FROM t ORDER BY a LIMIT 5) ORDER BY -a LIMIT 3) ORDER BY a LIMIT 2);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval EXPLAIN $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW] One union materialized tmp table with dedup over unary sorted tmp tables
+let $query =
+(((SELECT * FROM t ORDER BY a LIMIT 5) ORDER BY -a LIMIT 3) ORDER BY a LIMIT 2) UNION DISTINCT
+(((SELECT * FROM t ORDER BY a LIMIT 5) ORDER BY -a LIMIT 3) ORDER BY a LIMIT 2);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval EXPLAIN $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW] Streams a limited and sorted union materialized tmp
+--echo # table *without* dedup over unary sorted tmp tables
+let $query =
+((((SELECT * FROM t ORDER BY a LIMIT 5) ORDER BY -a LIMIT 3) ORDER BY a LIMIT 2) UNION ALL
+(((SELECT * FROM t ORDER BY a LIMIT 5) ORDER BY -a LIMIT 3) ORDER BY a LIMIT 2)) ORDER BY a LIMIT 3;
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval EXPLAIN $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # Don't collapse levels if LIMIT is present: streams two limited and sorted
+--echo # materialized tmp tables for dedup
+
+let $query =
+   (SELECT * FROM r UNION DISTINCT SELECT * FROM t ORDER BY a LIMIT 3) UNION ALL
+   (SELECT * FROM r UNION DISTINCT SELECT * FROM t ORDER BY -a LIMIT 5);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval EXPLAIN $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # Ok to collapse here: one materialized tmp table with last two tables
+--echo # added with dedup disabled
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION ALL
+    (SELECT * FROM r UNION ALL SELECT * FROM t);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # but *not* ok to collapse here
+--echo #
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION ALL
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # nor here: two materialized tmp tables for dedup (of 2 and 3
+--echo # tables respectively), streamed
+--echo #
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION ALL
+    (SELECT * FROM r UNION ALL SELECT * FROM r UNION DISTINCT SELECT * FROM t);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # mix: two materialized tmp tables for dedup, rest is streaming
+--echo #
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s) UNION ALL
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION ALL
+    (SELECT * FROM t);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # mix: One materialized tmp table w/disable de-dup for final ALL
+--echo #
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s) UNION
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION ALL
+    (SELECT * FROM t);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW}
+--echo # mix: One materialized tmp table for dedup
+--echo #
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s) UNION ALL
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION
+    (SELECT * FROM t);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # mix: One materialized tmp table for dedup
+--echo #
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s) UNION ALL
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # mix, same result as above, since the last inner ALL
+--echo # can be elided
+--echo #
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s) UNION ALL
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION
+    (SELECT * FROM r UNION ALL SELECT * FROM s);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # mix, now final DISTINCT can not be elided. Top level streaming of
+--echo # three lower materialized tmp tables for dedup.
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s) UNION ALL
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM t) UNION ALL
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # mix: one materialized tmp table for de-dup, four last tables
+--echo # added with dedup disabled
+let $query =
+    (SELECT * FROM r UNION DISTINCT SELECT * FROM s) UNION ALL
+    (SELECT * FROM r UNION ALL SELECT * FROM t) UNION ALL
+    (SELECT * FROM r UNION ALL SELECT * FROM s);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # ALL ALL: every table is streamed
+let $query =
+    (SELECT * FROM r UNION ALL SELECT * FROM s) UNION ALL
+    (SELECT * FROM r UNION ALL SELECT * FROM t) UNION ALL
+    (SELECT * FROM r UNION ALL SELECT * FROM s);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+DROP PREPARE q;
+
+--echo # [NEW]
+--echo # show off
+let $query =
+   ((((SELECT a FROM r UNION DISTINCT
+       SELECT 1) ORDER BY a LIMIT 4) UNION ALL
+     (SELECT a FROM s UNION DISTINCT
+      (SELECT * FROM t UNION DISTINCT
+       (SELECT a FROM r UNION ALL SELECT * FROM s ORDER BY a LIMIT 10))) UNION DISTINCT
+     (VALUES ROW(1), ROW(2) UNION DISTINCT
+      SELECT * FROM s ORDER BY a LIMIT 3)) ORDER BY a LIMIT 3) UNION DISTINCT
+   (SELECT * FROM r UNION DISTINCT SELECT * FROM t) ORDER BY a LIMIT 5;
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+eval PREPARE q FROM "$query";
+EXECUTE q;
+
+--echo #
+--echo # Test that LIMIT in nests prohibit merging
+--echo #
+let $query =
+  (SELECT * FROM r UNION SELECT * FROM s ORDER BY 1 LIMIT 1) UNION ALL
+  (SELECT * FROM r UNION SELECT * FROM s ORDER BY 1 LIMIT 1);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+
+let $query =
+  (SELECT * FROM r UNION ALL      SELECT * FROM s ORDER BY 1 LIMIT 1) UNION ALL
+  (SELECT * FROM r UNION DISTINCT SELECT * FROM s ORDER BY 1 LIMIT 1);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+
+let $query =
+  (SELECT * FROM r UNION DISTINCT SELECT * FROM s ORDER BY 1 LIMIT 1) UNION ALL
+  (SELECT * FROM r UNION ALL      SELECT * FROM s ORDER BY 1 LIMIT 1);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+
+let $query =
+  (SELECT * FROM r UNION ALL SELECT * FROM s ORDER BY 1 LIMIT 1) UNION ALL
+  (SELECT * FROM r UNION ALL SELECT * FROM s ORDER BY 1 LIMIT 1);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+
+let $query =
+  (SELECT * FROM r UNION DISTINCT  SELECT * FROM s ORDER BY 1 LIMIT 1) UNION DISTINCT
+  (SELECT * FROM r UNION ALL       SELECT * FROM s ORDER BY 1 LIMIT 1);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+
+let $query =
+  (SELECT * FROM r UNION ALL      SELECT * FROM s ORDER BY 1 LIMIT 1) UNION DISTINCT
+  (SELECT * FROM r UNION DISTINCT SELECT * FROM s ORDER BY 1 LIMIT 1);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+
+let $query =
+  (SELECT * FROM r UNION DISTINCT SELECT * FROM s ORDER BY 1 LIMIT 1) UNION DISTINCT
+  (SELECT * FROM r UNION DISTINCT SELECT * FROM s ORDER BY 1 LIMIT 1);
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+
+--echo # No limit, but ordering does not prohibit merging:
+let $query =
+  (SELECT * FROM r UNION DISTINCT SELECT * FROM s ORDER BY 1) UNION DISTINCT
+  (SELECT * FROM r UNION DISTINCT SELECT * FROM s ORDER BY 1);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT = tree $query;
+
+--echo #
+--echo # [NEW] Check maximum depth 63
+--echo #
+let $query =
+     (SELECT * FROM r
+      UNION SELECT * FROM s ORDER BY a LIMIT 5);
+let $1=62;
+while ($1)
+{
+ let $query =
+     ($query
+      UNION SELECT * FROM s ORDER BY a LIMIT 5);
+ dec $1;
+}
+
+--echo # This query has max nesting and should work
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+eval EXPLAIN FORMAT = tree $query;
+
+--echo # This query one exceeds max and should fail
+let $query = ($query ORDER BY a LIMIT 1);
+--error ER_TOO_HIGH_LEVEL_OF_NESTING_FOR_SELECT
+eval $query;
+
+--echo #
+--echo # WL#11350 bug: lower level ALL not quenched when merging, giving
+--echo # rise to duplicates: upper DISTINCT must be heeded
+--echo #
+let $query =
+  (SELECT 1 AS col1 UNION SELECT 2) UNION
+  (SELECT 1 UNION SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 3);
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN format = tree $query;
+
+--echo #
+--echo # WL#11350 bug: upper level ALL in nesting context, e.g. ORDER
+--echo # BY: non-first lower level operand with DISTINCT incorrectly
+--echo # merged.
+--echo #
+let $query =
+  (SELECT 1 UNION SELECT 2) UNION ALL (SELECT 1 UNION SELECT 1) ORDER BY 1;
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN format = tree $query;
+
+--echo #
+--echo # WL#11350 bug: upper level ALL in nesting context, e.g ORDER
+--echo # BY: first operand lower level with DISTINCT can be merged,
+--echo # but last_distinct was clobbered if right hand side contains a
+--echo # nest that could not be merged.
+--echo #
+let $query =
+  (SELECT 1 UNION SELECT 1) UNION ALL (SELECT 1 UNION SELECT 1) ORDER BY 1;
+eval $query;
+--replace_regex $elide_costs
+eval EXPLAIN format = tree $query;
+
+DROP TABLE r, s, t;

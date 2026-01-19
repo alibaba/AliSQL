@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2007 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,33 +28,16 @@
 
 #include <ndb_global.h>
 
-#include <NdbTCP.h>
+#include "portlib/ndb_socket.h"
 
-#include <NdbMutex.h>
+#include "portlib/NdbMutex.h"
 
-#ifdef  __cplusplus
-extern "C" {
-#endif
+int read_socket(ndb_socket_t, int timeout_msec, char *buf, int len);
 
-  int read_socket(NDB_SOCKET_TYPE, int timeout_ms, char *, int len);
+int readln_socket(ndb_socket_t, int timeout_msec, int *time, char *buf, int len,
+                  NdbMutex *mutex);
 
-  int readln_socket(NDB_SOCKET_TYPE socket, int timeout_millis, int *time,
-                    char * buf, int buflen, NdbMutex *mutex);
-
-  int write_socket(NDB_SOCKET_TYPE, int timeout_ms, int *time,
-                   const char[], int len);
-
-  int print_socket(NDB_SOCKET_TYPE, int timeout_ms, int *time,
-                   const char *, ...) ATTRIBUTE_FORMAT(printf, 4, 5);
-  int println_socket(NDB_SOCKET_TYPE, int timeout_ms, int *time,
-                     const char *, ...) ATTRIBUTE_FORMAT(printf, 4, 5);
-  int vprint_socket(NDB_SOCKET_TYPE, int timeout_ms, int *time,
-                    const char *, va_list);
-  int vprintln_socket(NDB_SOCKET_TYPE, int timeout_ms, int *time,
-                      const char *, va_list);
-
-#ifdef  __cplusplus
-}
-#endif
+int write_socket(ndb_socket_t, int timeout_msec, int *time, const char[],
+                 int len);
 
 #endif

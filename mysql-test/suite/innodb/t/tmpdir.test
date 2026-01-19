@@ -1,4 +1,3 @@
---source include/have_innodb.inc
 --source include/count_sessions.inc
 
 --echo #
@@ -53,7 +52,7 @@ set global innodb_tmpdir = @tmpdir;
 show session variables like 'innodb_tmpdir';
 --echo # Connection con3
 connect (con3,localhost,root);
-# Following alter using innodb_tmpdir as a path to create temporary files
+# Following alter uses innodb_tmpdir as a path to create temporary files
 alter table t1 add fulltext(b);
 disconnect con3;
 connection default;

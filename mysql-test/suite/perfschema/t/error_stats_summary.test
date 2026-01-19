@@ -1,0 +1,249 @@
+############# suite/perfschema/t/ees.test ####################
+
+--source include/no_protocol.inc
+
+--echo
+--echo ========================================================================
+--echo STEP 1 - SETUP
+--echo ========================================================================
+
+# Create a stored procedure which handles ER_NO_SUCH_TABLE error
+delimiter //;
+
+CREATE PROCEDURE handleError() 
+BEGIN
+  DECLARE no_such_table CONDITION FOR 1146;
+  DECLARE CONTINUE HANDLER FOR no_such_table select 1;
+  INSERT INTO test.no_table values (1);
+END//
+
+CREATE PROCEDURE signalError() 
+BEGIN
+  DECLARE mycond CONDITION FOR SQLSTATE '42S02';
+  SIGNAL mycond SET MESSAGE_TEXT = 'An error occurred';
+END//
+
+CREATE PROCEDURE bigError()
+BEGIN
+   SIGNAL SQLSTATE "HY000" SET MYSQL_ERRNO = 40000, MESSAGE_TEXT = "A big error number";
+END//
+
+delimiter ;//
+
+truncate  performance_schema.events_errors_summary_by_thread_by_error;
+truncate  performance_schema.events_errors_summary_by_user_by_error;
+truncate  performance_schema.events_errors_summary_by_host_by_error;
+truncate  performance_schema.events_errors_summary_by_account_by_error;
+truncate  performance_schema.events_errors_summary_global_by_error;
+
+--echo
+--echo # Control thread
+--echo
+--connection default
+
+#-------------------------------------------------------------
+# Create new users 
+#-------------------------------------------------------------
+--echo
+--echo # Create new user user1.
+--echo
+create user user1@localhost;
+grant ALL on *.* to user1@localhost;
+
+--echo
+--echo # Create new user user2.
+--echo
+create user user2@localhost;
+grant ALL on *.* to user2@localhost;
+
+#-------------------------------------------------------------
+# Run some queries which give errors.
+#-------------------------------------------------------------
+--echo
+--echo # Connection 1
+--echo
+connect(con1, localhost, user1,,);
+let $con1_thread_id = `SELECT THREAD_ID FROM performance_schema.threads WHERE
+       PROCESSLIST_ID = connection_id()`;
+# BAD db name
+--error ER_BAD_DB_ERROR
+use bad_db;
+# Syntax error
+--error ER_NO_SUCH_TABLE
+SELECT * from test.no_table;
+
+--error 1644
+# Call the stored procedure
+call signalError();
+--error 40000
+call bigError();
+
+--echo
+--echo # Connection 2
+--echo
+connect(con2, localhost, user2,,);
+let $con2_thread_id = `SELECT THREAD_ID FROM performance_schema.threads WHERE
+       PROCESSLIST_ID = connection_id()`;
+# Table doesn't exist error
+--error ER_NO_SUCH_TABLE
+SELECT * from test.no_table;
+--error ER_PARSE_ERROR 
+I dont know the syntax;
+
+# Call the stored procedure
+call handleError();
+
+
+
+--echo #-------------------------------------------------------------
+--echo # Now see the error stats from P_S tables.
+--echo #-------------------------------------------------------------
+
+--connection default
+
+--echo
+--echo # events_errors_summary_by_thread_by_error.
+--disable_query_log
+eval SELECT ERROR_NUMBER, ERROR_NAME, SQL_STATE, SUM_ERROR_RAISED, SUM_ERROR_HANDLED from performance_schema.events_errors_summary_by_thread_by_error where (SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0) AND THREAD_ID = $con1_thread_id;
+eval SELECT ERROR_NUMBER, ERROR_NAME, SQL_STATE, SUM_ERROR_RAISED, SUM_ERROR_HANDLED from performance_schema.events_errors_summary_by_thread_by_error where (SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0) AND THREAD_ID = $con2_thread_id;
+--enable_query_log
+
+--echo
+--echo # events_errors_summary_by_user_by_error.
+SELECT USER, ERROR_NUMBER, ERROR_NAME, SQL_STATE, SUM_ERROR_RAISED, SUM_ERROR_HANDLED from performance_schema.events_errors_summary_by_user_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+--echo
+--echo # events_errors_summary_by_host_by_error.
+SELECT HOST, ERROR_NUMBER, ERROR_NAME, SQL_STATE, SUM_ERROR_RAISED, SUM_ERROR_HANDLED from performance_schema.events_errors_summary_by_host_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+--echo
+--echo # events_errors_summary_by_account_by_error.
+SELECT USER, HOST, ERROR_NUMBER, ERROR_NAME, SQL_STATE, SUM_ERROR_RAISED, SUM_ERROR_HANDLED from performance_schema.events_errors_summary_by_account_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+--echo
+--echo # events_errors_summary_global_by_error.
+SELECT ERROR_NUMBER, ERROR_NAME, SQL_STATE, SUM_ERROR_RAISED, SUM_ERROR_HANDLED from performance_schema.events_errors_summary_global_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+--echo
+
+--echo #-----------------------------------------------------
+--echo # Truncate stats
+--echo #-----------------------------------------------------
+TRUNCATE performance_schema.events_errors_summary_by_thread_by_error;
+TRUNCATE performance_schema.events_errors_summary_by_user_by_error;
+TRUNCATE performance_schema.events_errors_summary_by_host_by_error;
+TRUNCATE performance_schema.events_errors_summary_by_account_by_error;
+TRUNCATE performance_schema.events_errors_summary_global_by_error;
+
+SELECT * from performance_schema.events_errors_summary_by_thread_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+SELECT * from performance_schema.events_errors_summary_by_user_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+SELECT * from performance_schema.events_errors_summary_by_host_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+SELECT * from performance_schema.events_errors_summary_by_account_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+SELECT * from performance_schema.events_errors_summary_global_by_error where SUM_ERROR_HANDLED>0 OR SUM_ERROR_RAISED>0;
+
+
+
+#-------------------------------------------------------------
+# Cleanup
+#-------------------------------------------------------------
+#--disconnect con1;
+#--disconnect con2;
+drop procedure handleError;
+drop procedure signalError;
+drop procedure bigError;
+drop user user1@localhost;
+drop user user2@localhost;
+
+#-------------------------------------------------------------
+# BUG#30311574 PERFORMANCE SCHEMA ERROR STATS FOR IMPOSSIBLE ERRORS
+#-------------------------------------------------------------
+
+# List specific errors to make sure instrumentation is correct.
+# - ER_HASHCHK : obsolete
+# - ER_NO : not an error
+# - ER_YES : not an error
+# - ER_CANT_CREATE_FILE : first in range 1000
+# - WARN_NAMED_PIPE_ACCESS_EVERYONE : last in range 1000
+# - ER_FILE_CORRUPT : first in range 3000
+# - ER_AUDIT_LOG_UDF_READ_INVALID_MAX_ARRAY_LENGTH_ARG_VALUE : last in range 3000
+# - ER_UNSUPPORT_COMPRESSED_TEMPORARY_TABLE : first in range 3500
+# - ER_DA_UDF_INVALID_RETURN_TYPE_TO_SET_CHARSET : last in range 3500
+# - ER_PARSER_TRACE : first in range 10000 (global only)
+# - ER_GR_ELECTED_PRIMARY_GTID_INFORMATION : last in range 10000 (global only)
+
+select distinct ERROR_NUMBER, ERROR_NAME
+  from performance_schema.events_errors_summary_by_thread_by_error
+  where ERROR_NAME in (
+    'ER_HASHCHK',
+    'ER_NO',
+    'ER_YES',
+    'ER_CANT_CREATE_FILE',
+    'WARN_NAMED_PIPE_ACCESS_EVERYONE',
+    'ER_FILE_CORRUPT',
+    'ER_AUDIT_LOG_UDF_READ_INVALID_MAX_ARRAY_LENGTH_ARG_VALUE',
+    'ER_UNSUPPORT_COMPRESSED_TEMPORARY_TABLE',
+    'ER_DA_UDF_INVALID_RETURN_TYPE_TO_SET_CHARSET',
+    'ER_PARSER_TRACE',
+    'ER_GR_ELECTED_PRIMARY_GTID_INFORMATION')
+  order by ERROR_NUMBER;
+
+select distinct ERROR_NUMBER, ERROR_NAME
+  from performance_schema.events_errors_summary_by_account_by_error
+  where ERROR_NAME in (
+    'ER_HASHCHK',
+    'ER_NO',
+    'ER_YES',
+    'ER_CANT_CREATE_FILE',
+    'WARN_NAMED_PIPE_ACCESS_EVERYONE',
+    'ER_FILE_CORRUPT',
+    'ER_AUDIT_LOG_UDF_READ_INVALID_MAX_ARRAY_LENGTH_ARG_VALUE',
+    'ER_UNSUPPORT_COMPRESSED_TEMPORARY_TABLE',
+    'ER_DA_UDF_INVALID_RETURN_TYPE_TO_SET_CHARSET',
+    'ER_PARSER_TRACE',
+    'ER_GR_ELECTED_PRIMARY_GTID_INFORMATION')
+  order by ERROR_NUMBER;
+
+select distinct ERROR_NUMBER, ERROR_NAME
+  from performance_schema.events_errors_summary_by_user_by_error
+  where ERROR_NAME in (
+    'ER_HASHCHK',
+    'ER_NO',
+    'ER_YES',
+    'ER_CANT_CREATE_FILE',
+    'WARN_NAMED_PIPE_ACCESS_EVERYONE',
+    'ER_FILE_CORRUPT',
+    'ER_AUDIT_LOG_UDF_READ_INVALID_MAX_ARRAY_LENGTH_ARG_VALUE',
+    'ER_UNSUPPORT_COMPRESSED_TEMPORARY_TABLE',
+    'ER_DA_UDF_INVALID_RETURN_TYPE_TO_SET_CHARSET',
+    'ER_PARSER_TRACE',
+    'ER_GR_ELECTED_PRIMARY_GTID_INFORMATION')
+  order by ERROR_NUMBER;
+
+select distinct ERROR_NUMBER, ERROR_NAME
+  from performance_schema.events_errors_summary_by_host_by_error
+  where ERROR_NAME in (
+    'ER_HASHCHK',
+    'ER_NO',
+    'ER_YES',
+    'ER_CANT_CREATE_FILE',
+    'WARN_NAMED_PIPE_ACCESS_EVERYONE',
+    'ER_FILE_CORRUPT',
+    'ER_AUDIT_LOG_UDF_READ_INVALID_MAX_ARRAY_LENGTH_ARG_VALUE',
+    'ER_UNSUPPORT_COMPRESSED_TEMPORARY_TABLE',
+    'ER_DA_UDF_INVALID_RETURN_TYPE_TO_SET_CHARSET',
+    'ER_PARSER_TRACE',
+    'ER_GR_ELECTED_PRIMARY_GTID_INFORMATION')
+  order by ERROR_NUMBER;
+
+select distinct ERROR_NUMBER, ERROR_NAME
+  from performance_schema.events_errors_summary_global_by_error
+  where ERROR_NAME in (
+    'ER_HASHCHK',
+    'ER_NO',
+    'ER_YES',
+    'ER_CANT_CREATE_FILE',
+    'WARN_NAMED_PIPE_ACCESS_EVERYONE',
+    'ER_FILE_CORRUPT',
+    'ER_AUDIT_LOG_UDF_READ_INVALID_MAX_ARRAY_LENGTH_ARG_VALUE',
+    'ER_UNSUPPORT_COMPRESSED_TEMPORARY_TABLE',
+    'ER_DA_UDF_INVALID_RETURN_TYPE_TO_SET_CHARSET',
+    'ER_PARSER_TRACE',
+    'ER_GR_ELECTED_PRIMARY_GTID_INFORMATION')
+  order by ERROR_NUMBER;
+

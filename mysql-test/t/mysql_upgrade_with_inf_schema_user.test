@@ -1,0 +1,39 @@
+# This test intends to test that the MySQL upgrade process will create the
+# user 'mysql.infoschema' that is an owner of views in inforamtion_schema.
+#
+
+--source include/not_valgrind.inc
+--source include/mysql_upgrade_preparation.inc
+
+let $date_to_restore=`SELECT password_last_changed FROM mysql.user WHERE user='mysql.infoschema'`;
+
+--echo #
+--echo # Delete the user
+--echo # Check that upgrade recreates it
+--echo #
+
+DELETE FROM mysql.user WHERE user='mysql.infoschema';
+COMMIT;
+
+--echo Run mysql_upgrade
+# Filter out ndb_binlog_index to mask differences due to running with or
+# without ndb.
+--let $restart_parameters = restart:--upgrade=FORCE
+--let $wait_counter= 10000
+--source include/restart_mysqld.inc
+
+--let $assert_text= The mysql.infoschema user should exist after upgrade
+--let $assert_cond= "[SELECT COUNT(*) FROM mysql.user WHERE user=\'mysql.infoschema\']" = 1
+--source include/assert.inc
+
+--echo #
+--echo # Clean up
+--echo #
+
+--disable_query_log ONCE
+--eval UPDATE mysql.user SET password_last_changed= '$date_to_restore' WHERE USER= 'mysql.infoschema'
+
+--source include/mysql_upgrade_cleanup.inc
+
+--echo
+--echo End of test

@@ -1,8 +1,9 @@
+--source include/not_hypergraph.inc  # Depends on choosing very specific query plans.
+
 # This is the test for Metrics Monitor Table feature.
 # Test the metrics monitor system's control system
 # and counter accuracy.
 
---source include/have_innodb.inc
 set global innodb_monitor_disable = All;
 # Test turn on/off the monitor counter  with "all" option
 # By default, they will be off
@@ -10,6 +11,13 @@ select name, status from information_schema.innodb_metrics;
 
 # Turn on all monitor counters
 set global innodb_monitor_enable = all;
+
+# Create and drop a table, to force the Global DD tables into the cache.
+# TODO: In the unlikely event that Global DD tables are evicted from
+# the InnoDB dict_sys cache during the rest of this test, we may get
+# mismatch on the metadata_table_handles_opened counter.
+create table monitor_test(col int) engine = innodb;
+drop table monitor_test;
 
 # status should all change to "enabled"
 select name from information_schema.innodb_metrics where status!='enabled';
@@ -370,9 +378,4 @@ drop table monitor_test;
 set global innodb_monitor_disable = All;
 set global innodb_monitor_reset_all = all;
 
--- disable_warnings
-set global innodb_monitor_enable = default;
-set global innodb_monitor_disable = default;
-set global innodb_monitor_reset = default;
-set global innodb_monitor_reset_all = default;
--- enable_warnings
+--source include/innodb_monitor_restore.inc

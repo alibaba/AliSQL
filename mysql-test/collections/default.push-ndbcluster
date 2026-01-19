@@ -1,0 +1,3 @@
+# This collection file is used to provide some NDB testing in PB2 branches
+# which otherwise runs no NDB tests.
+perl mysql-test-run.pl --timer --testcase-timeout=30 --suite-timeout=300 --debug-server --force --comment=ndb --vardir=var-ndb --no-skip --with-ndb-only

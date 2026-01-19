@@ -1,14 +1,22 @@
 /*
-  Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -62,6 +70,7 @@ public class NdbScanOperation extends NdbOperation implements NdbScanOperationCo
     }
     static public class /*_struct_*/ ScanOptions extends Wrapper implements ScanOptionsConst
     {
+        static public final native int/*_Uint32_*/ size();
         public final native long/*_Uint64_*/ optionsPresent();
         public final native int/*_Uint32_*/ scan_flags();
         public final native int/*_Uint32_*/ parallel();
@@ -86,6 +95,7 @@ public class NdbScanOperation extends NdbOperation implements NdbScanOperationCo
     public /*_virtual_*/ native int readTuples(int/*_LockMode_*/ lock_mode /*_= LM_Read_*/, int/*_Uint32_*/ scan_flags /*_= 0_*/, int/*_Uint32_*/ parallel /*_= 0_*/, int/*_Uint32_*/ batch /*_= 0_*/);
     public final native int nextResult(boolean fetchAllowed /*_= true_*/, boolean forceSend /*_= false_*/);
     // MMM! support <out:char *> or check if needed: public final native int nextResult(const char * * out_row_ptr, boolean fetchAllowed, boolean forceSend);
+    public final native int nextResultCopyOut(ByteBuffer/*_char *_*/ buffer, boolean fetchAllowed, boolean forceSend);
     public final native void close(boolean forceSend /*_= false_*/, boolean releaseOp /*_= false_*/);
     public final native NdbOperation/*_NdbOperation *_*/ lockCurrentTuple();
     public final native NdbOperation/*_NdbOperation *_*/ lockCurrentTuple(NdbTransaction/*_NdbTransaction *_*/ lockTrans);

@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005-2007 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,11 +28,17 @@
 
 #include "SignalData.hpp"
 
-struct DropTableReq {
-  STATIC_CONST( SignalLength = 7 );
+#define JAM_FILE_ID 176
 
-  union { Uint32 clientRef, senderRef; };
-  union { Uint32 clientData, senderData; };
+struct DropTableReq {
+  static constexpr Uint32 SignalLength = 7;
+
+  union {
+    Uint32 clientRef, senderRef;
+  };
+  union {
+    Uint32 clientData, senderData;
+  };
   Uint32 requestInfo;
   Uint32 transId;
   Uint32 transKey;
@@ -34,40 +47,46 @@ struct DropTableReq {
 };
 
 struct DropTableConf {
-  STATIC_CONST( SignalLength = 5 );
-  
+  static constexpr Uint32 SignalLength = 5;
+
   Uint32 senderRef;
-  union { Uint32 clientData, senderData; };
+  union {
+    Uint32 clientData, senderData;
+  };
   Uint32 transId;
-  Uint32 tableId; 
+  Uint32 tableId;
   Uint32 tableVersion;
 };
 
 struct DropTableRef {
-  STATIC_CONST( SignalLength = 9 );
-  
+  static constexpr Uint32 SignalLength = 9;
+
   Uint32 senderRef;
-  union { Uint32 clientData, senderData; };
+  union {
+    Uint32 clientData, senderData;
+  };
   Uint32 transId;
-  Uint32 tableId; 
+  Uint32 tableId;
   Uint32 tableVersion;
-  Uint32 errorCode; 
+  Uint32 errorCode;
   Uint32 errorLine;
   Uint32 errorNodeId;
   Uint32 masterNodeId;
-  
+
   enum ErrorCode {
     Busy = 701,
     BusyWithNR = 711,
     NotMaster = 702,
-    NoSuchTable         = 709,
+    NoSuchTable = 709,
     InvalidTableVersion = 241,
-    DropInProgress      = 283,
+    DropInProgress = 283,
     NoDropTableRecordAvailable = 1229,
     BackupInProgress = 761,
     SingleUser = 299,
     ActiveSchemaTrans = 785
   };
 };
+
+#undef JAM_FILE_ID
 
 #endif

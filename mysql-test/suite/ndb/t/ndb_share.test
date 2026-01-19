@@ -1,10 +1,5 @@
--- source include/not_embedded.inc
 -- source include/have_ndb.inc
 -- source include/have_log_bin.inc
-
--- disable_query_log
-call mtr.add_suppression('.*You need to use --log-bin to make --binlog-format work.*');
--- enable_query_log
 
 connect (server1,127.0.0.1,root,,test,$MYSQLD1_PORT,);
 connect (server2,127.0.0.1,root,,test,$MYSQLD2_PORT,);
@@ -13,12 +8,23 @@ connect (server4,127.0.0.1,root,,test,$MYSQLD4_PORT,);
 
 connection server1;
 show variables like 'log_bin';
+
 connection server2;
 show variables like 'log_bin';
+
 connection server3;
 show variables like 'log_bin';
+# Since this server is intentionally running without log-bin, supress warning 
+--disable_query_log
+call mtr.add_suppression("You need to use --log-bin to make --binlog-format work");
+--enable_query_log
+
 connection server4;
 show variables like 'log_bin';
+# Since this server is intentionally running without log-bin, supress warning 
+-- disable_query_log
+call mtr.add_suppression("You need to use --log-bin to make --binlog-format work");
+-- enable_query_log
 
 #
 # Basic create+drop (from with and without log-bin)
@@ -56,13 +62,13 @@ drop table t2;
 #
 connection server1;
 create table t1 (a int) engine=ndbcluster;
-alter offline table t1 add column b int default 77;
+alter table t1 algorithm=copy, add column b int default 77;
 drop table t1;
 --source suite/ndb/include/ndb_share_check_shares.inc
 
 connection server2;
 create table t1 (a int) engine=ndbcluster;
-alter offline table t1 add column b int default 77;
+alter table t1 algorithm=copy, add column b int default 77;
 drop table t1;
 --source suite/ndb/include/ndb_share_check_shares.inc
 
@@ -73,14 +79,14 @@ drop table t1;
 connection server1;
 create table t1 (a int primary key) engine=ndbcluster
 partition by list(a) (partition p0 values in (0));
-alter offline table t1 add partition (partition p1 values in (1));
+alter table t1 algorithm=copy, add partition (partition p1 values in (1));
 drop table t1;
 --source suite/ndb/include/ndb_share_check_shares.inc
 
 connection server2;
 create table t1 (a int primary key) engine=ndbcluster
 partition by list(a) (partition p0 values in (0));
-alter offline table t1 add partition (partition p1 values in (1));
+alter table t1 algorithm=copy, add partition (partition p1 values in (1));
 drop table t1;
 --source suite/ndb/include/ndb_share_check_shares.inc
 
@@ -90,13 +96,13 @@ drop table t1;
 #
 connection server1;
 create table t1 (a int primary key) engine=ndbcluster;
-alter online table t1 add column b int column_format dynamic;
+alter table t1 algorithm=inplace, add column b int column_format dynamic;
 drop table t1;
 --source suite/ndb/include/ndb_share_check_shares.inc
 
 connection server2;
 create table t1 (a int primary key) engine=ndbcluster;
-alter offline table t1 add column b int column_format dynamic;
+alter table t1 algorithm=copy, add column b int column_format dynamic;
 drop table t1;
 --source suite/ndb/include/ndb_share_check_shares.inc
 
@@ -120,33 +126,59 @@ drop table t1, t2;
 
 #
 # Now...lets get nastier 1
-#   create myisam tables on other servers...and then create ndb table
+#   create innodb tables on other servers...and then create ndb table
 #
 connection server2;
-create table t1 (a int) engine=myisam;
+create table t1 (a int) engine=innodb;
+
+# Suppress errors provoked by the "shadow table" on first mysqld
+--disable_query_log
+call mtr.add_suppression("Local table 'test.t1' .* shadows");
+call mtr.add_suppression("Failed to remove table definition");
+call mtr.add_suppression("Failed to update table definition");
+call mtr.add_suppression("Failed to rename table definition");
+call mtr.add_suppression("Distribution of CREATE TABLE");
+call mtr.add_suppression("Distribution of ALTER TABLE");
+--enable_query_log
+
 connection server4;
-create table t1 (a int) engine=myisam;
+create table t1 (a int) engine=innodb;
+
+# Suppress errors provoked by the "shadow table" on first mysqld
+--disable_query_log
+call mtr.add_suppression("Local table 'test.t1' .* shadows");
+call mtr.add_suppression("Failed to remove table definition");
+call mtr.add_suppression("Failed to update table definition");
+call mtr.add_suppression("Failed to rename table definition");
+call mtr.add_suppression("Distribution of CREATE TABLE");
+call mtr.add_suppression("Distribution of ALTER TABLE");
+--enable_query_log
 
 connection server1;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 create table t1 (a int) engine = ndb;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 drop table t1;
 --source suite/ndb/include/ndb_share_check_shares.inc
 
 connection server3;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 create table t1 (a int) engine = ndb;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 drop table t1;
 --source suite/ndb/include/ndb_share_check_shares.inc
 
 connection server1;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 create table t1 (a int) engine = ndb;
 
 connection server2;
 drop table t1;
-desc t1; # force discovery
+select * from t1 /* force discovery */;
 
 connection server4;
 drop table t1;
-desc t1; # force discovery
+select * from t1 /* force discovery */;
 
 connection server1;
 drop table t1;
@@ -154,24 +186,26 @@ drop table t1;
 
 #
 # Now...lets get nastier 2
-#   create myisam tables on other servers...and then create ndb table
+#   create innodb tables on other servers...and then create ndb table
 #   and off-line alter them
 connection server2;
-create table t1 (a int) engine=myisam;
+create table t1 (a int) engine=innodb;
 connection server4;
-create table t1 (a int) engine=myisam;
+create table t1 (a int) engine=innodb;
 
 connection server1;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 create table t1 (a int) engine = ndb;
-alter offline table t1 add column b int column_format dynamic;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
+alter table t1 algorithm=copy, add column b int column_format dynamic;
 
 connection server2;
 drop table t1;
-desc t1; # force discovery
+select * from t1 /* force discovery */;
 
 connection server4;
 drop table t1;
-desc t1; # force discovery
+select * from t1 /* force discovery */;
 
 connection server1;
 drop table t1;
@@ -179,24 +213,26 @@ drop table t1;
 
 #
 # Now...lets get nastier 3
-#   create myisam tables on other servers...and then create ndb table
+#   create innodb tables on other servers...and then create ndb table
 #   and online alter them
 connection server2;
-create table t1 (a int) engine=myisam;
+create table t1 (a int) engine=innodb;
 connection server4;
-create table t1 (a int) engine=myisam;
+create table t1 (a int) engine=innodb;
 
 connection server1;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 create table t1 (a int primary key) engine = ndb;
-alter online table t1 add column b int column_format dynamic;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
+alter table t1 algorithm=inplace, add column b int column_format dynamic;
 
 connection server2;
 drop table t1;
-desc t1; # force discovery
+select * from t1 /* force discovery */;
 
 connection server4;
 drop table t1;
-desc t1; # force discovery
+select * from t1 /* force discovery */;
 
 connection server1;
 drop table t1;
@@ -204,22 +240,23 @@ drop table t1;
 
 #
 # Now...lets get nastier 4
-#   create myisam tables on other servers...and then create ndb table
+#   create innodb tables on other servers...and then create ndb table
 #   and rename them
 connection server2;
-create table t1 (a int) engine=myisam;
+create table t1 (a int) engine=innodb;
 connection server4;
-create table t1 (a int) engine=myisam;
+create table t1 (a int) engine=innodb;
 
 connection server1;
+replace_regex /Node [0-9]+:/Node <nodeid>/;
 create table t1 (a int) engine = ndb;
 rename table t1 to t2;
 
 connection server2;
-desc t2; # force discovery
+select * from t2 /* force discovery */;
 
 connection server4;
-desc t2; # force discovery
+select * from t2 /* force discovery */;
 
 connection server1;
 drop table t2;
@@ -299,16 +336,26 @@ while ($1)
 connection server1;
 create table t1 (a int) engine=ndbcluster;
 
+# Ignore the warning generated by ndbcluster's binlog thread
+# when cluster is restarted
+--disable_query_log ONCE
+call mtr.add_suppression("cluster disconnect An incident event has been written");
+
+connection server2;
+# Ignore the warning generated by ndbcluster's binlog thread
+# when cluster is restarted
+--disable_query_log ONCE
+call mtr.add_suppression("cluster disconnect An incident event has been written");
+
 connection server3;
 create table t2 (a int) engine=ndbcluster;
 
---exec $NDB_MGM --no-defaults -e "all restart -n" >> $NDB_TOOLS_OUTPUT
---exec $NDB_WAITER --no-defaults --ndb-connectstring="$NDB_CONNECTSTRING" --not-started >> $NDB_TOOLS_OUTPUT
---exec $NDB_MGM --no-defaults -e "all start" >> $NDB_TOOLS_OUTPUT
---exec $NDB_WAITER --no-defaults --ndb-connectstring="$NDB_CONNECTSTRING" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_MGM -e "all restart -n" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_WAITER --not-started
+--exec $NDB_MGM -e "all start" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_WAITER
 
-# Wait for mysqld to reconnect and exit from readonly mode
---disable_query_log
+# Wait for mysqld(s) to reconnect and exit from readonly mode
 connection server1;
 --source include/ndb_not_readonly.inc
 connection server2;
@@ -317,20 +364,19 @@ connection server3;
 --source include/ndb_not_readonly.inc
 connection server4;
 --source include/ndb_not_readonly.inc
---enable_query_log
 
 connection server1;
-desc t1;
-desc t2;
+select * from t1 /* force discovery */;
+select * from t2 /* force discovery */;
 connection server2;
-desc t1;
-desc t2;
+select * from t1 /* force discovery */;
+select * from t2 /* force discovery */;
 connection server3;
-desc t1;
-desc t2;
+select * from t1 /* force discovery */;
+select * from t2 /* force discovery */;
 connection server4;
-desc t1;
-desc t2;
+select * from t1 /* force discovery */;
+select * from t2 /* force discovery */;
 
 connection server1;
 drop table t1, t2;
@@ -345,13 +391,12 @@ create table t1 (a int) engine=ndbcluster;
 connection server3;
 create table t2 (a int) engine=ndbcluster;
 
---exec $NDB_MGM --no-defaults -e "all restart -i -n" >> $NDB_TOOLS_OUTPUT
---exec $NDB_WAITER --no-defaults --ndb-connectstring="$NDB_CONNECTSTRING" --not-started >> $NDB_TOOLS_OUTPUT
---exec $NDB_MGM --no-defaults -e "all start" >> $NDB_TOOLS_OUTPUT
---exec $NDB_WAITER --no-defaults --ndb-connectstring="$NDB_CONNECTSTRING" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_MGM -e "all restart -i -n" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_WAITER --not-started
+--exec $NDB_MGM -e "all start" >> $NDB_TOOLS_OUTPUT
+--exec $NDB_WAITER
 
-# Wait for mysqld to reconnect and exit from readonly mode
---disable_query_log
+# Wait for mysqld(s) to reconnect and exit from readonly mode
 connection server1;
 --source include/ndb_not_readonly.inc
 connection server2;
@@ -360,27 +405,27 @@ connection server3;
 --source include/ndb_not_readonly.inc
 connection server4;
 --source include/ndb_not_readonly.inc
---enable_query_log
 
 connection server1;
---error 1146
-desc t1;
---error 1146
-desc t2;
+--error ER_NO_SUCH_TABLE
+select * from t1 /* force discovery */;
+--error ER_NO_SUCH_TABLE
+select * from t2 /* force discovery */;
 connection server2;
---error 1146
-desc t1;
---error 1146
-desc t2;
+--error ER_NO_SUCH_TABLE
+select * from t1 /* force discovery */;
+--error ER_NO_SUCH_TABLE
+select * from t2 /* force discovery */;
 connection server3;
---error 1146
-desc t1;
---error 1146
-desc t2;
+--error ER_NO_SUCH_TABLE
+select * from t1 /* force discovery */;
+--error ER_NO_SUCH_TABLE
+select * from t2 /* force discovery */;
 connection server4;
---error 1146
-desc t1;
---error 1146
-desc t2;
+--error ER_NO_SUCH_TABLE
+select * from t1 /* force discovery */;
+--error ER_NO_SUCH_TABLE
+select * from t2 /* force discovery */;
 
 --source suite/ndb/include/ndb_share_check_shares.inc
+--remove_file $NDB_TOOLS_OUTPUT

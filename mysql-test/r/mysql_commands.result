@@ -1,0 +1,102 @@
+#
+# WL#16949: A mysql command line option to disable all built-in commands
+#
+# FR1: --commands boolean option added
+1
+1
+2
+2
+3
+3
+4
+4
+5
+5
+6
+6
+# FR1.1: check the default value of --commands
+# test: must not fail
+include/assert_grep.inc [FR1.1: checking the default --commands value]
+include/assert_grep.inc [FR1.1: checking the updated --commands value]
+# FR1.2.1: help short disabled
+ERROR at line 1: Unknown command '\?'.
+# FR1.2.2: clear disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'clear' at line 1
+# FR1.2.3: connect disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'connect' at line 1
+# FR1.2.4: delimier enabled
+# FR1.2.5: edit disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'edit' at line 1
+# FR1.2.6: ego disabled
+ERROR at line 1: Unknown command '\G'.
+# FR1.2.7: exit disabled
+1
+1
+ERROR 1064 (42000) at line 2: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'exit' at line 1
+# FR1.2.8: go enabled
+go
+1
+# FR1.2.9: help disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1
+# FR1.2.10: nopager disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'nopager' at line 1
+# FR1.2.11: notee disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'notee' at line 1
+# FR1.2.12: pager disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'pager more' at line 1
+# FR1.2.13: print disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'print' at line 1
+# FR1.2.14: prompt disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'prompt foo' at line 1
+# FR1.2.15: quit disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'quit' at line 1
+# FR1.2.16: rehash disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'rehash' at line 1
+# FR1.2.17: source disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'source gogo.text' at line 1
+# FR1.2.18: status disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'status' at line 1
+# FR1.2.19: system disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'system echo' at line 1
+# FR1.2.20: tee disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'tee foo' at line 1
+# FR1.2.21: use disabled
+ERROR at line 1: Unknown command '\u'.
+# FR1.2.22: charset disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'charset latin1' at line 1
+# FR1.2.22.1: \c enabled
+# FR1.2.23: warnings disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'warnings' at line 1
+# FR1.2.24: nowarning disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'nowarning' at line 1
+# FR1.2.25: resetconnection disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'resetconnection' at line 1
+# FR1.2.26: query_attributes disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'query_attributes a b' at line 1
+# FR1.2.27: ssl_session_data_print disabled
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ssl_session_data_print foo' at line 1
+# FR1.3: system-command ignored when commands=off
+# must fail with syntax error
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'system cd foo' at line 1
+# FR1.3: system-command ignored when commands=off in reverse
+# must fail with syntax error
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'system cd foo' at line 1
+# FR1.4: resetconnection enabled when commands is ON
+# FR1.5: system-command=off in effect when commands=on
+# must fail with specific error
+ERROR at line 1: 'system' command received, but the --system-command option is off. Skipping.
+# FR1.5: system-command=off in effect when commands=on in reverse
+# must fail with specific error
+ERROR at line 1: 'system' command received, but the --system-command option is off. Skipping.
+# FR1.6: commands in .cnf files work
+include/assert_grep.inc [FR1.1: the --commands value must be true]
+# FR1.7: --binary-mode=1 overrides --commands
+# must fail with a syntax error
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'system echo foo' at line 1
+trying in reverse
+# must fail with a syntax error
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'system echo foo' at line 1
+# FR1.8: --binary-mode=0 enables --commands
+# must fail with a syntax error
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'system echo foo' at line 1
+# End of tests

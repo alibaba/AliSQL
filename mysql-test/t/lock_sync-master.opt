@@ -1,1 +1,1 @@
---default-storage-engine=MyISAM
+--binlog_format=STATEMENT

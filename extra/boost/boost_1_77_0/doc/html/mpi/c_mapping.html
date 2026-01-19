@@ -1,0 +1,2814 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Mapping from C MPI to Boost.MPI</title>
+<link rel="stylesheet" href="../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="The Boost C++ Libraries BoostBook Documentation Subset">
+<link rel="up" href="../mpi.html" title="Chapter 26. Boost.MPI">
+<link rel="prev" href="tutorial.html" title="Tutorial">
+<link rel="next" href="reference.html" title="Reference">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../boost.png"></td>
+<td align="center"><a href="../../../index.html">Home</a></td>
+<td align="center"><a href="../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../mpi.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="reference.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="mpi.c_mapping"></a><a class="link" href="c_mapping.html" title="Mapping from C MPI to Boost.MPI">Mapping from C MPI to Boost.MPI</a>
+</h2></div></div></div>
+<p>
+      This section provides tables that map from the functions and constants of the
+      standard C MPI to their Boost.MPI equivalents. It will be most useful for users
+      that are already familiar with the C or Fortran interfaces to MPI, or for porting
+      existing parallel programs to Boost.MPI.
+    </p>
+<p>
+      Note that this is not a perfect one to one mapping, the Boost.MPI will sometime
+      use function from the C API in a way that is transparent for the end user.
+      For example, <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node50.html#Node50" target="_top"><code class="computeroutput"><span class="identifier">MPI_Probe</span> <span class="keyword">and</span> <span class="identifier">friends</span></code></a> can be used to implement
+      asynchronous send/recv.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.point_to_point_communication"></a><p class="title"><b>Table 26.1. Point-to-point communication</b></p>
+<div class="table-contents"><table class="table" summary="Point-to-point communication">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function/Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_ANY_SOURCE</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">any_source</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_ANY_TAG</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">any_tag</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node40.html#Node40" target="_top"><code class="computeroutput"><span class="identifier">MPI_Bsend</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node51.html#Node51" target="_top"><code class="computeroutput"><span class="identifier">MPI_Bsend_init</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node42.html#Node42" target="_top"><code class="computeroutput"><span class="identifier">MPI_Buffer_attach</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node42.html#Node42" target="_top"><code class="computeroutput"><span class="identifier">MPI_Buffer_detach</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node50.html#Node50" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cancel</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/request.html#id-1_3_27_7_21_2_1_1_7_3-bb">request::cancel</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node35.html#Node35" target="_top"><code class="computeroutput"><span class="identifier">MPI_Get_count</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/status.html#id-1_3_27_7_24_2_1_1_4_5-bb">status::count</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node46.html#Node46" target="_top"><code class="computeroutput"><span class="identifier">MPI_Ibsend</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node50.html#Node50" target="_top"><code class="computeroutput"><span class="identifier">MPI_Iprobe</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_26-bb">communicator::iprobe</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node46.html#Node46" target="_top"><code class="computeroutput"><span class="identifier">MPI_Irsend</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node46.html#Node46" target="_top"><code class="computeroutput"><span class="identifier">MPI_Isend</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_16-bb">communicator::isend</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node46.html#Node46" target="_top"><code class="computeroutput"><span class="identifier">MPI_Issend</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node46.html#Node46" target="_top"><code class="computeroutput"><span class="identifier">MPI_Irecv</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_16-bb">communicator::irecv</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node50.html#Node50" target="_top"><code class="computeroutput"><span class="identifier">MPI_Probe</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_25-bb">communicator::probe</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node53.html#Node53" target="_top"><code class="computeroutput"><span class="identifier">MPI_PROC_NULL</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node34.html#Node34" target="_top"><code class="computeroutput"><span class="identifier">MPI_Recv</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_9-bb">communicator::recv</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node51.html#Node51" target="_top"><code class="computeroutput"><span class="identifier">MPI_Recv_init</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Request_free</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node40.html#Node40" target="_top"><code class="computeroutput"><span class="identifier">MPI_Rsend</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node51.html#Node51" target="_top"><code class="computeroutput"><span class="identifier">MPI_Rsend_init</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node31.html#Node31" target="_top"><code class="computeroutput"><span class="identifier">MPI_Send</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_4-bb">communicator::send</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node52.html#Node52" target="_top"><code class="computeroutput"><span class="identifier">MPI_Sendrecv</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_15-bb">communicator::sendrecv</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node52.html#Node52" target="_top"><code class="computeroutput"><span class="identifier">MPI_Sendrecv_replace</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node51.html#Node51" target="_top"><code class="computeroutput"><span class="identifier">MPI_Send_init</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node40.html#Node40" target="_top"><code class="computeroutput"><span class="identifier">MPI_Ssend</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node51.html#Node51" target="_top"><code class="computeroutput"><span class="identifier">MPI_Ssend_init</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node51.html#Node51" target="_top"><code class="computeroutput"><span class="identifier">MPI_Start</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node51.html#Node51" target="_top"><code class="computeroutput"><span class="identifier">MPI_Startall</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Test</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/request.html#id-1_3_27_7_21_2_1_1_7_1-bb">request::test</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Testall</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/test_all.html" title="Function test_all">test_all</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Testany</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/test_any.html" title="Function template test_any">test_any</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Testsome</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/test_some.html" title="Function test_some">test_some</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node50.html#Node50" target="_top"><code class="computeroutput"><span class="identifier">MPI_Test_cancelled</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/status.html#id-1_3_27_7_24_2_1_1_4_4-bb">status::cancelled</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Wait</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/request.html#id-1_3_27_7_21_2_1_1_7_1-bb">request::wait</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Waitall</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/wait_all.html" title="Function wait_all">wait_all</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Waitany</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/wait_any.html" title="Function template wait_any">wait_any</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node47.html#Node47" target="_top"><code class="computeroutput"><span class="identifier">MPI_Waitsome</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/wait_some.html" title="Function wait_some">wait_some</a></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI automatically maps C and C++ data types to their MPI equivalents.
+      The following table illustrates the mappings between C++ types and MPI datatype
+      constants.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.datatypes"></a><p class="title"><b>Table 26.2. Datatypes</b></p>
+<div class="table-contents"><table class="table" summary="Datatypes">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_CHAR</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">signed</span> <span class="keyword">char</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_SHORT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">signed</span> <span class="keyword">short</span>
+                <span class="keyword">int</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">signed</span> <span class="keyword">int</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_LONG</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">signed</span> <span class="keyword">long</span>
+                <span class="keyword">int</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_UNSIGNED_CHAR</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">char</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_UNSIGNED_SHORT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">short</span>
+                <span class="keyword">int</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_UNSIGNED_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">int</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_UNSIGNED_LONG</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">long</span>
+                <span class="keyword">int</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_FLOAT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">float</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_DOUBLE</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">double</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_LONG_DOUBLE</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">long</span> <span class="keyword">double</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_BYTE</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unused
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_PACKED</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                used internally for <a class="link" href="tutorial.html#mpi.tutorial.user_data_types" title="User-defined data types">serialized
+                data types</a>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_LONG_LONG_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">long</span> <span class="keyword">long</span>
+                <span class="keyword">int</span></code>, if supported by compiler
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_UNSIGNED_LONG_LONG_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">long</span>
+                <span class="keyword">long</span> <span class="keyword">int</span></code>,
+                if supported by compiler
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_FLOAT_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="keyword">float</span><span class="special">,</span> <span class="keyword">int</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_DOUBLE_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="keyword">double</span><span class="special">,</span>
+                <span class="keyword">int</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_LONG_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="keyword">long</span><span class="special">,</span> <span class="keyword">int</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_2INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">,</span> <span class="keyword">int</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_SHORT_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="keyword">short</span><span class="special">,</span> <span class="keyword">int</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_LONG_DOUBLE_INT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="keyword">long</span> <span class="keyword">double</span><span class="special">,</span> <span class="keyword">int</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI does not provide direct wrappers to the MPI derived datatypes functionality.
+      Instead, Boost.MPI relies on the <a href="../../../libs/serialization/doc" target="_top">Boost.Serialization</a>
+      library to construct MPI datatypes for user-defined classes. The section on
+      <a class="link" href="tutorial.html#mpi.tutorial.user_data_types" title="User-defined data types">user-defined data types</a>
+      describes this mechanism, which is used for types that marked as "MPI
+      datatypes" using <code class="computeroutput"><a class="link" href="../boost/mpi/is_mpi_datatype.html" title="Struct template is_mpi_datatype">is_mpi_datatype</a></code>.
+    </p>
+<p>
+      The derived datatypes table that follows describes which C++ types correspond
+      to the functionality of the C MPI's datatype constructor. Boost.MPI may not
+      actually use the C MPI function listed when building datatypes of a certain
+      form. Since the actual datatypes built by Boost.MPI are typically hidden from
+      the user, many of these operations are called internally by Boost.MPI.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.derived_datatypes"></a><p class="title"><b>Table 26.3. Derived datatypes</b></p>
+<div class="table-contents"><table class="table" summary="Derived datatypes">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function/Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node56.html#Node56" target="_top"><code class="computeroutput"><span class="identifier">MPI_Address</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI for MPI version 1.x
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-20-html/node76.htm#Node76" target="_top"><code class="computeroutput"><span class="identifier">MPI_Get_address</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI for MPI version 2.0 and higher
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node58.html#Node58" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_commit</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node55.html#Node55" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_contiguous</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                arrays
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node56.html#Node56" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_extent</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node58.html#Node58" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_free</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node55.html#Node55" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_hindexed</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                any type used as a subobject
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node55.html#Node55" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_hvector</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unused
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node55.html#Node55" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_indexed</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                any type used as a subobject
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node57.html#Node57" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_lb</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node56.html#Node56" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_size</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node55.html#Node55" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_struct</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                user-defined classes and structs with MPI 1.x
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-20-html/node76.htm#Node76" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_create_struct</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                user-defined classes and structs with MPI 2.0 and higher
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node57.html#Node57" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_ub</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node55.html#Node55" target="_top"><code class="computeroutput"><span class="identifier">MPI_Type_vector</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      MPI's packing facilities store values into a contiguous buffer, which can later
+      be transmitted via MPI and unpacked into separate values via MPI's unpacking
+      facilities. As with datatypes, Boost.MPI provides an abstract interface to
+      MPI's packing and unpacking facilities. In particular, the two archive classes
+      <code class="computeroutput"><a class="link" href="../boost/mpi/packed_oarchive.html" title="Class packed_oarchive">packed_oarchive</a></code>
+      and <code class="computeroutput"><a class="link" href="../boost/mpi/packed_iarchive.html" title="Class packed_iarchive">packed_iarchive</a></code>
+      can be used to pack or unpack a contiguous buffer using MPI's facilities.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.packing_and_unpacking"></a><p class="title"><b>Table 26.4. Packing and unpacking</b></p>
+<div class="table-contents"><table class="table" summary="Packing and unpacking">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node62.html#Node62" target="_top"><code class="computeroutput"><span class="identifier">MPI_Pack</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/packed_oarchive.html" title="Class packed_oarchive">packed_oarchive</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node62.html#Node62" target="_top"><code class="computeroutput"><span class="identifier">MPI_Pack_size</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used internally by Boost.MPI
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node62.html#Node62" target="_top"><code class="computeroutput"><span class="identifier">MPI_Unpack</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/packed_iarchive.html" title="Class packed_iarchive">packed_iarchive</a></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI supports a one-to-one mapping for most of the MPI collectives. For
+      each collective provided by Boost.MPI, the underlying C MPI collective will
+      be invoked when it is possible (and efficient) to do so.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.collectives"></a><p class="title"><b>Table 26.5. Collectives</b></p>
+<div class="table-contents"><table class="table" summary="Collectives">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node73.html#Node73" target="_top"><code class="computeroutput"><span class="identifier">MPI_Allgather</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/all_gather.html" title="Function all_gather">all_gather</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node73.html#Node73" target="_top"><code class="computeroutput"><span class="identifier">MPI_Allgatherv</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                most uses supported by <code class="computeroutput"><a class="link" href="../boost/mpi/all_gather.html" title="Function all_gather">all_gather</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node82.html#Node82" target="_top"><code class="computeroutput"><span class="identifier">MPI_Allreduce</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/all_reduce.html" title="Function all_reduce">all_reduce</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node75.html#Node75" target="_top"><code class="computeroutput"><span class="identifier">MPI_Alltoall</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/all_to_all.html" title="Function all_to_all">all_to_all</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node75.html#Node75" target="_top"><code class="computeroutput"><span class="identifier">MPI_Alltoallv</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                most uses supported by <code class="computeroutput"><a class="link" href="../boost/mpi/all_to_all.html" title="Function all_to_all">all_to_all</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node66.html#Node66" target="_top"><code class="computeroutput"><span class="identifier">MPI_Barrier</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_27-bb">communicator::barrier</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node67.html#Node67" target="_top"><code class="computeroutput"><span class="identifier">MPI_Bcast</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/broadcast.html" title="Function broadcast">broadcast</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node69.html#Node69" target="_top"><code class="computeroutput"><span class="identifier">MPI_Gather</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/gather.html" title="Function gather">gather</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node69.html#Node69" target="_top"><code class="computeroutput"><span class="identifier">MPI_Gatherv</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                most uses supported by <code class="computeroutput"><a class="link" href="../boost/mpi/gather.html" title="Function gather">gather</a></code>, other usages
+                supported by <code class="computeroutput"><a class="link" href="../boost/mpi/gatherv.html" title="Function gatherv">gatherv</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node77.html#Node77" target="_top"><code class="computeroutput"><span class="identifier">MPI_Reduce</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/reduce.html" title="Function reduce">reduce</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node83.html#Node83" target="_top"><code class="computeroutput"><span class="identifier">MPI_Reduce_scatter</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node84.html#Node84" target="_top"><code class="computeroutput"><span class="identifier">MPI_Scan</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/scan.html" title="Function scan">scan</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node71.html#Node71" target="_top"><code class="computeroutput"><span class="identifier">MPI_Scatter</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/scatter.html" title="Function scatter">scatter</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node71.html#Node71" target="_top"><code class="computeroutput"><span class="identifier">MPI_Scatterv</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                most uses supported by <code class="computeroutput"><a class="link" href="../boost/mpi/scatter.html" title="Function scatter">scatter</a></code>, other uses
+                supported by <code class="computeroutput"><a class="link" href="../boost/mpi/scatterv.html" title="Function scatterv">scatterv</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-20-html/node145.htm#Node145" target="_top"><code class="computeroutput"><span class="identifier">MPI_IN_PLACE</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                supported implicitly by <code class="computeroutput"><a class="link" href="../boost/mpi/all_reduce.html" title="Function all_reduce">all_reduce by omitting the output
+                value</a></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI uses function objects to specify how reductions should occur in its
+      equivalents to <code class="computeroutput"><span class="identifier">MPI_Allreduce</span></code>,
+      <code class="computeroutput"><span class="identifier">MPI_Reduce</span></code>, and <code class="computeroutput"><span class="identifier">MPI_Scan</span></code>. The following table illustrates
+      how <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node78.html#Node78" target="_top">predefined</a>
+      and <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node80.html#Node80" target="_top">user-defined</a>
+      reduction operations can be mapped between the C MPI and Boost.MPI.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.reduction_operations"></a><p class="title"><b>Table 26.6. Reduction operations</b></p>
+<div class="table-contents"><table class="table" summary="Reduction operations">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_BAND</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/bitwise_and.html" title="Struct template bitwise_and">bitwise_and</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_BOR</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/bitwise_or.html" title="Struct template bitwise_or">bitwise_or</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_BXOR</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/bitwise_xor.html" title="Struct template bitwise_xor">bitwise_xor</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_LAND</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">logical_and</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_LOR</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">logical_or</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_LXOR</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/logical_xor.html" title="Struct template logical_xor">logical_xor</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_MAX</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/maximum.html" title="Struct template maximum">maximum</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_MAXLOC</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_MIN</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/minimum.html" title="Struct template minimum">minimum</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_MINLOC</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_Op_create</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                used internally by Boost.MPI
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_Op_free</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                used internally by Boost.MPI
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_PROD</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">multiplies</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_SUM</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">plus</span></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      MPI defines several special communicators, including <code class="computeroutput"><span class="identifier">MPI_COMM_WORLD</span></code>
+      (including all processes that the local process can communicate with), <code class="computeroutput"><span class="identifier">MPI_COMM_SELF</span></code> (including only the local process),
+      and <code class="computeroutput"><span class="identifier">MPI_COMM_EMPTY</span></code> (including
+      no processes). These special communicators are all instances of the <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html" title="Class communicator">communicator</a></code>
+      class in Boost.MPI.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.predefined_communicators"></a><p class="title"><b>Table 26.7. Predefined communicators</b></p>
+<div class="table-contents"><table class="table" summary="Predefined communicators">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_COMM_WORLD</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                a default-constructed <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html" title="Class communicator">communicator</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_COMM_SELF</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                a <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html" title="Class communicator">communicator</a></code>
+                that contains only the current process
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_COMM_EMPTY</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                a <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html" title="Class communicator">communicator</a></code>
+                that evaluates false
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI supports groups of processes through its <code class="computeroutput"><a class="link" href="../boost/mpi/group.html" title="Class group">group</a></code> class.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.group_operations_and_constants"></a><p class="title"><b>Table 26.8. Group operations and constants</b></p>
+<div class="table-contents"><table class="table" summary="Group operations and constants">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function/Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_GROUP_EMPTY</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                a default-constructed <code class="computeroutput"><a class="link" href="../boost/mpi/group.html" title="Class group">group</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node97.html#Node97" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_size</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/group.html#id-1_3_27_7_13_2_1_1_3_2-bb">group::size</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node97.html#Node97" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_rank</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                memberref boost::mpi::group::rank <code class="computeroutput"><span class="identifier">group</span><span class="special">::</span><span class="identifier">rank</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node97.html#Node97" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_translate_ranks</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                memberref boost::mpi::group::translate_ranks <code class="computeroutput"><span class="identifier">group</span><span class="special">::</span><span class="identifier">translate_ranks</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node97.html#Node97" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_compare</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                operators <code class="computeroutput"><span class="special">==</span></code> and <code class="computeroutput"><span class="special">!=</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_IDENT</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                operators <code class="computeroutput"><span class="special">==</span></code> and <code class="computeroutput"><span class="special">!=</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_SIMILAR</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                operators <code class="computeroutput"><span class="special">==</span></code> and <code class="computeroutput"><span class="special">!=</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_UNEQUAL</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                operators <code class="computeroutput"><span class="special">==</span></code> and <code class="computeroutput"><span class="special">!=</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node98.html#Node98" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_group</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_3-bb">communicator::group</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node98.html#Node98" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_union</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                operator <code class="computeroutput"><span class="special">|</span></code> for groups
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node98.html#Node98" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_intersection</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                operator <code class="computeroutput"><span class="special">&amp;</span></code> for groups
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node98.html#Node98" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_difference</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                operator <code class="computeroutput"><span class="special">-</span></code> for groups
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node98.html#Node98" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_incl</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/group.html#id-1_3_27_7_13_2_1_1_3_6-bb">group::include</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node98.html#Node98" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_excl</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/group.html#id-1_3_27_7_13_2_1_1_3_6-bb">group::exclude</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node98.html#Node98" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_range_incl</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node98.html#Node98" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_range_excl</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node99.html#Node99" target="_top"><code class="computeroutput"><span class="identifier">MPI_Group_free</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI provides manipulation of communicators through the <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html" title="Class communicator">communicator</a></code> class.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.communicator_operations"></a><p class="title"><b>Table 26.9. Communicator operations</b></p>
+<div class="table-contents"><table class="table" summary="Communicator operations">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node101.html#Node101" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_size</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_2-bb">communicator::size</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node101.html#Node101" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_rank</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_1-bb">communicator::rank</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node101.html#Node101" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_compare</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                operators <code class="computeroutput"><span class="special">==</span></code> and <code class="computeroutput"><span class="special">!=</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node102.html#Node102" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_dup</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html" title="Class communicator">communicator</a></code>
+                class constructor using <code class="computeroutput"><span class="identifier">comm_duplicate</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node102.html#Node102" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_create</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html" title="Class communicator">communicator</a></code>
+                constructor
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node102.html#Node102" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_split</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_30-bb">communicator::split</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node103.html#Node103" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_free</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used automatically in Boost.MPI
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI currently provides support for inter-communicators via the <code class="computeroutput"><a class="link" href="../boost/mpi/intercommunicator.html" title="Class intercommunicator">intercommunicator</a></code>
+      class.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.inter_communicator_operations"></a><p class="title"><b>Table 26.10. Inter-communicator operations</b></p>
+<div class="table-contents"><table class="table" summary="Inter-communicator operations">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node112.html#Node112" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_test_inter</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                use <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_32-bb">communicator::as_intercommunicator</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node112.html#Node112" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_remote_size</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/intercommunicator.html#id-1_3_27_7_15_2_1_1_4_4-bb">boost::mpi::intercommunicator::remote_size</a></code>
+                <code class="computeroutput"><span class="identifier">intercommunicator</span><span class="special">::</span><span class="identifier">remote_size</span></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node112.html#Node112" target="_top"><code class="computeroutput"><span class="identifier">MPI_Comm_remote_group</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/intercommunicator.html#id-1_3_27_7_15_2_1_1_4_5-bb">intercommunicator::remote_group</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node113.html#Node113" target="_top"><code class="computeroutput"><span class="identifier">MPI_Intercomm_create</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/intercommunicator.html" title="Class intercommunicator">intercommunicator</a></code>
+                constructor
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node113.html#Node113" target="_top"><code class="computeroutput"><span class="identifier">MPI_Intercomm_merge</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/intercommunicator.html#id-1_3_27_7_15_2_1_1_4_6-bb">intercommunicator::merge</a></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI currently provides no support for attribute caching.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.attributes_and_caching"></a><p class="title"><b>Table 26.11. Attributes and caching</b></p>
+<div class="table-contents"><table class="table" summary="Attributes and caching">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function/Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_NULL_COPY_FN</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_NULL_DELETE_FN</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_KEYVAL_INVALID</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node119.html#Node119" target="_top"><code class="computeroutput"><span class="identifier">MPI_Keyval_create</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node119.html#Node119" target="_top"><code class="computeroutput"><span class="identifier">MPI_Copy_function</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node119.html#Node119" target="_top"><code class="computeroutput"><span class="identifier">MPI_Delete_function</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node119.html#Node119" target="_top"><code class="computeroutput"><span class="identifier">MPI_Keyval_free</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node119.html#Node119" target="_top"><code class="computeroutput"><span class="identifier">MPI_Attr_put</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node119.html#Node119" target="_top"><code class="computeroutput"><span class="identifier">MPI_Attr_get</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node119.html#Node119" target="_top"><code class="computeroutput"><span class="identifier">MPI_Attr_delete</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI will provide complete support for creating communicators with different
+      topologies and later querying those topologies. Support for graph topologies
+      is provided via an interface to the <a href="http://www.boost.org/libs/graph/doc/index.html" target="_top">Boost
+      Graph Library (BGL)</a>, where a communicator can be created which matches
+      the structure of any BGL graph, and the graph topology of a communicator can
+      be viewed as a BGL graph for use in existing, generic graph algorithms.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.process_topologies"></a><p class="title"><b>Table 26.12. Process topologies</b></p>
+<div class="table-contents"><table class="table" summary="Process topologies">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function/Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_GRAPH</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unnecessary; use <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_33-bb">communicator::as_graph_communicator</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_CART</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unnecessary; use <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_36-bb">communicator::has_cartesian_topology</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node133.html#Node133" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cart_create</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/cartesian_communicator.html" title="Class cartesian_communicator">cartesian_communicator</a></code>
+                constructor
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node134.html#Node134" target="_top"><code class="computeroutput"><span class="identifier">MPI_Dims_create</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/cartesian_dimensions.html" title="Function cartesian_dimensions">cartesian_dimensions</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node135.html#Node135" target="_top"><code class="computeroutput"><span class="identifier">MPI_Graph_create</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/graph_communicator.html" title="Class graph_communicator">graph_communicator
+                ctors</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Topo_test</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_33-bb">communicator::as_graph_communicator</a></code>,
+                <code class="computeroutput"><a class="link" href="../boost/mpi/communicator.html#id-1_3_27_7_6_2_1_1_3_36-bb">communicator::has_cartesian_topology</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Graphdims_get</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="reference.html#boost.mpi.num_vertices">num_vertices</a></code>,
+                <code class="computeroutput"><a class="link" href="reference.html#boost.mpi.num_edges">num_edges</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Graph_get</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="reference.html#boost.mpi.vertices">vertices</a></code>,
+                <code class="computeroutput"><a class="link" href="reference.html#boost.mpi.edges">edges</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cartdim_get</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/cartesian_communicator.html#id-1_3_27_7_3_2_1_1_4_1-bb">cartesian_communicator::ndims </a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cart_get</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/cartesian_communicator.html#id-1_3_27_7_3_2_1_1_4_5-bb">cartesian_communicator::topology </a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cart_rank</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/cartesian_communicator.html#id-1_3_27_7_3_2_1_1_4_2-bb">cartesian_communicator::rank </a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cart_coords</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/cartesian_communicator.html#id-1_3_27_7_3_2_1_1_4_4-bb">cartesian_communicator::coordinates </a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Graph_neighbors_count</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="reference.html#boost.mpi.out_degree">out_degree</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node136.html#Node136" target="_top"><code class="computeroutput"><span class="identifier">MPI_Graph_neighbors</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="reference.html#boost.mpi.out_edges">out_edges</a></code>,
+                <code class="computeroutput"><a class="link" href="reference.html#boost.mpi.adjacent_vertices">adjacent_vertices</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node137.html#Node137" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cart_shift</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/cartesian_communicator.html#id-1_3_27_7_3_2_1_1_4_3-bb">cartesian_communicator::shifted_ranks </a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node138.html#Node138" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cart_sub</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/cartesian_communicator.html" title="Class cartesian_communicator">cartesian_communicator</a></code>
+                constructor
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node139.html#Node139" target="_top"><code class="computeroutput"><span class="identifier">MPI_Cart_map</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node139.html#Node139" target="_top"><code class="computeroutput"><span class="identifier">MPI_Graph_map</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI supports environmental inquires through the <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html" title="Class environment">environment</a></code> class.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.environmental_inquiries"></a><p class="title"><b>Table 26.13. Environmental inquiries</b></p>
+<div class="table-contents"><table class="table" summary="Environmental inquiries">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function/Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_TAG_UB</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unnecessary; use <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html#id-1_3_27_7_10_2_1_1_10_4-bb">environment::max_tag</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_HOST</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unnecessary; use <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html#id-1_3_27_7_10_2_1_1_10_6-bb">environment::host_rank</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_IO</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unnecessary; use <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html#id-1_3_27_7_10_2_1_1_10_7-bb">environment::io_rank</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node143.html#Node147" target="_top"><code class="computeroutput"><span class="identifier">MPI_Get_processor_name</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html#id-1_3_27_7_10_2_1_1_10_8-bb">environment::processor_name</a></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI translates MPI errors into exceptions, reported via the <code class="computeroutput"><a class="link" href="../boost/mpi/exception.html" title="Class exception">exception</a></code>
+      class.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.error_handling"></a><p class="title"><b>Table 26.14. Error handling</b></p>
+<div class="table-contents"><table class="table" summary="Error handling">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function/Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_ERRORS_ARE_FATAL</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unused; errors are translated into Boost.MPI exceptions
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_ERRORS_RETURN</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unused; errors are translated into Boost.MPI exceptions
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node148.html#Node148" target="_top"><code class="computeroutput"><span class="identifier">MPI_errhandler_create</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unused; errors are translated into Boost.MPI exceptions
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node148.html#Node148" target="_top"><code class="computeroutput"><span class="identifier">MPI_errhandler_set</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unused; errors are translated into Boost.MPI exceptions
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node148.html#Node148" target="_top"><code class="computeroutput"><span class="identifier">MPI_errhandler_get</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unused; errors are translated into Boost.MPI exceptions
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node148.html#Node148" target="_top"><code class="computeroutput"><span class="identifier">MPI_errhandler_free</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unused; errors are translated into Boost.MPI exceptions
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node148.html#Node148" target="_top"><code class="computeroutput"><span class="identifier">MPI_Error_string</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                used internally by Boost.MPI
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node149.html#Node149" target="_top"><code class="computeroutput"><span class="identifier">MPI_Error_class</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/exception.html#id-1_3_27_7_11_2_1_1_4_4-bb">exception::error_class</a></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      The MPI timing facilities are exposed via the Boost.MPI <code class="computeroutput"><a class="link" href="../boost/mpi/timer.html" title="Class timer">timer</a></code> class, which provides an
+      interface compatible with the <a href="http://www.boost.org/libs/timer/index.html" target="_top">Boost
+      Timer library</a>.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.timing_facilities"></a><p class="title"><b>Table 26.15. Timing facilities</b></p>
+<div class="table-contents"><table class="table" summary="Timing facilities">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function/Constant
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">MPI_WTIME_IS_GLOBAL</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                unnecessary; use <code class="computeroutput"><a class="link" href="../boost/mpi/timer.html#id-1_3_27_7_25_2_1_1_5_1-bb">timer::time_is_global</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node150.html#Node150" target="_top"><code class="computeroutput"><span class="identifier">MPI_Wtime</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                use <code class="computeroutput"><a class="link" href="../boost/mpi/timer.html#id-1_3_27_7_25_2_1_1_3_2-bb">timer::elapsed</a></code>
+                to determine the time elapsed from some specific starting point
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node150.html#Node150" target="_top"><code class="computeroutput"><span class="identifier">MPI_Wtick</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/timer.html#id-1_3_27_7_25_2_1_1_3_4-bb">timer::elapsed_min</a></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      MPI startup and shutdown are managed by the construction and destruction of
+      the Boost.MPI <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html" title="Class environment">environment</a></code>
+      class.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.startup_shutdown_facilities"></a><p class="title"><b>Table 26.16. Startup/shutdown facilities</b></p>
+<div class="table-contents"><table class="table" summary="Startup/shutdown facilities">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node151.html#Node151" target="_top"><code class="computeroutput"><span class="identifier">MPI_Init</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html" title="Class environment">environment</a></code>
+                constructor
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node151.html#Node151" target="_top"><code class="computeroutput"><span class="identifier">MPI_Finalize</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html" title="Class environment">environment</a></code>
+                destructor
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node151.html#Node151" target="_top"><code class="computeroutput"><span class="identifier">MPI_Initialized</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html#id-1_3_27_7_10_2_1_1_10_2-bb">environment::initialized</a></code>
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node151.html#Node151" target="_top"><code class="computeroutput"><span class="identifier">MPI_Abort</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><a class="link" href="../boost/mpi/environment.html#id-1_3_27_7_10_2_1_1_10_1-bb">environment::abort</a></code>
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break"><p>
+      Boost.MPI does not provide any support for the profiling facilities in MPI
+      1.1.
+    </p>
+<div class="table">
+<a name="mpi.c_mapping.profiling_interface"></a><p class="title"><b>Table 26.17. Profiling interface</b></p>
+<div class="table-contents"><table class="table" summary="Profiling interface">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C Function
+              </p>
+            </th>
+<th>
+              <p>
+                Boost.MPI Equivalent
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node153.html#Node153" target="_top"><code class="computeroutput"><span class="identifier">PMPI_</span><span class="special">*</span></code>
+                routines</a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a href="http://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node156.html#Node156" target="_top"><code class="computeroutput"><span class="identifier">MPI_Pcontrol</span></code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                unsupported
+              </p>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<br class="table-break">
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2005-2007 Douglas Gregor,
+      Matthias Troyer, Trustees of Indiana University<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at &lt;ulink url="http://www.boost.org/LICENSE_1_0.txt"&gt;
+        http://www.boost.org/LICENSE_1_0.txt &lt;/ulink&gt;)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="tutorial.html"><img src="../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../mpi.html"><img src="../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="reference.html"><img src="../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

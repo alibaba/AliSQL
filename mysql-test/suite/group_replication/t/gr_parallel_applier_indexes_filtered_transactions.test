@@ -1,0 +1,158 @@
+################################################################################
+# Validate that transactions from an inbound channel, containing
+# changes that should be ignored according to filtering rules, are
+# applied in parallel in the `group_replication_applier` channel.
+#
+# Test:
+# 0. The test requires three servers: M1 (group primary),
+#    M2 (group secondary), M3 external source.
+# 1. Bootstrap group on server1, the primary.
+# 2. server2 joins the grop, as secondary.
+# 3. Establish a asynchronous replication channel from server3
+#    into server1.
+#    Transactions from `test.t2` will be filtered out.
+# 4. Execute transactions on server3.
+# 5. Validate applier indexes on server2
+#    `group_replication_applier` channel.
+# 6. Clean up.
+################################################################################
+--source include/have_group_replication_plugin.inc
+--let $rpl_group_replication_single_primary_mode =1
+--let $rpl_skip_group_replication_start = 1
+--let $rpl_server_count = 3
+--source include/group_replication.inc
+
+
+--echo
+--echo ############################################################
+--echo # 1. Bootstrap group on server1, the primary.
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/start_and_bootstrap_group_replication.inc
+
+
+--echo
+--echo ############################################################
+--echo # 2. server2 joins the grop, as secondary.
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+
+
+--echo
+--echo ############################################################
+--echo # 3. Establish a asynchronous replication channel from server3
+--echo #    into server1.
+--echo #    Transactions from `test.t2` will be filtered out.
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--replace_result $SERVER_MYPORT_3 SERVER_3_PORT
+--eval CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PORT=$SERVER_MYPORT_3, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch2_3'
+CHANGE REPLICATION FILTER Replicate_Ignore_Table=(test.t2) FOR CHANNEL 'ch2_3';
+--source include/start_slave.inc
+
+
+--echo
+--echo ############################################################
+--echo # 4. Execute transactions on server3.
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+
+# on server2 `group_replication_applier` channel: DDL
+# # server_id=3, last_committed=1, sequence_number=2
+CREATE TABLE t0 (c1 INT NOT NULL PRIMARY KEY);
+
+# on server2 `group_replication_applier` channel: DDL
+# # server_id=3, last_committed=2, sequence_number=3
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY);
+
+# on server2 `group_replication_applier` channel: DDL filtered
+# # server_id=3, last_committed=3, sequence_number=4
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY);
+
+--source include/rpl_sync.inc
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--let $assert_text= 'Assert table t2 does not exist on server1'
+--let $assert_cond= "[SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA=\"test\" AND TABLE_NAME=\"t2\"]" = 0
+--source include/assert.inc
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--let $assert_text= 'Assert table t2 does not exist on server2'
+--let $assert_cond= "[SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA=\"test\" AND TABLE_NAME=\"t2\"]" = 0
+--source include/assert.inc
+
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+# on server2 `group_replication_applier` channel: DML
+# # server_id=3, last_committed=3, sequence_number=5
+INSERT INTO t1 VALUES (1);
+
+# on server2 `group_replication_applier` channel: DML filtered
+# # server_id=3, last_committed=3, sequence_number=6
+INSERT INTO t2 VALUES (1);
+
+# on server2 `group_replication_applier` channel: empty transaction
+# # server_id=3, last_committed=3, sequence_number=7
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1';
+BEGIN;
+COMMIT;
+SET GTID_NEXT= 'AUTOMATIC';
+
+# on server2 `group_replication_applier` channel: DML
+# # server_id=3, last_committed=3, sequence_number=8
+INSERT INTO t1 VALUES (2);
+
+# on server2 `group_replication_applier` channel: DML filtered
+# # server_id=3, last_committed=3, sequence_number=9
+INSERT INTO t2 VALUES (2);
+
+# on server2 `group_replication_applier` channel: DDL
+# # server_id=3, last_committed=9, sequence_number=10
+DROP TABLE t1;
+
+# on server2 `group_replication_applier` channel: DML filtered
+# # server_id=3, last_committed=10, sequence_number=11
+INSERT INTO t2 VALUES (3);
+
+# on server2 `group_replication_applier` channel: DML filtered
+# # server_id=2, last_committed=10, sequence_number=12
+INSERT INTO t2 VALUES (4);
+
+# on server2 `group_replication_applier` channel: DDL filtered
+# # server_id=3, last_committed=10, sequence_number=13
+DROP TABLE t2;
+
+# on server2 `group_replication_applier` channel: DDL
+# # server_id=3, last_committed=13, sequence_number=14
+DROP TABLE t0;
+
+--source include/rpl_sync.inc
+
+
+--echo
+--echo ############################################################
+--echo # 5. Validate applier indexes on server2
+--echo #    `group_replication_applier` channel.
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--let $binlog_file= server-relay-log-group_replication_applier.000002
+--let $logical_timestamps= 0 0;1 2;2 3;3 4;3 5;3 6;3 7;3 8;3 9;9 10;10 11;10 12;10 13;13 14
+--source include/assert_logical_timestamps.inc
+
+
+--echo
+--echo ############################################################
+--echo # 6. Clean up.
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+RESET REPLICA ALL FOR CHANNEL 'ch2_3';
+
+--source include/group_replication_end.inc

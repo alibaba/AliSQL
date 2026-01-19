@@ -1,0 +1,111 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>thread_pool::basic_executor_type::require</title>
+<link rel="stylesheet" href="../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../../boost_asio.html" title="Boost.Asio">
+<link rel="up" href="../thread_pool__basic_executor_type.html" title="thread_pool::basic_executor_type">
+<link rel="prev" href="query__static/overload3.html" title="thread_pool::basic_executor_type::query (3 of 3 overloads)">
+<link rel="next" href="require/overload1.html" title="thread_pool::basic_executor_type::require (1 of 9 overloads)">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="query__static/overload3.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../thread_pool__basic_executor_type.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="require/overload1.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h4 class="title">
+<a name="boost_asio.reference.thread_pool__basic_executor_type.require"></a><a class="link" href="require.html" title="thread_pool::basic_executor_type::require">thread_pool::basic_executor_type::require</a>
+</h4></div></div></div>
+<p>
+          <a class="indexterm" name="boost_asio.indexterm.thread_pool__basic_executor_type.require"></a> 
+Obtain
+          an executor with the <code class="computeroutput">blocking.possibly</code> property.
+        </p>
+<pre class="programlisting">constexpr basic_executor_type&lt; Allocator, unspecified &gt; <a class="link" href="require/overload1.html" title="thread_pool::basic_executor_type::require (1 of 9 overloads)">require</a>(
+    execution::blocking_t::possibly_t ) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload1.html" title="thread_pool::basic_executor_type::require (1 of 9 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Obtain an executor with the <code class="computeroutput">blocking.always</code> property.
+        </p>
+<pre class="programlisting">constexpr basic_executor_type&lt; Allocator, unspecified &gt; <a class="link" href="require/overload2.html" title="thread_pool::basic_executor_type::require (2 of 9 overloads)">require</a>(
+    execution::blocking_t::always_t ) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload2.html" title="thread_pool::basic_executor_type::require (2 of 9 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Obtain an executor with the <code class="computeroutput">blocking.never</code> property.
+        </p>
+<pre class="programlisting">constexpr basic_executor_type&lt; Allocator, unspecified &gt; <a class="link" href="require/overload3.html" title="thread_pool::basic_executor_type::require (3 of 9 overloads)">require</a>(
+    execution::blocking_t::never_t ) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload3.html" title="thread_pool::basic_executor_type::require (3 of 9 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Obtain an executor with the <code class="computeroutput">relationship.fork</code> property.
+        </p>
+<pre class="programlisting">constexpr basic_executor_type <a class="link" href="require/overload4.html" title="thread_pool::basic_executor_type::require (4 of 9 overloads)">require</a>(
+    execution::relationship_t::fork_t ) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload4.html" title="thread_pool::basic_executor_type::require (4 of 9 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Obtain an executor with the <code class="computeroutput">relationship.continuation</code> property.
+        </p>
+<pre class="programlisting">constexpr basic_executor_type <a class="link" href="require/overload5.html" title="thread_pool::basic_executor_type::require (5 of 9 overloads)">require</a>(
+    execution::relationship_t::continuation_t ) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload5.html" title="thread_pool::basic_executor_type::require (5 of 9 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Obtain an executor with the <code class="computeroutput">outstanding_work.tracked</code> property.
+        </p>
+<pre class="programlisting">constexpr basic_executor_type&lt; Allocator, unspecified &gt; <a class="link" href="require/overload6.html" title="thread_pool::basic_executor_type::require (6 of 9 overloads)">require</a>(
+    execution::outstanding_work_t::tracked_t ) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload6.html" title="thread_pool::basic_executor_type::require (6 of 9 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Obtain an executor with the <code class="computeroutput">outstanding_work.untracked</code> property.
+        </p>
+<pre class="programlisting">constexpr basic_executor_type&lt; Allocator, unspecified &gt; <a class="link" href="require/overload7.html" title="thread_pool::basic_executor_type::require (7 of 9 overloads)">require</a>(
+    execution::outstanding_work_t::untracked_t ) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload7.html" title="thread_pool::basic_executor_type::require (7 of 9 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Obtain an executor with the specified <code class="computeroutput">allocator</code> property.
+        </p>
+<pre class="programlisting">template&lt;
+    typename OtherAllocator&gt;
+constexpr basic_executor_type&lt; OtherAllocator, Bits &gt; <a class="link" href="require/overload8.html" title="thread_pool::basic_executor_type::require (8 of 9 overloads)">require</a>(
+    execution::allocator_t&lt; OtherAllocator &gt; a) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload8.html" title="thread_pool::basic_executor_type::require (8 of 9 overloads)">more...</a></em></span>
+</pre>
+<p>
+          Obtain an executor with the default <code class="computeroutput">allocator</code> property.
+        </p>
+<pre class="programlisting">constexpr basic_executor_type&lt; std::allocator&lt; void &gt;, Bits &gt; <a class="link" href="require/overload9.html" title="thread_pool::basic_executor_type::require (9 of 9 overloads)">require</a>(
+    execution::allocator_t&lt; void &gt; ) const;
+  <span class="emphasis"><em>» <a class="link" href="require/overload9.html" title="thread_pool::basic_executor_type::require (9 of 9 overloads)">more...</a></em></span>
+</pre>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright © 2003-2021 Christopher
+      M. Kohlhoff<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="query__static/overload3.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../thread_pool__basic_executor_type.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../boost_asio.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="require/overload1.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

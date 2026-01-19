@@ -1,0 +1,150 @@
+# Create Table
+CREATE TABLE t1 (
+auditid VARCHAR(45) NOT NULL,
+ip VARCHAR(39) NOT NULL DEFAULT '',
+PRIMARY KEY (auditid)
+) ENGINE=INNODB;
+# Insert Values
+INSERT INTO t1 VALUES
+('abcdefghi', '1.1.1.1'),
+('fghi', '192.168.1.1'),
+('jklmnop', '2.2.2.2'),
+('qrstu', '255.255.255.255'),
+('uvwxyzabcde', '2001:db8::1');
+# Create function for getting memory usage from perf schema
+CREATE FUNCTION get_my_std_memory_usage() RETURNS INT READS SQL DATA
+RETURN (
+SELECT SUM_NUMBER_OF_BYTES_ALLOC
+FROM performance_schema.memory_summary_global_by_event_name
+WHERE EVENT_NAME = 'memory/innodb/std'
+);
+# Test 1. Check memory usage during create index
+# Set the limit for memory usage
+# Set Buffer Size
+SET innodb_ddl_buffer_size = (4*1024*1024);
+# Number of bytes allocated before create index
+SET @before_memory = get_my_std_memory_usage();
+# Create index
+CREATE INDEX i1 ON t1(ip);
+# Number of bytes allocated after create index
+SET @after_memory = get_my_std_memory_usage();
+# Bytes allocated in the process
+SET @memory_diff = @after_memory - @before_memory;
+include/assert.inc [Assert that memory usage is less than 4MB]
+# Drop index
+DROP INDEX i1 ON t1;
+# Set Buffer Size
+SET innodb_ddl_buffer_size = (8*1024*1024);
+# Number of bytes allocated before create index
+SET @before_memory = get_my_std_memory_usage();
+# Create index
+CREATE INDEX i1 ON t1(ip);
+# Number of bytes allocated after create index
+SET @after_memory = get_my_std_memory_usage();
+# Bytes allocated in the process
+SET @memory_diff = @after_memory - @before_memory;
+include/assert.inc [Assert that memory usage is less than 4MB]
+# Drop index
+DROP INDEX i1 ON t1;
+# Set Buffer Size
+SET innodb_ddl_buffer_size = (16*1024*1024);
+# Number of bytes allocated before create index
+SET @before_memory = get_my_std_memory_usage();
+# Create index
+CREATE INDEX i1 ON t1(ip);
+# Number of bytes allocated after create index
+SET @after_memory = get_my_std_memory_usage();
+# Bytes allocated in the process
+SET @memory_diff = @after_memory - @before_memory;
+include/assert.inc [Assert that memory usage is less than 4MB]
+# Drop index
+DROP INDEX i1 ON t1;
+# Set Buffer Size
+SET innodb_ddl_buffer_size = (32*1024*1024);
+# Number of bytes allocated before create index
+SET @before_memory = get_my_std_memory_usage();
+# Create index
+CREATE INDEX i1 ON t1(ip);
+# Number of bytes allocated after create index
+SET @after_memory = get_my_std_memory_usage();
+# Bytes allocated in the process
+SET @memory_diff = @after_memory - @before_memory;
+include/assert.inc [Assert that memory usage is less than 4MB]
+# Drop index
+DROP INDEX i1 ON t1;
+# Set Buffer Size
+SET innodb_ddl_buffer_size = (64*1024*1024);
+# Number of bytes allocated before create index
+SET @before_memory = get_my_std_memory_usage();
+# Create index
+CREATE INDEX i1 ON t1(ip);
+# Number of bytes allocated after create index
+SET @after_memory = get_my_std_memory_usage();
+# Bytes allocated in the process
+SET @memory_diff = @after_memory - @before_memory;
+include/assert.inc [Assert that memory usage is less than 4MB]
+# Drop index
+DROP INDEX i1 ON t1;
+# Set Buffer Size
+SET innodb_ddl_buffer_size = (128*1024*1024);
+# Number of bytes allocated before create index
+SET @before_memory = get_my_std_memory_usage();
+# Create index
+CREATE INDEX i1 ON t1(ip);
+# Number of bytes allocated after create index
+SET @after_memory = get_my_std_memory_usage();
+# Bytes allocated in the process
+SET @memory_diff = @after_memory - @before_memory;
+include/assert.inc [Assert that memory usage is less than 4MB]
+# Drop index
+DROP INDEX i1 ON t1;
+# Test 2. Test memory usage with minumum value of innodb_ddl_buffer_size
+# and maximum value of --innodb_parallel_read_threads
+SET innodb_ddl_buffer_size = 65536;
+SET innodb_parallel_read_threads = 256;
+# Number of bytes allocated before create index
+SET @before_memory = get_my_std_memory_usage();
+# Create index
+CREATE INDEX i1 ON t1(ip);
+# Number of bytes allocated after create index
+SET @after_memory = get_my_std_memory_usage();
+# Bytes allocated in the process
+SET @memory_diff = @after_memory - @before_memory;
+include/assert.inc [Assert that memory usage is less than 4MB]
+# Drop index
+DROP INDEX i1 ON t1;
+# Test 3. Test memory usage with maximum value of innodb_ddl_buffer_size
+# and minimum value of --innodb_parallel_read_threads
+SET innodb_ddl_buffer_size = 4294967295;
+SET innodb_parallel_read_threads = 1;
+# Number of bytes allocated before create index
+SET @before_memory = get_my_std_memory_usage();
+# Create index
+CREATE INDEX i1 ON t1(ip);
+# Number of bytes allocated after create index
+SET @after_memory = get_my_std_memory_usage();
+# Bytes allocated in the process
+SET @memory_diff = @after_memory - @before_memory;
+include/assert.inc [Assert that memory usage is less than 4MB]
+# Drop index
+DROP INDEX i1 ON t1;
+# Test 4. Test DB_OVERFLOW by setting tuple vector size to 2
+# Set Buffer Size
+SET innodb_ddl_buffer_size = (4*1024*1024);
+SET innodb_parallel_read_threads = default;
+# Create index
+SET DEBUG = '+d, ddl_buf_add_two';
+CREATE INDEX i1 ON t1(ip);
+# The warning "InnoDB rebuilding table to add column FTS_DOC_ID" is expected
+CREATE FULLTEXT INDEX i2 ON t1(ip);
+Warnings:
+Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+SET DEBUG = '-d, ddl_buf_add_two';
+# Drop index
+DROP INDEX i1 ON t1;
+DROP INDEX i2 ON t1;
+# Cleanup
+DROP TABLE t1;
+DROP FUNCTION get_my_std_memory_usage;
+# Restart server to set parameters to default
+# restart

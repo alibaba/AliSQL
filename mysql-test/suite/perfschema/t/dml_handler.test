@@ -1,8 +1,5 @@
 # Tests for PERFORMANCE_SCHEMA
 
---source include/not_embedded.inc
---source include/have_perfschema.inc
-
 #==============================================================================
 # This test verifies that the peformance schema storage engine does not support
 # HANDLER operations.
@@ -18,7 +15,7 @@
  
 CREATE TEMPORARY TABLE table_list (id INT AUTO_INCREMENT, PRIMARY KEY (id)) AS
   SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-  WHERE TABLE_SCHEMA='performance_schema';
+  WHERE TABLE_SCHEMA='performance_schema' ORDER BY TABLE_NAME;
 
 SELECT COUNT(*) FROM table_list INTO @table_count;
 

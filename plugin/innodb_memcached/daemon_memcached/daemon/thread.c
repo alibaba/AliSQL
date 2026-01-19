@@ -17,6 +17,11 @@
 
 #define ITEMS_PER_ALLOC 64
 
+#define INNODB_MEMCACHED
+
+extern void my_thread_end();
+extern void my_thread_init();
+
 static char devnull[8192];
 extern volatile sig_atomic_t memcached_shutdown;
 
@@ -295,6 +300,9 @@ static void *worker_libevent(void *arg) {
     /* Any per-thread setup can happen here; thread_init() will block until
      * all threads have finished initializing.
      */
+#ifdef INNODB_MEMCACHED
+    my_thread_init();
+#endif
 
     pthread_mutex_lock(&init_lock);
     init_count++;
@@ -302,6 +310,12 @@ static void *worker_libevent(void *arg) {
     pthread_mutex_unlock(&init_lock);
 
     event_base_loop(me->base, 0);
+#ifdef INNODB_MEMCACHED
+    if (me->base)
+        event_base_free(me->base);
+    my_thread_end();
+#endif
+
     return NULL;
 }
 
@@ -867,6 +881,13 @@ void threads_shutdown(void)
         safe_close(threads[ii].notify[0]);
         safe_close(threads[ii].notify[1]);
     }
+
+#ifdef INNODB_MEMCACHED
+    if (dispatcher_thread.notify[0])
+        closesocket(dispatcher_thread.notify[0]);
+    if (dispatcher_thread.notify[1])
+        closesocket(dispatcher_thread.notify[1]);
+#endif
 }
 
 void notify_thread(LIBEVENT_THREAD *thread) {

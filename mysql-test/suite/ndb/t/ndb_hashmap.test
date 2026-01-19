@@ -1,0 +1,17 @@
+-- source include/have_ndb.inc
+
+# use data nodes DefaultHashmapSize
+create table t1 (x int primary key) engine=ndbcluster;
+
+# Expect to not find any 'HASHMAP...-7'
+select fq_name from ndbinfo.dict_obj_info
+  where type = 24 /* HashMap */ and fq_name like '%HASHMAP%-7%';
+
+# use api nodes DefaultHashmapSize
+alter table t1 partition by key() partitions 7;
+
+# Check that a 'HASHMAP...-7' for 'partitions 7' was created
+select fq_name from ndbinfo.dict_obj_info
+  where type = 24 /* HashMap */ and fq_name like '%HASHMAP%-7%';
+
+drop table t1;

@@ -5,14 +5,16 @@
 #======================================================================
 # WL#4084: enable disabled parts, 2007-11-15, hhunger
 
+# Thread stack overrun in debug mode on sparc
+--source include/not_sparc_debug.inc
+
 USE test;
 --source suite/funcs_1/include/tb3.inc
 
 --replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
 eval
 load data infile '$MYSQLTEST_VARDIR/std_data/funcs_1/memory_tb3.txt'
-into table tb3;
-
+into table tb3 character set latin1;
 
 --disable_abort_on_error
 
@@ -109,7 +111,7 @@ let $message= Testcase 3.5.10.4:;
 	set @counter= 0;
 	select @counter as 'Rows Loaded Before';
 	--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
-	eval load data infile '$MYSQLTEST_VARDIR/std_data/funcs_1/t9.txt' into table tb_load;
+	eval load data infile '$MYSQLTEST_VARDIR/std_data/funcs_1/t9.txt' into table tb_load character set latin1;
 
 	select @counter as 'Rows Loaded After';
 	Select * from tb_load order by f1 limit 10;
@@ -152,6 +154,7 @@ let $message= Testcase 3.5.10.extra:;
 		for each row set @counter=@counter+1;
 		# declare continue handler for sqlstate '01000' set done = 1;
 
+        SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 	delimiter //;
 	create procedure trig_sp()
 	begin
@@ -363,6 +366,7 @@ set @sql_mode='traditional';
 	set @@max_sp_recursion_depth= 10;
 	set @counter=0;
 	select @counter;
+        
 	--error ER_CANT_UPDATE_USED_TABLE_IN_SF_OR_TRG
 	call trig_sp();
 	select @counter;
@@ -399,7 +403,7 @@ let $message= Testcase y.y.y.5: Rollback of nested trigger references;
         --replace_result $engine_type <engine_to_be_used>
 	eval create table t4 (f4 tinyint) engine = $engine_type;
         --replace_result $engine_type <engine_to_be_used>
-	show create table t1;
+
 	insert into t1 values (1);
 	create trigger tr1 after insert on t1
 		for each row insert into t2 (f2) values (new.f1+1);
@@ -427,5 +431,5 @@ let $message= Testcase y.y.y.5: Rollback of nested trigger references;
 	drop table t2;
 	drop table t3;
 	drop table t4;
-
 DROP TABLE test.tb3;
+SET sql_mode = default;

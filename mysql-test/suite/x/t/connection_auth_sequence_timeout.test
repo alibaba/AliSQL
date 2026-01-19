@@ -1,0 +1,72 @@
+## Test cases for authorization plugins
+
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+--source include/restart_mysqld.inc
+
+#
+## Setup
+#
+
+call mtr.add_suppression("Maximum number of authentication attempts reached");
+
+--write_file $MYSQL_TMP_DIR/auth_seq.xpl
+-->import connection_auth_mechanism_memory_helpers.macro
+-->import connection.macro
+
+-->echo
+-->echo #######################################################################
+-->echo ## 3. Authentication fails, and client is idle
+-->echo ##
+-->echo ## * Establish a connection, try to login with invalid data, do nothing
+-->echo ##   (waiting for disconnection)
+-->echo ## * Establish a connection, enable ssl, try to login with invalid data,
+-->echo ##   do nothing (waiting for disconnection)
+-->echo ##
+-->echo #
+
+-->echo
+-->echo #######################################################################
+-->echo ## New connection & SSL, user is waiting for disconnection after the auth
+-->echo ## failure
+newsession seq	-;
+callmacro Verify_its_xprotocol_connection;
+callmacro Enable_ssl_on_xprotocol_and_transmision_layer;
+
+expecterror ER_ACCESS_DENIED_ERROR;
+login xuser_native	native	test	sha256_memory;
+
+peerdisc 30000 30000;
+
+-->echo
+-->echo #######################################################################
+-->echo ## New connection, user is waiting for disconnection after the auth
+-->echo ## failure
+newsession seq	-;
+
+callmacro Verify_its_xprotocol_connection;
+expecterror ER_ACCESS_DENIED_ERROR;
+login xuser_native	native	test	sha256_memory;
+
+peerdisc 30000 30000;
+EOF
+
+--let $MYSQLXTEST=$MYSQLXTEST -ux_root --ssl-cipher='ECDHE-RSA-AES128-GCM-SHA256'
+
+--source ../include/create_mysql_accounts_for_xplugin_tests.inc
+
+
+#
+## Test starts here
+#
+
+SET GLOBAL mysqlx_connect_timeout = 15;
+exec $MYSQLXTEST --file=$MYSQL_TMP_DIR/auth_seq.xpl 2>&1;
+
+#
+# Postamble
+#
+--source ../include/remove_mysql_accounts_for_xplugin_tests.inc
+--source ../include/xplugin_cleanup.inc
+
+SET GLOBAL mysqlx_connect_timeout = DEFAULT;

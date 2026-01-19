@@ -488,6 +488,9 @@ test.t1	optimize	status	OK
 proceed with the normal connection
 drop table t1;
 CREATE TABLE t1 (  no1 smallint(5) NOT NULL default '0',  no2 int(10) NOT NULL default '0',  PRIMARY KEY  (no1,no2));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1,274),(1,275),(2,6),(2,8),(4,1),(4,2);
 HANDLER t1 OPEN;
 HANDLER t1 READ `primary` = (1, 1000);
@@ -755,24 +758,18 @@ ERROR HY000: Table storage engine for 't1' doesn't have this option
 handler t1 close;
 unlock tables;
 drop table t1;
-# Now test case which was reported originally but which no longer
-# triggers execution path which has caused the problem.
+# Now test case which was reported originally.
 create table t1 (a int, key(a));
 insert into t1 values (1);
 handler t1 open;
 alter table t1 engine=memory;
-# Since S metadata lock was already acquired at HANDLER OPEN time
-# and TL_READ lock requested by HANDLER READ is compatible with
-# ALTER's TL_WRITE_ALLOW_READ the below statement should succeed
-# without waiting. The old version of table should be used in it.
 handler t1 read a next;
-a
-1
+ERROR HY000: Table storage engine for 't1' doesn't have this option
 handler t1 close;
 drop table t1;
 USE information_schema;
 HANDLER COLUMNS OPEN;
-ERROR HY000: Incorrect usage of HANDLER OPEN and information_schema
+ERROR HY000: 'information_schema.COLUMNS' is not BASE TABLE
 USE test;
 #
 # Add test coverage for HANDLER and LOCK TABLES, HANDLER and DDL.
@@ -1036,12 +1033,10 @@ drop table t1 ;
 # --> connection con2 
 # Waitng for 'drop table t1' to get blocked...
 # --> connection default
+# Attempt to upgrade metadata locks to SR from S will lead to
+# deadlock which will result in table being automatically closed.
 handler t1 read a prev;
-a	b
-5	NULL
-handler t1 read a prev;
-a	b
-4	NULL
+ERROR 42S02: Table 'test.t1' doesn't exist
 handler t1 close;
 # --> connection con1
 # Reaping 'drop table t1'...
@@ -1085,20 +1080,16 @@ a
 # thus we can reopen it in the handler
 handler t1 open;
 # We can commit the transaction, it doesn't close the handler
-# and doesn't let DROP to proceed.
+# and doesn't let DROP to proceed immediately.
 commit;
+# Waiting for 'drop table t1' to get blocked...
+# --> connection default
+# OTOH the first attempt to read from HANDLER will lead to metadata
+# locks deadlock and thus to HANDLER being automatically closed.
 handler t1 read a prev;
-a
-5
-handler t1 read a prev;
-a
-4
-handler t1 read a prev;
-a
-3
+ERROR 42S02: Table 'test.t1' doesn't exist
 handler t1 close;
 # --> connection con1
-# Now drop can proceed
 # Reaping 'drop table t1'...
 # --> connection default
 #
@@ -1215,15 +1206,13 @@ rollback to savepoint sv;
 # Reaping 'drop table t2'...
 # Demonstrate that ROLLBACK TO SAVEPOINT didn't release the handler
 # lock.
+# --> connection con3
+# Check if 'drop table t1' still blocked...
 # --> connection default
+# Demonstrate that the drop will go through as soon as we close
+# or will try to access HANDLER
 handler t1 read a next;
-a
-3
-handler t1 read a next;
-a
-4
-# Demonstrate that the drop will go through as soon as we close the 
-# HANDLER
+ERROR 42S02: Table 'test.t1' doesn't exist
 handler t1 close;
 # connection con1
 # Reaping 'drop table t1'...
@@ -1274,15 +1263,13 @@ rollback to savepoint sv;
 # Reaping 'drop table t2'...
 # Demonstrate that ROLLBACK TO SAVEPOINT didn't release the handler
 # lock.
+# --> connection con3
+# Check if 'drop table t1' is still blocked...
 # --> connection default
+# Demonstrate that the drop will go through as soon as we access or
+# close the HANDLER
 handler t1 read a next;
-a
-3
-handler t1 read a next;
-a
-4
-# Demonstrate that the drop will go through as soon as we close the 
-# HANDLER
+ERROR 42S02: Table 'test.t1' doesn't exist
 handler t1 close;
 # connection con1
 # Reaping 'drop table t1'...
@@ -1320,14 +1307,12 @@ drop table t3;
 # Let DROP TABLE statement sync in.
 # --> connection con2
 # Waiting for 'drop table t3' to get blocked...
-# Demonstrate that ROLLBACK TO SAVEPOINT didn't release the handler
-# lock.
+# The fact that DROP TABLE is blocked means that ROLLBACK TO SAVEPOINT
+# didn't release the handler lock.
 # --> connection default
+# Drop will go through as soon as we access or close the HANDLER
 handler t3 read a next;
-a
-2
-# Demonstrate that the drop will go through as soon as we close the 
-# HANDLER
+ERROR 42S02: Table 'test.t3' doesn't exist
 handler t3 close;
 # connection con1
 # Reaping 'drop table t3'...
@@ -1591,7 +1576,7 @@ CREATE TABLE t1 (id INT);
 HANDLER t1 OPEN;
 SELECT table_name, table_comment FROM information_schema.tables
 WHERE table_schema= 'test' AND table_name= 't1';
-table_name	table_comment
+TABLE_NAME	TABLE_COMMENT
 t1	
 HANDLER t1 CLOSE;
 DROP TABLE t1;
@@ -1839,6 +1824,42 @@ a	b
 HANDLER t1 CLOSE;
 DROP TABLE t1;
 #
+# Bug#21650603 ASSERT `0' FAILED AT THD::SEND_STATEMENT_STATUS() ON
+#              HANDLER READ + INVALID DATE
+#
+CREATE TABLE t (
+col_date DATE
+, col_datetime DATETIME
+, col_time TIME
+, col_year YEAR
+, KEY col_date_key (col_date)
+, KEY col_datetime_key (col_datetime)
+, KEY col_year_key (col_year));
+HANDLER t OPEN;
+HANDLER t READ col_date_key <= ('p');
+ERROR HY000: Incorrect arguments to HANDLER ... READ
+HANDLER t READ col_datetime_key <= ('p');
+ERROR HY000: Incorrect arguments to HANDLER ... READ
+HANDLER t READ col_year_key <= ('p');
+ERROR HY000: Incorrect arguments to HANDLER ... READ
+DROP TABLE t;
+#
+# Bug#31977414: ASSERT `!TABLE || (!TABLE->READ_SET ||
+#               BITMAP_IS_SET(TABLE->READ_SET, FIELD_IND
+#
+CREATE TABLE t(x INT);
+INSERT INTO t VALUES (1);
+CREATE VIEW v AS SELECT MAX(x) AS x FROM t;
+HANDLER t OPEN;
+UPDATE v v1, v v2 SET v1.x = v2.x;
+ERROR HY000: The target table v1 of the UPDATE is not updatable
+HANDLER t READ NEXT;
+x
+1
+HANDLER t CLOSE;
+DROP VIEW v;
+DROP TABLE t;
+#
 # BUG #46456: HANDLER OPEN + TRUNCATE + DROP (temporary) TABLE, crash 
 #
 CREATE TABLE t1 AS SELECT 1 AS f1;
@@ -2035,8 +2056,14 @@ HANDLER t1 READ FIRST;
 ERROR 42S02: Unknown table 't1' in HANDLER
 CREATE TEMPORARY TABLE t1(a INT, b INT, INDEX i(a));
 set global keycache1.key_cache_block_size=2048;
+Warnings:
+Warning	1287	keycache1.key_cache_block_size syntax is deprecated and will be removed in a future release
 set global keycache1.key_buffer_size=1*1024*1024;
+Warnings:
+Warning	1287	keycache1.key_buffer_size syntax is deprecated and will be removed in a future release
 set global keycache1.key_buffer_size=1024*1024;
+Warnings:
+Warning	1287	keycache1.key_buffer_size syntax is deprecated and will be removed in a future release
 # -- CACHE INDEX
 HANDLER t1 OPEN;
 CACHE INDEX t1 IN keycache1;

@@ -1,0 +1,1597 @@
+[table:platform Platform Details
+[[Platform][Linux 5.3.0-24-generic, version #26-Ubuntu SMP Thu Nov 14 01:33:18 UTC 2019, x86_64]]
+[[Compiler][GNU C++ version 9.2.1 20191008]]
+[[GMP][6.1.2]]
+[[MPFR][262146]]
+[[Boost][107200]]
+[[Run date][Dec 13 2019]]
+]
+
+gmp_float      50        +                                  0.0146581
+gmp_float      50        -                                  0.0174816
+gmp_float      50        *                                  0.0190973
+gmp_float      50        /                                  0.117114
+gmp_float      50        str                                0.000625689
+gmp_float      50        +(int)                             0.00724196
+gmp_float      50        -(int)                             0.0181961
+gmp_float      50        *(int)                             0.00749984
+gmp_float      50        /(int)                             0.0194966
+gmp_float      50        construct                          0.0502204
+gmp_float      50        construct(unsigned)                0.0554274
+gmp_float      50        construct(unsigned long long)      0.0549133
+gmp_float      50        +(unsigned long long)              0.00751313
+gmp_float      50        -(unsigned long long)              0.0177832
+gmp_float      50        *(unsigned long long)              0.00696399
+gmp_float      50        /(unsigned long long)              0.0189978
+gmp_float      50        +=(unsigned long long)             0.0153858
+gmp_float      50        -=(unsigned long long)             0.0240839
+gmp_float      50        *=(unsigned long long)             0.0147675
+gmp_float      50        /=(unsigned long long)             0.0257964
+gmp_float      100       +                                  0.0154229
+gmp_float      100       -                                  0.0183114
+gmp_float      100       *                                  0.0373344
+gmp_float      100       /                                  0.142427
+gmp_float      100       str                                0.000909959
+gmp_float      100       +(int)                             0.00756543
+gmp_float      100       -(int)                             0.0183525
+gmp_float      100       *(int)                             0.00733255
+gmp_float      100       /(int)                             0.0223617
+gmp_float      100       construct                          0.0503551
+gmp_float      100       construct(unsigned)                0.0556435
+gmp_float      100       construct(unsigned long long)      0.054621
+gmp_float      100       +(unsigned long long)              0.00778945
+gmp_float      100       -(unsigned long long)              0.0184047
+gmp_float      100       *(unsigned long long)              0.00721095
+gmp_float      100       /(unsigned long long)              0.0214276
+gmp_float      100       +=(unsigned long long)             0.0169298
+gmp_float      100       -=(unsigned long long)             0.0256223
+gmp_float      100       *=(unsigned long long)             0.0159383
+gmp_float      100       /=(unsigned long long)             0.0305434
+gmp_float      500       +                                  0.0208329
+gmp_float      500       -                                  0.0244205
+gmp_float      500       *                                  0.276224
+gmp_float      500       /                                  0.402463
+gmp_float      500       str                                0.00304907
+gmp_float      500       +(int)                             0.00998923
+gmp_float      500       -(int)                             0.0218218
+gmp_float      500       *(int)                             0.0139051
+gmp_float      500       /(int)                             0.0570519
+gmp_float      500       construct                          0.109351
+gmp_float      500       construct(unsigned)                0.111332
+gmp_float      500       construct(unsigned long long)      0.11125
+gmp_float      500       +(unsigned long long)              0.0101232
+gmp_float      500       -(unsigned long long)              0.0210111
+gmp_float      500       *(unsigned long long)              0.0140224
+gmp_float      500       /(unsigned long long)              0.0564701
+gmp_float      500       +=(unsigned long long)             0.022811
+gmp_float      500       -=(unsigned long long)             0.0304267
+gmp_float      500       *=(unsigned long long)             0.0212737
+gmp_float      500       /=(unsigned long long)             0.0641451
+gmp_int        128       +                                  0.00643694
+gmp_int        128       -                                  0.00931231
+gmp_int        128       *                                  0.00672197
+gmp_int        128       /                                  0.0853863
+gmp_int        128       str                                0.000219061
+gmp_int        128       +(int)                             0.00367891
+gmp_int        128       -(int)                             0.00375949
+gmp_int        128       *(int)                             0.00596161
+gmp_int        128       /(int)                             0.0112211
+gmp_int        128       construct                          0.0489404
+gmp_int        128       construct(unsigned)                0.0520479
+gmp_int        128       construct(unsigned long long)      0.0528826
+gmp_int        128       %                                  0.0638235
+gmp_int        128       |                                  0.00819781
+gmp_int        128       &                                  0.00610446
+gmp_int        128       ^                                  0.00900763
+gmp_int        128       <<                                 0.0116198
+gmp_int        128       >>                                 0.00344295
+gmp_int        128       %(int)                             0.0103823
+gmp_int        128       |(int)                             0.0329958
+gmp_int        128       &(int)                             0.0311256
+gmp_int        128       ^(int)                             0.0344397
+gmp_int        128       gcd                                0.191195
+gmp_int        128       powm                               0.0752583
+gmp_int        128       +(unsigned long long)              0.00400966
+gmp_int        128       -(unsigned long long)              0.00465772
+gmp_int        128       *(unsigned long long)              0.00575774
+gmp_int        128       /(unsigned long long)              0.0119333
+gmp_int        128       +=(unsigned long long)             0.00797012
+gmp_int        128       -=(unsigned long long)             0.0081014
+gmp_int        128       *=(unsigned long long)             0.00994121
+gmp_int        128       /=(unsigned long long)             0.0163719
+gmp_int        256       +                                  0.00787741
+gmp_int        256       -                                  0.00942373
+gmp_int        256       *                                  0.0180725
+gmp_int        256       /                                  0.11081
+gmp_int        256       str                                0.000265419
+gmp_int        256       +(int)                             0.00405429
+gmp_int        256       -(int)                             0.00387191
+gmp_int        256       *(int)                             0.00574233
+gmp_int        256       /(int)                             0.0130833
+gmp_int        256       construct                          0.0484711
+gmp_int        256       construct(unsigned)                0.0512762
+gmp_int        256       construct(unsigned long long)      0.0514712
+gmp_int        256       %                                  0.0771433
+gmp_int        256       |                                  0.00772371
+gmp_int        256       &                                  0.00583083
+gmp_int        256       ^                                  0.00859017
+gmp_int        256       <<                                 0.0119341
+gmp_int        256       >>                                 0.0033497
+gmp_int        256       %(int)                             0.0149784
+gmp_int        256       |(int)                             0.0327581
+gmp_int        256       &(int)                             0.0303296
+gmp_int        256       ^(int)                             0.0336138
+gmp_int        256       gcd                                0.842898
+gmp_int        256       powm                               0.187607
+gmp_int        256       +(unsigned long long)              0.00409262
+gmp_int        256       -(unsigned long long)              0.00394375
+gmp_int        256       *(unsigned long long)              0.00553729
+gmp_int        256       /(unsigned long long)              0.0137293
+gmp_int        256       +=(unsigned long long)             0.00789978
+gmp_int        256       -=(unsigned long long)             0.00807013
+gmp_int        256       *=(unsigned long long)             0.0104288
+gmp_int        256       /=(unsigned long long)             0.0189142
+gmp_int        512       +                                  0.00759213
+gmp_int        512       -                                  0.00962656
+gmp_int        512       *                                  0.0366081
+gmp_int        512       /                                  0.114775
+gmp_int        512       str                                0.000464936
+gmp_int        512       +(int)                             0.00396328
+gmp_int        512       -(int)                             0.00398606
+gmp_int        512       *(int)                             0.00696202
+gmp_int        512       /(int)                             0.0191805
+gmp_int        512       construct                          0.0493265
+gmp_int        512       construct(unsigned)                0.0525909
+gmp_int        512       construct(unsigned long long)      0.0537536
+gmp_int        512       %                                  0.0854098
+gmp_int        512       |                                  0.00868852
+gmp_int        512       &                                  0.00780563
+gmp_int        512       ^                                  0.0101714
+gmp_int        512       <<                                 0.0150714
+gmp_int        512       >>                                 0.00330767
+gmp_int        512       %(int)                             0.0168035
+gmp_int        512       |(int)                             0.034836
+gmp_int        512       &(int)                             0.0323335
+gmp_int        512       ^(int)                             0.0353319
+gmp_int        512       gcd                                1.9441
+gmp_int        512       powm                               0.807043
+gmp_int        512       +(unsigned long long)              0.00450039
+gmp_int        512       -(unsigned long long)              0.00461397
+gmp_int        512       *(unsigned long long)              0.00709163
+gmp_int        512       /(unsigned long long)              0.0188726
+gmp_int        512       +=(unsigned long long)             0.00812
+gmp_int        512       -=(unsigned long long)             0.00845934
+gmp_int        512       *=(unsigned long long)             0.0117912
+gmp_int        512       /=(unsigned long long)             0.0226949
+gmp_int        1024      +                                  0.00992945
+gmp_int        1024      -                                  0.0109271
+gmp_int        1024      *                                  0.100555
+gmp_int        1024      /                                  0.132969
+gmp_int        1024      str                                0.000975531
+gmp_int        1024      +(int)                             0.00571412
+gmp_int        1024      -(int)                             0.00521786
+gmp_int        1024      *(int)                             0.00950608
+gmp_int        1024      /(int)                             0.0317386
+gmp_int        1024      construct                          0.0481075
+gmp_int        1024      construct(unsigned)                0.0515831
+gmp_int        1024      construct(unsigned long long)      0.0517252
+gmp_int        1024      %                                  0.0987817
+gmp_int        1024      |                                  0.00950363
+gmp_int        1024      &                                  0.00821528
+gmp_int        1024      ^                                  0.00995865
+gmp_int        1024      <<                                 0.0193613
+gmp_int        1024      >>                                 0.00332904
+gmp_int        1024      %(int)                             0.0204792
+gmp_int        1024      |(int)                             0.0342437
+gmp_int        1024      &(int)                             0.0306228
+gmp_int        1024      ^(int)                             0.0348967
+gmp_int        1024      gcd                                4.0549
+gmp_int        1024      powm                               4.7187
+gmp_int        1024      +(unsigned long long)              0.0055593
+gmp_int        1024      -(unsigned long long)              0.00543571
+gmp_int        1024      *(unsigned long long)              0.00962312
+gmp_int        1024      /(unsigned long long)              0.0315286
+gmp_int        1024      +=(unsigned long long)             0.00914227
+gmp_int        1024      -=(unsigned long long)             0.00944683
+gmp_int        1024      *=(unsigned long long)             0.0141241
+gmp_int        1024      /=(unsigned long long)             0.0359977
+cpp_int(fixed) 128       +                                  0.000836815
+cpp_int(fixed) 128       -                                  0.00107085
+cpp_int(fixed) 128       *                                  0.000960586
+cpp_int(fixed) 128       /                                  0.0325094
+cpp_int(fixed) 128       str                                0.00112106
+cpp_int(fixed) 128       +(int)                             0.000651354
+cpp_int(fixed) 128       -(int)                             0.000981414
+cpp_int(fixed) 128       *(int)                             0.000634036
+cpp_int(fixed) 128       /(int)                             0.0186586
+cpp_int(fixed) 128       construct                          0.000571519
+cpp_int(fixed) 128       construct(unsigned)                0.000762672
+cpp_int(fixed) 128       construct(unsigned long long)      0.000803908
+cpp_int(fixed) 128       %                                  0.0330895
+cpp_int(fixed) 128       |                                  0.00328643
+cpp_int(fixed) 128       &                                  0.00316334
+cpp_int(fixed) 128       ^                                  0.00338833
+cpp_int(fixed) 128       <<                                 0.000848746
+cpp_int(fixed) 128       >>                                 0.000802316
+cpp_int(fixed) 128       %(int)                             0.020153
+cpp_int(fixed) 128       |(int)                             0.00343686
+cpp_int(fixed) 128       &(int)                             0.00349434
+cpp_int(fixed) 128       ^(int)                             0.00345661
+cpp_int(fixed) 128       gcd                                0.664533
+cpp_int(fixed) 128       powm                               0.438734
+cpp_int(fixed) 128       +(unsigned long long)              0.00063349
+cpp_int(fixed) 128       -(unsigned long long)              0.00096911
+cpp_int(fixed) 128       *(unsigned long long)              0.000696646
+cpp_int(fixed) 128       /(unsigned long long)              0.0205101
+cpp_int(fixed) 128       +=(unsigned long long)             0.000579142
+cpp_int(fixed) 128       -=(unsigned long long)             0.000804926
+cpp_int(fixed) 128       *=(unsigned long long)             0.000748647
+cpp_int(fixed) 128       /=(unsigned long long)             0.0196733
+cpp_int(fixed) 256       +                                  0.00681969
+cpp_int(fixed) 256       -                                  0.00932056
+cpp_int(fixed) 256       *                                  0.0189943
+cpp_int(fixed) 256       /                                  0.112153
+cpp_int(fixed) 256       str                                0.00051039
+cpp_int(fixed) 256       +(int)                             0.00918106
+cpp_int(fixed) 256       -(int)                             0.00778659
+cpp_int(fixed) 256       *(int)                             0.00533605
+cpp_int(fixed) 256       /(int)                             0.0691348
+cpp_int(fixed) 256       construct                          0.00204677
+cpp_int(fixed) 256       construct(unsigned)                0.00223478
+cpp_int(fixed) 256       construct(unsigned long long)      0.00227157
+cpp_int(fixed) 256       %                                  0.10904
+cpp_int(fixed) 256       |                                  0.0112498
+cpp_int(fixed) 256       &                                  0.0121216
+cpp_int(fixed) 256       ^                                  0.013859
+cpp_int(fixed) 256       <<                                 0.00624253
+cpp_int(fixed) 256       >>                                 0.00532573
+cpp_int(fixed) 256       %(int)                             0.0699684
+cpp_int(fixed) 256       |(int)                             0.0108938
+cpp_int(fixed) 256       &(int)                             0.0182556
+cpp_int(fixed) 256       ^(int)                             0.013225
+cpp_int(fixed) 256       gcd                                1.43732
+cpp_int(fixed) 256       powm                               1.66829
+cpp_int(fixed) 256       +(unsigned long long)              0.00923798
+cpp_int(fixed) 256       -(unsigned long long)              0.00840261
+cpp_int(fixed) 256       *(unsigned long long)              0.00422601
+cpp_int(fixed) 256       /(unsigned long long)              0.0761662
+cpp_int(fixed) 256       +=(unsigned long long)             0.00776928
+cpp_int(fixed) 256       -=(unsigned long long)             0.00736247
+cpp_int(fixed) 256       *=(unsigned long long)             0.00940387
+cpp_int(fixed) 256       /=(unsigned long long)             0.0817993
+cpp_int(fixed) 512       +                                  0.0107337
+cpp_int(fixed) 512       -                                  0.0113195
+cpp_int(fixed) 512       *                                  0.0512925
+cpp_int(fixed) 512       /                                  0.187605
+cpp_int(fixed) 512       str                                0.00114008
+cpp_int(fixed) 512       +(int)                             0.00891717
+cpp_int(fixed) 512       -(int)                             0.0079343
+cpp_int(fixed) 512       *(int)                             0.0087273
+cpp_int(fixed) 512       /(int)                             0.128571
+cpp_int(fixed) 512       construct                          0.00318462
+cpp_int(fixed) 512       construct(unsigned)                0.00348916
+cpp_int(fixed) 512       construct(unsigned long long)      0.00344948
+cpp_int(fixed) 512       %                                  0.184697
+cpp_int(fixed) 512       |                                  0.0126787
+cpp_int(fixed) 512       &                                  0.0130102
+cpp_int(fixed) 512       ^                                  0.0160556
+cpp_int(fixed) 512       <<                                 0.00903085
+cpp_int(fixed) 512       >>                                 0.00707508
+cpp_int(fixed) 512       %(int)                             0.129488
+cpp_int(fixed) 512       |(int)                             0.0114047
+cpp_int(fixed) 512       &(int)                             0.0195101
+cpp_int(fixed) 512       ^(int)                             0.0115328
+cpp_int(fixed) 512       gcd                                4.50823
+cpp_int(fixed) 512       powm                               8.01404
+cpp_int(fixed) 512       +(unsigned long long)              0.00963492
+cpp_int(fixed) 512       -(unsigned long long)              0.00881879
+cpp_int(fixed) 512       *(unsigned long long)              0.00592347
+cpp_int(fixed) 512       /(unsigned long long)              0.148664
+cpp_int(fixed) 512       +=(unsigned long long)             0.00796329
+cpp_int(fixed) 512       -=(unsigned long long)             0.00770724
+cpp_int(fixed) 512       *=(unsigned long long)             0.0111425
+cpp_int(fixed) 512       /=(unsigned long long)             0.149478
+cpp_int(fixed) 1024      +                                  0.0205823
+cpp_int(fixed) 1024      -                                  0.0212976
+cpp_int(fixed) 1024      *                                  0.133528
+cpp_int(fixed) 1024      /                                  0.355761
+cpp_int(fixed) 1024      str                                0.00362969
+cpp_int(fixed) 1024      +(int)                             0.0134049
+cpp_int(fixed) 1024      -(int)                             0.0123073
+cpp_int(fixed) 1024      *(int)                             0.0173257
+cpp_int(fixed) 1024      /(int)                             0.268837
+cpp_int(fixed) 1024      construct                          0.00774465
+cpp_int(fixed) 1024      construct(unsigned)                0.00779734
+cpp_int(fixed) 1024      construct(unsigned long long)      0.007641
+cpp_int(fixed) 1024      %                                  0.350131
+cpp_int(fixed) 1024      |                                  0.0185784
+cpp_int(fixed) 1024      &                                  0.0174986
+cpp_int(fixed) 1024      ^                                  0.0181626
+cpp_int(fixed) 1024      <<                                 0.0137187
+cpp_int(fixed) 1024      >>                                 0.0140212
+cpp_int(fixed) 1024      %(int)                             0.274825
+cpp_int(fixed) 1024      |(int)                             0.0205014
+cpp_int(fixed) 1024      &(int)                             0.0303898
+cpp_int(fixed) 1024      ^(int)                             0.0206643
+cpp_int(fixed) 1024      gcd                                14.4217
+cpp_int(fixed) 1024      powm                               41.6696
+cpp_int(fixed) 1024      +(unsigned long long)              0.0138758
+cpp_int(fixed) 1024      -(unsigned long long)              0.0128921
+cpp_int(fixed) 1024      *(unsigned long long)              0.013052
+cpp_int(fixed) 1024      /(unsigned long long)              0.307082
+cpp_int(fixed) 1024      +=(unsigned long long)             0.00863808
+cpp_int(fixed) 1024      -=(unsigned long long)             0.0085416
+cpp_int(fixed) 1024      *=(unsigned long long)             0.0138715
+cpp_int(fixed) 1024      /=(unsigned long long)             0.29968
+cpp_int        128       +                                  0.013332
+cpp_int        128       -                                  0.013267
+cpp_int        128       *                                  0.0300171
+cpp_int        128       /                                  0.120457
+cpp_int        128       str                                0.000421266
+cpp_int        128       +(int)                             0.00838402
+cpp_int        128       -(int)                             0.00718041
+cpp_int        128       *(int)                             0.00819119
+cpp_int        128       /(int)                             0.0610196
+cpp_int        128       construct                          0.00154337
+cpp_int        128       construct(unsigned)                0.00163907
+cpp_int        128       construct(unsigned long long)      0.00192516
+cpp_int        128       %                                  0.0864932
+cpp_int        128       |                                  0.0172824
+cpp_int        128       &                                  0.0183659
+cpp_int        128       ^                                  0.0176691
+cpp_int        128       <<                                 0.0162764
+cpp_int        128       >>                                 0.0162325
+cpp_int        128       %(int)                             0.0411513
+cpp_int        128       |(int)                             0.0155813
+cpp_int        128       &(int)                             0.022195
+cpp_int        128       ^(int)                             0.0154762
+cpp_int        128       gcd                                0.395833
+cpp_int        128       powm                               0.802191
+cpp_int        128       +(unsigned long long)              0.00642975
+cpp_int        128       -(unsigned long long)              0.00750847
+cpp_int        128       *(unsigned long long)              0.00634192
+cpp_int        128       /(unsigned long long)              0.0679437
+cpp_int        128       +=(unsigned long long)             0.0119696
+cpp_int        128       -=(unsigned long long)             0.0131613
+cpp_int        128       *=(unsigned long long)             0.0124159
+cpp_int        128       /=(unsigned long long)             0.0787575
+cpp_int        256       +                                  0.0143298
+cpp_int        256       -                                  0.0143848
+cpp_int        256       *                                  0.0236033
+cpp_int        256       /                                  0.256283
+cpp_int        256       str                                0.000851021
+cpp_int        256       +(int)                             0.00932673
+cpp_int        256       -(int)                             0.00764735
+cpp_int        256       *(int)                             0.00975751
+cpp_int        256       /(int)                             0.114124
+cpp_int        256       construct                          0.00165673
+cpp_int        256       construct(unsigned)                0.00163286
+cpp_int        256       construct(unsigned long long)      0.00189599
+cpp_int        256       %                                  0.180207
+cpp_int        256       |                                  0.0151621
+cpp_int        256       &                                  0.0152432
+cpp_int        256       ^                                  0.0151583
+cpp_int        256       <<                                 0.0163378
+cpp_int        256       >>                                 0.0157363
+cpp_int        256       %(int)                             0.0824453
+cpp_int        256       |(int)                             0.015007
+cpp_int        256       &(int)                             0.0225044
+cpp_int        256       ^(int)                             0.0152722
+cpp_int        256       gcd                                2.95518
+cpp_int        256       powm                               2.61537
+cpp_int        256       +(unsigned long long)              0.00645253
+cpp_int        256       -(unsigned long long)              0.00771183
+cpp_int        256       *(unsigned long long)              0.00682732
+cpp_int        256       /(unsigned long long)              0.118515
+cpp_int        256       +=(unsigned long long)             0.0116516
+cpp_int        256       -=(unsigned long long)             0.0134809
+cpp_int        256       *=(unsigned long long)             0.0117921
+cpp_int        256       /=(unsigned long long)             0.16217
+cpp_int        512       +                                  0.0167551
+cpp_int        512       -                                  0.0168786
+cpp_int        512       *                                  0.0566226
+cpp_int        512       /                                  0.342198
+cpp_int        512       str                                0.00169768
+cpp_int        512       +(int)                             0.00974958
+cpp_int        512       -(int)                             0.00793413
+cpp_int        512       *(int)                             0.0145601
+cpp_int        512       /(int)                             0.188141
+cpp_int        512       construct                          0.00160871
+cpp_int        512       construct(unsigned)                0.00171255
+cpp_int        512       construct(unsigned long long)      0.00183399
+cpp_int        512       %                                  0.265481
+cpp_int        512       |                                  0.015208
+cpp_int        512       &                                  0.0150612
+cpp_int        512       ^                                  0.01576
+cpp_int        512       <<                                 0.021464
+cpp_int        512       >>                                 0.0149173
+cpp_int        512       %(int)                             0.158338
+cpp_int        512       |(int)                             0.0145389
+cpp_int        512       &(int)                             0.022403
+cpp_int        512       ^(int)                             0.0149375
+cpp_int        512       gcd                                8.63567
+cpp_int        512       powm                               10.4205
+cpp_int        512       +(unsigned long long)              0.00641131
+cpp_int        512       -(unsigned long long)              0.00832029
+cpp_int        512       *(unsigned long long)              0.00820436
+cpp_int        512       /(unsigned long long)              0.19782
+cpp_int        512       +=(unsigned long long)             0.0113839
+cpp_int        512       -=(unsigned long long)             0.0129795
+cpp_int        512       *=(unsigned long long)             0.0140258
+cpp_int        512       /=(unsigned long long)             0.247055
+cpp_int        1024      +                                  0.0233641
+cpp_int        1024      -                                  0.0248697
+cpp_int        1024      *                                  0.200935
+cpp_int        1024      /                                  0.552845
+cpp_int        1024      str                                0.00504001
+cpp_int        1024      +(int)                             0.0103926
+cpp_int        1024      -(int)                             0.00889396
+cpp_int        1024      *(int)                             0.0199823
+cpp_int        1024      /(int)                             0.347422
+cpp_int        1024      construct                          0.00172862
+cpp_int        1024      construct(unsigned)                0.0017176
+cpp_int        1024      construct(unsigned long long)      0.00196715
+cpp_int        1024      %                                  0.437939
+cpp_int        1024      |                                  0.017812
+cpp_int        1024      &                                  0.0169715
+cpp_int        1024      ^                                  0.0166044
+cpp_int        1024      <<                                 0.0286746
+cpp_int        1024      >>                                 0.0162095
+cpp_int        1024      %(int)                             0.324245
+cpp_int        1024      |(int)                             0.0155149
+cpp_int        1024      &(int)                             0.0249629
+cpp_int        1024      ^(int)                             0.0152534
+cpp_int        1024      gcd                                22.6997
+cpp_int        1024      powm                               51.2302
+cpp_int        1024      +(unsigned long long)              0.00821865
+cpp_int        1024      -(unsigned long long)              0.00851748
+cpp_int        1024      *(unsigned long long)              0.012381
+cpp_int        1024      /(unsigned long long)              0.36737
+cpp_int        1024      +=(unsigned long long)             0.0125775
+cpp_int        1024      -=(unsigned long long)             0.0140383
+cpp_int        1024      *=(unsigned long long)             0.017396
+cpp_int        1024      /=(unsigned long long)             0.405759
+cpp_rational   128       +                                  1.97719
+cpp_rational   128       -                                  2.0234
+cpp_rational   128       *                                  1.11835
+cpp_rational   128       /                                  6.66075
+cpp_rational   128       str                                0.00206821
+cpp_rational   128       +(int)                             0.669913
+cpp_rational   128       -(int)                             0.62794
+cpp_rational   128       *(int)                             0.612884
+cpp_rational   128       /(int)                             0.64166
+cpp_rational   128       construct                          0.00323537
+cpp_rational   128       construct(unsigned)                0.00321917
+cpp_rational   128       construct(unsigned long long)      0.00333944
+cpp_rational   128       +(unsigned long long)              1.16835
+cpp_rational   128       -(unsigned long long)              1.16081
+cpp_rational   128       *(unsigned long long)              0.691659
+cpp_rational   128       /(unsigned long long)              0.691696
+cpp_rational   128       +=(unsigned long long)             1.14891
+cpp_rational   128       -=(unsigned long long)             1.16049
+cpp_rational   128       *=(unsigned long long)             0.690473
+cpp_rational   128       /=(unsigned long long)             0.685733
+cpp_rational   256       +                                  7.34254
+cpp_rational   256       -                                  7.38282
+cpp_rational   256       *                                  6.61855
+cpp_rational   256       /                                  21.0634
+cpp_rational   256       str                                0.00645497
+cpp_rational   256       +(int)                             2.91217
+cpp_rational   256       -(int)                             2.96506
+cpp_rational   256       *(int)                             2.83784
+cpp_rational   256       /(int)                             2.84312
+cpp_rational   256       construct                          0.00328614
+cpp_rational   256       construct(unsigned)                0.00319471
+cpp_rational   256       construct(unsigned long long)      0.00335336
+cpp_rational   256       +(unsigned long long)              3.37438
+cpp_rational   256       -(unsigned long long)              3.40187
+cpp_rational   256       *(unsigned long long)              2.97414
+cpp_rational   256       /(unsigned long long)              2.94678
+cpp_rational   256       +=(unsigned long long)             3.45541
+cpp_rational   256       -=(unsigned long long)             3.64132
+cpp_rational   256       *=(unsigned long long)             3.35519
+cpp_rational   256       /=(unsigned long long)             3.08065
+cpp_rational   512       +                                  21.2507
+cpp_rational   512       -                                  19.913
+cpp_rational   512       *                                  18.5981
+cpp_rational   512       /                                  55.0195
+cpp_rational   512       str                                0.0156602
+cpp_rational   512       +(int)                             7.40631
+cpp_rational   512       -(int)                             7.56072
+cpp_rational   512       *(int)                             7.61151
+cpp_rational   512       /(int)                             7.74325
+cpp_rational   512       construct                          0.0032946
+cpp_rational   512       construct(unsigned)                0.00327131
+cpp_rational   512       construct(unsigned long long)      0.00348777
+cpp_rational   512       +(unsigned long long)              8.08959
+cpp_rational   512       -(unsigned long long)              8.26011
+cpp_rational   512       *(unsigned long long)              7.64879
+cpp_rational   512       /(unsigned long long)              7.48547
+cpp_rational   512       +=(unsigned long long)             8.17612
+cpp_rational   512       -=(unsigned long long)             8.10257
+cpp_rational   512       *=(unsigned long long)             7.47312
+cpp_rational   512       /=(unsigned long long)             7.43555
+cpp_rational   1024      +                                  49.7843
+cpp_rational   1024      -                                  50.8786
+cpp_rational   1024      *                                  47.0022
+cpp_rational   1024      /                                  149.774
+cpp_rational   1024      str                                0.0705044
+cpp_rational   1024      +(int)                             29.7057
+cpp_rational   1024      -(int)                             23.42
+cpp_rational   1024      *(int)                             19.4821
+cpp_rational   1024      /(int)                             19.5619
+cpp_rational   1024      construct                          0.00333283
+cpp_rational   1024      construct(unsigned)                0.00366486
+cpp_rational   1024      construct(unsigned long long)      0.00345967
+cpp_rational   1024      +(unsigned long long)              19.9733
+cpp_rational   1024      -(unsigned long long)              20.5682
+cpp_rational   1024      *(unsigned long long)              19.5719
+cpp_rational   1024      /(unsigned long long)              19.5526
+cpp_rational   1024      +=(unsigned long long)             20.0733
+cpp_rational   1024      -=(unsigned long long)             20.0829
+cpp_rational   1024      *=(unsigned long long)             19.3092
+cpp_rational   1024      /=(unsigned long long)             19.2754
+mpq_rational   128       +                                  0.232113
+mpq_rational   128       -                                  0.236118
+mpq_rational   128       *                                  0.431264
+mpq_rational   128       /                                  1.17344
+mpq_rational   128       str                                0.000356077
+mpq_rational   128       +(int)                             0.0933486
+mpq_rational   128       -(int)                             0.094814
+mpq_rational   128       *(int)                             0.108777
+mpq_rational   128       /(int)                             0.108671
+mpq_rational   128       construct                          0.0935664
+mpq_rational   128       construct(unsigned)                0.0993283
+mpq_rational   128       construct(unsigned long long)      0.09744
+mpq_rational   128       +(unsigned long long)              0.0934708
+mpq_rational   128       -(unsigned long long)              0.0937381
+mpq_rational   128       *(unsigned long long)              0.155504
+mpq_rational   128       /(unsigned long long)              0.158948
+mpq_rational   128       +=(unsigned long long)             0.0976436
+mpq_rational   128       -=(unsigned long long)             0.0993285
+mpq_rational   128       *=(unsigned long long)             0.167468
+mpq_rational   128       /=(unsigned long long)             0.165432
+mpq_rational   256       +                                  0.93406
+mpq_rational   256       -                                  0.936822
+mpq_rational   256       *                                  1.7681
+mpq_rational   256       /                                  3.51474
+mpq_rational   256       str                                0.000559971
+mpq_rational   256       +(int)                             0.0975637
+mpq_rational   256       -(int)                             0.0966986
+mpq_rational   256       *(int)                             0.111198
+mpq_rational   256       /(int)                             0.111385
+mpq_rational   256       construct                          0.0924926
+mpq_rational   256       construct(unsigned)                0.0977495
+mpq_rational   256       construct(unsigned long long)      0.097742
+mpq_rational   256       +(unsigned long long)              0.100222
+mpq_rational   256       -(unsigned long long)              0.094297
+mpq_rational   256       *(unsigned long long)              0.161502
+mpq_rational   256       /(unsigned long long)              0.161207
+mpq_rational   256       +=(unsigned long long)             0.100389
+mpq_rational   256       -=(unsigned long long)             0.0993737
+mpq_rational   256       *=(unsigned long long)             0.165609
+mpq_rational   256       /=(unsigned long long)             0.168124
+mpq_rational   512       +                                  2.18402
+mpq_rational   512       -                                  2.08686
+mpq_rational   512       *                                  3.94136
+mpq_rational   512       /                                  6.80254
+mpq_rational   512       str                                0.000861937
+mpq_rational   512       +(int)                             0.0977514
+mpq_rational   512       -(int)                             0.0995801
+mpq_rational   512       *(int)                             0.11768
+mpq_rational   512       /(int)                             0.118393
+mpq_rational   512       construct                          0.0930936
+mpq_rational   512       construct(unsigned)                0.0967869
+mpq_rational   512       construct(unsigned long long)      0.0958203
+mpq_rational   512       +(unsigned long long)              0.0986335
+mpq_rational   512       -(unsigned long long)              0.099081
+mpq_rational   512       *(unsigned long long)              0.172267
+mpq_rational   512       /(unsigned long long)              0.169168
+mpq_rational   512       +=(unsigned long long)             0.104573
+mpq_rational   512       -=(unsigned long long)             0.105098
+mpq_rational   512       *=(unsigned long long)             0.174588
+mpq_rational   512       /=(unsigned long long)             0.171411
+mpq_rational   1024      +                                  4.46507
+mpq_rational   1024      -                                  4.44964
+mpq_rational   1024      *                                  8.56905
+mpq_rational   1024      /                                  14.1539
+mpq_rational   1024      str                                0.00185005
+mpq_rational   1024      +(int)                             0.116781
+mpq_rational   1024      -(int)                             0.117408
+mpq_rational   1024      *(int)                             0.143955
+mpq_rational   1024      /(int)                             0.145528
+mpq_rational   1024      construct                          0.0919355
+mpq_rational   1024      construct(unsigned)                0.103874
+mpq_rational   1024      construct(unsigned long long)      0.099173
+mpq_rational   1024      +(unsigned long long)              0.116332
+mpq_rational   1024      -(unsigned long long)              0.121534
+mpq_rational   1024      *(unsigned long long)              0.19878
+mpq_rational   1024      /(unsigned long long)              0.197224
+mpq_rational   1024      +=(unsigned long long)             0.124408
+mpq_rational   1024      -=(unsigned long long)             0.12517
+mpq_rational   1024      *=(unsigned long long)             0.20482
+mpq_rational   1024      /=(unsigned long long)             0.204503
+tommath_int    128       +                                  0.00678965
+tommath_int    128       -                                  0.0123641
+tommath_int    128       *                                  0.0246539
+tommath_int    128       /                                  0.981836
+tommath_int    128       str                                0.00472888
+tommath_int    128       +(int)                             0.106733
+tommath_int    128       -(int)                             0.113635
+tommath_int    128       *(int)                             0.118252
+tommath_int    128       /(int)                             0.736239
+tommath_int    128       construct                          0.115289
+tommath_int    128       construct(unsigned)                0.252455
+tommath_int    128       construct(unsigned long long)      0.349159
+tommath_int    128       %                                  0.96577
+tommath_int    128       |                                  0.038702
+tommath_int    128       &                                  0.0406739
+tommath_int    128       ^                                  0.0398677
+tommath_int    128       <<                                 0.0209838
+tommath_int    128       >>                                 0.0543026
+tommath_int    128       %(int)                             0.658846
+tommath_int    128       |(int)                             0.136462
+tommath_int    128       &(int)                             0.145742
+tommath_int    128       ^(int)                             0.136771
+tommath_int    128       gcd                                2.06703
+tommath_int    128       powm                               0.459715
+tommath_int    128       +(unsigned long long)              0.254372
+tommath_int    128       -(unsigned long long)              0.259661
+tommath_int    128       *(unsigned long long)              0.265975
+tommath_int    128       /(unsigned long long)              0.840045
+tommath_int    128       +=(unsigned long long)             0.257947
+tommath_int    128       -=(unsigned long long)             0.257531
+tommath_int    128       *=(unsigned long long)             0.286726
+tommath_int    128       /=(unsigned long long)             0.88258
+tommath_int    256       +                                  0.00798749
+tommath_int    256       -                                  0.0149887
+tommath_int    256       *                                  0.0349929
+tommath_int    256       /                                  1.18898
+tommath_int    256       str                                0.0105433
+tommath_int    256       +(int)                             0.112797
+tommath_int    256       -(int)                             0.116037
+tommath_int    256       *(int)                             0.125352
+tommath_int    256       /(int)                             0.973953
+tommath_int    256       construct                          0.0973229
+tommath_int    256       construct(unsigned)                0.247326
+tommath_int    256       construct(unsigned long long)      0.357713
+tommath_int    256       %                                  1.19522
+tommath_int    256       |                                  0.0424855
+tommath_int    256       &                                  0.0427744
+tommath_int    256       ^                                  0.0427158
+tommath_int    256       <<                                 0.028672
+tommath_int    256       >>                                 0.05892
+tommath_int    256       %(int)                             0.911168
+tommath_int    256       |(int)                             0.142016
+tommath_int    256       &(int)                             0.151627
+tommath_int    256       ^(int)                             0.147598
+tommath_int    256       gcd                                4.31644
+tommath_int    256       powm                               1.09382
+tommath_int    256       +(unsigned long long)              0.275892
+tommath_int    256       -(unsigned long long)              0.282188
+tommath_int    256       *(unsigned long long)              0.29312
+tommath_int    256       /(unsigned long long)              1.01524
+tommath_int    256       +=(unsigned long long)             0.276042
+tommath_int    256       -=(unsigned long long)             0.273305
+tommath_int    256       *=(unsigned long long)             0.285285
+tommath_int    256       /=(unsigned long long)             1.00486
+tommath_int    512       +                                  0.0105369
+tommath_int    512       -                                  0.0156977
+tommath_int    512       *                                  0.0562246
+tommath_int    512       /                                  1.48007
+tommath_int    512       str                                0.0256704
+tommath_int    512       +(int)                             0.111833
+tommath_int    512       -(int)                             0.115455
+tommath_int    512       *(int)                             0.129959
+tommath_int    512       /(int)                             1.24139
+tommath_int    512       construct                          0.0848414
+tommath_int    512       construct(unsigned)                0.227296
+tommath_int    512       construct(unsigned long long)      0.341884
+tommath_int    512       %                                  1.47963
+tommath_int    512       |                                  0.0426395
+tommath_int    512       &                                  0.0425969
+tommath_int    512       ^                                  0.0424452
+tommath_int    512       <<                                 0.033255
+tommath_int    512       >>                                 0.0585334
+tommath_int    512       %(int)                             1.20499
+tommath_int    512       |(int)                             0.160345
+tommath_int    512       &(int)                             0.154665
+tommath_int    512       ^(int)                             0.142844
+tommath_int    512       gcd                                8.92681
+tommath_int    512       powm                               3.07116
+tommath_int    512       +(unsigned long long)              0.280267
+tommath_int    512       -(unsigned long long)              0.278803
+tommath_int    512       *(unsigned long long)              0.2998
+tommath_int    512       /(unsigned long long)              1.48911
+tommath_int    512       +=(unsigned long long)             0.278477
+tommath_int    512       -=(unsigned long long)             0.293781
+tommath_int    512       *=(unsigned long long)             0.324997
+tommath_int    512       /=(unsigned long long)             1.61452
+tommath_int    1024      +                                  0.0161566
+tommath_int    1024      -                                  0.018493
+tommath_int    1024      *                                  0.141039
+tommath_int    1024      /                                  2.20208
+tommath_int    1024      str                                0.0794284
+tommath_int    1024      +(int)                             0.139279
+tommath_int    1024      -(int)                             0.143658
+tommath_int    1024      *(int)                             0.162966
+tommath_int    1024      /(int)                             1.90434
+tommath_int    1024      construct                          0.0770287
+tommath_int    1024      construct(unsigned)                0.219878
+tommath_int    1024      construct(unsigned long long)      0.341
+tommath_int    1024      %                                  2.12727
+tommath_int    1024      |                                  0.0434857
+tommath_int    1024      &                                  0.0459981
+tommath_int    1024      ^                                  0.0434936
+tommath_int    1024      <<                                 0.0408897
+tommath_int    1024      >>                                 0.0591272
+tommath_int    1024      %(int)                             1.92505
+tommath_int    1024      |(int)                             0.144457
+tommath_int    1024      &(int)                             0.154131
+tommath_int    1024      ^(int)                             0.146067
+tommath_int    1024      gcd                                20.3168
+tommath_int    1024      powm                               14.291
+tommath_int    1024      +(unsigned long long)              0.297388
+tommath_int    1024      -(unsigned long long)              0.293414
+tommath_int    1024      *(unsigned long long)              0.315697
+tommath_int    1024      /(unsigned long long)              2.35142
+tommath_int    1024      +=(unsigned long long)             0.556978
+tommath_int    1024      -=(unsigned long long)             0.571167
+tommath_int    1024      *=(unsigned long long)             0.437006
+tommath_int    1024      /=(unsigned long long)             2.42996
+cpp_dec_float  50        +                                  0.0218359
+cpp_dec_float  50        -                                  0.0226168
+cpp_dec_float  50        *                                  0.031823
+cpp_dec_float  50        /                                  0.582036
+cpp_dec_float  50        str                                0.00302637
+cpp_dec_float  50        +(int)                             0.0254011
+cpp_dec_float  50        -(int)                             0.0346161
+cpp_dec_float  50        *(int)                             0.0318849
+cpp_dec_float  50        /(int)                             0.292944
+cpp_dec_float  50        construct                          0.00303671
+cpp_dec_float  50        construct(unsigned)                0.0086802
+cpp_dec_float  50        construct(unsigned long long)      0.0155978
+cpp_dec_float  50        +(unsigned long long)              0.030015
+cpp_dec_float  50        -(unsigned long long)              0.0392273
+cpp_dec_float  50        *(unsigned long long)              0.0348541
+cpp_dec_float  50        /(unsigned long long)              0.280663
+cpp_dec_float  50        +=(unsigned long long)             0.0297781
+cpp_dec_float  50        -=(unsigned long long)             0.029523
+cpp_dec_float  50        *=(unsigned long long)             0.0377542
+cpp_dec_float  50        /=(unsigned long long)             0.276449
+cpp_dec_float  100       +                                  0.0261964
+cpp_dec_float  100       -                                  0.0316003
+cpp_dec_float  100       *                                  0.0662176
+cpp_dec_float  100       /                                  1.02087
+cpp_dec_float  100       str                                0.0040019
+cpp_dec_float  100       +(int)                             0.0308294
+cpp_dec_float  100       -(int)                             0.0403659
+cpp_dec_float  100       *(int)                             0.0557104
+cpp_dec_float  100       /(int)                             0.482477
+cpp_dec_float  100       construct                          0.00411687
+cpp_dec_float  100       construct(unsigned)                0.00831702
+cpp_dec_float  100       construct(unsigned long long)      0.00848537
+cpp_dec_float  100       +(unsigned long long)              0.0317483
+cpp_dec_float  100       -(unsigned long long)              0.0331383
+cpp_dec_float  100       *(unsigned long long)              0.0611235
+cpp_dec_float  100       /(unsigned long long)              0.481967
+cpp_dec_float  100       +=(unsigned long long)             0.0528949
+cpp_dec_float  100       -=(unsigned long long)             0.0365817
+cpp_dec_float  100       *=(unsigned long long)             0.0653562
+cpp_dec_float  100       /=(unsigned long long)             0.492342
+cpp_dec_float  500       +                                  0.126431
+cpp_dec_float  500       -                                  0.198666
+cpp_dec_float  500       *                                  0.482708
+cpp_dec_float  500       /                                  5.95388
+cpp_dec_float  500       str                                0.0103068
+cpp_dec_float  500       +(int)                             0.128342
+cpp_dec_float  500       -(int)                             0.117354
+cpp_dec_float  500       *(int)                             0.461166
+cpp_dec_float  500       /(int)                             2.95226
+cpp_dec_float  500       construct                          0.0143345
+cpp_dec_float  500       construct(unsigned)                0.0291456
+cpp_dec_float  500       construct(unsigned long long)      0.0287679
+cpp_dec_float  500       +(unsigned long long)              0.0945316
+cpp_dec_float  500       -(unsigned long long)              0.0902684
+cpp_dec_float  500       *(unsigned long long)              0.455598
+cpp_dec_float  500       /(unsigned long long)              2.91535
+cpp_dec_float  500       +=(unsigned long long)             0.110218
+cpp_dec_float  500       -=(unsigned long long)             0.0946795
+cpp_dec_float  500       *=(unsigned long long)             0.460876
+cpp_dec_float  500       /=(unsigned long long)             2.84786
+cpp_bin_float  50        +                                  0.0381834
+cpp_bin_float  50        -                                  0.0409089
+cpp_bin_float  50        *                                  0.0408401
+cpp_bin_float  50        /                                  0.472005
+cpp_bin_float  50        str                                0.00249639
+cpp_bin_float  50        +(int)                             0.0381889
+cpp_bin_float  50        -(int)                             0.0423205
+cpp_bin_float  50        *(int)                             0.0223518
+cpp_bin_float  50        /(int)                             0.0938506
+cpp_bin_float  50        construct                          0.00303111
+cpp_bin_float  50        construct(unsigned)                0.00519769
+cpp_bin_float  50        construct(unsigned long long)      0.00524853
+cpp_bin_float  50        +(unsigned long long)              0.044578
+cpp_bin_float  50        -(unsigned long long)              0.057902
+cpp_bin_float  50        *(unsigned long long)              0.0235916
+cpp_bin_float  50        /(unsigned long long)              0.101822
+cpp_bin_float  50        +=(unsigned long long)             0.045722
+cpp_bin_float  50        -=(unsigned long long)             0.0470344
+cpp_bin_float  50        *=(unsigned long long)             0.0230891
+cpp_bin_float  50        /=(unsigned long long)             0.125006
+cpp_bin_float  100       +                                  0.0642049
+cpp_bin_float  100       -                                  0.0485095
+cpp_bin_float  100       *                                  0.0653409
+cpp_bin_float  100       /                                  1.06338
+cpp_bin_float  100       str                                0.00505412
+cpp_bin_float  100       +(int)                             0.0518618
+cpp_bin_float  100       -(int)                             0.0550403
+cpp_bin_float  100       *(int)                             0.0313689
+cpp_bin_float  100       /(int)                             0.162749
+cpp_bin_float  100       construct                          0.00357506
+cpp_bin_float  100       construct(unsigned)                0.0054342
+cpp_bin_float  100       construct(unsigned long long)      0.00566609
+cpp_bin_float  100       +(unsigned long long)              0.0758362
+cpp_bin_float  100       -(unsigned long long)              0.075218
+cpp_bin_float  100       *(unsigned long long)              0.0423397
+cpp_bin_float  100       /(unsigned long long)              0.190303
+cpp_bin_float  100       +=(unsigned long long)             0.0640784
+cpp_bin_float  100       -=(unsigned long long)             0.0618181
+cpp_bin_float  100       *=(unsigned long long)             0.031993
+cpp_bin_float  100       /=(unsigned long long)             0.208589
+cpp_bin_float  500       +                                  0.102092
+cpp_bin_float  500       -                                  0.103383
+cpp_bin_float  500       *                                  0.597984
+cpp_bin_float  500       /                                  5.3577
+cpp_bin_float  500       str                                0.0320983
+cpp_bin_float  500       +(int)                             0.104875
+cpp_bin_float  500       -(int)                             0.105425
+cpp_bin_float  500       *(int)                             0.0632425
+cpp_bin_float  500       /(int)                             0.551804
+cpp_bin_float  500       construct                          0.0113051
+cpp_bin_float  500       construct(unsigned)                0.0275892
+cpp_bin_float  500       construct(unsigned long long)      0.0278919
+cpp_bin_float  500       +(unsigned long long)              0.112203
+cpp_bin_float  500       -(unsigned long long)              0.116255
+cpp_bin_float  500       *(unsigned long long)              0.0709145
+cpp_bin_float  500       /(unsigned long long)              0.717622
+cpp_bin_float  500       +=(unsigned long long)             0.117755
+cpp_bin_float  500       -=(unsigned long long)             0.124911
+cpp_bin_float  500       *=(unsigned long long)             0.0772075
+cpp_bin_float  500       /=(unsigned long long)             0.662579
+mpfr_float     50        +                                  0.00990649
+mpfr_float     50        -                                  0.0131639
+mpfr_float     50        *                                  0.00985486
+mpfr_float     50        /                                  0.196689
+mpfr_float     50        str                                0.00126221
+mpfr_float     50        +(int)                             0.0325694
+mpfr_float     50        -(int)                             0.0407359
+mpfr_float     50        *(int)                             0.0218488
+mpfr_float     50        /(int)                             0.0264314
+mpfr_float     50        construct                          0.0838087
+mpfr_float     50        construct(unsigned)                0.107663
+mpfr_float     50        construct(unsigned long long)      0.115395
+mpfr_float     50        +(unsigned long long)              0.0308868
+mpfr_float     50        -(unsigned long long)              0.0443848
+mpfr_float     50        *(unsigned long long)              0.0199265
+mpfr_float     50        /(unsigned long long)              0.0255842
+mpfr_float     50        +=(unsigned long long)             0.0528711
+mpfr_float     50        -=(unsigned long long)             0.0579167
+mpfr_float     50        *=(unsigned long long)             0.0315954
+mpfr_float     50        /=(unsigned long long)             0.0446419
+mpfr_float     50        +                                  0.0097614
+mpfr_float     50        -                                  0.00984886
+mpfr_float     50        *                                  0.00947969
+mpfr_float     50        /                                  0.200117
+mpfr_float     50        str                                0.0012204
+mpfr_float     50        +(int)                             0.0327002
+mpfr_float     50        -(int)                             0.041936
+mpfr_float     50        *(int)                             0.0223562
+mpfr_float     50        /(int)                             0.0269409
+mpfr_float     50        construct                          0.0853075
+mpfr_float     50        construct(unsigned)                0.130111
+mpfr_float     50        construct(unsigned long long)      0.109108
+mpfr_float     50        +(unsigned long long)              0.0322161
+mpfr_float     50        -(unsigned long long)              0.0447741
+mpfr_float     50        *(unsigned long long)              0.0211571
+mpfr_float     50        /(unsigned long long)              0.0269157
+mpfr_float     50        +=(unsigned long long)             0.0526874
+mpfr_float     50        -=(unsigned long long)             0.0580968
+mpfr_float     50        *=(unsigned long long)             0.0329355
+mpfr_float     50        /=(unsigned long long)             0.0389292
+mpfr_float     100       +                                  0.0188131
+mpfr_float     100       -                                  0.0187679
+mpfr_float     100       *                                  0.0452924
+mpfr_float     100       /                                  0.256012
+mpfr_float     100       str                                0.00146774
+mpfr_float     100       +(int)                             0.034396
+mpfr_float     100       -(int)                             0.043451
+mpfr_float     100       *(int)                             0.0243651
+mpfr_float     100       /(int)                             0.0323974
+mpfr_float     100       construct                          0.0887486
+mpfr_float     100       construct(unsigned)                0.113405
+mpfr_float     100       construct(unsigned long long)      0.11486
+mpfr_float     100       +(unsigned long long)              0.0376537
+mpfr_float     100       -(unsigned long long)              0.0498416
+mpfr_float     100       *(unsigned long long)              0.0253062
+mpfr_float     100       /(unsigned long long)              0.0361161
+mpfr_float     100       +=(unsigned long long)             0.0562794
+mpfr_float     100       -=(unsigned long long)             0.0653955
+mpfr_float     100       *=(unsigned long long)             0.0383137
+mpfr_float     100       /=(unsigned long long)             0.0455194
+mpfr_float     500       +                                  0.0378282
+mpfr_float     500       -                                  0.0381809
+mpfr_float     500       *                                  0.589363
+mpfr_float     500       /                                  1.4123
+mpfr_float     500       str                                0.00463864
+mpfr_float     500       +(int)                             0.0524673
+mpfr_float     500       -(int)                             0.0642965
+mpfr_float     500       *(int)                             0.0525722
+mpfr_float     500       /(int)                             0.0867728
+mpfr_float     500       construct                          0.117058
+mpfr_float     500       construct(unsigned)                0.173715
+mpfr_float     500       construct(unsigned long long)      0.144437
+mpfr_float     500       +(unsigned long long)              0.052676
+mpfr_float     500       -(unsigned long long)              0.0723102
+mpfr_float     500       *(unsigned long long)              0.0483258
+mpfr_float     500       /(unsigned long long)              0.0861411
+mpfr_float     500       +=(unsigned long long)             0.0742172
+mpfr_float     500       -=(unsigned long long)             0.0837856
+mpfr_float     500       *=(unsigned long long)             0.0561789
+mpfr_float     500       /=(unsigned long long)             0.109346
+gmp_int        5120      +                                  0.050588
+gmp_int        5120      -                                  0.0462452
+gmp_int        5120      *                                  2.13089
+gmp_int        5120      /                                  0.340699
+gmp_int        5120      str                                0.00720651
+gmp_int        5120      +(int)                             0.0291824
+gmp_int        5120      -(int)                             0.0309358
+gmp_int        5120      *(int)                             0.0425668
+gmp_int        5120      /(int)                             0.172715
+gmp_int        5120      construct                          0.0629698
+gmp_int        5120      construct(unsigned)                0.0694635
+gmp_int        5120      construct(unsigned long long)      0.138372
+gmp_int        5120      %                                  0.280057
+gmp_int        5120      |                                  0.0327866
+gmp_int        5120      &                                  0.0328374
+gmp_int        5120      ^                                  0.0338873
+gmp_int        5120      <<                                 0.0640186
+gmp_int        5120      >>                                 0.00407185
+gmp_int        5120      %(int)                             0.0531708
+gmp_int        5120      |(int)                             0.0526751
+gmp_int        5120      &(int)                             0.0367266
+gmp_int        5120      ^(int)                             0.0541849
+gmp_int        5120      gcd                                28.3707
+gmp_int        5120      +(unsigned long long)              0.0188413
+gmp_int        5120      -(unsigned long long)              0.0185005
+gmp_int        5120      *(unsigned long long)              0.0318361
+gmp_int        5120      /(unsigned long long)              0.135343
+gmp_int        5120      +=(unsigned long long)             0.0229395
+gmp_int        5120      -=(unsigned long long)             0.0216753
+gmp_int        5120      *=(unsigned long long)             0.043807
+gmp_int        5120      /=(unsigned long long)             0.149975
+gmp_int        10240     +                                  0.0500843
+gmp_int        10240     -                                  0.0551462
+gmp_int        10240     *                                  4.82421
+gmp_int        10240     /                                  0.395344
+gmp_int        10240     str                                0.0154642
+gmp_int        10240     +(int)                             0.033729
+gmp_int        10240     -(int)                             0.0335308
+gmp_int        10240     *(int)                             0.0589007
+gmp_int        10240     /(int)                             0.266509
+gmp_int        10240     construct                          0.048682
+gmp_int        10240     construct(unsigned)                0.0510816
+gmp_int        10240     construct(unsigned long long)      0.0510862
+gmp_int        10240     %                                  0.438501
+gmp_int        10240     |                                  0.0514528
+gmp_int        10240     &                                  0.055402
+gmp_int        10240     ^                                  0.0517833
+gmp_int        10240     <<                                 0.0979761
+gmp_int        10240     >>                                 0.00430902
+gmp_int        10240     %(int)                             0.0707528
+gmp_int        10240     |(int)                             0.0619762
+gmp_int        10240     &(int)                             0.0316487
+gmp_int        10240     ^(int)                             0.0622954
+gmp_int        10240     gcd                                61.2516
+gmp_int        10240     +(unsigned long long)              0.0353357
+gmp_int        10240     -(unsigned long long)              0.0336949
+gmp_int        10240     *(unsigned long long)              0.0586816
+gmp_int        10240     /(unsigned long long)              0.28069
+gmp_int        10240     +=(unsigned long long)             0.0498017
+gmp_int        10240     -=(unsigned long long)             0.0368808
+gmp_int        10240     *=(unsigned long long)             0.0846612
+gmp_int        10240     /=(unsigned long long)             0.297582
+cpp_int        5120      +                                  0.0544877
+cpp_int        5120      -                                  0.0615975
+cpp_int        5120      *                                  3.97724
+cpp_int        5120      /                                  1.93033
+cpp_int        5120      str                                0.0811042
+cpp_int        5120      +(int)                             0.0217559
+cpp_int        5120      -(int)                             0.0198067
+cpp_int        5120      *(int)                             0.0692257
+cpp_int        5120      /(int)                             1.5446
+cpp_int        5120      construct                          0.00156009
+cpp_int        5120      construct(unsigned)                0.00167292
+cpp_int        5120      construct(unsigned long long)      0.00191441
+cpp_int        5120      %                                  1.84456
+cpp_int        5120      |                                  0.0913325
+cpp_int        5120      &                                  0.0908961
+cpp_int        5120      ^                                  0.0907825
+cpp_int        5120      <<                                 0.164462
+cpp_int        5120      >>                                 0.0539071
+cpp_int        5120      %(int)                             1.64821
+cpp_int        5120      |(int)                             0.0620504
+cpp_int        5120      &(int)                             0.114785
+cpp_int        5120      ^(int)                             0.062951
+cpp_int        5120      gcd                                269.4
+cpp_int        5120      +(unsigned long long)              0.0236995
+cpp_int        5120      -(unsigned long long)              0.0205857
+cpp_int        5120      *(unsigned long long)              0.0410419
+cpp_int        5120      /(unsigned long long)              1.71211
+cpp_int        5120      +=(unsigned long long)             0.0473177
+cpp_int        5120      -=(unsigned long long)             0.051436
+cpp_int        5120      *=(unsigned long long)             0.135787
+cpp_int        5120      /=(unsigned long long)             1.88874
+cpp_int        10240     +                                  0.108428
+cpp_int        10240     -                                  0.124313
+cpp_int        10240     *                                  15.8254
+cpp_int        10240     /                                  3.77425
+cpp_int        10240     str                                0.313789
+cpp_int        10240     +(int)                             0.0382453
+cpp_int        10240     -(int)                             0.0351681
+cpp_int        10240     *(int)                             0.122618
+cpp_int        10240     /(int)                             3.04214
+cpp_int        10240     construct                          0.00174205
+cpp_int        10240     construct(unsigned)                0.00156985
+cpp_int        10240     construct(unsigned long long)      0.0018252
+cpp_int        10240     %                                  3.52132
+cpp_int        10240     |                                  0.14832
+cpp_int        10240     &                                  0.150675
+cpp_int        10240     ^                                  0.147776
+cpp_int        10240     <<                                 0.258076
+cpp_int        10240     >>                                 0.0524954
+cpp_int        10240     %(int)                             3.18758
+cpp_int        10240     |(int)                             0.0526689
+cpp_int        10240     &(int)                             0.162092
+cpp_int        10240     ^(int)                             0.0542065
+cpp_int        10240     gcd                                962.995
+cpp_int        10240     +(unsigned long long)              0.0416466
+cpp_int        10240     -(unsigned long long)              0.0402243
+cpp_int        10240     *(unsigned long long)              0.0850577
+cpp_int        10240     /(unsigned long long)              3.49901
+cpp_int        10240     +=(unsigned long long)             0.0700083
+cpp_int        10240     -=(unsigned long long)             0.0544701
+cpp_int        10240     *=(unsigned long long)             0.222949
+cpp_int        10240     /=(unsigned long long)             3.63347
+tommath_int    5120      +                                  0.0408838
+tommath_int    5120      -                                  0.0525017
+tommath_int    5120      *                                  2.64598
+tommath_int    5120      /                                  8.78879
+tommath_int    5120      str                                1.21819
+tommath_int    5120      +(int)                             0.148099
+tommath_int    5120      -(int)                             0.153674
+tommath_int    5120      *(int)                             0.260397
+tommath_int    5120      /(int)                             8.18491
+tommath_int    5120      construct                          0.079323
+tommath_int    5120      construct(unsigned)                0.220546
+tommath_int    5120      construct(unsigned long long)      0.351027
+tommath_int    5120      %                                  8.59385
+tommath_int    5120      |                                  0.061712
+tommath_int    5120      &                                  0.0662069
+tommath_int    5120      ^                                  0.0634399
+tommath_int    5120      <<                                 0.118049
+tommath_int    5120      >>                                 0.164016
+tommath_int    5120      %(int)                             8.40805
+tommath_int    5120      |(int)                             0.178221
+tommath_int    5120      &(int)                             0.206173
+tommath_int    5120      ^(int)                             0.180022
+tommath_int    5120      gcd                                213.524
+tommath_int    5120      +(unsigned long long)              0.306988
+tommath_int    5120      -(unsigned long long)              0.32854
+tommath_int    5120      *(unsigned long long)              0.425264
+tommath_int    5120      /(unsigned long long)              9.42692
+tommath_int    5120      +=(unsigned long long)             0.32154
+tommath_int    5120      -=(unsigned long long)             0.328186
+tommath_int    5120      *=(unsigned long long)             0.478321
+tommath_int    5120      /=(unsigned long long)             9.85499
+tommath_int    10240     +                                  0.0871834
+tommath_int    10240     -                                  0.0994384
+tommath_int    10240     *                                  9.64701
+tommath_int    10240     /                                  21.113
+tommath_int    10240     str                                4.67986
+tommath_int    10240     +(int)                             0.18034
+tommath_int    10240     -(int)                             0.181844
+tommath_int    10240     *(int)                             0.355638
+tommath_int    10240     /(int)                             19.5472
+tommath_int    10240     construct                          0.0820957
+tommath_int    10240     construct(unsigned)                0.225072
+tommath_int    10240     construct(unsigned long long)      0.320084
+tommath_int    10240     %                                  20.5696
+tommath_int    10240     |                                  0.102926
+tommath_int    10240     &                                  0.105229
+tommath_int    10240     ^                                  0.111699
+tommath_int    10240     <<                                 0.216819
+tommath_int    10240     >>                                 0.196537
+tommath_int    10240     %(int)                             19.9384
+tommath_int    10240     |(int)                             0.200881
+tommath_int    10240     &(int)                             0.251494
+tommath_int    10240     ^(int)                             0.211046
+tommath_int    10240     gcd                                756.428
+tommath_int    10240     +(unsigned long long)              0.383846
+tommath_int    10240     -(unsigned long long)              0.364638
+tommath_int    10240     *(unsigned long long)              0.600894
+tommath_int    10240     /(unsigned long long)              29.3423
+tommath_int    10240     +=(unsigned long long)             0.866288
+tommath_int    10240     -=(unsigned long long)             0.834089
+tommath_int    10240     *=(unsigned long long)             1.33227
+tommath_int    10240     /=(unsigned long long)             30.1285
+[section:float_performance Float Type Perfomance]
+[table Operator *
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][4.30817 (0.0408401s)][1.75015 (0.0653409s)][2.16485 (0.597984s)]]
+[[cpp_dec_float][3.35696 (0.031823s)][1.77364 (0.0662176s)][1.74752 (0.482708s)]]
+[[gmp_float][2.01455 (0.0190973s)][[*1] (0.0373344s)][[*1] (0.276224s)]]
+[[mpfr_float][[*1] (0.00947969s)][1.21316 (0.0452924s)][2.13364 (0.589363s)]]
+]
+[table Operator *(int)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][2.98031 (0.0223518s)][4.27803 (0.0313689s)][4.54817 (0.0632425s)]]
+[[cpp_dec_float][4.25141 (0.0318849s)][7.59768 (0.0557104s)][33.1653 (0.461166s)]]
+[[gmp_float][[*1] (0.00749984s)][[*1] (0.00733255s)][[*1] (0.0139051s)]]
+[[mpfr_float][2.98089 (0.0223562s)][3.32286 (0.0243651s)][3.7808 (0.0525722s)]]
+]
+[table Operator *(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][3.38766 (0.0235916s)][5.87158 (0.0423397s)][5.05723 (0.0709145s)]]
+[[cpp_dec_float][5.0049 (0.0348541s)][8.47648 (0.0611235s)][32.4907 (0.455598s)]]
+[[gmp_float][[*1] (0.00696399s)][[*1] (0.00721095s)][[*1] (0.0140224s)]]
+[[mpfr_float][3.03806 (0.0211571s)][3.50941 (0.0253062s)][3.44633 (0.0483258s)]]
+]
+[table Operator *=(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][1.56351 (0.0230891s)][2.0073 (0.031993s)][3.62925 (0.0772075s)]]
+[[cpp_dec_float][2.55656 (0.0377542s)][4.10056 (0.0653562s)][21.6642 (0.460876s)]]
+[[gmp_float][[*1] (0.0147675s)][[*1] (0.0159383s)][[*1] (0.0212737s)]]
+[[mpfr_float][2.23026 (0.0329355s)][2.40387 (0.0383137s)][2.64077 (0.0561789s)]]
+]
+[table Operator +
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][3.91168 (0.0381834s)][4.16297 (0.0642049s)][4.90051 (0.102092s)]]
+[[cpp_dec_float][2.23696 (0.0218359s)][1.69854 (0.0261964s)][6.06882 (0.126431s)]]
+[[gmp_float][1.50164 (0.0146581s)][[*1] (0.0154229s)][[*1] (0.0208329s)]]
+[[mpfr_float][[*1] (0.0097614s)][1.21982 (0.0188131s)][1.81579 (0.0378282s)]]
+]
+[table Operator +(int)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][5.27328 (0.0381889s)][6.85509 (0.0518618s)][10.4988 (0.104875s)]]
+[[cpp_dec_float][3.50749 (0.0254011s)][4.07503 (0.0308294s)][12.8481 (0.128342s)]]
+[[gmp_float][[*1] (0.00724196s)][[*1] (0.00756543s)][[*1] (0.00998923s)]]
+[[mpfr_float][4.51538 (0.0327002s)][4.54647 (0.034396s)][5.25239 (0.0524673s)]]
+]
+[table Operator +(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][5.93334 (0.044578s)][9.73575 (0.0758362s)][11.0837 (0.112203s)]]
+[[cpp_dec_float][3.99501 (0.030015s)][4.07581 (0.0317483s)][9.33811 (0.0945316s)]]
+[[gmp_float][[*1] (0.00751313s)][[*1] (0.00778945s)][[*1] (0.0101232s)]]
+[[mpfr_float][4.28797 (0.0322161s)][4.83393 (0.0376537s)][5.2035 (0.052676s)]]
+]
+[table Operator +=(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][2.97171 (0.045722s)][3.78495 (0.0640784s)][5.16221 (0.117755s)]]
+[[cpp_dec_float][1.93543 (0.0297781s)][3.12436 (0.0528949s)][4.83179 (0.110218s)]]
+[[gmp_float][[*1] (0.0153858s)][[*1] (0.0169298s)][[*1] (0.022811s)]]
+[[mpfr_float][3.42442 (0.0526874s)][3.32428 (0.0562794s)][3.25356 (0.0742172s)]]
+]
+[table Operator -
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][4.15367 (0.0409089s)][2.64914 (0.0485095s)][4.23345 (0.103383s)]]
+[[cpp_dec_float][2.29639 (0.0226168s)][1.72571 (0.0316003s)][8.13523 (0.198666s)]]
+[[gmp_float][1.77498 (0.0174816s)][[*1] (0.0183114s)][[*1] (0.0244205s)]]
+[[mpfr_float][[*1] (0.00984886s)][1.02493 (0.0187679s)][1.56348 (0.0381809s)]]
+]
+[table Operator -(int)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][2.32581 (0.0423205s)][2.99906 (0.0550403s)][4.83118 (0.105425s)]]
+[[cpp_dec_float][1.90239 (0.0346161s)][2.19948 (0.0403659s)][5.37782 (0.117354s)]]
+[[gmp_float][[*1] (0.0181961s)][[*1] (0.0183525s)][[*1] (0.0218218s)]]
+[[mpfr_float][2.30468 (0.041936s)][2.36758 (0.043451s)][2.94644 (0.0642965s)]]
+]
+[table Operator -(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][3.256 (0.057902s)][4.0869 (0.075218s)][5.533 (0.116255s)]]
+[[cpp_dec_float][2.20586 (0.0392273s)][1.80053 (0.0331383s)][4.29622 (0.0902684s)]]
+[[gmp_float][[*1] (0.0177832s)][[*1] (0.0184047s)][[*1] (0.0210111s)]]
+[[mpfr_float][2.51778 (0.0447741s)][2.70809 (0.0498416s)][3.44152 (0.0723102s)]]
+]
+[table Operator -=(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][1.95294 (0.0470344s)][2.41267 (0.0618181s)][4.10529 (0.124911s)]]
+[[cpp_dec_float][1.22584 (0.029523s)][1.42773 (0.0365817s)][3.11172 (0.0946795s)]]
+[[gmp_float][[*1] (0.0240839s)][[*1] (0.0256223s)][[*1] (0.0304267s)]]
+[[mpfr_float][2.41227 (0.0580968s)][2.55229 (0.0653955s)][2.75369 (0.0837856s)]]
+]
+[table Operator /
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][4.03031 (0.472005s)][7.46615 (1.06338s)][13.3123 (5.3577s)]]
+[[cpp_dec_float][4.96983 (0.582036s)][7.16767 (1.02087s)][14.7936 (5.95388s)]]
+[[gmp_float][[*1] (0.117114s)][[*1] (0.142427s)][[*1] (0.402463s)]]
+[[mpfr_float][1.70874 (0.200117s)][1.79749 (0.256012s)][3.50914 (1.4123s)]]
+]
+[table Operator /(int)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][4.81369 (0.0938506s)][7.27806 (0.162749s)][9.67195 (0.551804s)]]
+[[cpp_dec_float][15.0254 (0.292944s)][21.5761 (0.482477s)][51.7469 (2.95226s)]]
+[[gmp_float][[*1] (0.0194966s)][[*1] (0.0223617s)][[*1] (0.0570519s)]]
+[[mpfr_float][1.38183 (0.0269409s)][1.44879 (0.0323974s)][1.52094 (0.0867728s)]]
+]
+[table Operator /(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][5.35966 (0.101822s)][8.88121 (0.190303s)][12.708 (0.717622s)]]
+[[cpp_dec_float][14.7735 (0.280663s)][22.4928 (0.481967s)][51.6265 (2.91535s)]]
+[[gmp_float][[*1] (0.0189978s)][[*1] (0.0214276s)][[*1] (0.0564701s)]]
+[[mpfr_float][1.41678 (0.0269157s)][1.6855 (0.0361161s)][1.52543 (0.0861411s)]]
+]
+[table Operator /=(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][4.84585 (0.125006s)][6.82926 (0.208589s)][10.3294 (0.662579s)]]
+[[cpp_dec_float][10.7166 (0.276449s)][16.1194 (0.492342s)][44.3971 (2.84786s)]]
+[[gmp_float][[*1] (0.0257964s)][[*1] (0.0305434s)][[*1] (0.0641451s)]]
+[[mpfr_float][1.50909 (0.0389292s)][1.49032 (0.0455194s)][1.70466 (0.109346s)]]
+]
+[table Operator construct
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][[*1] (0.00303111s)][[*1] (0.00357506s)][[*1] (0.0113051s)]]
+[[cpp_dec_float][1.00185 (0.00303671s)][1.15155 (0.00411687s)][1.26796 (0.0143345s)]]
+[[gmp_float][16.5683 (0.0502204s)][14.0851 (0.0503551s)][9.67268 (0.109351s)]]
+[[mpfr_float][28.144 (0.0853075s)][24.8244 (0.0887486s)][10.3544 (0.117058s)]]
+]
+[table Operator construct(unsigned long long)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][[*1] (0.00524853s)][[*1] (0.00566609s)][[*1] (0.0278919s)]]
+[[cpp_dec_float][2.97185 (0.0155978s)][1.49757 (0.00848537s)][1.03141 (0.0287679s)]]
+[[gmp_float][10.4626 (0.0549133s)][9.63997 (0.054621s)][3.98862 (0.11125s)]]
+[[mpfr_float][20.7883 (0.109108s)][20.2715 (0.11486s)][5.17847 (0.144437s)]]
+]
+[table Operator construct(unsigned)
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][[*1] (0.00519769s)][[*1] (0.0054342s)][[*1] (0.0275892s)]]
+[[cpp_dec_float][1.67001 (0.0086802s)][1.5305 (0.00831702s)][1.05641 (0.0291456s)]]
+[[gmp_float][10.6639 (0.0554274s)][10.2395 (0.0556435s)][4.03533 (0.111332s)]]
+[[mpfr_float][25.0325 (0.130111s)][20.8688 (0.113405s)][6.29649 (0.173715s)]]
+]
+[table Operator str
+[[Backend][50 Bits][100 Bits][500 Bits]]
+[[cpp_bin_float][3.98982 (0.00249639s)][5.55423 (0.00505412s)][10.5272 (0.0320983s)]]
+[[cpp_dec_float][4.83686 (0.00302637s)][4.39789 (0.0040019s)][3.38032 (0.0103068s)]]
+[[gmp_float][[*1] (0.000625689s)][[*1] (0.000909959s)][[*1] (0.00304907s)]]
+[[mpfr_float][1.95049 (0.0012204s)][1.61297 (0.00146774s)][1.52133 (0.00463864s)]]
+]
+[endsect]
+[section:integer_performance Integer Type Perfomance]
+[table Operator %
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][2.61392 (0.0864932s)][2.33601 (0.180207s)][3.10832 (0.265481s)][4.4334 (0.437939s)][6.58635 (1.84456s)][8.03034 (3.52132s)]]
+[[cpp_int(fixed)][[*1] (0.0330895s)][1.41347 (0.10904s)][2.16247 (0.184697s)][3.54449 (0.350131s)]]
+[[gmp_int][1.92882 (0.0638235s)][[*1] (0.0771433s)][[*1] (0.0854098s)][[*1] (0.0987817s)][[*1] (0.280057s)][[*1] (0.438501s)]]
+[[tommath_int][29.1866 (0.96577s)][15.4935 (1.19522s)][17.3239 (1.47963s)][21.5351 (2.12727s)][30.686 (8.59385s)][46.9089 (20.5696s)]]
+]
+[table Operator %(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][3.96358 (0.0411513s)][5.50428 (0.0824453s)][9.42287 (0.158338s)][15.8329 (0.324245s)][30.9984 (1.64821s)][45.0524 (3.18758s)]]
+[[cpp_int(fixed)][1.94108 (0.020153s)][4.67128 (0.0699684s)][7.70602 (0.129488s)][13.4197 (0.274825s)]]
+[[gmp_int][[*1] (0.0103823s)][[*1] (0.0149784s)][[*1] (0.0168035s)][[*1] (0.0204792s)][[*1] (0.0531708s)][[*1] (0.0707528s)]]
+[[tommath_int][63.4583 (0.658846s)][60.8321 (0.911168s)][71.7106 (1.20499s)][94.0003 (1.92505s)][158.133 (8.40805s)][281.804 (19.9384s)]]
+]
+[table Operator &
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][5.80585 (0.0183659s)][2.61424 (0.0152432s)][1.92953 (0.0150612s)][2.06584 (0.0169715s)][2.76807 (0.0908961s)][2.71967 (0.150675s)]]
+[[cpp_int(fixed)][[*1] (0.00316334s)][2.07888 (0.0121216s)][1.66677 (0.0130102s)][2.13 (0.0174986s)]]
+[[gmp_int][1.92975 (0.00610446s)][[*1] (0.00583083s)][[*1] (0.00780563s)][[*1] (0.00821528s)][[*1] (0.0328374s)][[*1] (0.055402s)]]
+[[tommath_int][12.8579 (0.0406739s)][7.3359 (0.0427744s)][5.45721 (0.0425969s)][5.59908 (0.0459981s)][2.0162 (0.0662069s)][1.89937 (0.105229s)]]
+]
+[table Operator &(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][6.35169 (0.022195s)][1.23274 (0.0225044s)][1.14828 (0.022403s)][[*1] (0.0249629s)][3.1254 (0.114785s)][5.12161 (0.162092s)]]
+[[cpp_int(fixed)][[*1] (0.00349434s)][[*1] (0.0182556s)][[*1] (0.0195101s)][1.2174 (0.0303898s)]]
+[[gmp_int][8.90744 (0.0311256s)][1.66139 (0.0303296s)][1.65728 (0.0323335s)][1.22673 (0.0306228s)][[*1] (0.0367266s)][[*1] (0.0316487s)]]
+[[tommath_int][41.7082 (0.145742s)][8.3058 (0.151627s)][7.92746 (0.154665s)][6.17442 (0.154131s)][5.61372 (0.206173s)][7.94642 (0.251494s)]]
+]
+[table Operator *
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][31.2488 (0.0300171s)][1.30604 (0.0236033s)][1.54672 (0.0566226s)][1.99827 (0.200935s)][1.86646 (3.97724s)][3.28041 (15.8254s)]]
+[[cpp_int(fixed)][[*1] (0.000960586s)][1.05101 (0.0189943s)][1.40113 (0.0512925s)][1.32791 (0.133528s)]]
+[[gmp_int][6.99778 (0.00672197s)][[*1] (0.0180725s)][[*1] (0.0366081s)][[*1] (0.100555s)][[*1] (2.13089s)][[*1] (4.82421s)]]
+[[tommath_int][25.6654 (0.0246539s)][1.93625 (0.0349929s)][1.53585 (0.0562246s)][1.40261 (0.141039s)][1.24172 (2.64598s)][1.99971 (9.64701s)]]
+]
+[table Operator *(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][12.9191 (0.00819119s)][1.8286 (0.00975751s)][2.09136 (0.0145601s)][2.10205 (0.0199823s)][1.62628 (0.0692257s)][2.08177 (0.122618s)]]
+[[cpp_int(fixed)][[*1] (0.000634036s)][[*1] (0.00533605s)][1.25356 (0.0087273s)][1.82259 (0.0173257s)]]
+[[gmp_int][9.40263 (0.00596161s)][1.07614 (0.00574233s)][[*1] (0.00696202s)][[*1] (0.00950608s)][[*1] (0.0425668s)][[*1] (0.0589007s)]]
+[[tommath_int][186.507 (0.118252s)][23.4915 (0.125352s)][18.6669 (0.129959s)][17.1434 (0.162966s)][6.11737 (0.260397s)][6.03792 (0.355638s)]]
+]
+[table Operator *(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][9.1035 (0.00634192s)][1.61555 (0.00682732s)][1.38506 (0.00820436s)][1.28658 (0.012381s)][1.28916 (0.0410419s)][1.44948 (0.0850577s)]]
+[[cpp_int(fixed)][[*1] (0.000696646s)][[*1] (0.00422601s)][[*1] (0.00592347s)][1.35631 (0.013052s)]]
+[[gmp_int][8.26494 (0.00575774s)][1.31029 (0.00553729s)][1.19721 (0.00709163s)][[*1] (0.00962312s)][[*1] (0.0318361s)][[*1] (0.0586816s)]]
+[[tommath_int][381.793 (0.265975s)][69.3609 (0.29312s)][50.6122 (0.2998s)][32.8061 (0.315697s)][13.3579 (0.425264s)][10.2399 (0.600894s)]]
+]
+[table Operator *=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][16.5844 (0.0124159s)][1.25396 (0.0117921s)][1.25877 (0.0140258s)][1.25408 (0.017396s)][3.09966 (0.135787s)][2.63342 (0.222949s)]]
+[[cpp_int(fixed)][[*1] (0.000748647s)][[*1] (0.00940387s)][[*1] (0.0111425s)][[*1] (0.0138715s)]]
+[[gmp_int][13.2789 (0.00994121s)][1.10899 (0.0104288s)][1.05822 (0.0117912s)][1.01821 (0.0141241s)][[*1] (0.043807s)][[*1] (0.0846612s)]]
+[[tommath_int][382.992 (0.286726s)][30.337 (0.285285s)][29.1674 (0.324997s)][31.5038 (0.437006s)][10.9188 (0.478321s)][15.7365 (1.33227s)]]
+]
+[table Operator +
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][15.9318 (0.013332s)][2.10124 (0.0143298s)][2.20691 (0.0167551s)][2.35301 (0.0233641s)][1.33275 (0.0544877s)][2.16492 (0.108428s)]]
+[[cpp_int(fixed)][[*1] (0.000836815s)][[*1] (0.00681969s)][1.41379 (0.0107337s)][2.07286 (0.0205823s)]]
+[[gmp_int][7.69219 (0.00643694s)][1.1551 (0.00787741s)][[*1] (0.00759213s)][[*1] (0.00992945s)][1.23736 (0.050588s)][[*1] (0.0500843s)]]
+[[tommath_int][8.11368 (0.00678965s)][1.17124 (0.00798749s)][1.38788 (0.0105369s)][1.62714 (0.0161566s)][[*1] (0.0408838s)][1.74073 (0.0871834s)]]
+]
+[table Operator +(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][12.8717 (0.00838402s)][2.30046 (0.00932673s)][2.45998 (0.00974958s)][1.81876 (0.0103926s)][[*1] (0.0217559s)][1.1339 (0.0382453s)]]
+[[cpp_int(fixed)][[*1] (0.000651354s)][2.26453 (0.00918106s)][2.24994 (0.00891717s)][2.34592 (0.0134049s)]]
+[[gmp_int][5.64809 (0.00367891s)][[*1] (0.00405429s)][[*1] (0.00396328s)][[*1] (0.00571412s)][1.34135 (0.0291824s)][[*1] (0.033729s)]]
+[[tommath_int][163.863 (0.106733s)][27.8217 (0.112797s)][28.2173 (0.111833s)][24.3745 (0.139279s)][6.8073 (0.148099s)][5.34674 (0.18034s)]]
+]
+[table Operator +(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][10.1497 (0.00642975s)][1.57663 (0.00645253s)][1.42461 (0.00641131s)][1.47836 (0.00821865s)][1.25785 (0.0236995s)][1.1786 (0.0416466s)]]
+[[cpp_int(fixed)][[*1] (0.00063349s)][2.25723 (0.00923798s)][2.14091 (0.00963492s)][2.49596 (0.0138758s)]]
+[[gmp_int][6.32948 (0.00400966s)][[*1] (0.00409262s)][[*1] (0.00450039s)][[*1] (0.0055593s)][[*1] (0.0188413s)][[*1] (0.0353357s)]]
+[[tommath_int][401.541 (0.254372s)][67.4121 (0.275892s)][62.2763 (0.280267s)][53.4937 (0.297388s)][16.2934 (0.306988s)][10.8628 (0.383846s)]]
+]
+[table Operator +=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][20.6678 (0.0119696s)][1.49971 (0.0116516s)][1.42955 (0.0113839s)][1.45605 (0.0125775s)][2.06272 (0.0473177s)][1.40574 (0.0700083s)]]
+[[cpp_int(fixed)][[*1] (0.000579142s)][[*1] (0.00776928s)][[*1] (0.00796329s)][[*1] (0.00863808s)]]
+[[gmp_int][13.7619 (0.00797012s)][1.0168 (0.00789978s)][1.01968 (0.00812s)][1.05837 (0.00914227s)][[*1] (0.0229395s)][[*1] (0.0498017s)]]
+[[tommath_int][445.395 (0.257947s)][35.5299 (0.276042s)][34.9701 (0.278477s)][64.4794 (0.556978s)][14.0169 (0.32154s)][17.3947 (0.866288s)]]
+]
+[table Operator -
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][12.3892 (0.013267s)][1.54334 (0.0143848s)][1.75333 (0.0168786s)][2.27597 (0.0248697s)][1.33198 (0.0615975s)][2.25424 (0.124313s)]]
+[[cpp_int(fixed)][[*1] (0.00107085s)][[*1] (0.00932056s)][1.17586 (0.0113195s)][1.94907 (0.0212976s)]]
+[[gmp_int][8.69616 (0.00931231s)][1.01107 (0.00942373s)][[*1] (0.00962656s)][[*1] (0.0109271s)][[*1] (0.0462452s)][[*1] (0.0551462s)]]
+[[tommath_int][11.546 (0.0123641s)][1.60814 (0.0149887s)][1.63067 (0.0156977s)][1.69241 (0.018493s)][1.13529 (0.0525017s)][1.80318 (0.0994384s)]]
+]
+[table Operator -(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][7.3164 (0.00718041s)][1.97509 (0.00764735s)][1.99047 (0.00793413s)][1.70452 (0.00889396s)][[*1] (0.0198067s)][1.04883 (0.0351681s)]]
+[[cpp_int(fixed)][[*1] (0.000981414s)][2.01105 (0.00778659s)][1.99052 (0.0079343s)][2.35869 (0.0123073s)]]
+[[gmp_int][3.83069 (0.00375949s)][[*1] (0.00387191s)][[*1] (0.00398606s)][[*1] (0.00521786s)][1.56189 (0.0309358s)][[*1] (0.0335308s)]]
+[[tommath_int][115.787 (0.113635s)][29.9688 (0.116037s)][28.9647 (0.115455s)][27.5319 (0.143658s)][7.75868 (0.153674s)][5.42319 (0.181844s)]]
+]
+[table Operator -(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][7.7478 (0.00750847s)][1.95546 (0.00771183s)][1.80328 (0.00832029s)][1.56695 (0.00851748s)][1.11271 (0.0205857s)][1.19378 (0.0402243s)]]
+[[cpp_int(fixed)][[*1] (0.00096911s)][2.13061 (0.00840261s)][1.91132 (0.00881879s)][2.37174 (0.0128921s)]]
+[[gmp_int][4.80618 (0.00465772s)][[*1] (0.00394375s)][[*1] (0.00461397s)][[*1] (0.00543571s)][[*1] (0.0185005s)][[*1] (0.0336949s)]]
+[[tommath_int][267.937 (0.259661s)][71.5531 (0.282188s)][60.4257 (0.278803s)][53.979 (0.293414s)][17.7584 (0.32854s)][10.8218 (0.364638s)]]
+]
+[table Operator -=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][16.3509 (0.0131613s)][1.83102 (0.0134809s)][1.68407 (0.0129795s)][1.64352 (0.0140383s)][2.37302 (0.051436s)][1.47693 (0.0544701s)]]
+[[cpp_int(fixed)][[*1] (0.000804926s)][[*1] (0.00736247s)][[*1] (0.00770724s)][[*1] (0.0085416s)]]
+[[gmp_int][10.0648 (0.0081014s)][1.09612 (0.00807013s)][1.09758 (0.00845934s)][1.10598 (0.00944683s)][[*1] (0.0216753s)][[*1] (0.0368808s)]]
+[[tommath_int][319.944 (0.257531s)][37.1214 (0.273305s)][38.1176 (0.293781s)][66.8689 (0.571167s)][15.141 (0.328186s)][22.6158 (0.834089s)]]
+]
+[table Operator /
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][3.7053 (0.120457s)][2.31282 (0.256283s)][2.98148 (0.342198s)][4.15769 (0.552845s)][5.66579 (1.93033s)][9.54675 (3.77425s)]]
+[[cpp_int(fixed)][[*1] (0.0325094s)][1.01212 (0.112153s)][1.63455 (0.187605s)][2.67551 (0.355761s)]]
+[[gmp_int][2.62651 (0.0853863s)][[*1] (0.11081s)][[*1] (0.114775s)][[*1] (0.132969s)][[*1] (0.340699s)][[*1] (0.395344s)]]
+[[tommath_int][30.2016 (0.981836s)][10.7299 (1.18898s)][12.8954 (1.48007s)][16.5608 (2.20208s)][25.7963 (8.78879s)][53.4042 (21.113s)]]
+]
+[table Operator /(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][5.43796 (0.0610196s)][8.7229 (0.114124s)][9.80894 (0.188141s)][10.9464 (0.347422s)][8.94304 (1.5446s)][11.4148 (3.04214s)]]
+[[cpp_int(fixed)][1.66282 (0.0186586s)][5.28422 (0.0691348s)][6.70321 (0.128571s)][8.47034 (0.268837s)]]
+[[gmp_int][[*1] (0.0112211s)][[*1] (0.0130833s)][[*1] (0.0191805s)][[*1] (0.0317386s)][[*1] (0.172715s)][[*1] (0.266509s)]]
+[[tommath_int][65.6123 (0.736239s)][74.4427 (0.973953s)][64.7215 (1.24139s)][60.0008 (1.90434s)][47.3896 (8.18491s)][73.3451 (19.5472s)]]
+]
+[table Operator /(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][5.69361 (0.0679437s)][8.63227 (0.118515s)][10.4819 (0.19782s)][11.652 (0.36737s)][12.6501 (1.71211s)][12.4658 (3.49901s)]]
+[[cpp_int(fixed)][1.71873 (0.0205101s)][5.54771 (0.0761662s)][7.87722 (0.148664s)][9.73978 (0.307082s)]]
+[[gmp_int][[*1] (0.0119333s)][[*1] (0.0137293s)][[*1] (0.0188726s)][[*1] (0.0315286s)][[*1] (0.135343s)][[*1] (0.28069s)]]
+[[tommath_int][70.3948 (0.840045s)][73.9467 (1.01524s)][78.9032 (1.48911s)][74.5804 (2.35142s)][69.6519 (9.42692s)][104.536 (29.3423s)]]
+]
+[table Operator /=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][4.81054 (0.0787575s)][8.57398 (0.16217s)][10.886 (0.247055s)][11.2718 (0.405759s)][12.5937 (1.88874s)][12.21 (3.63347s)]]
+[[cpp_int(fixed)][1.20166 (0.0196733s)][4.32475 (0.0817993s)][6.58644 (0.149478s)][8.32497 (0.29968s)]]
+[[gmp_int][[*1] (0.0163719s)][[*1] (0.0189142s)][[*1] (0.0226949s)][[*1] (0.0359977s)][[*1] (0.149975s)][[*1] (0.297582s)]]
+[[tommath_int][53.9084 (0.88258s)][53.1273 (1.00486s)][71.1404 (1.61452s)][67.5031 (2.42996s)][65.7108 (9.85499s)][101.244 (30.1285s)]]
+]
+[table Operator <<
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][19.177 (0.0162764s)][2.61717 (0.0163378s)][2.37674 (0.021464s)][2.09019 (0.0286746s)][2.56897 (0.164462s)][2.63407 (0.258076s)]]
+[[cpp_int(fixed)][[*1] (0.000848746s)][[*1] (0.00624253s)][[*1] (0.00903085s)][[*1] (0.0137187s)]]
+[[gmp_int][13.6905 (0.0116198s)][1.91174 (0.0119341s)][1.66888 (0.0150714s)][1.41131 (0.0193613s)][[*1] (0.0640186s)][[*1] (0.0979761s)]]
+[[tommath_int][24.7233 (0.0209838s)][4.59302 (0.028672s)][3.68238 (0.033255s)][2.98058 (0.0408897s)][1.84398 (0.118049s)][2.21298 (0.216819s)]]
+]
+[table Operator >>
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][20.232 (0.0162325s)][4.69783 (0.0157363s)][4.50992 (0.0149173s)][4.86912 (0.0162095s)][13.239 (0.0539071s)][12.1827 (0.0524954s)]]
+[[cpp_int(fixed)][[*1] (0.000802316s)][1.58991 (0.00532573s)][2.13899 (0.00707508s)][4.21178 (0.0140212s)]]
+[[gmp_int][4.29127 (0.00344295s)][[*1] (0.0033497s)][[*1] (0.00330767s)][[*1] (0.00332904s)][[*1] (0.00407185s)][[*1] (0.00430902s)]]
+[[tommath_int][67.6824 (0.0543026s)][17.5897 (0.05892s)][17.6963 (0.0585334s)][17.7611 (0.0591272s)][40.2804 (0.164016s)][45.6107 (0.196537s)]]
+]
+[table Operator ^
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][5.21469 (0.0176691s)][1.76461 (0.0151583s)][1.54944 (0.01576s)][1.66733 (0.0166044s)][2.67895 (0.0907825s)][2.85374 (0.147776s)]]
+[[cpp_int(fixed)][[*1] (0.00338833s)][1.61335 (0.013859s)][1.5785 (0.0160556s)][1.8238 (0.0181626s)]]
+[[gmp_int][2.65843 (0.00900763s)][[*1] (0.00859017s)][[*1] (0.0101714s)][[*1] (0.00995865s)][[*1] (0.0338873s)][[*1] (0.0517833s)]]
+[[tommath_int][11.7662 (0.0398677s)][4.97263 (0.0427158s)][4.173 (0.0424452s)][4.36742 (0.0434936s)][1.87208 (0.0634399s)][2.15704 (0.111699s)]]
+]
+[table Operator ^(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][4.47727 (0.0154762s)][1.1548 (0.0152722s)][1.29522 (0.0149375s)][[*1] (0.0152534s)][1.16178 (0.062951s)][[*1] (0.0542065s)]]
+[[cpp_int(fixed)][[*1] (0.00345661s)][[*1] (0.013225s)][[*1] (0.0115328s)][1.35474 (0.0206643s)]]
+[[gmp_int][9.96342 (0.0344397s)][2.54169 (0.0336138s)][3.0636 (0.0353319s)][2.2878 (0.0348967s)][[*1] (0.0541849s)][1.14922 (0.0622954s)]]
+[[tommath_int][39.5678 (0.136771s)][11.1605 (0.147598s)][12.3859 (0.142844s)][9.57606 (0.146067s)][3.32237 (0.180022s)][3.89337 (0.211046s)]]
+]
+[table Operator construct
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][2.70048 (0.00154337s)][[*1] (0.00165673s)][[*1] (0.00160871s)][[*1] (0.00172862s)][[*1] (0.00156009s)][[*1] (0.00174205s)]]
+[[cpp_int(fixed)][[*1] (0.000571519s)][1.23543 (0.00204677s)][1.9796 (0.00318462s)][4.48025 (0.00774465s)]]
+[[gmp_int][85.6322 (0.0489404s)][29.2571 (0.0484711s)][30.662 (0.0493265s)][27.83 (0.0481075s)][40.363 (0.0629698s)][27.9451 (0.048682s)]]
+[[tommath_int][201.724 (0.115289s)][58.7441 (0.0973229s)][52.7386 (0.0848414s)][44.5608 (0.0770287s)][50.8452 (0.079323s)][47.1258 (0.0820957s)]]
+]
+[table Operator construct(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][2.39475 (0.00192516s)][[*1] (0.00189599s)][[*1] (0.00183399s)][[*1] (0.00196715s)][[*1] (0.00191441s)][[*1] (0.0018252s)]]
+[[cpp_int(fixed)][[*1] (0.000803908s)][1.19809 (0.00227157s)][1.88086 (0.00344948s)][3.8843 (0.007641s)]]
+[[gmp_int][65.7819 (0.0528826s)][27.1474 (0.0514712s)][29.3096 (0.0537536s)][26.2945 (0.0517252s)][72.2795 (0.138372s)][27.9893 (0.0510862s)]]
+[[tommath_int][434.327 (0.349159s)][188.668 (0.357713s)][186.415 (0.341884s)][173.347 (0.341s)][183.361 (0.351027s)][175.369 (0.320084s)]]
+]
+[table Operator construct(unsigned)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][2.14911 (0.00163907s)][[*1] (0.00163286s)][[*1] (0.00171255s)][[*1] (0.0017176s)][[*1] (0.00167292s)][[*1] (0.00156985s)]]
+[[cpp_int(fixed)][[*1] (0.000762672s)][1.36862 (0.00223478s)][2.03741 (0.00348916s)][4.53966 (0.00779734s)]]
+[[gmp_int][68.2442 (0.0520479s)][31.4026 (0.0512762s)][30.7091 (0.0525909s)][30.032 (0.0515831s)][41.5223 (0.0694635s)][32.5392 (0.0510816s)]]
+[[tommath_int][331.014 (0.252455s)][151.468 (0.247326s)][132.724 (0.227296s)][128.015 (0.219878s)][131.833 (0.220546s)][143.372 (0.225072s)]]
+]
+[table Operator gcd
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][2.07031 (0.395833s)][3.50598 (2.95518s)][4.44198 (8.63567s)][5.59809 (22.6997s)][9.49572 (269.4s)][15.722 (962.995s)]]
+[[cpp_int(fixed)][3.47569 (0.664533s)][1.70521 (1.43732s)][2.31892 (4.50823s)][3.55661 (14.4217s)]]
+[[gmp_int][[*1] (0.191195s)][[*1] (0.842898s)][[*1] (1.9441s)][[*1] (4.0549s)][[*1] (28.3707s)][[*1] (61.2516s)]]
+[[tommath_int][10.8111 (2.06703s)][5.12095 (4.31644s)][4.59174 (8.92681s)][5.01043 (20.3168s)][7.52621 (213.524s)][12.3495 (756.428s)]]
+]
+[table Operator powm
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_int][10.6592 (0.802191s)][13.9407 (2.61537s)][12.912 (10.4205s)][10.8568 (51.2302s)]]
+[[cpp_int(fixed)][5.82971 (0.438734s)][8.89247 (1.66829s)][9.93013 (8.01404s)][8.83073 (41.6696s)]]
+[[gmp_int][[*1] (0.0752583s)][[*1] (0.187607s)][[*1] (0.807043s)][[*1] (4.7187s)]]
+[[tommath_int][6.1085 (0.459715s)][5.83038 (1.09382s)][3.80545 (3.07116s)][3.02859 (14.291s)]]
+]
+[table Operator str
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][1.92305 (0.000421266s)][3.20633 (0.000851021s)][3.65142 (0.00169768s)][5.16642 (0.00504001s)][11.2543 (0.0811042s)][20.2913 (0.313789s)]]
+[[cpp_int(fixed)][5.11756 (0.00112106s)][1.92296 (0.00051039s)][2.45213 (0.00114008s)][3.72073 (0.00362969s)]]
+[[gmp_int][[*1] (0.000219061s)][[*1] (0.000265419s)][[*1] (0.000464936s)][[*1] (0.000975531s)][[*1] (0.00720651s)][[*1] (0.0154642s)]]
+[[tommath_int][21.587 (0.00472888s)][39.7234 (0.0105433s)][55.2128 (0.0256704s)][81.4207 (0.0794284s)][169.04 (1.21819s)][302.626 (4.67986s)]]
+]
+[table Operator |
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][5.25873 (0.0172824s)][1.96305 (0.0151621s)][1.75036 (0.015208s)][1.87423 (0.017812s)][2.78566 (0.0913325s)][2.88264 (0.14832s)]]
+[[cpp_int(fixed)][[*1] (0.00328643s)][1.45652 (0.0112498s)][1.45925 (0.0126787s)][1.95487 (0.0185784s)]]
+[[gmp_int][2.49444 (0.00819781s)][[*1] (0.00772371s)][[*1] (0.00868852s)][[*1] (0.00950363s)][[*1] (0.0327866s)][[*1] (0.0514528s)]]
+[[tommath_int][11.7763 (0.038702s)][5.50066 (0.0424855s)][4.90757 (0.0426395s)][4.5757 (0.0434857s)][1.88223 (0.061712s)][2.0004 (0.102926s)]]
+]
+[table Operator |(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits][5120 Bits][10240 Bits]]
+[[cpp_int][4.53358 (0.0155813s)][1.37758 (0.015007s)][1.27482 (0.0145389s)][[*1] (0.0155149s)][1.17798 (0.0620504s)][[*1] (0.0526689s)]]
+[[cpp_int(fixed)][[*1] (0.00343686s)][[*1] (0.0108938s)][[*1] (0.0114047s)][1.3214 (0.0205014s)]]
+[[gmp_int][9.60058 (0.0329958s)][3.00706 (0.0327581s)][3.05453 (0.034836s)][2.20715 (0.0342437s)][[*1] (0.0526751s)][1.17671 (0.0619762s)]]
+[[tommath_int][39.7055 (0.136462s)][13.0365 (0.142016s)][14.0596 (0.160345s)][9.31086 (0.144457s)][3.38341 (0.178221s)][3.81403 (0.200881s)]]
+]
+[endsect]
+[section:rational_performance Rational Type Perfomance]
+[table Operator *
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][2.59318 (1.11835s)][3.74332 (6.61855s)][4.71871 (18.5981s)][5.48511 (47.0022s)]]
+[[mpq_rational][[*1] (0.431264s)][[*1] (1.7681s)][[*1] (3.94136s)][[*1] (8.56905s)]]
+]
+[table Operator *(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][5.63431 (0.612884s)][25.5205 (2.83784s)][64.6798 (7.61151s)][135.335 (19.4821s)]]
+[[mpq_rational][[*1] (0.108777s)][[*1] (0.111198s)][[*1] (0.11768s)][[*1] (0.143955s)]]
+]
+[table Operator *(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][4.44786 (0.691659s)][18.4155 (2.97414s)][44.4009 (7.64879s)][98.4603 (19.5719s)]]
+[[mpq_rational][[*1] (0.155504s)][[*1] (0.161502s)][[*1] (0.172267s)][[*1] (0.19878s)]]
+]
+[table Operator *=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][4.12301 (0.690473s)][20.2597 (3.35519s)][42.8043 (7.47312s)][94.2742 (19.3092s)]]
+[[mpq_rational][[*1] (0.167468s)][[*1] (0.165609s)][[*1] (0.174588s)][[*1] (0.20482s)]]
+]
+[table Operator +
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][8.51825 (1.97719s)][7.8609 (7.34254s)][9.73008 (21.2507s)][11.1497 (49.7843s)]]
+[[mpq_rational][[*1] (0.232113s)][[*1] (0.93406s)][[*1] (2.18402s)][[*1] (4.46507s)]]
+]
+[table Operator +(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][7.17647 (0.669913s)][29.8489 (2.91217s)][75.7668 (7.40631s)][254.371 (29.7057s)]]
+[[mpq_rational][[*1] (0.0933486s)][[*1] (0.0975637s)][[*1] (0.0977514s)][[*1] (0.116781s)]]
+]
+[table Operator +(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][12.4996 (1.16835s)][33.6691 (3.37438s)][82.0167 (8.08959s)][171.692 (19.9733s)]]
+[[mpq_rational][[*1] (0.0934708s)][[*1] (0.100222s)][[*1] (0.0986335s)][[*1] (0.116332s)]]
+]
+[table Operator +=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][11.7663 (1.14891s)][34.4202 (3.45541s)][78.1856 (8.17612s)][161.351 (20.0733s)]]
+[[mpq_rational][[*1] (0.0976436s)][[*1] (0.100389s)][[*1] (0.104573s)][[*1] (0.124408s)]]
+]
+[table Operator -
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][8.56942 (2.0234s)][7.88071 (7.38282s)][9.54207 (19.913s)][11.4343 (50.8786s)]]
+[[mpq_rational][[*1] (0.236118s)][[*1] (0.936822s)][[*1] (2.08686s)][[*1] (4.44964s)]]
+]
+[table Operator -(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][6.62286 (0.62794s)][30.6629 (2.96506s)][75.926 (7.56072s)][199.475 (23.42s)]]
+[[mpq_rational][[*1] (0.094814s)][[*1] (0.0966986s)][[*1] (0.0995801s)][[*1] (0.117408s)]]
+]
+[table Operator -(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][12.3835 (1.16081s)][36.0761 (3.40187s)][83.3673 (8.26011s)][169.239 (20.5682s)]]
+[[mpq_rational][[*1] (0.0937381s)][[*1] (0.094297s)][[*1] (0.099081s)][[*1] (0.121534s)]]
+]
+[table Operator -=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][11.6833 (1.16049s)][36.6427 (3.64132s)][77.0952 (8.10257s)][160.444 (20.0829s)]]
+[[mpq_rational][[*1] (0.0993285s)][[*1] (0.0993737s)][[*1] (0.105098s)][[*1] (0.12517s)]]
+]
+[table Operator /
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][5.67626 (6.66075s)][5.99288 (21.0634s)][8.08809 (55.0195s)][10.5818 (149.774s)]]
+[[mpq_rational][[*1] (1.17344s)][[*1] (3.51474s)][[*1] (6.80254s)][[*1] (14.1539s)]]
+]
+[table Operator /(int)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][5.9046 (0.64166s)][25.5252 (2.84312s)][65.4027 (7.74325s)][134.42 (19.5619s)]]
+[[mpq_rational][[*1] (0.108671s)][[*1] (0.111385s)][[*1] (0.118393s)][[*1] (0.145528s)]]
+]
+[table Operator /(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][4.35172 (0.691696s)][18.2795 (2.94678s)][44.2487 (7.48547s)][99.1392 (19.5526s)]]
+[[mpq_rational][[*1] (0.158948s)][[*1] (0.161207s)][[*1] (0.169168s)][[*1] (0.197224s)]]
+]
+[table Operator /=(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][4.14511 (0.685733s)][18.3237 (3.08065s)][43.3784 (7.43555s)][94.2547 (19.2754s)]]
+[[mpq_rational][[*1] (0.165432s)][[*1] (0.168124s)][[*1] (0.171411s)][[*1] (0.204503s)]]
+]
+[table Operator construct
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][[*1] (0.00323537s)][[*1] (0.00328614s)][[*1] (0.0032946s)][[*1] (0.00333283s)]]
+[[mpq_rational][28.9199 (0.0935664s)][28.1463 (0.0924926s)][28.2564 (0.0930936s)][27.5848 (0.0919355s)]]
+]
+[table Operator construct(unsigned long long)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][[*1] (0.00333944s)][[*1] (0.00335336s)][[*1] (0.00348777s)][[*1] (0.00345967s)]]
+[[mpq_rational][29.1785 (0.09744s)][29.1475 (0.097742s)][27.4732 (0.0958203s)][28.6655 (0.099173s)]]
+]
+[table Operator construct(unsigned)
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][[*1] (0.00321917s)][[*1] (0.00319471s)][[*1] (0.00327131s)][[*1] (0.00366486s)]]
+[[mpq_rational][30.8553 (0.0993283s)][30.5973 (0.0977495s)][29.5866 (0.0967869s)][28.3432 (0.103874s)]]
+]
+[table Operator str
+[[Backend][128 Bits][256 Bits][512 Bits][1024 Bits]]
+[[cpp_rational][5.80834 (0.00206821s)][11.5273 (0.00645497s)][18.1686 (0.0156602s)][38.1095 (0.0705044s)]]
+[[mpq_rational][[*1] (0.000356077s)][[*1] (0.000559971s)][[*1] (0.000861937s)][[*1] (0.00185005s)]]
+]
+[endsect]

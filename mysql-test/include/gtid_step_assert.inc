@@ -9,6 +9,7 @@
 # [--let $gtid_step_count= N]
 # [--let $gtid_step_only_count= [0|1]]
 # [--let $gtid_step_uuid= UUID]
+# [--let $gtid_step_check_table= [0|1]]
 # --source include/gtid_step_assert.inc
 #
 # Parameters:
@@ -29,6 +30,15 @@
 #     uuid component of all GTIDs added to @@GLOBAL.GTID_EXECUTED is
 #     equal to @@GLOBAL.SERVER_UUID.  If this parameter is given, uses
 #     that UUID instead.
+#
+#   $gtid_step_gtid_mode_agnostic
+#     If this is set, the script will work also if gtid_mode=off.
+#     In that case it will assert that no GTID was generated.
+#
+#   $gtid_step_check_table
+#     This script checks that exactly $_gtid_step_count GTIDs have been
+#     added to mysql.gtid_executed since last invocation if this parameter
+#     is nonzero. The check is skipped if this parameter is not set or zero.
 #
 # ==== Example ====
 #
@@ -63,8 +73,22 @@ if ($gtid_step_only_count != '')
   --let $_gtid_step_only_count= $gtid_step_only_count
 }
 
---let $include_filename= gtid_step_assert.inc [count=$_gtid_step_count, only_count=$_gtid_step_only_count]
+--let $_gtid_step_print_count= [count=$_gtid_step_count, only_count=$_gtid_step_only_count]
+if ($_gtid_step_dont_print_count)
+{
+  --let $_gtid_step_print_count=
+}
+
+--let $include_filename= gtid_step_assert.inc $_gtid_step_print_count
 --source include/begin_include_file.inc
+
+if ($gtid_step_gtid_mode_agnostic)
+{
+  if (!$gtid_mode_on)
+  {
+    --let $_gtid_step_count= 0
+  }
+}
 
 --let $_gtid_step_uuid= $gtid_step_uuid
 if ($_gtid_step_uuid == '')
@@ -73,7 +97,7 @@ if ($_gtid_step_uuid == '')
 }
 
 --let $_gsa_extra_debug_eval_old= $extra_debug_eval
---let $extra_debug_eval= @@GLOBAL.GTID_EXECUTED, GTID_NEXT_GENERATED_SET("$gtid_step_last", "$_gtid_step_uuid", $_gtid_step_count), GTID_SUBTRACT(@@GLOBAL.GTID_EXECUTED, "$gtid_step_last")
+--let $extra_debug_eval= @@GLOBAL.GTID_EXECUTED, GTID_NEXT_GENERATED_MULTIPLE("$gtid_step_last", "$_gtid_step_uuid", $_gtid_step_count), GTID_SUBTRACT(@@GLOBAL.GTID_EXECUTED, "$gtid_step_last")
 
 if ($_gtid_step_only_count)
 {
@@ -84,8 +108,24 @@ if ($_gtid_step_only_count)
 if (!$_gtid_step_only_count)
 {
   --let $assert_text= Exactly $_gtid_step_count GTIDs should have been generated since last invocation
-  --let $assert_cond= GTID_NEXT_GENERATED_SET("$gtid_step_last", "$_gtid_step_uuid", $_gtid_step_count) = GTID_SUBTRACT(@@GLOBAL.GTID_EXECUTED, "$gtid_step_last")
+  --let $assert_cond= GTID_NEXT_GENERATED_MULTIPLE("$gtid_step_last", "$_gtid_step_uuid", $_gtid_step_count) = GTID_SUBTRACT(@@GLOBAL.GTID_EXECUTED, "$gtid_step_last")
   --source include/assert.inc
+}
+
+if ($gtid_step_check_table)
+{
+  if ($_gtid_step_only_count)
+  {
+    --let $assert_text= Exactly $_gtid_step_count GTIDs should have been added to mysql.gtid_executed since last invocation
+    --let $assert_cond= GTID_COUNT(GTID_SUBTRACT(GTID_EXECUTED_FROM_TABLE(), "$gtid_step_last")) = $_gtid_step_count
+    --source include/assert.inc
+  }
+  if (!$_gtid_step_only_count)
+  {
+    --let $assert_text= Exactly $_gtid_step_count GTIDs should have been added to mysql.gtid_executed since last invocation
+    --let $assert_cond= GTID_NEXT_GENERATED_MULTIPLE("$gtid_step_last", "$_gtid_step_uuid", $_gtid_step_count) = GTID_SUBTRACT(GTID_EXECUTED_FROM_TABLE(), "$gtid_step_last")
+    --source include/assert.inc
+  }
 }
 
 --let $extra_debug_eval= $_gsa_extra_debug_eval_old

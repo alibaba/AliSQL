@@ -1,14 +1,14 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 # Let master and slave synced with t1 table created
 CREATE TABLE t1 (f INT) ENGINE= INNODB;
 include/sync_slave_sql_with_master.inc
 # Setup GLOBAL.DEBUG at slave to reach commit
 [connection slave]
-SET @@GLOBAL.DEBUG= '+d,dbug.reached_commit';
+# Adding debug point 'dbug.reached_commit' to @@GLOBAL.debug
 # Do some DML operation on master so that it will be blocked on
 # slave as global read lock is in place.
 [connection master]
@@ -23,7 +23,9 @@ SET DEBUG_SYNC= 'now SIGNAL signal.commit_continue';
 [connection slave]
 SHOW SLAVE STATUS;
 UNLOCK TABLES;
-SET @@GLOBAL.DEBUG= '$debug_saved';
+# Removing debug point 'dbug.reached_commit' from @@GLOBAL.debug
+# Restart SQL thread so that it notices debug has changed
+include/restart_slave.inc
 [connection master]
 include/sync_slave_sql_with_master.inc
 include/diff_tables.inc [master:t1, slave:t1]

@@ -1,0 +1,998 @@
+--source include/have_ndb.inc
+-- source suite/ndb/include/backup_restore_setup.inc
+
+--echo # manual ndb_import tests
+
+--let IS_WINDOWS= `select convert(@@version_compile_os using latin1) in ('Win32', 'Win64', 'Windows')`
+
+# LOAD DATA line terminators
+--let $lt_unix='\n'
+--let $lt_windows='\r\n'
+if (!$IS_WINDOWS) {
+  --let $lt_default=$lt_unix
+}
+if ($IS_WINDOWS) {
+  --let $lt_default=$lt_windows
+}
+
+--echo # database argument is required
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--echo # no args is ok
+--error 0
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     test >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--echo # table does not exist
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     test '/foo/data/t1.csv' >> $NDB_TOOLS_OUTPUT 2>&1;
+
+create table t1 (
+  a int primary key,
+  b int not null
+) engine=ndb;
+
+--echo # csv file does not exist
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     test '/foo/data/t1.csv' >> $NDB_TOOLS_OUTPUT 2>&1;
+
+# Most CSV files are written in perl.  On windows perl automatically
+# pushes :crlf layer.  We prefer :raw and set line terminator explicitly.
+
+perl;
+use strict;
+use Symbol;
+my $lt = !$ENV{IS_WINDOWS} ? "\n" : "\r\n";
+my $vardir = $ENV{MYSQLTEST_VARDIR}
+  or die "need MYSQLTEST_VARDIR";
+my $file = "$vardir/tmp/t1.csv";
+my $fh = gensym();
+open($fh, ">:raw", $file)
+  or die "$file: open for write failed: $!";
+for my $i (0..999) {
+  print $fh $i, "\t", $i*10, $lt;
+}
+close($fh)
+  or die "$file: close after write failed: $!";
+exit(0)
+EOF
+
+--echo # bad state dir
+--error 1
+exec $NDB_IMPORT --state-dir=/foo/state --keep-state --log-level=1
+     test $MYSQLTEST_VARDIR/tmp/t1.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--echo # normal import
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     --input-type=csv --output-type=ndb
+     test $MYSQLTEST_VARDIR/tmp/t1.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+select count(*) from t1;
+
+--echo # invalid --input-type
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     --input-type=xxx --output-type=ndb
+     test $MYSQLTEST_VARDIR/tmp/t1.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--echo # invalid --output-type
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     --input-type=csv --output-type=xxx
+     test $MYSQLTEST_VARDIR/tmp/t1.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--echo # test --connections and --ndb-nodeid
+--echo # needs consecutive api nodes 230,231,232
+
+delete from t1;
+
+create table t1ver like t1;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     --input-type=csv --output-type=ndb
+     --connections=3 --ndb-nodeid=230
+     test $MYSQLTEST_VARDIR/tmp/t1.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t1.csv'
+into table t1ver
+lines terminated by $lt_default;
+--enable_query_log
+
+select count(*) from t1 x, t1ver y
+where x.a = y.a and x.b = y.b;
+
+--echo # simple utf8 test
+
+perl;
+use strict;
+use Symbol;
+my $lt = !$ENV{IS_WINDOWS} ? "\n" : "\r\n";
+my $vardir = $ENV{MYSQLTEST_VARDIR}
+  or die "need MYSQLTEST_VARDIR";
+my $file = "$vardir/tmp/t2.csv";
+my $fh = gensym();
+open($fh, ">:raw:utf8", $file)
+  or die "$file: open for write failed: $!";
+my $c1 = chr(0x00e4);
+my $c2 = chr(0x263a);
+my $c3 = chr(0x2665);
+print $fh 0, "\t", '\N', $lt;
+print $fh 1, "\t", $c1, $lt;
+print $fh 2, "\t", $c1, $c2, $lt;
+print $fh 3, "\t", $c1, $c2, $c3, $lt;
+close($fh)
+  or die "$file: close after write failed: $!";
+exit(0);
+EOF
+
+create table t2 (
+  a int primary key,
+  b char(3)
+) charset utf8mb4
+  engine=ndb;
+
+create table t2ver (
+  a int primary key,
+  b char(3)
+) charset utf8mb4
+  engine=ndb;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     test $MYSQLTEST_VARDIR/tmp/t2.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t2.csv'
+into table t2ver
+character set utf8mb4
+lines terminated by $lt_default;
+--enable_query_log
+
+select count(*) from t2 x, t2ver y
+where x.a = y.a
+and (x.b = y.b or (x.b is null and y.b is null));
+
+--echo # test with rejects and no --keep-state
+
+perl;
+use strict;
+use Symbol;
+my $lt = !$ENV{IS_WINDOWS} ? "\n" : "\r\n";
+my $vardir = $ENV{MYSQLTEST_VARDIR}
+  or die "need MYSQLTEST_VARDIR";
+my $file = "$vardir/tmp/t4.csv";
+my $fh = gensym();
+open($fh, ">:raw", $file)
+  or die "$file: open for write failed: $!";
+for my $i (0..999) {
+  if ($i == 333) {
+    print $fh $i, "\t", $i*10, "\t", 333, $lt;
+  } elsif ($i == 666) {
+    print $fh 111, "\t", $i*10, $lt;
+  } elsif ($i == 999) {
+    print $fh $i, "\t", "abcde", $lt;
+  } else {
+    print $fh $i, "\t", $i*10, $lt;
+  }
+}
+close($fh)
+  or die "$file: close after write failed: $!";
+exit(0)
+EOF
+
+create table t4 (
+  a int primary key,
+  b int not null
+) engine=ndb;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --rejects=3
+     test $MYSQLTEST_VARDIR/tmp/t4.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+select count(*) from t4;
+
+--error 1
+--file_exists $MYSQLTEST_VARDIR/tmp/t4.res
+--error 0
+--file_exists $MYSQLTEST_VARDIR/tmp/t4.rej
+--error 1
+--file_exists $MYSQLTEST_VARDIR/tmp/t4.map
+--error 1
+--file_exists $MYSQLTEST_VARDIR/tmp/t4.stt
+
+--echo # test with rejects and --stats
+
+delete from t4;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --rejects=3 --stats
+     test $MYSQLTEST_VARDIR/tmp/t4.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+select count(*) from t4;
+
+--error 1
+--file_exists $MYSQLTEST_VARDIR/tmp/t4.res
+--error 0
+--file_exists $MYSQLTEST_VARDIR/tmp/t4.rej
+--error 1
+--file_exists $MYSQLTEST_VARDIR/tmp/t4.map
+--error 0
+--file_exists $MYSQLTEST_VARDIR/tmp/t4.stt
+
+--echo # test --continue option with missing table
+
+create table t5a (a int primary key) engine=ndb;
+create table t5c like t5a;
+
+write_file $MYSQLTEST_VARDIR/tmp/t5a.csv;
+111
+222
+EOF
+
+write_file $MYSQLTEST_VARDIR/tmp/t5b.csv;
+111
+111
+EOF
+
+write_file $MYSQLTEST_VARDIR/tmp/t5c.csv;
+111
+222
+EOF
+
+# files have '\n' terminator so add --csvopt=n
+
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --continue --csvopt=n
+     test
+     $MYSQLTEST_VARDIR/tmp/t5a.csv
+     $MYSQLTEST_VARDIR/tmp/t5b.csv
+     $MYSQLTEST_VARDIR/tmp/t5c.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+select count(*) from t5a;
+select count(*) from t5c;
+
+--echo # test --continue option with rejects
+
+delete from t5a;
+delete from t5c;
+create table t5b like t5a;
+
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --continue --csvopt=n
+     test
+     $MYSQLTEST_VARDIR/tmp/t5a.csv
+     $MYSQLTEST_VARDIR/tmp/t5b.csv
+     $MYSQLTEST_VARDIR/tmp/t5c.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+select count(*) from t5a;
+select count(*) from t5b;
+select count(*) from t5c;
+
+--echo # test quoting and escapes
+
+create table t6 (
+  a int primary key,
+  b char(5) not null
+) engine=ndb;
+
+create table t6ver like t6;
+
+write_file $MYSQLTEST_VARDIR/tmp/t6.csv;
+1,abc
+2,"abc"
+3,"a""bc"
+4,\\\"\\
+5,"\\\"\\"
+6,\0\b\r\n\t
+7,"\0\b\r\n\t"
+EOF
+
+--error 0
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --csvopt=cqn
+     test $MYSQLTEST_VARDIR/tmp/t6.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t6.csv'
+into table t6ver
+fields terminated by ',' enclosed by '"' escaped by '\\\\'
+lines terminated by $lt_unix;
+--enable_query_log
+
+select count(*) from t6 x, t6ver y
+where x.a = y.a and x.b = y.b;
+
+select a from t6
+where b like '%"%'
+order by a;
+
+--echo # test CR-LF line terminator
+
+perl;
+use strict;
+use Symbol;
+my $lt = "\r\n";
+my $vardir = $ENV{MYSQLTEST_VARDIR}
+  or die "need MYSQLTEST_VARDIR";
+my $file = "$vardir/tmp/t7.csv";
+my $fh = gensym();
+open($fh, ">:raw", $file)
+  or die "$file: open for write failed: $!";
+for my $i (1..1000) {
+  my $s;
+  if (int(rand(5)) == 0) {
+    $s = "\\N";
+  } else {
+    my $n = int(rand(20+1));
+    my $prevk = 0;
+    for (1..$n) {
+      my $c;
+      my $k = int(rand(256));
+      if ($k == 0) {
+        $c = int(rand(2)) ? chr($k) : int(rand(2)) ? "\\".chr($k) : "\\0";
+      } elsif ($k == 0x09) {
+        # TAB is field separator
+        $c = "\\t";
+      } elsif ($k == 0x5c) {
+        # backslash is escape
+        $c = "\\\\";
+      } elsif ($k == 0x0d) {
+        $c = chr($k);
+      } else {
+        if ($prevk == 0x0d && $k == 0xa) {
+          # avoid CR-LF
+          $k = 0x61;
+        }
+        $c = chr($k);
+      }
+      $s .= $c;
+      $prevk = $k;
+    }
+  }
+  print $fh $i, "\t", $s, $lt;
+}
+close($fh)
+  or die "$file: close after write failed: $!";
+exit(0);
+EOF
+
+create table t7 (
+  a int primary key,
+  b varbinary(20)
+) engine=ndb;
+
+create table t7ver like t7;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --csvopt=r --keep-state
+     test $MYSQLTEST_VARDIR/tmp/t7.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t7.csv'
+into table t7ver
+character set binary
+lines terminated by $lt_windows;
+--enable_query_log
+
+select count(*) from t7 x, t7ver y
+where x.a = y.a
+and (x.b = y.b or (x.b is null and y.b is null));
+
+--echo # test windows directory separator
+
+# on windows mysqltest converts "/" to "\" in recognized paths
+# on windows file i/o functions also convert "/" to "\"
+
+--mkdir $MYSQLTEST_VARDIR/tmp/imp0
+--copy_file $MYSQLTEST_VARDIR/tmp/t7.csv $MYSQLTEST_VARDIR/tmp/imp0/t7.csv
+
+delete from t7;
+
+if (!$IS_WINDOWS)
+{
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp/imp0 --log-level=1
+     --csvopt=r --keep-state
+     test $MYSQLTEST_VARDIR/tmp/imp0/t7.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+}
+
+if ($IS_WINDOWS)
+{
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR\tmp\imp0 --log-level=1
+     --csvopt=r --keep-state
+     test $MYSQLTEST_VARDIR\tmp\imp0\t7.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+}
+
+select count(*) from t7;
+
+--list_files $MYSQLTEST_VARDIR/tmp/imp0
+
+--echo # test NUL byte
+
+perl;
+use strict;
+use Symbol;
+my $lt = "\n";
+my $vardir = $ENV{MYSQLTEST_VARDIR}
+  or die "need MYSQLTEST_VARDIR";
+my $file = "$vardir/tmp/t8.csv";
+my $fh = gensym();
+open($fh, ">:raw", $file)
+  or die "$file: open for write failed: $!";
+for my $i (1..1000) {
+  my $s;
+  if (int(rand(5)) == 0) {
+    $s = "\\N";
+  } else {
+    my $n = int(rand(20+1));
+    for (1..$n) {
+      my $c;
+      my $k = int(rand(256));
+      if ($k == 0) {
+        $c = int(rand(2)) ? chr($k) : int(rand(2)) ? "\\".chr($k) : "\\0";
+      } elsif ($k == 0x09) {
+        # TAB is field separator
+        $c == "\\t";
+      } elsif ($k == 0x0a) {
+        # newline is line terminator
+        $c = "\\n";
+      } elsif ($k == 0x5c) {
+        # backslash is escape
+        $c = "\\\\";
+      } else {
+        $c = chr($k);
+      }
+      $s .= $c;
+    }
+  }
+  print $fh $i, "\t", $s, $lt;
+}
+close($fh)
+  or die "$file: close after write failed: $!";
+exit(0)
+EOF
+
+create table t8 (
+  a int primary key,
+  b varbinary(20)
+) engine=ndb;
+
+create table t8ver like t8;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t8.csv'
+into table t8ver
+character set binary
+lines terminated by $lt_unix;
+--enable_query_log
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --csvopt=n --keep-state
+     test $MYSQLTEST_VARDIR/tmp/t8.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+select count(*) from t8 x, t8ver y
+where x.a = y.a
+and (x.b = y.b or (x.b is null and y.b is null));
+
+--echo # test long field and line terminators
+
+perl;
+use strict;
+use Symbol;
+my $vardir = $ENV{MYSQLTEST_VARDIR}
+  or die "need MYSQLTEST_VARDIR";
+my $file = "$vardir/tmp/t9.csv";
+my $fh = gensym();
+open($fh, ">:raw", $file)
+  or die "$file: open for write failed: $!";
+my $d = '-';
+print $fh 0, "::", "123", "::", "abc", "===_";
+print $fh 1, "::", ":456=", "::", ":foo=", "===_";
+print $fh 2, "::", "789===", "::", "bar===", "===_";
+print $fh 3, "::", $d."123".$d, "::", "abc", "===_";
+print $fh 4, "::", ":456=", "::", $d.":foo=".$d, "===_";
+print $fh 5, "::", $d."789===".$d, "::", $d."bar===".$d, "===_";
+close($fh)
+  or die "$file: close after write failed: $!";
+exit(0);
+EOF
+
+create table t9 (
+  a int primary key,
+  b char(10),
+  c char(10)
+) engine=ndb;
+
+create table t9ver like t9;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t9.csv'
+into table t9ver
+fields terminated by '::' optionally enclosed by '-'
+lines terminated by '===_';
+--enable_query_log
+select * from t9ver order by a;
+
+if (!$IS_WINDOWS)
+{
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --keep-state
+     --fields-terminated-by='::'
+     --fields-optionally-enclosed-by='-'
+     --lines-terminated-by='===_'
+     test $MYSQLTEST_VARDIR/tmp/t9.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+}
+
+if ($IS_WINDOWS)
+{
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --log-level=1
+     --keep-state
+     --fields-terminated-by=::
+     --fields-optionally-enclosed-by=-
+     --lines-terminated-by====_
+     test $MYSQLTEST_VARDIR/tmp/t9.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+}
+
+select count(*) from t9 x, t9ver y
+where x.a = y.a
+and (x.b = y.b or (x.b is null and y.b is null))
+and (x.c = y.c or (x.c is null and y.c is null));
+
+--echo # run backup
+--source include/ndb_backup.inc
+
+let BACKUP_SRC=$NDB_BACKUPS-$the_backup_id;
+let BACKUP_DST=$MYSQLTEST_VARDIR/tmp/BACKUP-$the_backup_id;
+
+perl;
+use strict;
+use Symbol;
+use File::Copy;
+my $src = $ENV{BACKUP_SRC};
+my $dst = $ENV{BACKUP_DST};
+mkdir $dst
+  or die "mkdir $dst failed: $!\n";
+my $dh = gensym();
+opendir($dh, $src)
+  or die "opendir $src failed: $!\n";
+my $ent;
+while (defined($ent = readdir($dh))) {
+  my $file = "$src/$ent";
+  if (-f $file) {
+    copy($file, $dst)
+      or die "copy $file to $dst failed: $!\n";
+  }
+}
+closedir($dh)
+  or "close dir $src failed: $!\n";
+EOF
+
+#### Bug 30434663 Trailing Field Separator
+# (1) Valid input with trailing field terminator
+--write_file $MYSQLTEST_VARDIR/tmp/t6.pipeterm.csv
+31|xyz|
+32|Rfc|
+33||
+34|
+EOF
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+      --fields-terminated-by="|" --csvopt=n
+      test $MYSQLTEST_VARDIR/tmp/t6.pipeterm.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+# (2) Trailing field sep, but too many fields
+--remove_file $MYSQLTEST_VARDIR/tmp/t6.pipeterm.csv
+--write_file $MYSQLTEST_VARDIR/tmp/t6.pipeterm.csv
+33|Bach|JS|
+EOF
+
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+    --fields-terminated-by="|" --csvopt=n
+    test $MYSQLTEST_VARDIR/tmp/t6.pipeterm.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+# (3) Final field is not empty
+--remove_file $MYSQLTEST_VARDIR/tmp/t6.pipeterm.csv
+--write_file $MYSQLTEST_VARDIR/tmp/t6.pipeterm.csv
+34|Bach|JC
+EOF
+
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+    --fields-terminated-by="|" --csvopt=n
+    test $MYSQLTEST_VARDIR/tmp/t6.pipeterm.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+SELECT * FROM t6 WHERE a > 30 order by a;
+
+# Bug#30839144 NDB_IMPORT FAILED REQUIRE
+# CSV parser error can lead to failed require in movetail().
+# Repeating this error without a large data file requires using a very
+# small pagesize and pagebuffer.
+
+CREATE TABLE tpersons (
+  id INT NOT NULL PRIMARY KEY,
+  date_born DATE NOT NULL,
+  first_name VARCHAR(14) NOT NULL COLUMN_FORMAT FIXED,
+  last_name VARCHAR(16) NOT NULL COLUMN_FORMAT FIXED,
+  gender CHAR(1) NOT NULL,
+  date_died DATE NOT NULL
+) engine=ndb CHARACTER SET latin1;
+
+--write_file $MYSQLTEST_VARDIR/tmp/tpersons.csv
+1,"1760-03-02","Camille","Desmoulins","M","1794-04-05"
+2,"1758-05-06","Maximilien","Robespierre","M","1794-07-28"
+3,"1712-06-28","Jean-Jacques","Rousseau","M","1778-07-02"
+4,"1713-10-05","Denis","Diderot","M","1784-07-31"
+5,"1716-11-27","Sophie","Volland","F","1784-02-22");
+6,"1759-10-26","Georges","Danton","M","1794-04-05"
+7,"1759-05-28","William","Pitt","M","1806-01-23"
+8,"1769-08-15","Napoleon","Boneparte","M","1821-05-05"
+9,"1743-05-20","Toussaint","Louverture","M","1803-04-07"
+10,"1758-09-20","Jean-Jacques","Dessalines","M","1806-10-17"
+11,"1732-02-22","George","Washington","M","1799-12-14"
+12,"1751-03-16","James","Madison","M","1836-06-28"
+13,"1706-01-17","Benjamin","Franklin","M","1790-04-17"
+14,"1620-01-01","Mary","Folger","F","1704-01-01"
+15,"1819-08-01","Herman","Melville","M","1891-09-28"
+16,"1804-07-04","Nathaniel","Hawthorne","M","1864-05-19"
+17,"1799-11-29","Bronson","Alcott","M","1888-03-04"
+18,"1810-05-23","Margaret","Fuller","F","1850-07-19"
+19,"1805-06-22","Guiseppe","Mazzini","M","1872-03-10"
+20,"1804-01-01","Giuditta","Sidoli","F","1871-03-28"
+21,"1806-03-06","Elizabeth","Barrett","F","1861-06-29"
+22,"1759-04-27","Mary","Wollstonecraft","F","1797-09-10"
+23,"1797-08-30","Mary","Shelley","F","1851-02-01"
+24,"1798-04-27","Claire","Clairmont","F","1879-03-19"
+25,"1805-12-12","Frederic","Hedge","M","1890-08-21"
+26,"1830-10-09","Annis","Wister","F","1908-11-15");
+27,"1802-04-20","William","Furness","M","1896-01-30"
+28,"1800-05-09","John","Brown","M","1859-12-02"
+29,"1811-01-06","Charles","Sumner","M","1874-03-11"
+30,"1764-04-01","Henry","Ware","M","1845-07-12"
+EOF
+
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cqn --pagesize=256 --pagebuffer=512
+ test $MYSQLTEST_VARDIR/tmp/tpersons.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+# Look for the specific error message from ndb_import
+--let $assert_file=$NDB_TOOLS_OUTPUT
+--let $assert_only_after=import test.tpersons
+--let $assert_text=Require CSV parser to fail with syntax error
+--let $assert_select=syntax error, unexpected T_DATA
+--let $assert_count=1
+--source include/assert_grep.inc
+
+create table t10 (
+  a int primary key,
+  b int not null,
+  c varchar(16) not null
+) engine=ndb CHARACTER SET latin1;
+
+--write_file $MYSQLTEST_VARDIR/tmp/t10_no_match.csv
+1,180,"Maximilien"
+2,175,"Jean-Jacques"
+3,168,"Denis"
+4,175,"Georges"
+5,174,"William"
+EOF
+
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cn
+ test $MYSQLTEST_VARDIR/tmp/t10_no_match.csv >> $NDB_TOOLS_OUTPUT 2>&1;
+
+# Look for the specific error message from ndb_import
+--let $assert_file=$NDB_TOOLS_OUTPUT
+--let $assert_text=No --table argument and csv filename does not match any table name
+--let $assert_select=No such table existed
+--let $assert_count=1
+--source include/assert_grep.inc
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cnq
+ test $MYSQLTEST_VARDIR/tmp/t10_no_match.csv --table=t10 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+delete from t10;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cnq
+ test $MYSQLTEST_VARDIR/tmp/t10_no_match.csv -t t10 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+create table t10ver like t10;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t10_no_match.csv'
+into table t10ver
+fields terminated by ',' enclosed by '"'
+lines terminated by $lt_unix;
+--enable_query_log
+
+select count(*) from t10 x, t10ver y
+where x.a = y.a and x.b = y.b and x.c = y.c;
+
+delete from t10;
+
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=r
+ test $MYSQLTEST_VARDIR/tmp/t10_no_match.csv -t t10 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+--echo # check .rej file exists and match the input csv filename
+--file_exists $MYSQLTEST_VARDIR/tmp/t10_no_match.rej
+
+--echo # check .rej file matching the table name does not exists
+--error 1
+--file_exists $MYSQLTEST_VARDIR/tmp/t10.rej
+
+
+delete from t10;
+
+--echo # check order matters when using --csvopt and --fields-terminated-by
+--error 1
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cqn
+ --fields-terminated-by=':'
+ test $MYSQLTEST_VARDIR/tmp/t10_no_match.csv -t t10 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --fields-terminated-by=':'
+ --csvopt=cqn
+ test $MYSQLTEST_VARDIR/tmp/t10_no_match.csv -t t10 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+# Verify that different ways of specify an empty or null column in a csv file
+# for a single column table works.
+
+create table t11 (
+  a varchar(16) null
+) engine=ndb CHARACTER SET latin1;
+
+--write_file $MYSQLTEST_VARDIR/tmp/t11.csv
+
+,
+""
+"",
+\N
+\N,
+EOF
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cnq
+ test $MYSQLTEST_VARDIR/tmp/t11.csv --table=t11 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+# 6 total 2 null and 4 empty
+SELECT COUNT(*), SUM(a IS NULL), SUM(a = '') FROM t11 ORDER BY a;
+
+delete from t11;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cnq
+ test $MYSQLTEST_VARDIR/tmp/t11.csv -t t11 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+create table t11ver like t11;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t11.csv'
+into table t11ver
+fields terminated by ',' enclosed by '"'
+lines terminated by $lt_unix;
+--enable_query_log
+
+# 6 total 2 null and 4 empty
+SELECT COUNT(*), SUM(a IS NULL), SUM(a = '') FROM t11ver ORDER BY a;
+
+# 20 total 2x2 null and 4x4 empty
+select count(*) from t11 x, t11ver y
+where ifnull(x.a,'NULL') = ifnull(y.a,'NULL');
+
+delete from t11;
+
+# Verify that the t11.csv produce the same result if one add a auto_increment
+# primary key column that both ndb_import and load data will generate values
+# for.
+
+create table t12 (
+  a int auto_increment primary key,
+  b varchar(16) null
+) engine=ndb CHARACTER SET latin1;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cnq --missing-ai-column
+ test $MYSQLTEST_VARDIR/tmp/t11.csv --table=t12 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+# 6 total 2 null and 4 empty
+SELECT COUNT(*), SUM(b IS NULL), SUM(b = '') FROM t12 ORDER BY b;
+
+delete from t12;
+
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cnq --missing-ai-column
+ test $MYSQLTEST_VARDIR/tmp/t11.csv -t t12 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+create table t12ver like t12;
+
+--disable_query_log
+eval load data infile '$MYSQLTEST_VARDIR/tmp/t11.csv'
+into table t12ver
+fields terminated by ',' enclosed by '"'
+lines terminated by $lt_unix (b);
+--enable_query_log
+
+# 6 total 2 null and 4 empty
+SELECT COUNT(*), SUM(b IS NULL), SUM(b = '') FROM t12ver ORDER BY b;
+
+# 20 total 2x2 null and 4x4 empty
+select count(*) from t12 x, t12ver y
+where ifnull(x.b,'NULL') = ifnull(y.b,'NULL');
+
+delete from t12;
+
+# 20 total 2x2 null and 4x4 empty
+select count(*) from t11ver x, t12ver y
+where ifnull(x.a,'NULL') = ifnull(y.b,'NULL');
+
+create table t13 (
+  a varchar(127) collate utf8mb4_unicode_ci,
+  b binary(255),
+  primary key(a,b)
+) engine=ndb;
+
+--echo # errins-type=bug34917498, use small computeHash scratch buffer
+error 1;
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     --input-type=csv --output-type=ndb --errins-type=bug34917498
+     test $MYSQLTEST_VARDIR/tmp/t1.csv -t t13 >> $NDB_TOOLS_OUTPUT 2>&1;
+
+create table t14 (
+  a varchar(767) collate utf8mb4_unicode_ci primary key,
+  b int not null
+) engine=ndb;
+
+--echo # errins-type=bug34917498, use small computeHash scratch buffer
+error 1;
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp --keep-state --log-level=1
+     --input-type=csv --output-type=ndb --errins-type=bug34917498
+     test $MYSQLTEST_VARDIR/tmp/t1.csv -t t14 >> $NDB_TOOLS_OUTPUT 2>&1;
+--let $assert_text= Found expected error ndb-4278
+--let $assert_select= error.ndb
+--let $assert_match= ndb-4278
+--let $assert_file= $NDB_TOOLS_OUTPUT
+--let $assert_count=
+--source include/assert_grep.inc
+
+# END t11
+
+# Check that it is not possible to import negative values into an unsigned int column.
+
+--write_file $MYSQLTEST_VARDIR/tmp/t15.csv
+1,1
+7,7
+2,-1
+3,168
+4,222
+5,174
+EOF
+
+create table t15a (
+  a int primary key,
+  b tinyint unsigned
+) engine=ndb CHARACTER SET latin1;
+
+create table t15b (
+  a int primary key,
+  b smallint unsigned
+) engine=ndb CHARACTER SET latin1;
+
+create table t15c (
+  a int primary key,
+  b mediumint unsigned
+) engine=ndb CHARACTER SET latin1;
+
+create table t15d (
+  a int primary key,
+  b int unsigned
+) engine=ndb CHARACTER SET latin1;
+
+create table t15e (
+  a int primary key,
+  b bigint unsigned
+) engine=ndb CHARACTER SET latin1;
+
+# Try to import negative values into a tinyint unsigned column
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cn
+ --rejects=1
+ test $MYSQLTEST_VARDIR/tmp/t15.csv -t t15a > $NDB_TOOLS_OUTPUT 2>&1;
+
+--let $assert_file=$NDB_TOOLS_OUTPUT
+--let $assert_text=Rows containing negative values for t15a.b are rejected
+--let $assert_select=rejected 1
+--let $assert_match= rejected 1
+--source include/assert_grep.inc
+
+# Verify the rows from the csv file are imported correctly, except the -1
+# given for the unsigned int column
+select * from t15a order by a;
+
+# Try to import negative values into a smallint unsigned column
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cn
+ --rejects=1
+ test $MYSQLTEST_VARDIR/tmp/t15.csv -t t15b > $NDB_TOOLS_OUTPUT 2>&1;
+
+--let $assert_file=$NDB_TOOLS_OUTPUT
+--let $assert_text=Rows containing negative values for t15b.b are rejected
+--let $assert_select=rejected 1
+--let $assert_match= rejected 1
+--source include/assert_grep.inc
+
+# Verify the rows from the csv file are imported correctly, except the -1
+# given for the unsigned int column
+select * from t15b order by a;
+
+# Try to import negative values into a mediumint unsigned column
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cn
+ --rejects=1
+ test $MYSQLTEST_VARDIR/tmp/t15.csv -t t15c > $NDB_TOOLS_OUTPUT 2>&1;
+
+--let $assert_file=$NDB_TOOLS_OUTPUT
+--let $assert_text=Rows containing negative values for t15c.b are rejected
+--let $assert_select=rejected 1
+--let $assert_match= rejected 1
+--source include/assert_grep.inc
+
+# Verify the rows from the csv file are imported correctly, except the -1
+# given for the unsigned int column
+select * from t15c order by a;
+
+# Try to import negative values into a int unsigned column
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cn
+ --rejects=1
+ test $MYSQLTEST_VARDIR/tmp/t15.csv -t t15d > $NDB_TOOLS_OUTPUT 2>&1;
+
+--let $assert_file=$NDB_TOOLS_OUTPUT
+--let $assert_text=Rows containing negative values for t15d.b are rejected
+--let $assert_select=rejected 1
+--let $assert_match= rejected 1
+--source include/assert_grep.inc
+
+# Verify the rows from the csv file are imported correctly, except the -1
+# given for the unsigned int column
+select * from t15d order by a;
+
+# Try to import negative values into a bigint unsigned column
+exec $NDB_IMPORT --state-dir=$MYSQLTEST_VARDIR/tmp
+ --csvopt=cn
+ --rejects=1
+ test $MYSQLTEST_VARDIR/tmp/t15.csv -t t15e > $NDB_TOOLS_OUTPUT 2>&1;
+
+--let $assert_file=$NDB_TOOLS_OUTPUT
+--let $assert_text=Rows containing negative values for t15e.b are rejected
+--let $assert_select=rejected 1
+--let $assert_match= rejected 1
+--source include/assert_grep.inc
+
+# Verify the rows from the csv file are imported correctly, except the -1
+# given for the unsigned int column
+select * from t15e order by a;
+
+drop table tpersons;
+
+drop table t1, t1ver, t2, t2ver, t4, t5a, t5b, t5c,
+           t6, t6ver, t7, t7ver, t8, t8ver, t9, t9ver, t10, t10ver,
+           t11, t11ver, t12, t12ver, t13, t14, t15a, t15b, t15c, t15d, t15e;
+
+
+--source suite/ndb/include/backup_restore_cleanup.inc
+--remove_files_wildcard $MYSQLTEST_VARDIR/tmp t*.csv
+--remove_files_wildcard $MYSQLTEST_VARDIR/tmp t*.map
+--remove_files_wildcard $MYSQLTEST_VARDIR/tmp t*.rej
+--remove_files_wildcard $MYSQLTEST_VARDIR/tmp t*.res
+--remove_files_wildcard $MYSQLTEST_VARDIR/tmp t*.sto
+--remove_files_wildcard $MYSQLTEST_VARDIR/tmp t*.stt
+--force-rmdir $BACKUP_DST
+--force-rmdir $MYSQLTEST_VARDIR/tmp/imp0
+--remove_file $NDB_TOOLS_OUTPUT

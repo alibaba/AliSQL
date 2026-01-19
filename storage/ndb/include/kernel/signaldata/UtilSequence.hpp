@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005, 2006, 2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,13 +28,14 @@
 
 #include "SignalData.hpp"
 
+#define JAM_FILE_ID 186
+
 class UtilSequenceReq {
-  
   /**
    * Receiver
    */
   friend class DbUtil;
-  
+
   /**
    * Sender
    */
@@ -36,39 +44,41 @@ class UtilSequenceReq {
   friend class Suma;
 
   friend bool printUTIL_SEQUENCE_REQ(FILE *, const Uint32 *, Uint32, Uint16);
-public:
-  STATIC_CONST( SignalLength = 4 );
-  
+
+ public:
+  static constexpr Uint32 SignalLength = 4;
+
   enum RequestType {
-    NextVal = 1, // Return uniq value
-    CurrVal = 2, // Read
-    Create  = 3,  // Create a sequence
-    SetVal  = 4  // Set a new sequence
+    NextVal = 1,  // Return uniq value
+    CurrVal = 2,  // Read
+    Create = 3,   // Create a sequence
+    SetVal = 4    // Set a new sequence
   };
-private:
-  Uint32 senderData;  
+
+ private:
+  Uint32 senderData;
   Uint32 sequenceId;  // Number of sequence variable
   Uint32 requestType;
   Uint32 value;
 };
 
 class UtilSequenceConf {
-  
   /**
    * Receiver
    */
   friend class Backup;
-  friend class Suma;  
+  friend class Suma;
   /**
    * Sender
    */
   friend class DbUtil;
 
   friend bool printUTIL_SEQUENCE_CONF(FILE *, const Uint32 *, Uint32, Uint16);
-public:
-  STATIC_CONST( SignalLength = 5 );
-  
-private:
+
+ public:
+  static constexpr Uint32 SignalLength = 5;
+
+ private:
   Uint32 senderData;
   Uint32 sequenceId;
   Uint32 requestType;
@@ -76,7 +86,6 @@ private:
 };
 
 class UtilSequenceRef {
-  
   /**
    * Reciver
    */
@@ -86,21 +95,22 @@ class UtilSequenceRef {
    * Sender
    */
   friend class DbUtil;
-  
+
   friend bool printUTIL_SEQUENCE_REF(FILE *, const Uint32 *, Uint32, Uint16);
-public:
-  STATIC_CONST( SignalLength = 5 );
-  
-  enum ErrorCode {
-    NoSuchSequence = 1,
-    TCError = 2
-  };
-private:
+
+ public:
+  static constexpr Uint32 SignalLength = 5;
+
+  enum ErrorCode { NoSuchSequence = 1, TCError = 2 };
+
+ private:
   Uint32 senderData;
   Uint32 sequenceId;
   Uint32 requestType;
   Uint32 errorCode;
   Uint32 TCErrorCode;
 };
+
+#undef JAM_FILE_ID
 
 #endif

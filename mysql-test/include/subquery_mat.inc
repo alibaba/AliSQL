@@ -3,18 +3,29 @@
 # (WL#1110: Subquery optimization: materialization)
 #
 
+-- disable_query_log
+-- disable_result_log
+# High values set for sampling scanning, effectively forcing full scan for
+# statistics.
+SET @innodb_stats_transient_sample_pages= @@GLOBAL.innodb_stats_transient_sample_pages;
+SET @@global.innodb_stats_transient_sample_pages=5000000000;
+SET @innodb_stats_persistent_sample_pages= @@GLOBAL.innodb_stats_persistent_sample_pages;
+SET @@global.innodb_stats_persistent_sample_pages=5000000000;
+-- enable_result_log
+-- enable_query_log
+
 # Force the feature, to test it as much as possible:
 set @old_opt_switch=@@optimizer_switch;
 set optimizer_switch='subquery_materialization_cost_based=off';
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --disable_warnings
 drop table if exists t1, t2, t3, t1i, t2i, t3i;
 drop view if exists v1, v2, v1m, v2m;
 --enable_warnings
 
-create table t1 (a1 char(8), a2 char(8));
-create table t2 (b1 char(8), b2 char(8));
-create table t3 (c1 char(8), c2 char(8));
+create table t1 (a1 char(8), a2 char(8)) charset utf8mb4;
+create table t2 (b1 char(8), b2 char(8)) charset utf8mb4;
+create table t3 (c1 char(8), c2 char(8)) charset utf8mb4;
 
 insert into t1 values ('1 - 00', '2 - 00');
 insert into t1 values ('1 - 01', '2 - 01');
@@ -30,11 +41,11 @@ insert into t3 values ('1 - 01', '2 - 01');
 insert into t3 values ('1 - 02', '2 - 02');
 insert into t3 values ('1 - 03', '2 - 03');
 insert into t3 values ('1 - 04', '2 - 04');
-
+ANALYZE TABLE t1, t2, t3;
 # Indexed columns
-create table t1i (a1 char(8), a2 char(8));
-create table t2i (b1 char(8), b2 char(8));
-create table t3i (c1 char(8), c2 char(8));
+create table t1i (a1 char(8), a2 char(8)) charset utf8mb4;
+create table t2i (b1 char(8), b2 char(8)) charset utf8mb4;
+create table t3i (c1 char(8), c2 char(8)) charset utf8mb4;
 create index it1i1 on t1i (a1);
 create index it1i2 on t1i (a2);
 create index it1i3 on t1i (a1, a2);
@@ -50,50 +61,51 @@ create index it3i3 on t3i (c1, c2);
 insert into t1i select * from t1;
 insert into t2i select * from t2;
 insert into t3i select * from t3;
+ANALYZE TABLE t1i, t2i, t3i;
 
 /******************************************************************************
 * Simple tests.
 ******************************************************************************/
 # non-indexed nullable fields
-explain extended
+explain
 select * from t1 where a1 in (select b1 from t2 where b1 > '0');
 select * from t1 where a1 in (select b1 from t2 where b1 > '0');
 
-explain extended
+explain
 select * from t1 where a1 in (select b1 from t2 where b1 > '0' group by b1);
 select * from t1 where a1 in (select b1 from t2 where b1 > '0' group by b1);
 
-explain extended
+explain
 select * from t1 where (a1, a2) in (select b1, b2 from t2 where b1 > '0' group by b1, b2);
 select * from t1 where (a1, a2) in (select b1, b2 from t2 where b1 > '0' group by b1, b2);
 
-explain extended
+explain
 select * from t1 where (a1, a2) in (select b1, min(b2) from t2 where b1 > '0' group by b1);
 select * from t1 where (a1, a2) in (select b1, min(b2) from t2 where b1 > '0' group by b1);
 
 # indexed columns
-explain extended
+explain
 select * from t1i where a1 in (select b1 from t2i where b1 > '0');
 select * from t1i where a1 in (select b1 from t2i where b1 > '0');
 
-explain extended
+explain
 select * from t1i where a1 in (select b1 from t2i where b1 > '0' group by b1);
 select * from t1i where a1 in (select b1 from t2i where b1 > '0' group by b1);
 
-explain extended
+explain
 select * from t1i where (a1, a2) in (select b1, b2 from t2i where b1 > '0');
 select * from t1i where (a1, a2) in (select b1, b2 from t2i where b1 > '0');
 
-explain extended
+explain
 select * from t1i where (a1, a2) in (select b1, b2 from t2i where b1 > '0' group by b1, b2);
 select * from t1i where (a1, a2) in (select b1, b2 from t2i where b1 > '0' group by b1, b2);
 
-explain extended
+explain
 select * from t1i where (a1, a2) in (select b1, min(b2) from t2i where b1 > '0' group by b1);
 select * from t1i where (a1, a2) in (select b1, min(b2) from t2i where b1 > '0' group by b1);
 
 # BUG#31639: Wrong plan for uncorrelated subquery when loose scan is applicable.
-explain extended
+explain
 select * from t1 where (a1, a2) in (select b1, max(b2) from t2i group by b1);
 select * from t1 where (a1, a2) in (select b1, max(b2) from t2i group by b1);
 
@@ -104,7 +116,7 @@ prepare st2 from "select * from t1 where (a1, a2) in (select b1, max(b2) from t2
 execute st2;
 execute st2;
 
-explain extended
+explain
 select * from t1 where (a1, a2) in (select b1, min(b2) from t2i where b1 > '0' group by b1);
 select * from t1 where (a1, a2) in (select b1, min(b2) from t2i where b1 > '0' group by b1);
 -- error 1235
@@ -112,18 +124,20 @@ select * from t1 where (a1, a2) in (select b1, min(b2) from t2i limit 1,1);
 
 # materialize the result of ORDER BY
 # non-indexed fields
-explain extended
+explain
 select * from t1 where (a1, a2) in (select b1, b2 from t2 order by b1, b2);
 select * from t1 where (a1, a2) in (select b1, b2 from t2 order by b1, b2);
 # indexed fields
-explain extended
+explain
 select * from t1i where (a1, a2) in (select b1, b2 from t2i order by b1, b2);
 select * from t1i where (a1, a2) in (select b1, b2 from t2i order by b1, b2);
 
-/******************************************************************************
-* Views, UNIONs, several levels of nesting.
-******************************************************************************/
-# materialize the result of subquery over temp-table view
+--echo /******************************************************************************
+--echo * Views, UNIONs, several levels of nesting.
+--echo ******************************************************************************/
+--echo # materialize the result of subquery over temp-table view
+
+--source include/turn_off_only_full_group_by.inc
 
 create algorithm=merge view v1 as
 select b1, c2 from t2, t3 where b2 > c2;
@@ -137,16 +151,21 @@ select b1, c2 from t2, t3 where b2 > c2;
 create algorithm=temptable view v2m as
 select b1, c2 from t2, t3 group by b2, c2;
 
+--sorted_result
 select * from v1 where (c2, b1) in (select c2, b1 from v2 where b1 is not null);
+--sorted_result
 select * from v1 where (c2, b1) in (select distinct c2, b1 from v2 where b1 is not null);
 
+--sorted_result
 select * from v1m where (c2, b1) in (select c2, b1 from v2m where b1 is not null);
+--sorted_result
 select * from v1m where (c2, b1) in (select distinct c2, b1 from v2m where b1 is not null);
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop view v1, v2, v1m, v2m;
 
 # nested subqueries, views
-explain extended
+explain
 select * from t1
 where (a1, a2) in (select b1, b2 from t2 where b1 >  '0') and
       (a1, a2) in (select c1, c2 from t3
@@ -156,7 +175,7 @@ where (a1, a2) in (select b1, b2 from t2 where b1 >  '0') and
       (a1, a2) in (select c1, c2 from t3
                    where (c1, c2) in (select b1, b2 from t2i where b2 > '0'));
 
-explain extended
+explain
 select * from t1i
 where (a1, a2) in (select b1, b2 from t2i where b1 >  '0') and
       (a1, a2) in (select c1, c2 from t3i
@@ -166,7 +185,7 @@ where (a1, a2) in (select b1, b2 from t2i where b1 >  '0') and
       (a1, a2) in (select c1, c2 from t3i
                    where (c1, c2) in (select b1, b2 from t2i where b2 > '0'));
 
-explain extended
+explain
 select * from t1
 where (a1, a2) in (select b1, b2 from t2
                    where b2 in (select c2 from t3 where c2 LIKE '%02') or
@@ -181,7 +200,7 @@ where (a1, a2) in (select b1, b2 from t2
                    where (c1, c2) in (select b1, b2 from t2i where b2 > '0'));
 
 # as above with correlated innermost subquery
-explain extended
+explain
 select * from t1
 where (a1, a2) in (select b1, b2 from t2
                    where b2 in (select c2 from t3 t3a where c1 = a1) or
@@ -197,7 +216,7 @@ where (a1, a2) in (select b1, b2 from t2
 
 
 # multiple levels of nesting subqueries, unions
-explain extended
+explain
 (select * from t1
 where (a1, a2) in (select b1, b2 from t2
                    where b2 in (select c2 from t3 where c2 LIKE '%02') or
@@ -226,7 +245,7 @@ where (a1, a2) in (select b1, b2 from t2i where b1 >  '0') and
 
 
 # UNION of subqueries as a subquery (thus it is not computed via materialization)
-explain extended
+explain
 select * from t1
 where (a1, a2) in (select * from t1 where a1 > '0' UNION select * from t2 where b1 < '9') and
       (a1, a2) in (select c1, c2 from t3
@@ -236,7 +255,7 @@ where (a1, a2) in (select * from t1 where a1 > '0' UNION select * from t2 where 
       (a1, a2) in (select c1, c2 from t3
                    where (c1, c2) in (select b1, b2 from t2i where b2 > '0'));
 # as above, with a join conditon between the outer references
-explain extended
+explain
 select * from t1, t3
 where (a1, a2) in (select * from t1 where a1 > '0' UNION select * from t2 where b1 < '9') and
       (c1, c2) in (select c1, c2 from t3
@@ -253,14 +272,14 @@ where (a1, a2) in (select * from t1 where a1 > '0' UNION select * from t2 where 
 * Negative tests, where materialization should not be applied.
 ******************************************************************************/
 # UNION in a subquery
-explain extended
+explain
 select * from t3
 where c1 in (select a1 from t1 where a1 > '0' UNION select b1 from t2 where b1 < '9');
 select * from t3
 where c1 in (select a1 from t1 where a1 > '0' UNION select b1 from t2 where b1 < '9');
 
 # correlation
-explain extended
+explain
 select * from t1
 where (a1, a2) in (select b1, b2 from t2
                    where b2 in (select c2 from t3 t3a where c1 = a1) or
@@ -269,10 +288,10 @@ where (a1, a2) in (select b1, b2 from t2
                    where (c1, c2) in (select b1, b2 from t2i where b2 > '0' or b2 = a2));
 
 # subquery has no tables
-explain extended
+explain
 select * from t1 where (a1, a2) in (select '1 - 01', '2 - 01');
 select * from t1 where (a1, a2) in (select '1 - 01', '2 - 01');
-explain extended
+explain
 select * from t1 where (a1, a2) in (select '1 - 01', '2 - 01' from dual);
 select * from t1 where (a1, a2) in (select '1 - 01', '2 - 01' from dual);
 
@@ -287,17 +306,21 @@ select ((a1,a2) IN (select * from t2 where b2 > '0')) IS NULL from t1;
 /* GROUP BY clause */
 create table columns (col int key);
 insert into columns values (1), (2);
+--source include/turn_off_only_full_group_by.inc
 
-explain extended
+explain
 select * from t1 group by (select col from columns limit 1);
 select * from t1 group by (select col from columns limit 1);
 
-explain extended
+explain
 select * from t1 group by (a1 in (select col from columns));
+--skip_if_hypergraph  # Different warnings.
 select * from t1 group by (a1 in (select col from columns));
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 /* ORDER BY clause */
-explain extended
+explain
 select * from t1 order by (select col from columns limit 1);
 select * from t1 order by (select col from columns limit 1);
 
@@ -317,8 +340,8 @@ insert into t2bit values (b'001', b'101');
 insert into t2bit values (b'010', b'110');
 insert into t2bit values (b'110', b'111');
 
-
-explain extended select bin(a1), bin(a2)
+ANALYZE TABLE t1bit, t2bit;
+explain select bin(a1), bin(a2)
 from t1bit
 where (a1, a2) in (select b1, b2 from t2bit);
 
@@ -339,8 +362,8 @@ insert into t1bb values (b'010', '110');
 insert into t2bb values (b'001', '101');
 insert into t2bb values (b'010', '110');
 insert into t2bb values (b'110', '111');
-
-explain extended select bin(a1), a2
+ANALYZE TABLE t1bb, t2bb;
+explain select bin(a1), a2
 from t1bb
 where (a1, a2) in (select b1, b2 from t2bb);
 
@@ -388,42 +411,45 @@ insert into t3 values (10);
 insert into t3 values (10);
 insert into t3 values (20);
 insert into t3 values (30);
-
-explain extended
+ANALYZE TABLE t1, t2, t3;
+explain
 select a from t1 where a in (select c from t2 where d >= 20);
 select a from t1 where a in (select c from t2 where d >= 20);
 
 create index it1a on t1(a);
-
-explain extended
+ANALYZE TABLE t1;
+explain
 select a from t1 where a in (select c from t2 where d >= 20);
 select a from t1 where a in (select c from t2 where d >= 20);
 
 # the first outer row has a matching inner row
 insert into t2 values (1,10);
-
-explain extended
+ANALYZE TABLE t2;
+explain
 select a from t1 where a in (select c from t2 where d >= 20);
 select a from t1 where a in (select c from t2 where d >= 20);
 
 # cacheing for IN predicates inside a having clause - here the cached
 # items are changed to point to temporary tables.
-explain extended
-select a from t1 group by a having a in (select c from t2 where d >= 20);
+--replace_column 10 7
+explain
+select/*+ NO_RANGE_OPTIMIZATION(t1) */ a from t1 group by a having a in (select c from t2 where d >= 20);
 select a from t1 group by a having a in (select c from t2 where d >= 20);
 
 # create an index that can be used for the outer query GROUP BY 
 create index iab on t1(a, b);
-explain extended
-select a from t1 group by a having a in (select c from t2 where d >= 20);
+ANALYZE TABLE t1;
+--replace_column 10 7
+explain
+select /*+ NO_RANGE_OPTIMIZATION(t1) */ a from t1 group by a having a in (select c from t2 where d >= 20);
 select a from t1 group by a having a in (select c from t2 where d >= 20);
 
-explain extended
+explain
 select a from t1 group by a
 having a in (select c from t2 where d >= some(select e from t3 where max(b)=e));
 select a from t1 group by a
 having a in (select c from t2 where d >= some(select e from t3 where max(b)=e));
-explain extended
+explain
 select a from t1
 where a in (select c from t2 where d >= some(select e from t3 where b=e));
 --sorted_result
@@ -449,7 +475,7 @@ drop table t2;
 create table t1 (a1 int key);
 create table t2 (b1 int);
 insert into t1 values (5);
-
+ANALYZE TABLE t1, t2;
 explain select min(a1) from t1 where 7 in (select b1 from t2 group by b1);
 select min(a1) from t1 where 7 in (select b1 from t2 group by b1);
 explain select min(a1) from t1 where 7 in (select b1 from t2);
@@ -462,7 +488,7 @@ drop table t1,t2;
 create table t1 (a char(2), b varchar(10));
 insert into t1 values ('a',  'aaa');
 insert into t1 values ('aa', 'aaaa');
-
+ANALYZE TABLE t1;
 explain select a,b from t1 where b in (select a from t1);
 select a,b from t1 where b in (select a from t1);
 prepare st1 from "select a,b from t1 where b in (select a from t1)";
@@ -474,20 +500,21 @@ drop table t1;
 # Test for Bug#16603 GROUP BY in a row subquery with a quantifier
 #                    when an index is defined on the grouping field
 
-CREATE TABLE t1 (a varchar(5), b varchar(10));
+CREATE TABLE t1 (a varchar(5), b varchar(10)) charset utf8mb4;
 INSERT INTO t1 VALUES
   ('AAA', 5), ('BBB', 4), ('BBB', 1), ('CCC', 2),
   ('CCC', 7), ('AAA', 2), ('AAA', 4), ('BBB', 3), ('AAA', 8);
-
+ANALYZE TABLE t1;
 SELECT * FROM t1 WHERE (a,b) = ANY (SELECT a, max(b) FROM t1 GROUP BY a);
 EXPLAIN
 SELECT * FROM t1 WHERE (a,b) = ANY (SELECT a, max(b) FROM t1 GROUP BY a);
 
 ALTER TABLE t1 ADD INDEX(a);
-
+ANALYZE TABLE t1;
 --let $query=SELECT * FROM t1 WHERE (a,b) = ANY (SELECT a, max(b) FROM t1 GROUP BY a)
 FLUSH STATUS;
 --eval $query
+--skip_if_hypergraph  # Depends on the query plan.
 SHOW SESSION STATUS LIKE 'Sort_scan%';
 --eval EXPLAIN $query
 
@@ -495,14 +522,15 @@ DROP TABLE t1;
 
 
 #
-# Bug#36011 Server crash with explain extended on query with dependent
+# Bug#36011 Server crash with explain on query with dependent
 #           subqueries
 #
 
 CREATE TABLE t1 (a INT);
 INSERT INTO t1 VALUES (1),(2);
-EXPLAIN EXTENDED SELECT 1 FROM t1 WHERE 1 IN (SELECT 1 FROM t1 GROUP BY a);
-EXPLAIN EXTENDED SELECT 1 FROM t1 WHERE 1 IN (SELECT 1 FROM t1 WHERE a > 3 GROUP BY a);
+ANALYZE TABLE t1;
+EXPLAIN SELECT 1 FROM t1 WHERE 1 IN (SELECT 1 FROM t1 GROUP BY a);
+EXPLAIN SELECT 1 FROM t1 WHERE 1 IN (SELECT 1 FROM t1 WHERE a > 3 GROUP BY a);
 DROP TABLE t1;
 
 
@@ -520,7 +548,7 @@ INSERT INTO t1 VALUES (1); # Note: t1 must be const table
 INSERT INTO t2 VALUES (1),(2);
 INSERT INTO t3 VALUES (1),(2);
 INSERT INTO t4 VALUES (1),(2);
-
+ANALYZE TABLE t1, t2, t3, t4;
 --echo
 EXPLAIN 
 SELECT t1i
@@ -549,7 +577,7 @@ CREATE TABLE t1 (
   pk INT,
   v VARCHAR(1) DEFAULT NULL,
   PRIMARY KEY(pk)
-);
+) charset latin1;
 CREATE TABLE t2 LIKE t1;
 CREATE TABLE t3 LIKE t1;
 CREATE TABLE empty1 (a int);
@@ -557,7 +585,7 @@ CREATE TABLE empty1 (a int);
 INSERT INTO t1 VALUES (1,'c'),(2,NULL);
 INSERT INTO t2 VALUES (3,'m'),(4,NULL);
 INSERT INTO t3 VALUES (1,'n');
-
+ANALYZE TABLE t1, t2, t3;
 --echo
 --echo #
 --echo # 1) Test that subquery materialization is setup for query with
@@ -681,7 +709,7 @@ CREATE TABLE t2 (j INTEGER);
 INSERT INTO t2 VALUES (5);
 
 CREATE TABLE t3 (k INTEGER);
-
+ANALYZE TABLE t1, t2, t3;
 EXPLAIN
 SELECT i, j FROM t1 LEFT JOIN t2 ON (j) IN (SELECT k FROM t3);
 SELECT i, j FROM t1 LEFT JOIN t2 ON (j) IN (SELECT k FROM t3);
@@ -790,12 +818,14 @@ CREATE TABLE t3 (c char(1));
 INSERT INTO t1 VALUES (1), (2);
 INSERT INTO t2 VALUES ('a'), ('b');
 INSERT INTO t3 VALUES ('x'), ('y');
+--source include/turn_off_only_full_group_by.inc
 
 SELECT COUNT( i ),i
 FROM t1
 HAVING ('c')  
   IN (SELECT t2.c FROM (t2 JOIN t3));
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1,t2,t3;
 
 --echo # End BUG#54511
@@ -830,17 +860,17 @@ CREATE TABLE t1 (
   pk int NOT NULL,
   f1 int DEFAULT NULL,
   PRIMARY KEY (pk)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 CREATE TABLE t2 (
   pk int NOT NULL,
   f1 int DEFAULT NULL,
   PRIMARY KEY (pk)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t1 VALUES (10,0);
 INSERT INTO t2 VALUES (10,0),(11,0);
-
+ANALYZE TABLE t1, t2, t3;
 let $query=
 SELECT * FROM t1 JOIN t2 USING (f1)
 WHERE t1.f1 IN (SELECT t1.pk FROM t1 ORDER BY t1.f1);
@@ -925,13 +955,14 @@ CREATE TABLE t1(a int);
 INSERT INTO t1 values(1),(2);
 CREATE TABLE t2(a int);
 INSERT INTO t2 values(1),(2);
-
+ANALYZE TABLE t1, t2;
 EXPLAIN SELECT * FROM t1 WHERE a IN (SELECT * FROM t2);
 FLUSH STATUS;
 SELECT * FROM t1 WHERE a IN (SELECT * FROM t2);
 CREATE TABLE t3 SELECT * FROM t1 WHERE a IN (SELECT * FROM t2);
 SELECT * FROM t3;
 # prove that subquery materialization was used:
+--skip_if_hypergraph  # Does not support subquery materialization yet.
 SHOW STATUS LIKE "CREATED_TMP_TABLES";
 DROP TABLE t1,t2,t3;
 
@@ -941,20 +972,20 @@ DROP TABLE t1,t2,t3;
 
 CREATE TABLE t1 (
   col_varchar_nokey varchar(1) NOT NULL
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t1 VALUES ('b');
 
 CREATE TABLE t2 (
   col_varchar_nokey varchar(1) NOT NULL
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t2 VALUES ('k');
 
 CREATE TABLE t3 (
   col_varchar_nokey varchar(1) NOT NULL
-) ENGINE=MyISAM;
-
+) ENGINE=INNODB;
+ANALYZE TABLE t1, t2, t3;
 let $query=
 SELECT STRAIGHT_JOIN *
 FROM t1 LEFT JOIN t2 ON t1.col_varchar_nokey IN (SELECT col_varchar_nokey
@@ -972,10 +1003,10 @@ DROP TABLE t1, t2, t3;
 --echo # in join_read_const_table()
 --echo #
 
-CREATE TABLE t1 (v INTEGER) ENGINE=MyISAM;
+CREATE TABLE t1 (v INTEGER) ENGINE=INNODB;
 INSERT INTO t1 VALUES(1);
 
-CREATE TABLE t2 (v INTEGER) ENGINE=MyISAM;
+CREATE TABLE t2 (v INTEGER) ENGINE=INNODB;
 
 SELECT *
 FROM t1 LEFT JOIN t2
@@ -996,7 +1027,7 @@ CREATE TABLE t1 (
   col_int_key int DEFAULT NULL,
   PRIMARY KEY (pk),
   KEY col_int_key (col_int_key)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t1 VALUES (1,2,4), (2,150,62);
 
@@ -1004,10 +1035,10 @@ CREATE TABLE t2 (
   pk int NOT NULL,
   col_int_key int DEFAULT NULL,
   PRIMARY KEY (pk)
-) ENGINE=MyISAM;
+) ENGINE=INNODB;
 
 INSERT INTO t2 VALUES (1,7);
-
+ANALYZE TABLE t1, t2;
 let $query=
 SELECT table1.pk, table2.pk
 FROM t2 AS table1 LEFT JOIN t2 AS table2
@@ -1040,21 +1071,21 @@ create table t1(a int not null);
 create table t2(a int not null);
 insert into t1 values(1),(2);
 insert into t2 values(1),(2);
-
+ANALYZE TABLE t1, t2;
 --echo Test in SELECT list
 
 --echo
 let $query=select a, (a,a) in (select a,a from t2) from t1;
 
 --echo cols not nullable => subq materialization
-eval explain extended $query;
+eval explain $query;
 eval $query;
 
 --echo
 let $query=select t1.a, t2.a, (t1.a,t1.a) in (select a,a from t2 as t3)
 from t1 join t2 on t1.a+t2.a=1000;
 --echo cols not nullable => subq materialization
-eval explain extended $query;
+eval explain $query;
 eval $query;
 
 --echo
@@ -1063,18 +1094,19 @@ from t1 left join t2 on t1.a+t2.a=1000;
 
 --echo t2.a is not nullable, but in the query it may appear as NULL
 --echo as it's in an outer join. So, no materialization.
-eval explain extended $query;
+eval explain $query;
 eval $query;
 
 --echo
 alter table t2 modify a int;
+ANALYZE TABLE t2;
 let $query=select t1.a, t2.a, (t1.a,t1.a) in (select a,a from t2 as t3)
 from t1 join t2 on t1.a+t2.a=1000;
 --echo two nullable inner cols => no subq materialization
-eval explain extended $query;
+eval explain $query;
 eval $query;
 alter table t2 modify a int not null;
-
+ANALYZE TABLE t2;
 --echo
 --echo Test in WHERE
 --echo
@@ -1085,7 +1117,8 @@ where (t2.a,t2.a) in (select a,a from t2 as t3);
 --echo semijoin is enabled in @@optimizer_switch, semijoin is chosen,
 --echo then rejected (due to outer join), and in that case, the
 --echo fallback is IN->EXISTS, subq-materialization is not tried...
-eval explain extended $query;
+eval explain $query;
+--sorted_result
 eval $query;
 
 --echo
@@ -1093,7 +1126,7 @@ let $query=select t1.a, t2.a
 from t1 join t2 on t1.a+t2.a=3
 where (t2.a,t2.a) not in (select a,a from t2 as t3);
 --echo cols not nullable => subq materialization
-eval explain extended $query;
+eval explain $query;
 eval $query;
 
 drop table t1,t2;
@@ -1114,7 +1147,7 @@ insert into t2 values(1),(2);
 let $query=select a, a in (select a from t2) from t1;
 
 --echo one col => subq materialization
-eval explain extended $query;
+eval explain $query;
 eval $query;
 
 --echo
@@ -1124,7 +1157,7 @@ from t1 left join t2 on t1.a+t2.a=1000;
 --echo t2.a is not nullable, but in the query it may appear as NULL
 --echo as it's in an outer join. But there is only one inner column so
 --echo materialization is possible
-eval explain extended $query;
+eval explain $query;
 eval $query;
 
 --echo
@@ -1132,7 +1165,7 @@ let $query=select t1.a, t2.a, (t2.a,t2.a) in (select a,a from t2 as t3)
 from t1 left join t2 on t1.a+t2.a=1000;
 
 --echo _two_ outer columns, nullable => no materialization
-eval explain extended $query;
+eval explain $query;
 eval $query;
 
 drop table t1,t2;
@@ -1144,31 +1177,35 @@ create table t1(a int, b int);
 create table t2(a int);
 insert into t1 values(1,1),(1,2),(1,3),(2,1),(2,2),(2,3);
 insert into t2 values(10),(20);
-
+ANALYZE TABLE t1, t2;
 let $query=select t1.a as z, sum(t1.b) from t1 group by t1.a
 having (z in (select * from t2)) is null;
 
 --echo no NULLs.
 
-eval explain extended $query;
+eval explain $query;
+--sorted_result
 eval $query;
 
 --echo one outer NULL
 insert into t1 values(null,null);
 
-eval explain extended $query;
+eval explain $query;
+--sorted_result
 eval $query;
 
 --echo one outer NULL and one inner NULL
 insert into t2 values(null);
 
-eval explain extended $query;
+eval explain $query;
+--sorted_result
 eval $query;
 
 --echo one inner NULL
 delete from t1 where a is null;
 
-eval explain extended $query;
+eval explain $query;
+--sorted_result
 eval $query;
 
 drop table t1,t2;
@@ -1182,15 +1219,16 @@ create table t2(a int);
 insert into t1 values(1),(2),(3),(4),(5),(6);
 insert into t1 select * from t1; # t1 has 12 rows
 insert into t2 values(10),(20),(NULL);
-
+ANALYZE TABLE t1, t2, t3;
 let $query=select a, (a in (select * from t2)) from t1;
 
-eval explain extended $query;
+eval explain $query;
 flush status;
 eval $query;
 --echo There will be one look-up in the temporary table for each row
 --echo of t1 (12), plus one additional look-up to check whether table
 --echo contains a NULL value.
+--skip_if_hypergraph  # Depends on the query plan.
 show status like "handler_read_key";
 
 drop table t1,t2;
@@ -1204,7 +1242,7 @@ CREATE TABLE t1(a INT);
 INSERT INTO t1 VALUES(1),(2),(3);
 CREATE TABLE t2(a INT);
 INSERT INTO t2 VALUES(1),(2),(4);
-
+ANALYZE TABLE t1, t2;
 --echo # subquery materialization used for SELECT:
 EXPLAIN SELECT * FROM t1 WHERE a IN (SELECT * FROM t2 WHERE a <> 2);
 SELECT * FROM t1 WHERE a IN (SELECT * FROM t2 WHERE a <> 2);
@@ -1212,6 +1250,7 @@ SELECT * FROM t1 WHERE a IN (SELECT * FROM t2 WHERE a <> 2);
 --echo # Also used for INSERT SELECT:
 # a) all different tables:
 CREATE TABLE t3 SELECT * FROM t1;
+ANALYZE TABLE t3;
 EXPLAIN INSERT INTO t3 SELECT * FROM t1 WHERE a IN (SELECT * FROM t2 WHERE a <> 2);
 INSERT INTO t3 SELECT * FROM t1 WHERE a IN (SELECT * FROM t2 WHERE a <> 2);
 --sorted_result
@@ -1220,6 +1259,7 @@ SELECT * FROM t3;
 # b) insert into subquery's selected table
 EXPLAIN INSERT INTO t2 SELECT * FROM t1 WHERE a IN (SELECT * FROM t2 WHERE a <> 2);
 INSERT INTO t2 SELECT * FROM t1 WHERE a IN (SELECT * FROM t2 WHERE a <> 2);
+ANALYZE TABLE t2;
 --sorted_result
 SELECT * FROM t2;
 
@@ -1229,7 +1269,7 @@ INSERT INTO t2 SELECT * FROM t2 WHERE a IN (SELECT * FROM t2 WHERE a <> 2);
 --sorted_result
 SELECT * FROM t2;
 
---echo # Not used for single-table UPDATE, DELETE:
+--echo # Used for single-table UPDATE, DELETE, by converting to multi-table
 # a) all different tables
 EXPLAIN SELECT * FROM t2 WHERE a IN (SELECT * FROM t1);
 EXPLAIN UPDATE t2 SET a=a-1 WHERE a IN (SELECT * FROM t1);
@@ -1249,13 +1289,14 @@ EXPLAIN DELETE FROM t2 WHERE a IN (SELECT * FROM t2);
 
 # Put some content so that future queries have rows to modify:
 UPDATE t2 SET a=3 WHERE a=0;
-
+ANALYZE TABLE t2;
 --echo # Used for multi-table UPDATE, DELETE:
 
 # a) all different tables
 EXPLAIN SELECT * FROM t2,t3 WHERE t2.a IN (SELECT * FROM t1 WHERE a <> 2);
 EXPLAIN UPDATE t2,t3 SET t2.a=t2.a-2 WHERE t2.a IN (SELECT * FROM t1 WHERE a <> 2);
 UPDATE t2,t3 SET t2.a=t2.a-2 WHERE t2.a IN (SELECT * FROM t1 WHERE a <> 2);
+ANALYZE TABLE t2, t3;
 --sorted_result
 SELECT * FROM t2;
 EXPLAIN DELETE t2.* FROM t2,t3 WHERE t2.a IN (SELECT * FROM t1 WHERE a <> 2);
@@ -1284,10 +1325,12 @@ create table t1 (a varchar(3));
 create table t2 (a varchar(2));
 insert into t1 values('aaa'), ('aaa');
 insert into t2 values('aa'), ('aa');
+ANALYZE TABLE t1, t2;
 let $query=select * from t1 where a in (select a from t2);
 eval explain $query;
 flush status;
 eval $query;
+--skip_if_hypergraph  # Depends on the query plan.
 show status like "handler_read%";
 drop table t1,t2;
 
@@ -1328,25 +1371,26 @@ CREATE TABLE t4 (
 );
 
 INSERT INTO t4 VALUES (1,'x');
-
+ANALYZE TABLE t1, t2, t3, t4;
 let $query=
-SELECT OUTR.pk, OUTR.col_varchar_nokey, OUTR2.col_varchar_nokey
-FROM t2 AS OUTR2
-  JOIN t4 AS OUTR
-  ON (OUTR2.col_varchar_nokey > OUTR.col_varchar_nokey)
+SELECT outr.pk, outr.col_varchar_nokey, outr2.col_varchar_nokey
+FROM t2 AS outr2
+  JOIN t4 AS outr
+  ON (outr2.col_varchar_nokey > outr.col_varchar_nokey)
 WHERE
-  OUTR.col_varchar_nokey IN (
-    SELECT INNR.col_varchar_nokey
-    FROM t3 AS INNR2
-      LEFT JOIN t1 AS INNR
-      ON (INNR2.col_int_key >= INNR.pk)
+  outr.col_varchar_nokey IN (
+    SELECT innr.col_varchar_nokey
+    FROM t3 AS innr2
+      LEFT JOIN t1 AS innr
+      ON (innr2.col_int_key >= innr.pk)
   )
-  XOR OUTR.pk < 6
+  XOR outr.pk < 6
 ;
 
 eval EXPLAIN $query;
 FLUSH STATUS;
 eval $query;
+--skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE "HANDLER_READ%";
 
 DROP TABLE t1,t2,t3,t4;
@@ -1372,7 +1416,7 @@ CREATE TABLE t2 (
 
 INSERT INTO t2 VALUES
  (7,'14:03:03','2001-11-28 00:50:27'), (1,'01:46:09','2007-10-09 19:53:04');
-
+ANALYZE TABLE t1, t2;
 let $query=
 SELECT col_datetime_nokey AS x
 FROM t2 AS outr
@@ -1403,6 +1447,7 @@ CREATE TABLE t3
 (c4 int,pk INT,c1 bigint,cyk year,cy year,key (cyk))
 ENGINE=InnoDB;
 INSERT INTO t3 VALUES(0,8,'',0,'');
+ANALYZE TABLE t1, t2, t3;
 let $query=
 SELECT o.c2 AS x FROM t1 AS o
 WHERE o.c1 IN
@@ -1416,6 +1461,95 @@ eval EXPLAIN $query;
 eval $query;
 
 DROP TABLE t1,t2,t3;
+
+--echo # End of 5.6 tests
+
+--echo #
+--echo # Bug #18770217 	DIFFERENT RESULT WITH SP ON 2ND EXECUTION OF QUERY WITH STRAIGHT_JOIN IN NOT IN
+--echo #
+
+# If IN->EXISTS is used, the WHERE clause of the EXISTS subquery looks
+# like:
+# alias1.col_varchar_key=sq1_alias1.col_varchar_nokey AND (scalar subquery)
+# and because the equality is false for all rows, the scalar subquery
+# is not evaluted - produces no ER_SUBQUERY_NO_1_ROW.
+
+if (`select locate('materialization=on', @@optimizer_switch) > 0`) 
+{
+
+CREATE TABLE t1 (
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1),
+  KEY col_int_key (col_int_key),
+  KEY col_varchar_key (col_varchar_key,col_int_key)
+) charset utf8mb4;
+
+INSERT INTO t1 VALUES (8,'x','x');
+INSERT INTO t1 VALUES (NULL,'x','x');
+
+CREATE TABLE t2 (
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1),
+  KEY col_int_key (col_int_key),
+  KEY col_varchar_key (col_varchar_key,col_int_key)
+) charset utf8mb4;
+
+INSERT INTO t2 VALUES (0,'x','x');
+
+CREATE TABLE t3 (
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1),
+  KEY col_int_key (col_int_key),
+  KEY col_varchar_key (col_varchar_key,col_int_key)
+) charset utf8mb4;
+
+INSERT INTO t3 VALUES (8,'g','g');
+
+CREATE VIEW view_d AS SELECT * FROM t2;
+
+let $query=
+SELECT alias2.col_int_key
+FROM t1 AS alias1 , t2 AS alias2
+WHERE alias1.col_varchar_key NOT IN (
+  SELECT sq1_alias1.col_varchar_nokey
+  FROM t3 AS sq1_alias1
+    JOIN ( t1 AS sq1_alias2
+      STRAIGHT_JOIN view_d AS sq1_alias3 )
+  WHERE (
+    SELECT col_int_key
+    FROM t1 AS c_sq1_alias1
+    WHERE c_sq1_alias1.col_varchar_key = sq1_alias3.col_varchar_nokey
+  )
+)
+;
+
+# Show materialization is used
+eval EXPLAIN $query;
+
+--error ER_SUBQUERY_NO_1_ROW
+eval $query;
+
+eval CREATE PROCEDURE stored_proc_2581 () LANGUAGE SQL $query;
+
+--error ER_SUBQUERY_NO_1_ROW
+CALL stored_proc_2581;
+--error ER_SUBQUERY_NO_1_ROW
+CALL stored_proc_2581;
+DROP PROCEDURE stored_proc_2581;
+
+eval PREPARE s FROM '$query';
+--error ER_SUBQUERY_NO_1_ROW
+EXECUTE s;
+--error ER_SUBQUERY_NO_1_ROW
+EXECUTE s;
+
+DROP VIEW view_d;
+DROP TABLE t1,t2,t3;
+
+}
 
 --echo #
 --echo # Bug#19297190 NOT IN DOESN'T RETURN EXPECTED RESULT
@@ -1443,29 +1577,143 @@ WHERE t1.a NOT IN (
   SELECT t2.a FROM t1 as t2
 );
 
-# If subq-mat is used, this will force MEMORY->MYISAM tmp table conversion:
+#  If subq-mat is used, this will force MEMORY->disk-based tmp table conversion:
 set @save_heap_size= @@max_heap_table_size;
 set @@max_heap_table_size= 16384;
 
-# Uses IN->EXISTS because field too long for subq-materialization:
-eval EXPLAIN $query;
-eval $query;
+# Test disk-based engine:
 
-# Make field just below the length limit:
-# Silence truncation warnings:
---disable_warnings
-ALTER TABLE t1 MODIFY a VARCHAR(332) CHARACTER SET UTF8;
---enable_warnings
-
-ANALYZE TABLE t1;
-
-# Now subquery materialization can be used, and result is still correct:
+# Subq-materialization can be used and gives correct result:
 eval EXPLAIN $query;
 eval $query;
 
 DROP TABLE t1;
 set @@max_heap_table_size= @save_heap_size;
 
---echo # End of 5.6 tests
+--echo #
+--echo # Bug#19805761 ASSERTION FAILURE IN SUBSELECT_HASH_SJ_ENGINE::EXEC WITH SUBQUERY IN LEFT ARGUME
+--echo #
+
+CREATE TABLE t1(a INT) ENGINE=INNODB;
+INSERT INTO t1 VALUES(1);
+CREATE TABLE t2 LIKE t1;
+ANALYZE TABLE t1,t2;
+
+let $query=
+SELECT (SELECT 1,2 FROM t2) NOT IN (SELECT 1,2 FROM t1) FROM t1;
+
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t1,t2;
+
+--echo #
+--echo # Bug#20729351 ASSERTION FAILED: ITEM_IN->LEFT_EXPR->ELEMENT_INDEX(0)->MAYBE_NULL
+--echo #
+
+CREATE TABLE t1 (a LONGBLOB) ENGINE=INNODB;
+INSERT INTO t1 VALUES ('a'), ('a'), ('a');
+CREATE TABLE t2 (a INT) ENGINE=INNODB;
+INSERT INTO t2 VALUES(1), (1), (1), (1);
+ANALYZE TABLE t1, t2;
+SELECT
+ (SELECT NULL IN (NULL) FROM t1 WHERE a) =
+  ANY(SELECT 1 FROM t2)
+FROM t1;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#22089623 ASSERTION IN ITEM_FUNC_TRIG_COND::VAL_INT()
+--echo #              WITH SUBQUERY ON LEFT SIDE OF IN
+--echo #
+
+--let $query= SELECT (SELECT NULL, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 1) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT NULL, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT NULL, 1) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 2, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 2 UNION SELECT 1, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 1 UNION SELECT 1, 1) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT NULL, NULL UNION SELECT NULL, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 1 UNION SELECT 2, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT 1, 2 WHERE FALSE UNION SELECT 1, 2 WHERE FALSE) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 2 UNION ALL SELECT 1, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT 1, 1 UNION ALL SELECT 1, 1) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT NULL, NULL UNION ALL SELECT NULL, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT 1, 1 UNION ALL SELECT 2, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT 1, 2 WHERE FALSE UNION ALL SELECT 1, 2 WHERE FALSE) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+
+--echo #
+--echo # Bug#20536077: WRONG RESULT FOR SELECT NULL,NULL IN (SUBQUERY)
+--echo #
+
+--echo # The following queries correctly returned NULL.
+CREATE TABLE s (s INT) ENGINE=InnoDB;
+INSERT INTO s VALUES(1);
+SELECT NULL IN (SELECT 1);
+SELECT NULL = (SELECT 1);
+SELECT NULL = (SELECT 1 FROM s);
+SELECT (NULL, NULL) IN (SELECT 1, 2);
+
+--echo # The following queries returned 0 instead of NULL.
+SELECT NULL IN (SELECT 1 FROM s);
+SELECT (SELECT NULL, NULL FROM DUAL) IN (SELECT 1, 2 FROM s) FROM s;
+SELECT (SELECT NULL,NULL) IN (SELECT 1, 2);
+CREATE TABLE u(a INT, b INT) ENGINE=INNODB;
+INSERT INTO u VALUES (NULL, NULL);
+SELECT (SELECT * FROM u) IN (SELECT 1, 2 FROM s) FROM s;
+SELECT (SELECT * FROM u) IN (SELECT 1, 2);
+
+DROP TABLE s, u;
+
 
 set @@optimizer_switch=@old_opt_switch;
+SET sql_mode = default;
+
+-- disable_query_log
+-- disable_result_log
+SET @@GLOBAL.innodb_stats_transient_sample_pages= @innodb_stats_transient_sample_pages;
+SET @@GLOBAL.innodb_stats_persistent_sample_pages= @innodb_stats_persistent_sample_pages;
+-- enable_result_log
+-- enable_query_log

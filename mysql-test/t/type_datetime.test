@@ -6,14 +6,14 @@
 drop table if exists t1;
 --enable_warnings
 
-create table t1 (t datetime);
-insert into t1 values (101),(691231),(700101),(991231),(10000101),(99991231),(101000000),(691231000000),(700101000000),(991231235959),(10000101000000),(99991231235959),(20030100000000),(20030000000000);
+create table t1 (t datetime) ENGINE=InnoDB;
+insert ignore into t1 values (101),(691231),(700101),(991231),(10000101),(99991231),(101000000),(691231000000),(700101000000),(991231235959),(10000101000000),(99991231235959),(20030100000000),(20030000000000);
 select * from t1;
 delete from t1 where t > 0;
 optimize table t1;
 check table t1;
 delete from t1;
-insert into t1 values("000101"),("691231"),("700101"),("991231"),("00000101"),("00010101"),("99991231"),("00101000000"),("691231000000"),("700101000000"),("991231235959"),("10000101000000"),("99991231235959"),("20030100000000"),("20030000000000");
+insert ignore into t1 values("000101"),("691231"),("700101"),("991231"),("00000101"),("00010101"),("99991231"),("00101000000"),("691231000000"),("700101000000"),("991231235959"),("10000101000000"),("99991231235959"),("20030100000000"),("20030000000000");
 
 # Strange dates
 insert into t1 values ("2003-003-03");
@@ -24,25 +24,25 @@ select * from t1;
 
 # Test some wrong dates
 truncate table t1;
-insert into t1 values("2003-0303 12:13:14");
+insert ignore into t1 values("2003-0303 12:13:14");
 select * from t1;
 drop table t1;
 
 #
 # Test insert of now() and curtime()
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, b date, c time, d datetime);
 insert into t1 (b,c,d) values(now(),curtime(),now());
 select date_format(a,"%Y-%m-%d")=b,right(a+0,6)=c+0,a=d+0 from t1;
 drop table t1;
-
+SET sql_mode = default;
 #
 # Test of datetime and not null
 #
 
 CREATE TABLE t1 (a datetime not null);
-insert into t1 values (0);
+insert ignore into t1 values (0);
 select * from t1 where a is null;
 drop table t1;
 
@@ -59,34 +59,10 @@ select * from t1 ignore index (dt) where dt > 20021020;
 drop table t1;
 
 #
-# Test of datetime optimization
-#
-
-CREATE TABLE `t1` (
-  `date` datetime NOT NULL default '0000-00-00 00:00:00',
-  `numfacture` int(6) unsigned NOT NULL default '0',
-  `expedition` datetime NOT NULL default '0000-00-00 00:00:00',
-  PRIMARY KEY  (`numfacture`),
-  KEY `date` (`date`),
-  KEY `expedition` (`expedition`)
-) ENGINE=MyISAM;
-
-INSERT INTO t1 (expedition) VALUES ('0001-00-00 00:00:00');
-SELECT * FROM t1 WHERE expedition='0001-00-00 00:00:00';
-INSERT INTO t1 (numfacture,expedition) VALUES ('1212','0001-00-00 00:00:00');
-SELECT * FROM t1 WHERE expedition='0001-00-00 00:00:00';
-EXPLAIN SELECT * FROM t1 WHERE expedition='0001-00-00 00:00:00';
-drop table t1;
-create table t1 (a datetime not null, b datetime not null);
-insert into t1 values (now(), now());
-insert into t1 values (now(), now());
-select * from t1 where a is null or b is null;
-drop table t1;
-
-#
 # Let us check if we properly treat wrong datetimes and produce proper
 # warnings (for both strings and numbers)
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (t datetime);
 insert into t1 values (20030102030460),(20030102036301),(20030102240401),
                       (20030132030401),(20031302030401),(100001202030401);
@@ -112,7 +88,7 @@ insert into t1 values ("12-00-00"), ("00-00-00 01:00:00");
 insert into t1 values ("00-00-00"), ("00-00-00 00:00:00");
 select * from t1;
 drop table t1;
-
+SET sql_mode = default;
 #
 # Bug #16546 DATETIME+0 not always coerced the same way 
 #
@@ -180,7 +156,7 @@ if (`SELECT CURTIME() > SEC_TO_TIME(24 * 3600 - 5)`)
 {
    # We are here when CURTIME() is between '23:59:56' and '23:59:59'.
    # So a sleep time of 5 seconds brings us between '00:00:01' and '00:00:04'.
-   --real_sleep 5
+   --sleep 5
 }
 create table t1 (f1 date, f2 datetime, f3 timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 insert into t1(f1) values(curdate());
@@ -222,17 +198,25 @@ drop table t1;
 #
 create table t1 (f1 date);
 insert into t1 values('01-01-01'),('01-01-02'),('01-01-03');
+--sorted_result
 select * from t1 where f1 in ('01-01-01','2001-01-02','2001-01-03 00:00:00');
 create table t2(f2 datetime);
 insert into t2 values('01-01-01 00:00:00'),('01-02-03 12:34:56'),('02-04-06 11:22:33');
+--sorted_result
 select * from t2 where f2 in ('01-01-01','01-02-03 12:34:56','01-02-03');
+--sorted_result
 select * from t1,t2 where '01-01-02' in (f1, cast(f2 as date));
+--sorted_result
 select * from t1,t2 where '01-01-01' in (f1, '01-02-03');
+--sorted_result
 select * from t1,t2 where if(1,'01-02-03 12:34:56','') in (f1, f2);
 create table t3(f3 varchar(20));
 insert into t3 select * from t2;
+--sorted_result
 select * from t2,t3 where f2 in (f3,'03-04-05');
-select f1,f2,f3 from t1,t2,t3 where (f1,'1') in ((f2,'1'),(f3,'1'));
+--sorted_result
+select f1,f2,f3 from t1,t2,t3 where (f1,'1') in ((f2,'1'),(f3,'1')) order by f1,f2,f3;
+--sorted_result
 select f1 from t1 where ('1',f1) in (('1','01-01-01'),('1','2001-1-1 0:0:0'),('1','02-02-02'));
 drop table t1,t2,t3;
 
@@ -279,10 +263,15 @@ drop table t1;
 #
 create table t1(f1 date);
 insert into t1 values('01-01-01'),('02-02-02'),('01-01-01'),('02-02-02');
+--disable_ps_protocol  # See bug #27245598.
 set @bug28261='';
+--skip_if_hypergraph  # Different warnings.
 select if(@bug28261 = f1, '', @bug28261:= f1) from t1;
+--skip_if_hypergraph  # Different warnings.
 select if(@bug28261 = f1, '', @bug28261:= f1) from t1;
+--skip_if_hypergraph  # Different warnings.
 select if(@bug28261 = f1, '', @bug28261:= f1) from t1;
+--enable_ps_protocol
 drop table t1;
 
 #
@@ -358,6 +347,7 @@ create table t1 (id int(10) not null, cur_date datetime not null);
 create table t2 (id int(10) not null, cur_date date not null);
 insert into t1 (id, cur_date) values (1, '2007-04-25 18:30:22');
 insert into t2 (id, cur_date) values (1, '2007-04-25');
+analyze table t1;
 
 --disable_query_log
 if (`select locate('semijoin', @@optimizer_switch) > 0`) 
@@ -365,13 +355,13 @@ if (`select locate('semijoin', @@optimizer_switch) > 0`)
   set optimizer_switch='semijoin=off';
 }
 --enable_query_log
-explain extended
+explain
 select * from t1
 where id in (select id from t1 as x1 where (t1.cur_date is null));
 select * from t1
 where id in (select id from t1 as x1 where (t1.cur_date is null));
 
-explain extended
+explain
 select * from t2
 where id in (select id from t2 as x1 where (t2.cur_date is null));
 select * from t2
@@ -380,13 +370,13 @@ where id in (select id from t2 as x1 where (t2.cur_date is null));
 insert into t1 (id, cur_date) values (2, '2007-04-26 18:30:22');
 insert into t2 (id, cur_date) values (2, '2007-04-26');
 
-explain extended
+explain
 select * from t1
 where id in (select id from t1 as x1 where (t1.cur_date is null));
 select * from t1
 where id in (select id from t1 as x1 where (t1.cur_date is null));
 
-explain extended
+explain
 select * from t2
 where id in (select id from t2 as x1 where (t2.cur_date is null));
 select * from t2
@@ -456,8 +446,9 @@ SELECT CAST(CAST('2008-07-29T10:42:51.1234567' AS DateTime) AS DECIMAL(30,7));
 --echo # Day is ZERO 
 --echo # 
 CREATE TABLE t1 (dt1 DATETIME);
-INSERT INTO t1 (dt1) VALUES ('0000-00-01 00:00:01');
-DELETE   FROM t1 WHERE dt1 = '0000-00-01 00:00:01';
+INSERT IGNORE INTO t1 (dt1) VALUES ('0000-00-01 00:00:01');
+--error ER_WRONG_VALUE
+DELETE IGNORE  FROM t1 WHERE dt1 = '0000-00-01 00:00:01';
 --echo # Should be empty
 SELECT * FROM t1;
 DROP TABLE t1;
@@ -474,7 +465,7 @@ DROP TABLE t1;
 CREATE TABLE t1 (Id INT, AtTime DATETIME, KEY AtTime (AtTime));
 SET NAMES CP850;
 INSERT INTO t1 VALUES (1,'2010-04-12 22:30:12'), (2,'2010-04-12 22:30:12'), (3,'2010-04-12 22:30:12');
-EXPLAIN EXTENDED SELECT * FROM t1 FORCE INDEX(attime) WHERE AtTime = '2010-02-22 18:40:07';
+EXPLAIN SELECT * FROM t1 FORCE INDEX(attime) WHERE AtTime = '2010-02-22 18:40:07';
 DROP TABLE t1;
 SET NAMES latin1;
 
@@ -495,6 +486,7 @@ STR_TO_DATE('1/1/2010', '%m/%d/%Y');
 
 create table t2(f1 datetime primary key);
 insert into t2 select STR_TO_DATE(CONCAT_WS('/01/',`month`,`year`), '%m/%d/%Y') from t1;
+analyze table t1;
 select * from t2 where f1=STR_TO_DATE('4/1/2010', '%m/%d/%Y');
 --echo t2 should be const
 explain select * from t2 where f1=STR_TO_DATE('4/1/2010', '%m/%d/%Y');
@@ -517,10 +509,10 @@ DROP TABLE t1;
 --echo #
 
 CREATE TABLE t1 (a DATE NOT NULL, b INT);
-INSERT INTO t1 VALUES ('0000-00-00',1), ('1999-05-10',2);
+INSERT IGNORE INTO t1 VALUES ('0000-00-00',1), ('1999-05-10',2);
 
 CREATE TABLE t2 (a DATETIME NOT NULL, b INT);
-INSERT INTO t2 VALUES ('0000-00-00 00:00:00',1), ('1999-05-10 00:00:00',2);
+INSERT IGNORE INTO t2 VALUES ('0000-00-00 00:00:00',1), ('1999-05-10 00:00:00',2);
 
 --echo
 SELECT * FROM t1 WHERE a IS NULL;
@@ -625,3 +617,266 @@ SET @@sql_mode= @org_mode;
 --echo #
 --echo # End of 5.6 tests
 --echo #
+
+--echo #
+--echo #Bug#25586673: ASSERT IN DA FOR SQL_CMD_UPDATE::UPDATE_SINGLE_TABLE
+--echo #Bug#25586959: SERVER CRASH IN SQL_CMD_DELETE::DELETE_FROM_SINGLE_TABLE
+--echo #
+CREATE TABLE test.t(col_varchar_nokey VARCHAR(1) NOT NULL,
+                    col_time_nokey time NOT NULL,
+                    col_int_nokey INT NOT NULL,
+                    col_datetime_key datetime not null,
+                    key(col_datetime_key)) ENGINE= InnoDB;
+--error ER_TRUNCATED_WRONG_VALUE
+DELETE FROM test.t WHERE `col_int_nokey` > `col_int_nokey`
+                         AND TIMESTAMP( '18:16:35.025453' ) IS  NULL;
+--error ER_TRUNCATED_WRONG_VALUE
+UPDATE test.t SET `col_varchar_nokey` = TIMESTAMP(`col_time_nokey`,'00:00:00')
+  WHERE `col_int_nokey` > `col_int_nokey`
+        AND TIMESTAMP('18:16:35.025453') IS  NULL;
+INSERT INTO t VALUES('x', CURRENT_TIME(), 0, CURRENT_TIMESTAMP());
+--error ER_TRUNCATED_WRONG_VALUE
+UPDATE test.t SET `col_datetime_key` = `col_datetime_key` WHERE
+  `col_datetime_key` <=> FROM_UNIXTIME(1151860736,CONCAT_WS(':','%D','%v'));
+DROP TABLE test.t;
+
+--echo #
+--echo # Bug#25866743 - ASSERTION FAILED: FALSE IN
+--echo #                ITEM_FUNC_GEOMETRY_FROM_TEXT::VAL_STR
+--echo # Bug#25866143 CRASH IN ST_ASWKB STRING::COPY
+--echo #
+
+--error ER_DATA_OUT_OF_RANGE
+do is_ipv4_mapped(bin(maketime(11111,exp(repeat('1',32)),'')));
+
+--error ER_WRONG_VALUE_FOR_TYPE
+do ifnull((bin_to_uuid(uuid_to_bin(date_format('7088-02-14'
+   ,0xabbd95)))),(maketime('4678-07-20 03:51:44.174847',1,'b')));
+
+--error ER_WRONG_VALUE_FOR_TYPE
+do ucase(insert(maketime(9.565398e+307 ,'',
+                         st_longfromgeohash(('4358-04-12 03:45:08.727399'))),
+			 0xdc0823,6756,release_all_locks()));
+
+--error ER_DATA_OUT_OF_RANGE
+do soundex(maketime(cast((2530967061762658367) as decimal),
+   exp(repeat('1',32)),((period_add(579349005,27636))xor (sha(current_user)))));
+
+--error ER_DATA_OUT_OF_RANGE
+do st_mlinefromtext(
+ maketime(
+  now(),
+  instr(1,pow(15270551309908264860,100)),
+  31
+ )
+);
+
+--echo #
+--echo # Bug#26147274 ASSERTION `ITEM->MAYBE_NULL' AT MAKE_SORTKEY_FROM_ITEM
+--echo #              IN SQL/FILESORT.CC
+--echo #
+CREATE TABLE t1 (
+  col_datetime_1_not_null datetime NOT NULL,
+  col_datetime_2_not_null datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET sql_mode=NO_ENGINE_SUBSTITUTION;
+INSERT INTO t1 VALUES ('0000-00-00 00:00:00.0','2005-12-22 19:53:31.01');
+INSERT INTO t1 VALUES ('9999-00-00 00:00:00.0','2005-12-22 19:53:31.01');
+
+SET sql_mode=default;
+
+SELECT * FROM t1 order by col_datetime_1_not_null; 
+SELECT LEAST( '2005-06-05',
+              LEAST( col_datetime_1_not_null , col_datetime_2_not_null ) )
+AS c1 FROM t1 ORDER BY c1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Tests of date/time literals with time zone displacement.
+--echo #
+
+SET time_zone = '+00:00';
+
+SELECT CAST('2019-09-20 10:00:00.999999+00:00' AS DATETIME);
+SELECT CAST('2019-09-20 10:00:00.999999+00:00' AS DATETIME(1));
+SELECT CAST('2019-09-20 10:00:00.999999+00:00' AS DATETIME(2));
+SELECT CAST('2019-09-20 10:00:00.999999+00:00' AS DATETIME(3));
+SELECT CAST('2019-09-20 10:00:00.999999+00:00' AS DATETIME(4));
+SELECT CAST('2019-09-20 10:00:00.999999+00:00' AS DATETIME(5));
+SELECT CAST('2019-09-20 10:00:00.999999+00:00' AS DATETIME(6));
+
+SELECT CAST('2019-09-20 10:00:00.999999+02:00' AS DATETIME);
+SELECT CAST('2019-09-20 10:00:00.999999+02:00' AS DATETIME(1));
+SELECT CAST('2019-09-20 10:00:00.999999+02:00' AS DATETIME(2));
+SELECT CAST('2019-09-20 10:00:00.999999+02:00' AS DATETIME(3));
+SELECT CAST('2019-09-20 10:00:00.999999+02:00' AS DATETIME(4));
+SELECT CAST('2019-09-20 10:00:00.999999+02:00' AS DATETIME(5));
+SELECT CAST('2019-09-20 10:00:00.999999+02:00' AS DATETIME(6));
+
+SELECT TIMESTAMP'2019-09-20 10:00:00.999999+02:00 ';
+
+SET time_zone = DEFAULT;
+
+--echo # Bug#32915973: Prepare DATE_ADD/DATE_SUB incorrectly returns DATETIME
+
+# Check prepared statements with various DATETIME comparisons
+
+set @d_str = '2020-01-01';
+set @t_str = '01:01:01';
+set @dt_str = '2020-01-01 01:01:01';
+set @dt_tz = '2020-01-01 01:01:01+03:00';
+set @d_int = 20200101;
+set @t_int = 010101;
+set @dt_int = 20200101010101;
+set @d_dec = 20200101.0;
+set @t_dec = 010101.0;
+set @dt_dec = 20200101010101.0;
+set @d_flt = 20200101E0;
+set @t_flt = 010101E0;
+set @dt_flt = 20200101010101E0;
+
+# Executions that supply a date literal will convert the literal to a
+# DATETIME value, and the comparison should fail.
+# Executions that supply a time literal will convert the literal to a
+# DATE value, and the comparison will fail.
+# Executions that supply a datetime literal will need no conversions and
+# the comparison should succeed.
+
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @d_str;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @t_str;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @dt_str;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @dt_tz;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @d_int;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @t_int;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @dt_int;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @d_dec;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @t_dec;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @dt_dec;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @d_flt;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @t_flt;
+prepare stmt from "SELECT TIMESTAMP'2020-01-01 01:01:01' = ?";
+execute stmt using @dt_flt;
+deallocate prepare stmt;
+
+--echo # Bug#33788832: wrong result with COALESCE function
+
+CREATE TABLE t1 (
+  pk INTEGER PRIMARY KEY,
+  t0 TIME NOT NULL,
+  t1 TIME NOT NULL,
+  dt DATETIME
+);
+
+INSERT INTO t1 VALUES
+(1, TIME'08:00:00', TIME'12:00:00', TIMESTAMP'2020-01-01 00:00:00'),
+(2, TIME'12:00:00', TIME'12:00:00', TIMESTAMP'2020-01-01 00:00:00'),
+(3, TIME'16:00:00', TIME'12:00:00', TIMESTAMP'2020-01-01 00:00:00');
+
+SELECT pk, t0, t1, dt,
+       t0 BETWEEN NULL AND t1 AS b1,
+       t0 NOT BETWEEN NULL AND t1 AS b2,
+       t0 BETWEEN NULL AND COALESCE(t1, dt) AS b3,
+       t0 NOT BETWEEN NULL AND COALESCE(t1, dt) AS b4
+FROM t1;
+
+SELECT pk, t0, t1, dt,
+       t1 BETWEEN t0 AND NULL AS b1,
+       t1 NOT BETWEEN t0 AND NULL AS b2,
+       t1 BETWEEN COALESCE(t0, dt) AND NULL AS b3,
+       t1 NOT BETWEEN COALESCE(t0, dt) AND NULL AS b4
+FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #33897969 DATE/DATETIME
+--echo #               type cover other values type in Item_func_in
+--echo #
+
+CREATE TABLE t1 (
+  pk INTEGER PRIMARY KEY,
+  col_date date DEFAULT NULL,
+  col_datetime datetime DEFAULT NULL,
+  col_varchar VARCHAR(1) DEFAULT NULL,
+  KEY (col_varchar)
+);
+
+INSERT INTO t1 VALUES(5, '2022-02-25', '2022-02-25 11:01:14', 'I');
+
+SELECT * FROM t1 WHERE pk = 5 AND
+(col_datetime, col_varchar)
+IN (('2022-02-25 11:01:14', 'Y'), ('2022-02-25 11:01:14', 'I'));
+
+SELECT * FROM t1 WHERE pk = 5 AND
+(col_datetime, col_varchar) IN ((@a, @b), (@c, @d));
+
+SELECT * FROM t1 WHERE pk = 5 AND
+(col_date, col_varchar) IN (('2022-02-25', 'Y'), ('2022-02-25', 'I'));
+
+SELECT * FROM t1 wHERE pk = 5 AND
+(col_varchar, col_date) IN (('Y','2022-02-25'), ('I', '2022-02-25'));
+
+SELECT * FROM t1 wHERE pk = 5 AND
+(col_varchar, col_date) IN (('I','2022-02-25'), ('I', '2022-02-25'));
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#35080094: MySQL server crash -
+--echo #               Assertion CompatibleTypesForIndexLookup failed
+--echo #
+
+CREATE TABLE t(a VARCHAR(100) CHARSET latin1, KEY(a));
+INSERT INTO t VALUES ('2023-1-1 1:2:3'), ('2023-01-01 01:02:03');
+--sorted_result
+SELECT * FROM t WHERE a = TIMESTAMP'2023-01-01 01:02:03';
+DROP TABLE t;
+
+--echo #
+--echo # Bug#35115909: Wrong join result when one of the join columns
+--echo #               is compared to a temporal literal
+--echo #
+
+CREATE TABLE t (a VARCHAR(30) CHARSET latin1,
+                b VARCHAR(30) CHARSET latin1);
+INSERT INTO t VALUES
+  ('2023-01-01 01:02:03', '2023-01-01 01:02:03'),
+  ('2023-01-01 01:02:03', '2023-1-1 1:2:3'),
+  ('2023-1-1 1:2:3',      '2023-01-01 01:02:03'),
+  ('2023-1-1 1:2:3',      '2023-1-1 1:2:3');
+# Used to return four rows. Should return only those two rows that
+# satisfy the a=b predicate.
+--sorted_result
+SELECT * FROM t WHERE a = b and b = TIMESTAMP'2023-01-01 01:02:03';
+DROP TABLE t;
+
+--echo #
+--echo # Bug#35173907: Assertion `CompatibleTypesForIndexLookup(eq_item,
+--echo #               field, right)' failed
+--echo #
+
+# Complements a test case with the same bug number in type_time. The
+# assertion was only seen when the indexed column was a TIME column,
+# so this test case is only for extra test coverage.
+CREATE TABLE t(a DATETIME, KEY(a));
+INSERT INTO t VALUES ('2023-03-15 00:00:00');
+SET timestamp = UNIX_TIMESTAMP('2023-03-15 01:02:03');
+SELECT * FROM t WHERE a = CURRENT_TIME;
+SELECT * FROM t WHERE a = CURRENT_TIMESTAMP;
+SELECT * FROM t WHERE a = CURRENT_DATE;
+SET timestamp = DEFAULT;
+DROP TABLE t;

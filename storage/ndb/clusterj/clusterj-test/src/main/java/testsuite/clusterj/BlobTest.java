@@ -1,15 +1,23 @@
 /*
-   Copyright 2010 Sun Microsystems, Inc.
-   All rights reserved. Use is subject to license terms.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -81,21 +89,25 @@ public class BlobTest extends AbstractClusterJModelTest {
                 error("Expected BlobTypes.id " + i + " but got " + actualId);
             }
             byte[] bytes = e.getBlobbytes();
-            // make sure all fields were fetched properly
-            checkBlobBytes("before update", bytes, i, false);
+            if (bytes == null) {
+                error("Unexpected blob bytes null for id " + i);
+            } else {
+                // make sure all fields were fetched properly
+                checkBlobBytes("before update", bytes, i, false);
 
-            int position = getBlobSizeFor(i)/2;
-            // only update if the length is correct
-            if (bytes.length == (position * 2)) {
-                // modify the byte in the middle of the blob
-                bytes[position] = (byte)(position % 128);
-                checkBlobBytes("after update", bytes, i, true);
+                int position = getBlobSizeFor(i)/2;
+                // only update if the length is correct
+                if (bytes.length == (position * 2)) {
+                    // modify the byte in the middle of the blob
+                    bytes[position] = (byte)(position % 128);
+                    checkBlobBytes("after update", bytes, i, true);
 
-                // mark the field as modified so it will be flushed
-                session.markModified(e, "blobbytes");
+                    // mark the field as modified so it will be flushed
+                    session.markModified(e, "blobbytes");
 
-                // update the modified instance
-                session.updatePersistent(e);
+                    // update the modified instance
+                    session.updatePersistent(e);
+                }
             }
         }
         tx.commit();
@@ -110,9 +122,13 @@ public class BlobTest extends AbstractClusterJModelTest {
                 error("Expected BlobTypes.id " + i + " but got " + actualId);
             }
             byte[] bytes = e.getBlobbytes();
+            if (bytes == null) {
+                error("Unexpected blob bytes null for id " + i);
+            } else {
 
             // check to see that the blob field has the right data
             checkBlobBytes("after commit", e.getBlobbytes(), i, true);
+            }
         }
         tx.commit();
     }
@@ -135,7 +151,7 @@ public class BlobTest extends AbstractClusterJModelTest {
      * @param size the length of the returned byte[]
      * @return the byte[] filled with the pattern
      */
-    protected byte[] getBlobBytes(int size) {
+    static byte[] getBlobBytes(int size) {
         byte[] result = new byte[size];
         for (int i = 0; i < size; ++i) {
             result[i] = (byte)((i % 256) - 128);
@@ -181,7 +197,6 @@ public class BlobTest extends AbstractClusterJModelTest {
 
     protected InputStream getBlobStream(final int i) {
         return new InputStream() {
-            int size = i;
             int counter = 0;
             @Override
             public int read() throws IOException {

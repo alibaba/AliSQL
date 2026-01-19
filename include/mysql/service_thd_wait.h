@@ -1,13 +1,21 @@
-/* Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,7 +28,7 @@
   @file include/mysql/service_thd_wait.h
   This service provides functions for plugins and storage engines to report
   when they are going to sleep/stall.
-  
+
   SYNOPSIS
   thd_wait_begin() - call just before a wait begins
   thd                     Thread object
@@ -46,9 +54,8 @@
   thread workload.
 */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+class THD;
+#define MYSQL_THD THD *
 
 /*
   One should only report wait events that could potentially block for a
@@ -62,23 +69,26 @@ extern "C" {
   that could easily be for many milliseconds or even seconds and the same
   holds true for global read locks, table locks and other meta data locks.
   Another event of interest is going to sleep for an extended time.
+
+  Note that user-level locks no longer use THD_WAIT_USER_LOCK wait type.
+  Since their implementation relies on metadata locks manager it uses
+  THD_WAIT_META_DATA_LOCK instead.
 */
 typedef enum _thd_wait_type_e {
-  THD_WAIT_SLEEP= 1,
-  THD_WAIT_DISKIO= 2,
-  THD_WAIT_ROW_LOCK= 3,
-  THD_WAIT_GLOBAL_LOCK= 4,
-  THD_WAIT_META_DATA_LOCK= 5,
-  THD_WAIT_TABLE_LOCK= 6,
-  THD_WAIT_USER_LOCK= 7,
-  THD_WAIT_BINLOG= 8,
-  THD_WAIT_GROUP_COMMIT= 9,
-  THD_WAIT_SYNC= 10,
-  THD_WAIT_NET= 11,
-  THD_WAIT_LAST= 12
+  THD_WAIT_SLEEP = 1,
+  THD_WAIT_DISKIO = 2,
+  THD_WAIT_ROW_LOCK = 3,
+  THD_WAIT_GLOBAL_LOCK = 4,
+  THD_WAIT_META_DATA_LOCK = 5,
+  THD_WAIT_TABLE_LOCK = 6,
+  THD_WAIT_USER_LOCK = 7,
+  THD_WAIT_BINLOG = 8,
+  THD_WAIT_GROUP_COMMIT = 9,
+  THD_WAIT_SYNC = 10,
+  THD_WAIT_LAST = 11
 } thd_wait_type;
 
-extern struct thd_wait_service_st {
+extern "C" struct thd_wait_service_st {
   void (*thd_wait_begin_func)(MYSQL_THD, int);
   void (*thd_wait_end_func)(MYSQL_THD);
 } *thd_wait_service;
@@ -96,9 +106,4 @@ void thd_wait_end(MYSQL_THD thd);
 
 #endif
 
-#ifdef __cplusplus
-}
 #endif
-
-#endif
-

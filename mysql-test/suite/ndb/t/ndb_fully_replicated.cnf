@@ -1,0 +1,9 @@
+!include suite/ndb/my.cnf
+
+[cluster_config]
+ThreadConfig=main,rep,recv,ldm={count=4}
+TimeBetweenGlobalCheckpoints= 200
+
+[cluster_config.1]
+ndbd=,,,
+NoOfReplicas=1

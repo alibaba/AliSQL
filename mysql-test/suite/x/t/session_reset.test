@@ -1,0 +1,38 @@
+--source include/no_ps_protocol.inc
+--source include/restart_mysqld.inc
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+call mtr.add_suppression("Plugin mysqlx reported: '.*: Unhandled message of type 12'");
+
+# wait a little to give time for internal temporary session to die out
+select sleep(1);
+--replace_regex /localhost[:0-9]*/localhost/ /Execute/Query/
+SELECT `user`,`host`,`db`,`command`,`state`,`info` FROM INFORMATION_SCHEMA.PROCESSLIST WHERE `state` != 'cleaning up' ORDER BY user ASC;
+
+
+echo ;
+echo ## A. Execute the Session reset without compression;
+echo #;
+--source ../include/test_session_reset.inc
+
+echo ;
+echo ## B. Execute the Session reset with "deflate" compression enabled;
+echo #;
+--let $param_mysqlxtest=--compression-algorithm=deflate_stream --compression-mode=REQUIRED
+--source ../include/test_session_reset.inc
+
+echo ;
+echo ## C. Execute the Session reset with "lz4" compression enabled;
+echo #;
+--let $param_mysqlxtest=--compression-algorithm=lz4_message --compression-mode=REQUIRED
+--source ../include/test_session_reset.inc
+
+echo ;
+echo ## D. Execute the Session reset with "zstd" compression enabled;
+echo #;
+--let $param_mysqlxtest=--compression-algorithm=zstd_stream --compression-mode=REQUIRED
+--source ../include/test_session_reset.inc
+
+## Cleanup
+--source ../include/xplugin_cleanup.inc

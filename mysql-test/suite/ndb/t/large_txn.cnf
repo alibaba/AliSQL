@@ -1,0 +1,8 @@
+!include suite/ndb/my.cnf
+
+[cluster_config.1]
+# Scale up for handling larger transactions:
+DataMemory = 256M
+NoOfReplicas = 1
+MaxNoOfConcurrentOperations = 512K
+NoOfFragmentLogFiles = 16

@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,30 +26,29 @@
 #ifndef MGMAPI_SERVICE_HPP
 #define MGMAPI_SERVICE_HPP
 
-#include <SocketServer.hpp>
-#include <NdbSleep.h>
-#include <Parser.hpp>
-#include <OutputStream.hpp>
-#include <InputStream.hpp>
+#include "NdbSleep.h"
+#include "Parser.hpp"
+#include "util/InputStream.hpp"
+#include "util/NdbSocket.h"
+#include "util/OutputStream.hpp"
+#include "util/SocketServer.hpp"
 
 #include "MgmtSrvr.hpp"
 
-class MgmApiSession : public SocketServer::Session
-{
-  static void stop_session_if_timed_out(SocketServer::Session *_s, void *data);
-  static void stop_session_if_not_connected(SocketServer::Session *_s, void *data);
+class MgmApiSession : public SocketServer::Session {
   static void list_session(SocketServer::Session *_s, void *data);
   static void get_session(SocketServer::Session *_s, void *data);
-private:
+
+ private:
   typedef Parser<MgmApiSession> Parser_t;
 
-  class MgmtSrvr & m_mgmsrv;
+  NdbSocket m_secure_socket;
+  class MgmtSrvr &m_mgmsrv;
   InputStream *m_input;
   OutputStream *m_output;
   Parser_t *m_parser;
-  MgmtSrvr::Allocated_resources *m_allocated_resources;
   char m_err_str[1024];
-  int m_stopSelf; // -1 is restart, 0 do nothing, 1 stop
+  int m_stopSelf;  // -1 is restart, 0 do nothing, 1 stop
   NdbMutex *m_mutex;
 
   // for listing sessions and other fun:
@@ -52,25 +58,36 @@ private:
   int m_errorInsert;
 
   BaseString m_name;
-  const char* name() { return m_name.c_str(); }
+  const char *name() { return m_name.c_str(); }
 
-  const char *get_error_text(int err_no)
-  { return m_mgmsrv.getErrorText(err_no, m_err_str, sizeof(m_err_str)); }
+  const char *get_error_text(int err_no) {
+    return m_mgmsrv.getErrorText(err_no, m_err_str, sizeof(m_err_str));
+  }
 
-public:
-  MgmApiSession(class MgmtSrvr & mgm, NDB_SOCKET_TYPE sock, Uint64 session_id);
-  virtual ~MgmApiSession();
-  void runSession();
+  /* Client version info, m_vMajor != 0 if known */
+  unsigned int m_vMajor;
+  unsigned int m_vMinor;
+  unsigned int m_vBuild;
+
+ public:
+  MgmApiSession(class MgmtSrvr &mgm, NdbSocket &&sock, Uint64 session_id);
+  ~MgmApiSession() override;
+  void runSession() override;
 
   static const unsigned SOCKET_TIMEOUT = 30000;
 
-  void getConfig(Parser_t::Context &ctx, const class Properties &args);
-  void setConfig(Parser_t::Context &ctx, const class Properties &args);
+  void getConfig(Parser_t::Context &ctx, const class Properties &args, bool v2);
+  void getConfig_v1(Parser_t::Context &ctx, const class Properties &args);
+  void getConfig_v2(Parser_t::Context &ctx, const class Properties &args);
+  void setConfig_v1(Parser_t::Context &ctx, const class Properties &args);
+  void setConfig_v2(Parser_t::Context &ctx, const class Properties &args);
+  void setConfig(Parser_t::Context &ctx, const class Properties &args, bool v2);
   void showConfig(Parser_t::Context &ctx, const class Properties &args);
   void reloadConfig(Parser_t::Context &ctx, const class Properties &args);
 
   void get_nodeid(Parser_t::Context &ctx, const class Properties &args);
   void getVersion(Parser_t::Context &ctx, const class Properties &args);
+  void setClientVersion(Parser_t::Context &ctx, const class Properties &args);
   void getStatus(Parser_t::Context &ctx, const class Properties &args);
   void getInfoClusterLog(Parser_t::Context &ctx, const class Properties &args);
   void restart(const class Properties &args, int version);
@@ -96,26 +113,26 @@ public:
   void bye(Parser_t::Context &ctx, const class Properties &args);
   void endSession(Parser_t::Context &ctx, const class Properties &args);
   void setLogLevel(Parser_t::Context &ctx, const class Properties &args);
-  void getClusterLogLevel(Parser_t::Context &ctx, 
-			  const class Properties &args);
-  void setClusterLogLevel(Parser_t::Context &ctx, 
-			  const class Properties &args);
+  void getClusterLogLevel(Parser_t::Context &ctx, const class Properties &args);
+  void setClusterLogLevel(Parser_t::Context &ctx, const class Properties &args);
   void setLogFilter(Parser_t::Context &ctx, const class Properties &args);
 
   void setParameter(Parser_t::Context &ctx, const class Properties &args);
   void setConnectionParameter(Parser_t::Context &ctx,
-			      const class Properties &args);
-  void getConnectionParameter(Parser_t::Context &ctx,
-			      Properties const &args);
+                              const class Properties &args);
+  void getConnectionParameter(Parser_t::Context &ctx, Properties const &args);
 
   void listen_event(Parser_t::Context &ctx, const class Properties &args);
 
-  void purge_stale_sessions(Parser_t::Context &ctx, const class Properties &args);
+  void purge_stale_sessions(Parser_t::Context &ctx,
+                            const class Properties &args);
   void check_connection(Parser_t::Context &ctx, const class Properties &args);
 
   void transporter_connect(Parser_t::Context &ctx, Properties const &args);
 
   void get_mgmd_nodeid(Parser_t::Context &ctx, Properties const &args);
+
+  static const unsigned MAX_EVENT_LENGTH = 25;
 
   void report_event(Parser_t::Context &ctx, Properties const &args);
 
@@ -130,30 +147,23 @@ public:
   void show_variables(Parser_t::Context &ctx, Properties const &args);
 
   void dump_events(Parser_t::Context &ctx, Properties const &args);
+
+  void set_ports(Parser_t::Context &, Properties const &args);
 };
 
 class MgmApiService : public SocketServer::Service {
-  MgmtSrvr& m_mgmsrv;
-  Uint64 m_next_session_id; // Protected by m_sessions mutex it SocketServer
-public:
-  MgmApiService(MgmtSrvr& mgm):
-    m_mgmsrv(mgm),
-    m_next_session_id(1) {}
+  MgmtSrvr &m_mgmsrv;
+  Uint64 m_next_session_id;  // Protected by m_sessions mutex it SocketServer
+ public:
+  MgmApiService(MgmtSrvr &mgm) : m_mgmsrv(mgm), m_next_session_id(1) {}
 
-  SocketServer::Session * newSession(NDB_SOCKET_TYPE socket){
-    return new MgmApiSession(m_mgmsrv, socket, m_next_session_id++);
+  SocketServer::Session *newSession(NdbSocket &&socket) override {
+    return new MgmApiSession(m_mgmsrv, std::move(socket), m_next_session_id++);
   }
 };
 
-static const char* str_null(const char* str)
-{
-  return (str ? str : "(null)");
-}
+static const char *str_null(const char *str) { return (str ? str : "(null)"); }
 
-static const char* yes_no(bool value)
-{
-  return (value ? "yes" : "no");
-}
-
+static const char *yes_no(bool value) { return (value ? "yes" : "no"); }
 
 #endif

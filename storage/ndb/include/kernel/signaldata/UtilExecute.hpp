@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003, 2005, 2006, 2008 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,8 +26,10 @@
 #ifndef UTIL_EXECUTE_HPP
 #define UTIL_EXECUTE_HPP
 
-#include "SignalData.hpp"
 #include <SimpleProperties.hpp>
+#include "SignalData.hpp"
+
+#define JAM_FILE_ID 145
 
 /**
  * UTIL_EXECUTE_REQ, UTIL_EXECUTE_CONF, UTIL_EXECUTE_REF
@@ -40,24 +49,25 @@ class UtilExecuteReq {
   friend class Trix;
 
   /** For printing */
-  friend bool printUTIL_EXECUTE_REQ(FILE * output, const Uint32 * theData, 
-				    Uint32 len, Uint16 receiverBlockNo);
-public:
-  STATIC_CONST( SignalLength = 4 );
-  STATIC_CONST( HEADER_SECTION = 0 );
-  STATIC_CONST( DATA_SECTION = 1 );
-  STATIC_CONST( NoOfSections = 2 );
+  friend bool printUTIL_EXECUTE_REQ(FILE *output, const Uint32 *theData,
+                                    Uint32 len, Uint16 receiverBlockNo);
+
+ public:
+  static constexpr Uint32 SignalLength = 4;
+  static constexpr Uint32 HEADER_SECTION = 0;
+  static constexpr Uint32 DATA_SECTION = 1;
+  static constexpr Uint32 NoOfSections = 2;
 
   GET_SET_SENDERREF
   GET_SET_SENDERDATA
-  void setPrepareId(Uint32 pId) { prepareId = pId; }; // !! unsets release flag
-  Uint32 getPrepareId() const { return prepareId & 0xFF; };
-  void setReleaseFlag() { prepareId |= 0x100; };
-  bool getReleaseFlag() const { return (prepareId & 0x100) != 0; };
+  void setPrepareId(Uint32 pId) { prepareId = pId; }  // !! unsets release flag
+  Uint32 getPrepareId() const { return prepareId & 0xFF; }
+  void setReleaseFlag() { prepareId |= 0x100; }
+  bool getReleaseFlag() const { return (prepareId & 0x100) != 0; }
 
-  Uint32 senderData; // MUST be no 1!
+  Uint32 senderData;  // MUST be no 1!
   Uint32 senderRef;
-  Uint32 prepareId;     // Which prepared transaction to execute
+  Uint32 prepareId;  // Which prepared transaction to execute
   Uint32 scanTakeOver;
 };
 
@@ -65,7 +75,7 @@ public:
  * @class UtilExecuteConf
  *
  * Data format:
- * - UTIL_PREPARE_CONF <UtilPrepareId> 
+ * - UTIL_PREPARE_CONF <UtilPrepareId>
  */
 
 class UtilExecuteConf {
@@ -78,26 +88,24 @@ class UtilExecuteConf {
   /**
    * For printing
    */
-  friend bool printUTIL_EXECUTE_CONF(FILE * output, 
-				     const Uint32 * theData, 
-				     Uint32 len, 
-				     Uint16 receiverBlockNo);
-public:
-  STATIC_CONST( SignalLength = 3 );
+  friend bool printUTIL_EXECUTE_CONF(FILE *output, const Uint32 *theData,
+                                     Uint32 len, Uint16 receiverBlockNo);
+
+ public:
+  static constexpr Uint32 SignalLength = 3;
 
   GET_SET_SENDERDATA
-private:
-  Uint32 senderData; // MUST be no 1!
+ private:
+  Uint32 senderData;  // MUST be no 1!
   Uint32 gci_hi;
   Uint32 gci_lo;
 };
-
 
 /**
  * @class UtilExecuteRef
  *
  * Data format:
- * - UTIL_PREPARE_REF 
+ * - UTIL_PREPARE_REF
  */
 
 class UtilExecuteRef {
@@ -110,13 +118,11 @@ class UtilExecuteRef {
   /**
    * For printing
    */
-  friend bool printUTIL_EXECUTE_REF(FILE * output, 
-				    const Uint32 * theData, 
-				    Uint32 len, 
-				    Uint16 receiverBlockNo);
+  friend bool printUTIL_EXECUTE_REF(FILE *output, const Uint32 *theData,
+                                    Uint32 len, Uint16 receiverBlockNo);
 
-public:
-  STATIC_CONST( SignalLength = 3 );
+ public:
+  static constexpr Uint32 SignalLength = 3;
 
   enum ErrorCode {
     IllegalKeyNumber = 1,
@@ -130,11 +136,12 @@ public:
   GET_SET_SENDERDATA
   GET_SET_ERRORCODE
   GET_SET_TCERRORCODE
-private:
-  Uint32 senderData; // MUST be no 1!
+ private:
+  Uint32 senderData;  // MUST be no 1!
   Uint32 errorCode;
   Uint32 TCErrorCode;
 };
 
+#undef JAM_FILE_ID
 
 #endif

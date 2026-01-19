@@ -24,7 +24,6 @@
 #                                                                             #
 ###############################################################################
 
---source include/have_innodb.inc
 --source include/load_sysvars.inc
 
 ########################################################################
@@ -101,18 +100,31 @@ SELECT @@global.innodb_flush_log_at_timeout;
 
 SET @@global.innodb_flush_log_at_timeout = 2701;
 SELECT @@global.innodb_flush_log_at_timeout;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_flush_log_at_timeout = ' ';
+SELECT @@global.innodb_flush_log_at_timeout;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_flush_log_at_timeout = " ";
+SELECT @@global.innodb_flush_log_at_timeout;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_flush_log_at_timeout = 1.1;
+SELECT @@global.innodb_flush_log_at_timeout;
 
 --echo '#----------------------FN_DYNVARS_046_05------------------------#'
 #########################################################################
 #     Check if the value in GLOBAL Table matches value in variable      #
 #########################################################################
 
+--disable_warnings
 SELECT @@global.innodb_flush_log_at_timeout =
- VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+ VARIABLE_VALUE FROM performance_schema.global_variables
   WHERE VARIABLE_NAME='innodb_flush_log_at_timeout';
+--enable_warnings
 SELECT @@global.innodb_flush_log_at_timeout;
-SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+--disable_warnings
+SELECT VARIABLE_VALUE FROM performance_schema.global_variables
  WHERE VARIABLE_NAME='innodb_flush_log_at_timeout';
+--enable_warnings
 
 --echo '#---------------------FN_DYNVARS_046_06-------------------------#'
 ###################################################################

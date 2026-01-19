@@ -1,0 +1,76 @@
+Create table with multiple Blob columns
+create table t1 (a int primary key,
+b0 text,
+b1 text,
+b2 text,
+b3 text,
+b4 text,
+b5 text,
+b6 text,
+b7 text,
+b8 text,
+b9 text)
+engine=ndb comment='NDB_TABLE=NOLOGGING=1';
+CREATE DEFINER=`root`@`localhost` PROCEDURE `load1`()
+begin
+set @x=1;
+repeat
+update test.t1 set b0=repeat('SMT0', 1000),
+b1=repeat('BML1', 1000),
+b2=repeat('TMS2', 1000),
+b3=repeat('LMN3', 500),
+b4=repeat('LME4', 600),
+b5=repeat('SMN5', 713),
+b6=repeat('LMB6', 300),
+b7=repeat('SMC7', 555),
+b8=repeat('SML8', 313),
+b9=repeat('TMS9', 453);
+set @x=row_count();
+until @x = 0
+end repeat;
+end%
+Starting Blob load on server 1
+call load1();
+Cause cluster disconnections of server2
+call mtr.add_suppression("incident event has been written to the binary log");
+Disconnecting server 2
+Sending dump signal with data:
+0x00000384 0x00000010 
+Sending dump signal with data:
+0x00000384 0x00000010 
+
+Disconnecting server 2
+Sending dump signal with data:
+0x00000384 0x00000010 
+Sending dump signal with data:
+0x00000384 0x00000010 
+
+Disconnecting server 2
+Sending dump signal with data:
+0x00000384 0x00000010 
+Sending dump signal with data:
+0x00000384 0x00000010 
+
+Disconnecting server 2
+Sending dump signal with data:
+0x00000384 0x00000010 
+Sending dump signal with data:
+0x00000384 0x00000010 
+
+Disconnecting server 2
+Sending dump signal with data:
+0x00000384 0x00000010 
+Sending dump signal with data:
+0x00000384 0x00000010 
+
+Disconnecting server 2
+Sending dump signal with data:
+0x00000384 0x00000010 
+Sending dump signal with data:
+0x00000384 0x00000010 
+
+Loops done
+Clear table
+Returing to server1
+drop procedure load1;
+drop table t1;

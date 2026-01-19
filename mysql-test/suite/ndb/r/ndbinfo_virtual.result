@@ -1,0 +1,18 @@
+result_format: 2
+
+
+use test;
+
+See truncated column list
+select substring(columns, -20)
+ from ndbinfo.events where name = 'REPL$test/allprimitives';
+substring(columns, -20)
+ng_not_null_none,...
+See quoted column names
+select columns from ndbinfo.events where name = 'REPL$test/commacomma';
+columns
+id,`,`,````,`name.with.dots`
+
+DROP table allprimitives;
+DROP table commacomma;
+

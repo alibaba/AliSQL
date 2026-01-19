@@ -22,7 +22,6 @@
 #                                                                             #
 ###############################################################################
 
--- source include/have_ssl.inc
 
 --echo '#---------------------BS_STVARS_049_01----------------------#'
 ####################################################################
@@ -37,7 +36,7 @@ SELECT COUNT(@@GLOBAL.ssl_key);
 #   Check if Value can set                                         #
 ####################################################################
 
---error ER_INCORRECT_GLOBAL_LOCAL_VAR
+--error ER_WRONG_TYPE_FOR_VAR
 SET @@GLOBAL.ssl_key=1;
 --echo Expected error 'Read only variable'
 
@@ -52,17 +51,21 @@ SELECT COUNT(@@GLOBAL.ssl_key);
 # Check if the value in GLOBAL Table matches value in variable  #
 #################################################################
 
+--disable_warnings
 SELECT @@GLOBAL.ssl_key = VARIABLE_VALUE
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='ssl_key';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@GLOBAL.ssl_key);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='ssl_key';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -96,7 +99,7 @@ SELECT COUNT(@@GLOBAL.ssl_key);
 --echo 1 Expected
 
 --Error ER_BAD_FIELD_ERROR
-SELECT ssl_key = @@SESSION.ssl_key;
---echo Expected error 'Readonly variable'
+SELECT ssl_key;
+--echo Expected error 'Unknown column'
 
 

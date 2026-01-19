@@ -1,0 +1,244 @@
+########################################################################
+# This test scripts covers meta data related aspects of upgrade
+# after 8.0. For upgrade from 5.7 to 8.0, see dd_upgrade_test.
+########################################################################
+########################################################################
+# Bug#29350955: UPGRADE 8.0.11-13 TO 8.0.14-16 FAILS IF DB OBJ HAS
+#               SQL_MODE ALLOW_INVALID_DATES
+########################################################################
+########################################################################
+# Copy and unzip the datadir, and stop the server.
+########################################################################
+########################################################################
+# Restart the server to trigger upgrade.
+########################################################################
+# restart: --datadir=MYSQLD_DATADIR_UPGRADE --log-error=MYSQLD_LOG --log-error-verbosity=3
+########################################################################
+# Verify that the entities have retained the SQL mode.
+########################################################################
+USE test;
+SHOW CREATE EVENT eve;
+Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
+eve	ALLOW_INVALID_DATES	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `eve` ON SCHEDULE EVERY 1 HOUR STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO SELECT 1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SHOW CREATE PROCEDURE p;
+Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
+p	ALLOW_INVALID_DATES	CREATE DEFINER=`root`@`localhost` PROCEDURE `p`(OUT t DATETIME)
+SELECT now() INTO t	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SHOW CREATE TRIGGER trg;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
+trg	ALLOW_INVALID_DATES	CREATE DEFINER=`root`@`localhost` TRIGGER `trg` BEFORE INSERT ON `t` FOR EACH ROW SET @i = 1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	#
+########################################################################
+# Stop the server and do cleanup.
+########################################################################
+# restart:
+#-----------------------------------------------------------------------
+# WL#929: CHECK Constraint
+#         Test case to verify upgrade from version before check
+#         constraint suppport.
+#-----------------------------------------------------------------------
+# Copy the remote tablespace & DB zip files from suite location to working location.
+# Check that the file exists in the working folder.
+# Set different paths for --datadir
+# Check that the file exits after unzip
+# Stop / restart DB server which was created by MTR default
+# restart: --datadir=MYSQLD_DATADIR1 --log-error=MYSQLD_LOG
+USE test;
+CREATE TABLE t1 (f1 INT CHECK (f1 < 10));
+# After upgrade CHECK_CONSTRAINTS table should be present and should list
+# check constraints.
+SELECT * FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS;
+CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	CHECK_CLAUSE
+def	test	t1_chk_1	(`f1` < 10)
+# After upgrade TABLE_CONSTRAINTS should list check constraints.
+SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME='t1';
+CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_SCHEMA	TABLE_NAME	CONSTRAINT_TYPE	ENFORCED
+def	test	t1_chk_1	test	t1	CHECK	YES
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `f1` int DEFAULT NULL,
+  CONSTRAINT `t1_chk_1` CHECK ((`f1` < 10))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 VALUES (100);
+ERROR HY000: Check constraint 't1_chk_1' is violated.
+DROP TABLE t1;
+# Stop the server and do cleanup
+# Remove copied files
+# Restart the server with default options.
+# restart:
+#
+# Bug#28901821 - AFTER UPGRADE TO 8.0.13, SYS SCHEMA VIEWS ARE LISTED AS INVALID
+#                IN I_S.TABLES
+#
+# Copy the remote tablespace & DB zip files from suite location to working location.
+# Check that the file exists in the working folder.
+# Set different paths for --datadir
+# Check that the file exits after unzip
+# Stop / start DB server which was created by MTR default
+# restart: --datadir=MYSQLD_DATADIR2 --log-error=MYSQLD_LOG
+# Without fix, following views are listed as invalid.
+SELECT TABLE_NAME, TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_NAME = 'schema_auto_increment_columns' OR
+TABLE_NAME = 'schema_object_overview' OR
+TABLE_NAME = 'schema_redundant_indexes' OR
+TABLE_NAME = 'schema_unused_indexes' OR
+TABLE_NAME = 'x$schema_flattened_keys'
+         ORDER BY TABLE_NAME;
+TABLE_NAME	TABLE_COMMENT
+schema_auto_increment_columns	VIEW
+schema_object_overview	VIEW
+schema_redundant_indexes	VIEW
+schema_unused_indexes	VIEW
+x$schema_flattened_keys	VIEW
+#
+# Bug#29596053  USER 'MYSQL.SESSION' GETS TBL_ENCR_ADM DURING UPGRADE,
+# BUT NOT DURING INITIALIZE
+#
+# Make sure mysql.session user do not have TABLE_ENCRYPTION_ADMIN privilege.
+SELECT COUNT(*) FROM mysql.global_grants
+WHERE user = 'mysql.session'
+        AND host = 'localhost'
+        AND priv = 'TABLE_ENCRYPTION_ADMIN';
+COUNT(*)
+0
+# We should also verify that the privilege is removed when
+# upgrading from a previous release where the mysql.session
+# was granted this privilege.  We simulate this by explicitly
+# granting the privilege, and then restarting the server with
+# '--upgrade=force'.
+GRANT TABLE_ENCRYPTION_ADMIN ON  *.* to 'mysql.session'@localhost;
+# Verify that the privilege has been granted.
+SELECT COUNT(*) FROM mysql.global_grants
+WHERE user = 'mysql.session'
+        AND host = 'localhost'
+        AND priv = 'TABLE_ENCRYPTION_ADMIN';
+COUNT(*)
+1
+# restart: --datadir=MYSQLD_DATADIR2 --log-error=MYSQLD_LOG --upgrade=force
+# Now, after upgrade, the privilege should be gone.
+SELECT COUNT(*) FROM mysql.global_grants
+WHERE user = 'mysql.session'
+        AND host = 'localhost'
+        AND priv = 'TABLE_ENCRYPTION_ADMIN';
+COUNT(*)
+0
+# Stop the server and do cleanup.
+# Remove copied files
+# Restart the server with default options.
+# restart:
+#
+# Bug#29697670: OVERRIDING SERVER DEFAULT CHARSET/COLLATION AFFECTS UPGRADE
+#
+# Copy the remote tablespace & DB zip files from suite location to working location.
+# Check that the file exists in the working folder.
+# Set different paths for --datadir
+# Check that the file exits after unzip
+# Stop / start DB server which was created by MTR default
+# restart: --datadir=MYSQLD_DATADIR --log-error=MYSQLD_LOG --character-set-server=utf8 --collation-server=utf8_unicode_ci
+#
+# Bug##29865428: UPGRADE OF HELP TABLES FAILED ON 8.0.16
+#
+# A server restart with --upgrade=force would fail without the patch when
+# also submitting --autocommit=0 and --completion_type=chain, because when
+# the SRS table updates end with a commit, a new transaction is started, so
+# when the statements in fill_help_tables.sql are executed, and sql_log_bin
+# is being set, this fails since it's not allowed within the scope of an
+# active transaction.
+# restart: --datadir=MYSQLD_DATADIR --log-error=MYSQLD_LOG --autocommit=0 --completion_type=chain --upgrade=force
+# Stop the server and do cleanup.
+# Remove copied files
+#
+# Bug#29917793: REJECT UPGRADE 8.0.14-16 -> 8.0.17 FOR LCTN=1 AND PARTITIONED TABLES
+#
+# This is the test case for case sensitive file systems. A corresponding test case
+# for case insensitive file systems can be found in dd_upgrade_ci.test.
+#
+# The issue is now fixed and Upgrade should be successful from 8.0.14-16 -> 8.0.18
+# Test with lctn=1 and no partitioned tables. Upgrade should succeed.
+# Set different path for --datadir and check that it exists.
+# Upgrade the server.
+# restart: --datadir=MYSQLD_DATADIR --log-error=MYSQLD_LOG --lower_case_table_names=1
+# Stop the server and do cleanup.
+# Test with lctn=1 and partitioned tables. Upgrade should not be rejected
+# Set different path for --datadir and check that it exists.
+# Try upgrading the server.
+# restart: --datadir=MYSQLD_DATADIR --log-error=MYSQLD_LOG --lower_case_table_names=1
+# Table rebuild should succeed.
+ALTER TABLE test.t ENGINE = InnoDB;
+SHOW CREATE TABLE test.t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`a`)
+(PARTITION p0 VALUES LESS THAN (-1) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+# Error log file must not contain following error. Patch for Bug#29440725 suppresses it.
+Pattern "Table 'information_schema.TABLES' doesn't exist" not found
+# Stop the server and do cleanup.
+# Test with lctn=0 and no partitioned tables. Upgrade should succeed.
+# Set different path for --datadir and check that it exists.
+# Upgrade the server.
+# restart: --datadir=MYSQLD_DATADIR --log-error=MYSQLD_LOG
+# Stop the server and do cleanup.
+# Test with lctn=0 and partitioned tables. Upgrade should succeed.
+# Set different path for --datadir and check that it exists.
+# Upgrade the server.
+# restart: --datadir=MYSQLD_DATADIR --log-error=MYSQLD_LOG
+# Table rebuild will succeed.
+ALTER TABLE test.t ENGINE = InnoDB;
+# Stop the server and do cleanup.
+#
+# Bug#30360695: TABLE WITH SUBPARTITIONS CAN NOT ADD COLUMN AFTER UPGRADE
+#
+# Copy the remote tablespace & DB zip files from suite location to working location.
+# Check that the file exists in the working folder.
+# Set different paths for --datadir
+# Check that the file exits after unzip
+# Start DB server which was created by MTR default
+# restart: --datadir=MYSQLD_DATADIR --log-error=MYSQLD_LOG --character-set-server=utf8 --collation-server=utf8_unicode_ci
+# Verify that we can add a column (instant) to upgraded table with
+# subpartitions
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  `purchased` date DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`purchased`))
+SUBPARTITION BY HASH (to_days(`purchased`))
+SUBPARTITIONS 2
+(PARTITION p0 VALUES LESS THAN (1990) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (2000) ENGINE = InnoDB,
+ PARTITION p2 VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+ALTER TABLE t1 ADD COLUMN col2 VARCHAR(15);
+Warnings:
+Warning	3958	Failed to delete sdi for test.t1 in test/t1#p#p0#sp#p0sp0 due to missing record.
+# Search log file for warning.
+Occurrences of 'sdi_delete failed' in the input file: 1
+# Stop the server and do cleanup.
+# Restart the server with default options.
+# restart:
+#
+# Bug#34607401: unhelpful 8.0.28->8.0.30 "Data Dictionary initialization
+#               failed."
+#
+# Copy the zipped 8.0.28 data directory and unzip it.
+# Shutdown the server
+# Start the server with the 8.0.28 data directory
+# Without the patch, the upgrade fails.
+CALL max_exec_time_10pov10();
+a
+1
+Warnings:
+Warning	1064	Unsupported MAX_EXECUTION_TIME near ') */ `a` from t1; end' at line 2
+CALL invalid_hint();
+a
+1
+Warnings:
+Warning	1064	Optimizer hint syntax error near 'abc */ `a` from t1; end' at line 2
+# Shutdown the server
+# Check for errors in the error log.
+Pattern "\[ERROR\]" not found
+# Cleanup
+# restart:

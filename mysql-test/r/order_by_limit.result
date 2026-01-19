@@ -1,0 +1,798 @@
+#
+# WL#6986 : Make switching of index due to order by limit cost based
+#
+# Testcase for Bug#16522053
+CREATE TABLE t1 (
+pk INT PRIMARY KEY AUTO_INCREMENT,
+i INT,
+j INT,
+INDEX (i),
+INDEX (j)
+);
+INSERT INTO t1 (i,j) VALUES (1,1);
+set @d=1;
+INSERT INTO t1 (i,j) SELECT i+@d, j+@d from t1;
+set @d=@d*2;
+INSERT INTO t1 (i,j) SELECT i+@d, j+@d from t1;
+set @d=@d*2;
+INSERT INTO t1 (i,j) SELECT i+@d, j+@d from t1;
+set @d=@d*2;
+INSERT INTO t1 (i,j) SELECT i+@d, j+@d from t1;
+set @d=@d*2;
+INSERT INTO t1 (i,j) SELECT i+@d, j+@d from t1;
+set @d=@d*2;
+INSERT INTO t1 (i,j) SELECT i+@d, j+@d from t1;
+set @d=@d*2;
+INSERT INTO t1 (i,j) SELECT i+@d, j+@d from t1;
+set @d=@d*2;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN SELECT * FROM t1
+WHERE i<100 AND j<10
+ORDER BY i LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	i,j	j	5	NULL	9	77.34	Using index condition; Using where; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i` AS `i`,`test`.`t1`.`j` AS `j` from `test`.`t1` where ((`test`.`t1`.`i` < 100) and (`test`.`t1`.`j` < 10)) order by `test`.`t1`.`i` limit 5
+SELECT * FROM t1
+WHERE i<100 AND j<10
+ORDER BY i LIMIT 5;
+pk	i	j
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+6	5	5
+DROP TABLE t1;
+CREATE TABLE t0 (
+i0 INTEGER NOT NULL
+);
+INSERT INTO t0 VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+CREATE TABLE t1 (
+pk INTEGER PRIMARY KEY,
+i1 INTEGER NOT NULL,
+i2 INTEGER NOT NULL,
+INDEX k1 (i1),
+INDEX k2 (i1,i2)
+) ENGINE=InnoDB;
+INSERT INTO t1
+SELECT a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0,
+(a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0) % 1000,
+(a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0) % 1000
+FROM t0 AS a0, t0 AS a1;
+CREATE TABLE t2 (
+pk INTEGER PRIMARY KEY,
+i1 INTEGER NOT NULL,
+INDEX k1 (i1)
+) ENGINE=InnoDB;
+INSERT INTO t2
+SELECT a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0,
+(a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0) % 500
+FROM t0 AS a0, t0 AS a1;
+ANALYZE TABLE t1,t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+# Query should use index to optimize the ORDER BY LIMIT
+EXPLAIN SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 and t1.i1 > 2
+ORDER BY t1.i1 LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY,k1,k2	k1	4	NULL	6	29.70	Using where
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t1`.`pk` > 7000) and (`test`.`t1`.`i1` > 2)) order by `test`.`t1`.`i1` limit 2
+# Query should not make the switch to use index to
+# optimize ORDER BY LIMIT. So should be using filesort
+EXPLAIN SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 and t1.i1 > 2
+ORDER BY t1.i1 LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY,k1,k2	PRIMARY	4	NULL	30	99.00	Using where; Using filesort
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t1`.`pk` > 7000) and (`test`.`t1`.`i1` > 2)) order by `test`.`t1`.`i1` limit 5
+SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 and t1.i1 > 2
+ORDER BY t1.i1 LIMIT 5;
+pk	i1	i2	pk	i1
+7070	70	70	7070	70
+8080	80	80	8080	80
+9090	90	90	9090	90
+7171	171	171	7171	171
+8181	181	181	8181	181
+# Changing range condition on i1 should make
+# key on i1 get picked to give the order
+EXPLAIN SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 and t1.i1 > 800
+ORDER BY t1.i1 LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY,k1,k2	k2	4	NULL	20	30.00	Using where; Using index
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t1`.`pk` > 7000) and (`test`.`t1`.`i1` > 800)) order by `test`.`t1`.`i1` limit 5
+SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 and t1.i1 > 800
+ORDER BY t1.i1 LIMIT 5;
+pk	i1	i2	pk	i1
+# Use range condition only on pk to see if switch
+# happens just for ORDER BY LIMIT
+# Should not happen unless range results in too
+# many records
+EXPLAIN SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 ORDER BY t1.i1 LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY,k1,k2	PRIMARY	4	NULL	30	100.00	Using where; Using filesort
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t1`.`pk` > 7000)) order by `test`.`t1`.`i1` limit 5
+SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 ORDER BY t1.i1 LIMIT 5;
+pk	i1	i2	pk	i1
+7070	70	70	7070	70
+8080	80	80	8080	80
+9090	90	90	9090	90
+7171	171	171	7171	171
+8181	181	181	8181	181
+EXPLAIN SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 1000 ORDER BY t1.i1 LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY,k1,k2	k1	4	NULL	5	90.00	Using where
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t1`.`pk` > 1000)) order by `test`.`t1`.`i1` limit 5
+SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 1000 ORDER BY t1.i1 LIMIT 5;
+pk	i1	i2	pk	i1
+1010	10	10	1010	10
+2020	20	20	2020	20
+3030	30	30	3030	30
+4040	40	40	4040	40
+5050	50	50	5050	50
+# check if switch happens when the index for order 
+# by is non-covering
+EXPLAIN SELECT t1.i1,t1.i2 FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1 
+WHERE t1.pk > 100 ORDER BY t1.i1 LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY,k1,k2	k1	4	NULL	5	99.00	Using where
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t1`.`pk` > 100)) order by `test`.`t1`.`i1` limit 5
+SELECT t1.i1,t1.i2 FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1 
+WHERE t1.pk > 100 ORDER BY t1.i1 LIMIT 5;
+i1	i2
+10	10
+20	20
+30	30
+40	40
+50	50
+# Reduce the fanout for table t2 and check
+# that index for order by is not choosen
+EXPLAIN SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 and t2.pk = 100 ORDER BY t1.i1 LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY,k1,k2	PRIMARY	4	NULL	30	100.00	Using where; Using filesort
+1	SIMPLE	t2	NULL	const	PRIMARY,k1	PRIMARY	4	const	1	5.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t2`.`pk` = 100) and (`test`.`t1`.`pk` > 7000)) order by `test`.`t1`.`i1` limit 5
+SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 and t2.pk = 100 ORDER BY t1.i1 LIMIT 5;
+pk	i1	i2	pk	i1
+# Increase the fanout to see if index gets choosen
+# for order by for which range scan was choosen
+# earlier
+INSERT INTO t2
+SELECT a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0 + 1,
+(a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0) % 500
+FROM t0 AS a0, t0 AS a1;
+ANALYZE TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	analyze	status	OK
+EXPLAIN SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 ORDER BY t1.i1 LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY,k1,k2	k1	4	NULL	6	30.00	Using where
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t1`.`pk` > 7000)) order by `test`.`t1`.`i1` limit 5
+SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i1=t2.i1
+WHERE t1.pk > 7000 ORDER BY t1.i1 LIMIT 5;
+pk	i1	i2	pk	i1
+7070	70	70	7070	70
+7070	70	70	7071	70
+8080	80	80	8080	80
+8080	80	80	8081	80
+9090	90	90	9090	90
+# Check if the index for order by is used when
+# force index is done on order by
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (k2) STRAIGHT_JOIN t2 ON
+t1.i1=t2.i1 WHERE t1.pk > 7000 ORDER BY t1.i1 LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY,k1,k2	k2	8	NULL	6	30.00	Using where; Using index
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i1	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`pk` AS `pk`,`test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1` from `test`.`t1` FORCE INDEX FOR ORDER BY (`k2`) straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i1`) and (`test`.`t1`.`pk` > 7000)) order by `test`.`t1`.`i1` limit 5
+SELECT * FROM t1 FORCE INDEX FOR ORDER BY (k2) STRAIGHT_JOIN t2 ON
+t1.i1=t2.i1 WHERE t1.pk > 7000 ORDER BY t1.i1 LIMIT 5;
+pk	i1	i2	pk	i1
+7070	70	70	7070	70
+7070	70	70	7071	70
+8080	80	80	8080	80
+8080	80	80	8081	80
+9090	90	90	9090	90
+DROP TABLE t0, t1, t2;
+#
+# Bug #26483909: INCORRECT BEHAVIOR FOR QUERY WITH DISTINCT
+#                and ORDER BY ... LIMIT.
+#
+CREATE TABLE t1 (
+pk int(11) NOT NULL,
+col_int int(11),
+col_varchar_key varchar(20),
+PRIMARY KEY (pk),
+KEY col_varchar_key (col_varchar_key),
+KEY col_varchar_key_2 (col_varchar_key(5))
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t1 VALUES (1,2,'t'), (2,5,'efqsdksj'),
+(3,NULL,'fqsdksjijcs'),(4,8,'qsdksjijc'),
+(5,40,NULL),(6,3,'dkz'),(7,2,NULL),
+(8,3,'dks'),(9,0,'ksjijcsz'),
+(10,84,'sjijcszxwbjj');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SET @@SESSION.sql_mode='NO_ENGINE_SUBSTITUTION';
+EXPLAIN SELECT DISTINCT col_int
+FROM t1
+WHERE col_varchar_key <> 'c'
+   OR col_varchar_key > 'w'
+ORDER BY col_varchar_key
+LIMIT 100;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	col_varchar_key,col_varchar_key_2	col_varchar_key_2	23	NULL	8	100.00	Using where; Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`col_int` AS `col_int` from `test`.`t1` where ((`test`.`t1`.`col_varchar_key` <> 'c') or (`test`.`t1`.`col_varchar_key` > 'w')) order by `test`.`t1`.`col_varchar_key` limit 100
+SELECT DISTINCT col_int
+FROM t1
+WHERE col_varchar_key <> 'c'
+   OR col_varchar_key > 'w'
+ORDER BY col_varchar_key
+LIMIT 100;
+col_int
+3
+5
+NULL
+0
+8
+84
+2
+DROP TABLE t1;
+#
+# Bug#29487181 INCORRECT 'ROWS' AND 'FILTERED' ESTIMATE IN
+#              'ORDER BY ... LIMIT .' QUERIES
+#
+CREATE TABLE t1 (
+col_int_unique INT DEFAULT NULL,
+col_int_key INT DEFAULT NULL,
+UNIQUE KEY col_int_unique (col_int_unique),
+KEY col_int_key (col_int_key)
+);
+INSERT INTO t1 VALUES (49,49), (9,7), (0,1), (2,42);
+CREATE TABLE t2 (
+col_int_unique INT DEFAULT NULL,
+pk INT NOT NULL,
+PRIMARY KEY (pk),
+UNIQUE KEY col_int_unique (col_int_unique)
+);
+INSERT INTO t2 VALUES (2,8), (5,2), (6,1);
+ANALYZE TABLE t1,t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+EXPLAIN
+SELECT STRAIGHT_JOIN t1.col_int_key AS field1
+FROM t1 JOIN t2
+ON t2.pk = t1.col_int_unique OR
+t2.col_int_unique = t1.col_int_key
+ORDER BY field1 LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	col_int_unique,col_int_key	NULL	NULL	NULL	4	100.00	Using filesort
+1	SIMPLE	t2	NULL	ALL	PRIMARY,col_int_unique	NULL	NULL	NULL	3	55.56	Range checked for each record (index map: 0x3)
+Warnings:
+Note	1003	/* select#1 */ select straight_join `test`.`t1`.`col_int_key` AS `field1` from `test`.`t1` join `test`.`t2` where ((`test`.`t2`.`pk` = `test`.`t1`.`col_int_unique`) or (`test`.`t2`.`col_int_unique` = `test`.`t1`.`col_int_key`)) order by `field1` limit 2
+DROP TABLE t1,t2;
+#
+# Bug#30348211: DANGEROUS OPTIMIZATION RECONSIDERING_ACCESS_PATHS_FOR_
+#               INDEX_ORDERING
+#
+CREATE TABLE t (id BIGINT NOT NULL, other_id BIGINT NOT NULL,
+covered_column VARCHAR(50) NOT NULL, non_covered_column VARCHAR(50) NOT NULL,
+PRIMARY KEY (id),
+INDEX index_other_id_covered_column (other_id, covered_column));
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (10, 10, '10', '10');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (9, 9, '9', '9');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (8, 8, '8', '8');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (7, 7, '7', '7');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (6, 6, '6', '6');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (5, 5, '5', '5');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (4, 4, '4', '4');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (3, 3, '3', '3');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (2, 2, '2', '2');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (1, 1, '1', '1');
+SET
+optimizer_trace = "enabled=on",
+optimizer_trace_max_mem_size = 1000000,
+end_markers_in_json = ON;
+SET optimizer_switch = "prefer_ordering_index=on";
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+EXPLAIN SELECT non_covered_column FROM t WHERE other_id > 3 ORDER BY id ASC LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	index_other_id_covered_column	PRIMARY	8	NULL	2	70.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`other_id` > 3) order by `test`.`t`.`id` limit 2
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+1
+SET optimizer_switch = "prefer_ordering_index=off";
+EXPLAIN SELECT non_covered_column FROM t WHERE other_id > 3 ORDER BY id ASC LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	range	index_other_id_covered_column	index_other_id_covered_column	8	NULL	7	100.00	Using index condition; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`other_id` > 3) order by `test`.`t`.`id` limit 2
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_0 FROM information_schema.optimizer_trace;
+should_be_0
+0
+SET optimizer_switch = default;
+EXPLAIN SELECT non_covered_column FROM t WHERE other_id > 3 ORDER BY id ASC LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	index_other_id_covered_column	PRIMARY	8	NULL	2	70.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`other_id` > 3) order by `test`.`t`.`id` limit 2
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+1
+SET optimizer_switch = "prefer_ordering_index=on";
+EXPLAIN SELECT /*+ ORDER_INDEX(t PRIMARY) */ non_covered_column FROM t WHERE other_id > 3 ORDER BY id ASC LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	PRIMARY	8	NULL	2	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ ORDER_INDEX(`t`@`select#1` `PRIMARY`) */ `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`other_id` > 3) order by `test`.`t`.`id` limit 2
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+1
+SET optimizer_switch = "prefer_ordering_index=off";
+EXPLAIN SELECT /*+ ORDER_INDEX(t PRIMARY) */ non_covered_column FROM t WHERE other_id > 3 ORDER BY id ASC LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	PRIMARY	8	NULL	2	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ ORDER_INDEX(`t`@`select#1` `PRIMARY`) */ `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`other_id` > 3) order by `test`.`t`.`id` limit 2
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+1
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (10+1+10, 10, '10', '10');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (9+1+10, 9, '9', '9');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (8+1+10, 8, '8', '8');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (7+1+10, 7, '7', '7');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (6+1+10, 6, '6', '6');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (5+1+10, 5, '5', '5');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (4+1+10, 4, '4', '4');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (3+1+10, 3, '3', '3');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (2+1+10, 2, '2', '2');
+INSERT INTO t (id, other_id, covered_column, non_covered_column)
+VALUES (1+1+10, 1, '1', '1');
+SET optimizer_switch = "prefer_ordering_index=on";
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+EXPLAIN SELECT non_covered_column FROM t WHERE id > 8 GROUP BY other_id LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	PRIMARY,index_other_id_covered_column	index_other_id_covered_column	210	NULL	3	60.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`id` > 8) group by `test`.`t`.`other_id` limit 1
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+1
+SET optimizer_switch = "prefer_ordering_index=off";
+EXPLAIN SELECT non_covered_column FROM t WHERE id > 8 GROUP BY other_id LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	range	PRIMARY,index_other_id_covered_column	PRIMARY	8	NULL	12	100.00	Using where; Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`id` > 8) group by `test`.`t`.`other_id` limit 1
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_0 FROM information_schema.optimizer_trace;
+should_be_0
+0
+SET optimizer_switch = default;
+EXPLAIN SELECT non_covered_column FROM t WHERE id > 8 GROUP BY id LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	range	PRIMARY,index_other_id_covered_column	PRIMARY	8	NULL	12	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`id` > 8) group by `test`.`t`.`id` limit 1
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+0
+SET optimizer_switch = "prefer_ordering_index=on";
+EXPLAIN SELECT /*+ GROUP_INDEX(t index_other_id_covered_column) */ non_covered_column FROM t WHERE id > 8 GROUP BY other_id LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	index_other_id_covered_column	index_other_id_covered_column	210	NULL	2	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ GROUP_INDEX(`t`@`select#1` `index_other_id_covered_column`) */ `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`id` > 8) group by `test`.`t`.`other_id` limit 1
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+1
+SET optimizer_switch = "prefer_ordering_index=off";
+EXPLAIN SELECT /*+ GROUP_INDEX(t index_other_id_covered_column) */ non_covered_column FROM t WHERE id > 8 GROUP BY other_id LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	index_other_id_covered_column	index_other_id_covered_column	210	NULL	2	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ GROUP_INDEX(`t`@`select#1` `index_other_id_covered_column`) */ `test`.`t`.`non_covered_column` AS `non_covered_column` from `test`.`t` where (`test`.`t`.`id` > 8) group by `test`.`t`.`other_id` limit 1
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+1
+DROP TABLE t;
+# Bug#32897503: Prepared statement performance slower with prefer
+#               ordering_index optimization
+# Bug#32897525: Prepared statement doesn't seem to use index extensions
+#               / extended_keys
+CREATE TABLE p (
+pid int unsigned NOT NULL AUTO_INCREMENT,
+cid int unsigned NOT NULL,
+pl char(255) DEFAULT '',
+PRIMARY KEY (pid),
+KEY cid (cid)
+);
+INSERT INTO p (cid) VALUES (1), (2), (3), (4), (5), (6), (7), (8);
+INSERT INTO p (cid) SELECT 1 FROM p;
+INSERT INTO p (cid) SELECT 2 FROM p;
+INSERT INTO p (cid) SELECT 3 FROM p;
+INSERT INTO p (cid) SELECT 4 FROM p;
+INSERT INTO p (cid) SELECT 5 FROM p;
+INSERT INTO p (cid) SELECT 4 FROM p;
+ANALYZE TABLE p;
+Table	Op	Msg_type	Msg_text
+test.p	analyze	status	OK
+SELECT pid, cid, pl FROM p WHERE cid = 4 ORDER BY pid DESC LIMIT 1;
+pid	cid	pl
+755	4	
+EXPLAIN SELECT pid, cid, pl FROM p WHERE cid = 4 ORDER BY pid DESC LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ref	cid	cid	4	const	321	100.00	Backward index scan
+Warnings:
+Note	1003	/* select#1 */ select `test`.`p`.`pid` AS `pid`,`test`.`p`.`cid` AS `cid`,`test`.`p`.`pl` AS `pl` from `test`.`p` where (`test`.`p`.`cid` = 4) order by `test`.`p`.`pid` desc limit 1
+PREPARE ps FROM "SELECT pid, cid, pl FROM p WHERE cid = ? ORDER BY pid DESC LIMIT 1";
+PREPARE pse FROM "EXPLAIN SELECT pid, cid, pl FROM p WHERE cid = ? ORDER BY pid DESC LIMIT 1";
+SET @client_id = 4;
+EXECUTE pse USING @client_id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ref	cid	cid	4	const	321	100.00	Backward index scan
+Warnings:
+Note	1003	/* select#1 */ select `test`.`p`.`pid` AS `pid`,`test`.`p`.`cid` AS `cid`,`test`.`p`.`pl` AS `pl` from `test`.`p` where (`test`.`p`.`cid` = 4) order by `test`.`p`.`pid` desc limit 1
+EXECUTE ps USING @client_id;
+pid	cid	pl
+755	4	
+DEALLOCATE PREPARE ps;
+DEALLOCATE PREPARE pse;
+SET @@optimizer_switch="prefer_ordering_index=off";
+PREPARE ps FROM "SELECT pid, cid, pl FROM p WHERE cid = ? ORDER BY pid DESC LIMIT 1";
+PREPARE pse FROM "EXPLAIN SELECT pid, cid, pl FROM p WHERE cid = ? ORDER BY pid DESC LIMIT 1";
+EXECUTE pse USING @client_id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ref	cid	cid	4	const	321	100.00	Backward index scan
+Warnings:
+Note	1003	/* select#1 */ select `test`.`p`.`pid` AS `pid`,`test`.`p`.`cid` AS `cid`,`test`.`p`.`pl` AS `pl` from `test`.`p` where (`test`.`p`.`cid` = 4) order by `test`.`p`.`pid` desc limit 1
+EXECUTE ps USING @client_id;
+pid	cid	pl
+755	4	
+DEALLOCATE PREPARE ps;
+DEALLOCATE PREPARE pse;
+DROP TABLE p;
+SET optimizer_switch = DEFAULT;
+#
+# Bug#33066458: TEST_IF_SKIP_SORT_ORDER: ASSERTION `SELECT_LIMIT > 0' FAILED.
+#
+CREATE TABLE t (x INTEGER PRIMARY KEY, y INTEGER);
+INSERT INTO t VALUES (1, 2), (2, 3), (3, 4);
+SELECT * FROM t ORDER BY x LIMIT 18446744073709551614;
+x	y
+1	2
+2	3
+3	4
+DROP TABLE t;
+#
+# Bug#34291261: The result of query plan is different between 5.7 and 8.0
+#
+CREATE TABLE test (
+a bigint NOT NULL AUTO_INCREMENT,
+b int not null,
+c date NOT NULL,
+d int NOT NULL,
+PRIMARY KEY (a),
+KEY ix_ordered_date (c,a)
+);
+CREATE PROCEDURE insertProc(input_date varchar(10))
+BEGIN
+DECLARE i INT DEFAULT 1;
+WHILE (i <= 1000)
+DO
+INSERT INTO test VALUE (0, 0, input_date, 0);
+SET i = i + 1;
+END WHILE;
+END$$
+CALL insertProc('2022-06-09');
+CALL insertProc('2022-06-10');
+CALL insertProc('2022-06-13');
+analyze table test;
+Table	Op	Msg_type	Msg_text
+test.test	analyze	status	OK
+EXPLAIN SELECT * FROM test  WHERE c = '2022-06-13' AND a > 222 ORDER BY c, a LIMIT 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test	NULL	range	PRIMARY,ix_ordered_date	ix_ordered_date	11	NULL	1000	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test`.`a` AS `a`,`test`.`test`.`b` AS `b`,`test`.`test`.`c` AS `c`,`test`.`test`.`d` AS `d` from `test`.`test` where ((`test`.`test`.`c` = DATE'2022-06-13') and (`test`.`test`.`a` > 222)) order by `test`.`test`.`c`,`test`.`test`.`a` limit 10
+DROP PROCEDURE insertProc;
+DROP TABLE test;
+#
+# Bug#34306497 - Low limit heuristic used unnecessarily with descending scans
+#
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, PRIMARY KEY (f1), KEY(f2, f1));
+INSERT INTO t1 (
+WITH RECURSIVE
+a(i) AS (SELECT 0 UNION ALL SELECT i+1 FROM a WHERE i < 9 ),
+b(i) AS (SELECT x.i + y.i * 10 + z.i * 100 FROM a x, a y, a z)
+SELECT b.i, b.i %2 FROM b ORDER BY i);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN SELECT * FROM t1 WHERE f2 = 1 AND f1 <= 100 ORDER BY f1 DESC LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY,f2	f2	9	NULL	50	100.00	Using where; Backward index scan; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`f1` AS `f1`,`test`.`t1`.`f2` AS `f2` from `test`.`t1` where ((`test`.`t1`.`f2` = 1) and (`test`.`t1`.`f1` <= 100)) order by `test`.`t1`.`f1` desc limit 1
+SELECT * FROM t1 WHERE f2 = 1 AND f1 <= 100 ORDER BY f1 DESC LIMIT 1;
+f1	f2
+99	1
+CREATE TABLE t2 (
+f1 INTEGER,
+f2 INTEGER,
+f3 INTEGER,
+f4 INTEGER,
+f5 INTEGER,
+PRIMARY KEY (f1), KEY(f2,f3,f4,f5,f1));
+INSERT INTO t2 (
+WITH RECURSIVE a (i) AS (SELECT 0 UNION ALL SELECT i+1 FROM a WHERE i < 9 ),
+b (i) AS (SELECT x.i + y.i * 10 + z.i * 100 FROM a x, a y, a z)
+SELECT b.i, b.i%2, b.i%3, b.i%4, b.i%5 FROM b ORDER BY i);
+ANALYZE TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	analyze	status	OK
+EXPLAIN SELECT * FROM t2
+WHERE f3 = 1 AND f2 = 1 AND f4 = 3 AND f5 IN(2,3) ORDER BY f4 DESC LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	range	f2	f2	20	NULL	33	100.00	Using where; Backward index scan; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`f1` AS `f1`,`test`.`t2`.`f2` AS `f2`,`test`.`t2`.`f3` AS `f3`,`test`.`t2`.`f4` AS `f4`,`test`.`t2`.`f5` AS `f5` from `test`.`t2` where ((`test`.`t2`.`f4` = 3) and (`test`.`t2`.`f2` = 1) and (`test`.`t2`.`f3` = 1) and (`test`.`t2`.`f5` in (2,3))) order by `test`.`t2`.`f4` desc limit 1
+SELECT * FROM t2
+WHERE f3 = 1 AND f2 = 1 AND f4 = 3 AND f5 IN(2,3) ORDER BY f4 DESC LIMIT 1;
+f1	f2	f3	f4	f5
+943	1	1	3	3
+EXPLAIN SELECT * FROM t2
+WHERE f2 = 1 AND f3 = 2 AND f4 = 3 AND f5 IN(2,3) ORDER BY f3,f4 DESC LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	range	f2	f2	20	NULL	33	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`f1` AS `f1`,`test`.`t2`.`f2` AS `f2`,`test`.`t2`.`f3` AS `f3`,`test`.`t2`.`f4` AS `f4`,`test`.`t2`.`f5` AS `f5` from `test`.`t2` where ((`test`.`t2`.`f4` = 3) and (`test`.`t2`.`f3` = 2) and (`test`.`t2`.`f2` = 1) and (`test`.`t2`.`f5` in (2,3))) order by `test`.`t2`.`f3`,`test`.`t2`.`f4` desc limit 1
+SELECT * FROM t2
+WHERE f2 = 1 AND f3 = 2 AND f4 = 3 AND f5 IN(2,3) ORDER BY f3,f4 DESC LIMIT 1;
+f1	f2	f3	f4	f5
+47	1	2	3	2
+EXPLAIN SELECT * FROM t2
+WHERE f2 = 1 AND f3 > 1 AND f4 = 3 AND f5 IN(2,3) ORDER BY f2,f3 DESC LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	range	f2	f2	10	NULL	166	2.00	Using where; Backward index scan; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`f1` AS `f1`,`test`.`t2`.`f2` AS `f2`,`test`.`t2`.`f3` AS `f3`,`test`.`t2`.`f4` AS `f4`,`test`.`t2`.`f5` AS `f5` from `test`.`t2` where ((`test`.`t2`.`f4` = 3) and (`test`.`t2`.`f2` = 1) and (`test`.`t2`.`f3` > 1) and (`test`.`t2`.`f5` in (2,3))) order by `test`.`t2`.`f2`,`test`.`t2`.`f3` desc limit 1
+SELECT * FROM t2
+WHERE f2 = 1 AND f3 > 1 AND f4 = 3 AND f5 IN(2,3) ORDER BY f2,f3 DESC LIMIT 1;
+f1	f2	f3	f4	f5
+983	1	2	3	3
+EXPLAIN SELECT * FROM t2
+WHERE f2 = 1 AND f3 > 1 AND f4 = 3 ORDER BY f2,f3,f5 DESC LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	range	f2	f2	10	NULL	166	10.00	Using where; Using index; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`f1` AS `f1`,`test`.`t2`.`f2` AS `f2`,`test`.`t2`.`f3` AS `f3`,`test`.`t2`.`f4` AS `f4`,`test`.`t2`.`f5` AS `f5` from `test`.`t2` where ((`test`.`t2`.`f4` = 3) and (`test`.`t2`.`f2` = 1) and (`test`.`t2`.`f3` > 1)) order by `test`.`t2`.`f2`,`test`.`t2`.`f3`,`test`.`t2`.`f5` desc limit 1
+SELECT * FROM t2
+WHERE f2 = 1 AND f3 > 1 AND f4 = 3 ORDER BY f2,f3,f5 DESC LIMIT 1;
+f1	f2	f3	f4	f5
+59	1	2	3	4
+EXPLAIN SELECT * FROM t2
+WHERE f2 = 1 AND f3 > 1 AND f4 = 3 ORDER BY f2 DESC ,f3 DESC ,f5 DESC LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	range	f2	f2	10	NULL	166	10.00	Using where; Backward index scan; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`f1` AS `f1`,`test`.`t2`.`f2` AS `f2`,`test`.`t2`.`f3` AS `f3`,`test`.`t2`.`f4` AS `f4`,`test`.`t2`.`f5` AS `f5` from `test`.`t2` where ((`test`.`t2`.`f4` = 3) and (`test`.`t2`.`f2` = 1) and (`test`.`t2`.`f3` > 1)) order by `test`.`t2`.`f2` desc,`test`.`t2`.`f3` desc,`test`.`t2`.`f5` desc limit 1
+SELECT * FROM t2
+WHERE f2 = 1 AND f3 > 1 AND f4 = 3 ORDER BY f2 DESC ,f3 DESC ,f5 DESC LIMIT 1;
+f1	f2	f3	f4	f5
+959	1	2	3	4
+DROP TABLE t1,t2;
+#
+# Bug#35930969 MDS offloads to HW based on Incorrect Costings
+#              from Optimizer
+#
+CREATE TABLE t1(id INT AUTO_INCREMENT,
+c1 VARCHAR(10), c2 VARCHAR(10), c3 VARCHAR(10),
+PRIMARY KEY(id)) SECONDARY_ENGINE MOCK;
+INSERT INTO t1 (c1, c2, c3) values ('132456','456789','789123'),
+('132456','456789','789123'),
+('132456','456789','789123'),
+('132456','456789','789123'),
+('132456','456789','789123');
+INSERT INTO t1(c1,c2,c3) SELECT t1.c1, t1.c2, t1.c3
+from t1, t1 as t11, t1 as t12, t1 as t13, t1 as t14;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=Tree SELECT * FROM t1 ORDER BY id LIMIT 10;
+EXPLAIN
+-> Limit: 10 row(s)  (cost=3.5 rows=10)
+    -> Index scan on t1 using PRIMARY  (cost=3.5 rows=10)
+
+SELECT * FROM t1 ORDER BY id LIMIT 10;
+id	c1	c2	c3
+1	132456	456789	789123
+2	132456	456789	789123
+3	132456	456789	789123
+4	132456	456789	789123
+5	132456	456789	789123
+6	132456	456789	789123
+7	132456	456789	789123
+8	132456	456789	789123
+9	132456	456789	789123
+10	132456	456789	789123
+SHOW SESSION STATUS LIKE '%cost%';
+Variable_name	Value
+Last_query_cost	3.500000
+EXPLAIN FORMAT=Tree SELECT * FROM t1 FORCE INDEX(PRIMARY) ORDER BY id LIMIT 10;
+EXPLAIN
+-> Limit: 10 row(s)  (cost=3.5 rows=10)
+    -> Index scan on t1 using PRIMARY  (cost=3.5 rows=10)
+
+SELECT * FROM t1 FORCE INDEX(PRIMARY) ORDER BY id LIMIT 10;
+id	c1	c2	c3
+1	132456	456789	789123
+2	132456	456789	789123
+3	132456	456789	789123
+4	132456	456789	789123
+5	132456	456789	789123
+6	132456	456789	789123
+7	132456	456789	789123
+8	132456	456789	789123
+9	132456	456789	789123
+10	132456	456789	789123
+SHOW SESSION STATUS LIKE '%cost%';
+Variable_name	Value
+Last_query_cost	3.500000
+EXPLAIN FORMAT=Tree SELECT * FROM t1 use index() ORDER BY id LIMIT 10;
+EXPLAIN
+-> Limit: 10 row(s)  (cost=316 rows=10)
+    -> Sort: t1.id, limit input to 10 row(s) per chunk  (cost=316 rows=3130)
+        -> Table scan on t1  (cost=316 rows=3130)
+
+SELECT * FROM t1 use index() ORDER BY id LIMIT 10;
+id	c1	c2	c3
+1	132456	456789	789123
+2	132456	456789	789123
+3	132456	456789	789123
+4	132456	456789	789123
+5	132456	456789	789123
+6	132456	456789	789123
+7	132456	456789	789123
+8	132456	456789	789123
+9	132456	456789	789123
+10	132456	456789	789123
+SHOW SESSION STATUS LIKE '%cost%';
+Variable_name	Value
+Last_query_cost	315.749000
+EXPLAIN FORMAT=Tree SELECT * FROM t1 WHERE c1 != 'asd' ORDER BY id LIMIT 10;
+EXPLAIN
+-> Limit: 10 row(s)  (cost=3.4 rows=9)
+    -> Filter: (t1.c1 <> 'asd')  (cost=3.4 rows=9)
+        -> Index scan on t1 using PRIMARY  (cost=3.4 rows=10)
+
+SELECT * FROM t1 WHERE c1 != 'asd' ORDER BY id LIMIT 10;
+id	c1	c2	c3
+1	132456	456789	789123
+2	132456	456789	789123
+3	132456	456789	789123
+4	132456	456789	789123
+5	132456	456789	789123
+6	132456	456789	789123
+7	132456	456789	789123
+8	132456	456789	789123
+9	132456	456789	789123
+10	132456	456789	789123
+SHOW SESSION STATUS LIKE '%cost%';
+Variable_name	Value
+Last_query_cost	3.500000
+DROP TABLE t1;
+# Bug#36213938: QEP regression with prefer_ordering_index=off
+#
+CREATE TABLE t0 (
+i0 INTEGER NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t0 VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+CREATE TABLE t1 (
+i1 INTEGER NOT NULL,
+i2 INTEGER NOT NULL,
+index k1 (i2)) ENGINE=InnoDB;
+INSERT INTO t1
+SELECT a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0,
+(a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0) % 1000
+FROM t0 AS a0, t0 AS a1;
+CREATE TABLE t2 (
+pk INTEGER PRIMARY KEY,
+i1 INTEGER NOT NULL,
+i2 INTEGER NOT NULL,
+INDEX k1 (i1)
+) ENGINE=InnoDB;
+INSERT INTO t2
+SELECT a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0,
+(a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0) % 500,
+(a0.i0 + 10*a1.i0 + 100*a0.i0 + 1000*a1.i0) % 500
+FROM t0 AS a0, t0 AS a1;
+ANALYZE TABLE t0,t1,t2;
+Table	Op	Msg_type	Msg_text
+test.t0	analyze	status	OK
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+# Even when prefer_ordering_index is off, ordering index is picked
+# if possible when optimizer's original plan was to do a table scan.
+SET optimizer_switch = "prefer_ordering_index=off";
+EXPLAIN SELECT i2 FROM t2 ORDER BY pk LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	index	NULL	PRIMARY	4	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`i2` AS `i2` from `test`.`t2` order by `test`.`t2`.`pk` limit 1
+SELECT (trace LIKE '%"plan_changed": true%') AS should_be_1 FROM information_schema.optimizer_trace;
+should_be_1
+1
+# Verify that when prefer ordering index is off and if the current plan
+# is to do a table scan, a recheck of the index usage does happen if
+# limit is specified in the query.
+SET @@GLOBAL.DEBUG= '+d,prefer_ordering_index_check';
+SET optimizer_switch = "prefer_ordering_index=off";
+EXPLAIN SELECT * FROM t1 STRAIGHT_JOIN t2 ON t1.i2=t2.i1 WHERE t1.i1 > 7000 and t1.i2 > 0 ORDER BY t1.i2 LIMIT 1;;
+SET DEBUG_SYNC= "now SIGNAL signal.prefer_ordering_index_check_continue";
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	k1	k1	4	NULL	99	33.33	Using index condition; Using where
+1	SIMPLE	t2	NULL	ref	k1	k1	4	test.t1.i2	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i1` AS `i1`,`test`.`t1`.`i2` AS `i2`,`test`.`t2`.`pk` AS `pk`,`test`.`t2`.`i1` AS `i1`,`test`.`t2`.`i2` AS `i2` from `test`.`t1` straight_join `test`.`t2` where ((`test`.`t2`.`i1` = `test`.`t1`.`i2`) and (`test`.`t1`.`i1` > 7000) and (`test`.`t1`.`i2` > 0)) order by `test`.`t1`.`i2` limit 1
+SET @@GLOBAL.DEBUG= '-d,prefer_ordering_index_check';
+SET optimizer_switch = DEFAULT;
+drop table t0, t1, t2;

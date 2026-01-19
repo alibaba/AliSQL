@@ -1,3 +1,4 @@
+
 -- source include/have_log_bin.inc
 
 # We change binlog format inside the test, so no need to re-run with
@@ -11,6 +12,8 @@
 
 let $oblf=`select @@SESSION.BINLOG_FORMAT`;
 let $otfc=`select @@log_bin_trust_function_creators`;
+
+create function fn16456_1() returns int  return 1;
 
 set global log_bin_trust_function_creators=0;
 
@@ -28,6 +31,12 @@ begin
        return unix_timestamp();
 end|
 delimiter ;|
+
+--error ER_BINLOG_UNSAFE_ROUTINE
+alter function fn16456_1 comment "fails" contains SQL;
+--error ER_BINLOG_UNSAFE_ROUTINE
+alter function fn16456_1 MODIFIES SQL DATA;
+drop function fn16456_1;
 
 
 
@@ -49,7 +58,7 @@ set global log_bin_trust_function_creators=0;
 
 # allow funcall in RBR
 
-set binlog_format=ROW;
+set binlog_format='ROW';
 
 --replace_column 1 timestamp
 select fn16456();
@@ -87,7 +96,7 @@ delimiter ;|
 
 # allow funcall in RBR
 
-set binlog_format=ROW;
+set binlog_format='ROW';
 
 --replace_column 1 timestamp
 select fn16456();
@@ -124,7 +133,7 @@ delimiter ;|
 
 # allow funcall in RBR
 
-set binlog_format=ROW;
+set binlog_format='ROW';
 
 --replace_column 1 timestamp
 select fn16456();
@@ -161,7 +170,7 @@ delimiter ;|
 
 # allow funcall in RBR
 
-set binlog_format=ROW;
+set binlog_format='ROW';
 
 --replace_column 1 timestamp
 select fn16456();

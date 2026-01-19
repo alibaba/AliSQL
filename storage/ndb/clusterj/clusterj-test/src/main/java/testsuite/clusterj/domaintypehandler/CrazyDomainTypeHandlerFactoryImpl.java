@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -23,8 +31,9 @@ import com.mysql.clusterj.core.spi.DomainFieldHandler;
 import com.mysql.clusterj.core.spi.DomainTypeHandler;
 import com.mysql.clusterj.core.spi.DomainTypeHandlerFactory;
 import com.mysql.clusterj.core.spi.ValueHandler;
-import com.mysql.clusterj.core.store.ClusterTransaction;
+import com.mysql.clusterj.core.spi.ValueHandlerFactory;
 import com.mysql.clusterj.core.store.Column;
+import com.mysql.clusterj.core.store.Db;
 import com.mysql.clusterj.core.store.Dictionary;
 import com.mysql.clusterj.core.store.Operation;
 import com.mysql.clusterj.core.store.PartitionKey;
@@ -44,6 +53,8 @@ public class CrazyDomainTypeHandlerFactoryImpl implements DomainTypeHandlerFacto
 
     static Class[] exceptions = new Class[] {NullPointerException.class, IllegalAccessException.class};
 
+    static boolean crazyDomainTypeHandlerFactoryUsed = false;
+
     static {
         for (Class exception: exceptions) {
             try {
@@ -56,10 +67,20 @@ public class CrazyDomainTypeHandlerFactoryImpl implements DomainTypeHandlerFacto
         }
     }
 
-    public <T> DomainTypeHandler<T> createDomainTypeHandler(Class<T> domainClass, Dictionary dictionary) {
+    static public void resetCrazyDomainTypeHandlerFactoryUsed() {
+        crazyDomainTypeHandlerFactoryUsed = false;
+    }
+
+    static public boolean wasCrazyDomainTypeHandlerFactoryUsed() {
+        return crazyDomainTypeHandlerFactoryUsed;
+    }
+
+    public <T> DomainTypeHandler<T> createDomainTypeHandler(Class<T> domainClass, Dictionary dictionary,
+            ValueHandlerFactory valueHandlerFactory) {
         String className = domainClass.getSimpleName();
         if (className.startsWith("Throw")) {
             String throwClassName = className.substring(5);
+            crazyDomainTypeHandlerFactoryUsed = throwClassName.equals("NullPointerException");
             try {
                 Constructor ctor = constructorMap.get(throwClassName);
                 RuntimeException throwable = (RuntimeException) ctor.newInstance(new Object[]{});
@@ -99,19 +120,19 @@ public class CrazyDomainTypeHandlerFactoryImpl implements DomainTypeHandlerFacto
                     throw new UnsupportedOperationException("Not supported yet.");
                 }
 
-                public Class getProxyClass() {
+                public Class<?>[] getProxyInterfaces() {
                     throw new UnsupportedOperationException("Nice Job!");
                 }
 
-                public T newInstance() {
+                public T newInstance(Db db) {
+                    throw new UnsupportedOperationException("Not supported yet.");
+                }
+
+                public T newInstance(ValueHandler valueHandler) {
                     throw new UnsupportedOperationException("Not supported yet.");
                 }
 
                 public ValueHandler getValueHandler(Object instance) {
-                    throw new UnsupportedOperationException("Not supported yet.");
-                }
-
-                public T getInstance(ValueHandler handler) {
                     throw new UnsupportedOperationException("Not supported yet.");
                 }
 
@@ -120,10 +141,6 @@ public class CrazyDomainTypeHandlerFactoryImpl implements DomainTypeHandlerFacto
                 }
 
                 public void objectSetValues(ResultData rs, ValueHandler handler) {
-                    throw new UnsupportedOperationException("Not supported yet.");
-                }
-
-                public void objectSetValuesExcept(ResultData rs, ValueHandler handler, String indexName) {
                     throw new UnsupportedOperationException("Not supported yet.");
                 }
 
@@ -159,7 +176,7 @@ public class CrazyDomainTypeHandlerFactoryImpl implements DomainTypeHandlerFacto
                     throw new UnsupportedOperationException("Not supported yet.");
                 }
 
-                public ValueHandler createKeyValueHandler(Object keys) {
+                public ValueHandler createKeyValueHandler(Object keys, Db db) {
                     throw new UnsupportedOperationException("Not supported yet.");
                 }
 
@@ -196,6 +213,15 @@ public class CrazyDomainTypeHandlerFactoryImpl implements DomainTypeHandlerFacto
                 public void objectSetKeys(Object keys, Object instance) {
                     throw new UnsupportedOperationException("Not supported yet.");
                 }
+
+                public void setUnsupported(String reason) {
+                    throw new UnsupportedOperationException("Not supported yet.");
+               }
+
+                public T newInstance(ResultData resultData, Db db) {
+                    throw new UnsupportedOperationException("Not supported yet.");
+                }
+
             };
         } else {
             return null;

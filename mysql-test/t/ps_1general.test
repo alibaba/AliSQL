@@ -1,14 +1,23 @@
+
 ###################### ps_general.test #######################
 #                                                            #
 #   basic and miscellaneous tests for prepared statements    #
 #                                                            #
 ##############################################################
 
+# Result differences depending on FS case sensitivity.
+if (!$require_case_insensitive_file_system)
+{
+  --source include/have_case_sensitive_file_system.inc
+}
 #    
 # NOTE: PLEASE SEE THE DETAILED DESCRIPTION AT THE BOTTOM OF THIS FILE
 #       BEFORE ADDING NEW TEST CASES HERE !!!
-
+# one subtest needs page size > 8k
 --disable_warnings
+# Test needs myisam for a few testcases
+--source include/have_myisam.inc
+
 drop table if exists t5, t6, t7, t8;
 drop database if exists mysqltest ;
 
@@ -287,7 +296,7 @@ create table t2
 );
 
 ################ SHOW COMMANDS ################
-prepare stmt4 from ' show databases ';
+prepare stmt4 from ' show databases like ''mysql'' ';
 execute stmt4;
 prepare stmt4 from ' show tables from test like ''t2%'' ';
 execute stmt4;
@@ -297,11 +306,14 @@ execute stmt4 using @arg00;
 SET @arg00="b";
 execute stmt4 using @arg00;
 SET @arg00=1;
+--disable_warnings
 execute stmt4 using @arg00;
+--enable_warnings
 
 prepare stmt4 from ' show columns from t2 from test like ''a%'' ';
 execute stmt4;
 create index t2_idx on t2(b);
+ANALYZE TABLE t2;
 prepare stmt4 from ' show index from t2 from test ';
 execute stmt4;
 prepare stmt4 from ' show table status from test like ''t2%'' ';
@@ -310,6 +322,7 @@ prepare stmt4 from ' show table status from test like ''t2%'' ';
 # Bug#4288 : prepared statement 'show table status ..', wrong output on execute
 execute stmt4;
 # try the same with the big table
+ANALYZE TABLE t9;
 prepare stmt4 from ' show table status from test like ''t9%'' ';
 # egalize date and time values
 --replace_column 8 # 12 # 13 # 14 #
@@ -327,7 +340,9 @@ prepare stmt4 from ' show create table t2 ';
 prepare stmt4 from ' show master status ';
 prepare stmt4 from ' show master logs ';
 prepare stmt4 from ' show slave status ';
+--error ER_UNSUPPORTED_PS
 prepare stmt4 from ' show warnings limit 20 ';
+--error ER_UNSUPPORTED_PS
 prepare stmt4 from ' show errors limit 20 ';
 prepare stmt4 from ' show storage engines ';
 # The output depends upon the precise order in which
@@ -488,22 +503,16 @@ execute stmt5;
 SET sql_mode="";
 
 prepare stmt1 from ' flush local privileges ' ;
-prepare stmt1 from ' reset query cache ' ;
 prepare stmt1 from ' KILL 0 ';
 
 ## simple explain
 # cases derived from client_test.c: test_explain_bug()
 prepare stmt1 from ' explain select a from t1 order by b ';
-# PS protocol gives slightly different metadata
 --disable_ps_protocol
---enable_metadata
 execute stmt1;
---disable_metadata
 SET @arg00=1 ;
 prepare stmt1 from ' explain select a from t1 where a > ? order by b ';
---enable_metadata
 execute stmt1 using @arg00;
---disable_metadata
 --enable_ps_protocol
 
 ## parameters with probably problematic characters (quote, double  quote)
@@ -583,9 +592,7 @@ drop table t2;
 prepare stmt1 from ' rename table t5 to t6, t7 to t8 ' ;
 create table t5 (a int) ;
 # rename must fail, t7 does not exist
-# Clean up the filename here because embedded server reports whole path
---replace_result $MYSQLTEST_VARDIR . mysqld.1/data/ '' t7.frm t7
---error ER_FILE_NOT_FOUND
+--error ER_NO_SUCH_TABLE
 execute stmt1 ;
 create table t7 (a int) ;
 # rename, t5 -> t6 and t7 -> t8

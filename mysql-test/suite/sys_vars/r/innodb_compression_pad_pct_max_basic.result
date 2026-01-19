@@ -40,15 +40,30 @@ ERROR 42000: Incorrect argument type to variable 'innodb_compression_pad_pct_max
 SELECT @@global.innodb_compression_pad_pct_max;
 @@global.innodb_compression_pad_pct_max
 0
+SET @@global.innodb_compression_pad_pct_max = 1.1;
+ERROR 42000: Incorrect argument type to variable 'innodb_compression_pad_pct_max'
+SELECT @@global.innodb_compression_pad_pct_max;
+@@global.innodb_compression_pad_pct_max
+0
 SET @@global.innodb_compression_pad_pct_max = 76;
 Warnings:
 Warning	1292	Truncated incorrect innodb_compression_pad_pct_max value: '76'
 SELECT @@global.innodb_compression_pad_pct_max;
 @@global.innodb_compression_pad_pct_max
 75
+SET @@global.innodb_compression_pad_pct_max = " ";
+ERROR 42000: Incorrect argument type to variable 'innodb_compression_pad_pct_max'
+SELECT @@global.innodb_compression_pad_pct_max;
+@@global.innodb_compression_pad_pct_max
+75
+SET @@global.innodb_compression_pad_pct_max = ' ';
+ERROR 42000: Incorrect argument type to variable 'innodb_compression_pad_pct_max'
+SELECT @@global.innodb_compression_pad_pct_max;
+@@global.innodb_compression_pad_pct_max
+75
 '#----------------------FN_DYNVARS_046_05------------------------#'
 SELECT @@global.innodb_compression_pad_pct_max =
-VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+VARIABLE_VALUE FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_compression_pad_pct_max';
 @@global.innodb_compression_pad_pct_max =
 VARIABLE_VALUE
@@ -56,7 +71,7 @@ VARIABLE_VALUE
 SELECT @@global.innodb_compression_pad_pct_max;
 @@global.innodb_compression_pad_pct_max
 75
-SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+SELECT VARIABLE_VALUE FROM performance_schema.global_variables
 WHERE VARIABLE_NAME='innodb_compression_pad_pct_max';
 VARIABLE_VALUE
 75

@@ -1,0 +1,206 @@
+call mtr.add_suppression("Message of size .* received, exceeding the limit of");
+
+--echo Setup
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+USE `test`;
+SET GLOBAL Mysqlx_max_allowed_packet=1024;
+CREATE TABLE IF NOT EXISTS `first_table`(`column_name` INTEGER DEFAULT 0 NOT NULL);
+
+--write_file $MYSQL_TMP_DIR/mysqlx-input-queue.xpl
+-->sql
+USE test;
+-->endsql
+
+
+-->macro Lock_table
+-->setsession
+LOCK TABLES `first_table` WRITE;
+-->endmacro
+
+-->macro Do_nothing
+-->endmacro
+
+-->macro Unlock_table
+-->setsession
+UNLOCK TABLES;
+-->endmacro
+
+-->macro Pipline_message %SESSION% %PACKET_COMMENT_SIZE%
+-->newsession %SESSION%	x_root		test
+Mysqlx.Sql.StmtExecute {
+  stmt:"LOCK TABLES `first_table` READ;"
+  namespace: "sql"
+}
+
+-->vargen %COMMENT% c %PACKET_COMMENT_SIZE%
+
+-->varsub %COMMENT%
+
+-->echo Test sends 4 messages
+-->echo LOCK TABLE stops processing of following commands
+-->quiet
+Mysqlx.Sql.StmtExecute {
+  stmt:"SELECT 1 as `First query` /*    %COMMENT%    */;"
+  namespace: "sql"
+}
+Mysqlx.Sql.StmtExecute {
+  stmt:"SELECT 2 as `Second query`/*    %COMMENT%    */;"
+  namespace: "sql"
+}
+Mysqlx.Sql.StmtExecute {
+  stmt:"SELECT 3 as `Third query`/*    %COMMENT%    */;"
+  namespace: "sql"
+}
+Mysqlx.Sql.StmtExecute {
+  stmt:"SELECT 4 as `Fourth query`/*    %COMMENT%    */;"
+  namespace: "sql"
+}
+-->noquiet
+-->endmacro
+
+-->macro Response_for_last_pipline %SESSION%
+-->setsession %SESSION%
+
+-->recvresult
+-->recvresult
+-->recvresult
+-->recvresult
+-->recvresult
+
+-->echo Bug 21811192 (fixed)
+-->echo Lets try if plugin is processing new data
+-->stmtadmin ping
+-->recvresult
+-->closesession %SESSION%
+-->endmacro
+
+
+-->macro Send_two_messages_as_one_and_queue_in_input %SESSION% %PACKET_COMMENT_SIZE%
+-->newsession %SESSION%	x_root		test
+
+-->vargen %COMMENT% c %PACKET_COMMENT_SIZE%
+-->varsub %COMMENT%
+
+-->quiet
+-->binparse %FIRST% Mysqlx.Sql.StmtExecute {
+  stmt:"SELECT 1 as `First query`/*%PACKET_COMMENT_SIZE% %COMMENT%    */;"
+  namespace: "sql"
+}
+-->binparse %SECOND% Mysqlx.Sql.StmtExecute {
+  stmt:"SELECT 2 as `Second query`;"
+  namespace: "sql"
+}
+
+-->binsend %FIRST%%SECOND%
+-->noquiet
+
+-->echo wait for first
+-->recvresult
+-->echo wait for second
+-->recvresult
+
+
+-->echo Bug 21811192 (fixed)
+-->echo Lets try if plugin is processing new data
+-->stmtadmin ping
+-->recvresult
+-->closesession %SESSION%
+-->endmacro
+
+
+-->macro Buffer_config %I1% %I2% %I3%
+-->setsession
+-->sql
+#Buffer uses one additional page
+SET GLOBAL Mysqlx_max_allowed_packet=%I2%;
+-->endsql
+	
+-->endmacro
+
+
+
+-->echo Limits are less then page size
+-->callmacro Buffer_config	1024	1024	1024
+-->callmacro %MACRO_LOCK%
+-->callmacro Pipline_message test1	250
+-->callmacro %MACRO_UNLOCK%
+-->callmacro Response_for_last_pipline test1
+
+
+-->echo Multiple messages fill the buffer (last one uses extra page)
+-->callmacro Buffer_config	4094	4094	4094
+-->callmacro %MACRO_LOCK%
+-->callmacro Pipline_message test2	1024
+-->callmacro %MACRO_UNLOCK%
+-->callmacro Response_for_last_pipline test2
+
+-->callmacro %MACRO_LOCK%
+-->callmacro Pipline_message test3	2048
+-->callmacro %MACRO_UNLOCK%
+-->callmacro Response_for_last_pipline test3
+
+-->callmacro %MACRO_LOCK%
+-->callmacro Pipline_message test4	3048
+-->callmacro %MACRO_UNLOCK%
+-->callmacro Response_for_last_pipline test4
+
+
+-->echo Use 2 page for single message, while receiving second packet wait for first to be processed
+-->echo Extra page is used in case of not full loaded first page
+-->callmacro Buffer_config	4094	8188	4094
+-->callmacro %MACRO_LOCK%
+-->callmacro Pipline_message test5	8058
+-->callmacro %MACRO_UNLOCK%
+-->callmacro Response_for_last_pipline test5
+
+-->callmacro Buffer_config	1024	2024	100
+-->callmacro Send_two_messages_as_one_and_queue_in_input	test6	1024
+
+
+-->echo Bug 21839782 (fixed) - no data in buffer for incoming message (infinite loop)
+# Current connection shouldn't be impacted by packet change
+-->newsession invalid_1	x_root		
+-->sql
+SET GLOBAL mysqlx_max_allowed_packet=1048597;
+-->endsql
+-->quiet
+-->vargen %A% c 1048576
+
+
+-->quiet
+-->echo While sending client could receive CR_BROKEN_PIPE network which could occur
+-->echo because xplugin stopped read ops
+-->expecterror 0,2007
+Mysqlx.Sql.StmtExecute {
+        stmt: "SELECT 1; /* %A% */"
+}
+-->recvresult
+EOF
+
+
+--echo Test case
+exec $MYSQLXTEST
+  -u x_root --password=''
+  -v%MACRO_LOCK%=Do_nothing
+  -v%MACRO_UNLOCK%=Do_nothing
+  --file=$MYSQL_TMP_DIR/mysqlx-input-queue.xpl 2>&1;
+
+# X Plugin uses TCP buffer for pipelining, anyway at least
+# client must have additional implementation to support
+# pipelining correctly.
+
+# Without server-side input buffering
+#
+# following scenrio is going to fail when system has small
+# values set in `tcp_rmem` and `tcp_wmem`.
+#exec $MYSQLXTEST
+#  -u x_root --password=''
+#  -v%MACRO_LOCK%=Lock_table
+#  -v%MACRO_UNLOCK%=Unlock_table
+#  --file=$MYSQL_TMP_DIR/mysqlx-input-queue.xpl 2>&1;
+
+## Cleanup
+SET GLOBAL Mysqlx_max_allowed_packet=DEFAULT;
+DROP TABLE `first_table`;
+--source ../include/xplugin_cleanup.inc

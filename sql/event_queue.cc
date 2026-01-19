@@ -1,28 +1,60 @@
-/* Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "sql_priv.h"
-#include "unireg.h"
-#include "event_queue.h"
-#include "event_data_objects.h"
-#include "event_db_repository.h"
-#include "events.h"
-#include "sql_audit.h"
-#include "tztime.h"     // my_tz_find, my_tz_OFFSET0, struct Time_zone
-#include "log.h"        // sql_print_error
-#include "sql_class.h"  // struct THD
+#include "sql/event_queue.h"
+
+#include <stdio.h>
+#include <atomic>
+#include <memory>
+
+#include "my_compiler.h"
+#include "my_dbug.h"
+#include "my_inttypes.h"
+#include "my_loglevel.h"
+#include "my_systime.h"
+#include "mysql/components/services/log_builtins.h"
+#include "mysql/psi/mysql_cond.h"
+#include "mysql/psi/mysql_mutex.h"
+#include "mysql/psi/mysql_sp.h"
+#include "mysql_time.h"
+#include "mysqld_error.h"
+#include "sql/dd/cache/dictionary_client.h"  // Auto_releaser
+#include "sql/event_db_repository.h"         // Event_db_repository
+#include "sql/events.h"                      // Events
+#include "sql/lock.h"                        // lock_object_name
+#include "sql/log.h"                         // log_*()
+#include "sql/malloc_allocator.h"
+#include "sql/mdl.h"
+#include "sql/psi_memory_key.h"  // key_memory_Event_scheduler_scheduler_param
+#include "sql/sql_audit.h"       // mysql_audit_release
+#include "sql/sql_class.h"       // THD
+#include "sql/sql_lex.h"
+#include "sql/sql_table.h"  // write_bin_log
+#include "sql/thd_raii.h"
+#include "sql/transaction.h"  // trans_commit*, trans_rollback*
+#include "sql/tztime.h"       // my_tz_OFFSET0
+#include "sql_string.h"
+#include "thr_mutex.h"
 
 /**
   @addtogroup Event_Scheduler
@@ -30,57 +62,9 @@
 */
 
 #define EVENT_QUEUE_INITIAL_SIZE 30
-#define EVENT_QUEUE_EXTENT       30
 
-#ifdef __GNUC__
-#if __GNUC__ >= 2
-#define SCHED_FUNC __FUNCTION__
-#endif
-#else
-#define SCHED_FUNC "<unknown>"
-#endif
-
-#define LOCK_QUEUE_DATA()   lock_data(SCHED_FUNC, __LINE__)
-#define UNLOCK_QUEUE_DATA() unlock_data(SCHED_FUNC, __LINE__)
-
-/*
-  Compares the execute_at members of two Event_queue_element instances.
-  Used as callback for the prioritized queue when shifting
-  elements inside.
-
-  SYNOPSIS
-    event_queue_element_data_compare_q()
-      vptr  Not used (set it to NULL)
-      a     First Event_queue_element object
-      b     Second Event_queue_element object
-
-  RETURN VALUE
-   -1   a->execute_at < b->execute_at
-    0   a->execute_at == b->execute_at
-    1   a->execute_at > b->execute_at
-
-  NOTES
-    execute_at.second_part is not considered during comparison
-*/
-
-extern "C" int event_queue_element_compare_q(void *, uchar *, uchar *);
-
-int event_queue_element_compare_q(void *vptr, uchar* a, uchar *b)
-{
-  Event_queue_element *left = (Event_queue_element *)a;
-  Event_queue_element *right = (Event_queue_element *)b;
-  my_time_t lhs = left->execute_at;
-  my_time_t rhs = right->execute_at;
-
-  if (left->status == Event_parse_data::DISABLED)
-    return right->status != Event_parse_data::DISABLED;
-
-  if (right->status == Event_parse_data::DISABLED)
-    return 1;
-
-  return (lhs < rhs ? -1 : (lhs > rhs ? 1 : 0));
-}
-
+#define LOCK_QUEUE_DATA() lock_data(__func__, __LINE__)
+#define UNLOCK_QUEUE_DATA() unlock_data(__func__, __LINE__)
 
 /*
   Constructor of class Event_queue.
@@ -90,29 +74,28 @@ int event_queue_element_compare_q(void *vptr, uchar* a, uchar *b)
 */
 
 Event_queue::Event_queue()
-  :next_activation_at(0),
-   mutex_last_locked_at_line(0),
-   mutex_last_unlocked_at_line(0),
-   mutex_last_attempted_lock_at_line(0),
-   mutex_last_locked_in_func("n/a"),
-   mutex_last_unlocked_in_func("n/a"),
-   mutex_last_attempted_lock_in_func("n/a"),
-   mutex_queue_data_locked(FALSE),
-   mutex_queue_data_attempting_lock(FALSE),
-   waiting_on_cond(FALSE)
-{
+    : queue(Event_queue_less(),
+            Malloc_allocator<Event_queue_element *>(
+                key_memory_Event_scheduler_scheduler_param)),
+      next_activation_at(0),
+      mutex_last_locked_at_line(0),
+      mutex_last_unlocked_at_line(0),
+      mutex_last_attempted_lock_at_line(0),
+      mutex_last_locked_in_func("n/a"),
+      mutex_last_unlocked_in_func("n/a"),
+      mutex_last_attempted_lock_in_func("n/a"),
+      mutex_queue_data_locked(false),
+      mutex_queue_data_attempting_lock(false),
+      waiting_on_cond(false) {
   mysql_mutex_init(key_LOCK_event_queue, &LOCK_event_queue, MY_MUTEX_INIT_FAST);
-  mysql_cond_init(key_COND_queue_state, &COND_queue_state, NULL);
+  mysql_cond_init(key_COND_queue_state, &COND_queue_state);
 }
 
-
-Event_queue::~Event_queue()
-{
+Event_queue::~Event_queue() {
   deinit_queue();
   mysql_mutex_destroy(&LOCK_event_queue);
   mysql_cond_destroy(&COND_queue_state);
 }
-
 
 /*
   This is a queue's constructor. Until this method is called, the
@@ -126,34 +109,28 @@ Event_queue::~Event_queue()
     Event_queue::init()
 
   RETURN VALUE
-    FALSE  OK
-    TRUE   Error
+    false  OK
+    true   Error
 */
 
-bool
-Event_queue::init_queue(THD *thd)
-{
-  DBUG_ENTER("Event_queue::init_queue");
-  DBUG_PRINT("enter", ("this: 0x%lx", (long) this));
+bool Event_queue::init_queue() {
+  DBUG_TRACE;
+  DBUG_PRINT("enter", ("this: %p", this));
 
   LOCK_QUEUE_DATA();
 
-  if (init_queue_ex(&queue, EVENT_QUEUE_INITIAL_SIZE , 0 /*offset*/,
-                    0 /*max_on_top*/, event_queue_element_compare_q,
-                    NULL, EVENT_QUEUE_EXTENT))
-  {
-    sql_print_error("Event Scheduler: Can't initialize the execution queue");
+  if (queue.reserve(EVENT_QUEUE_INITIAL_SIZE)) {
+    LogErr(ERROR_LEVEL, ER_EVENT_CANT_INIT_QUEUE);
     goto err;
   }
 
   UNLOCK_QUEUE_DATA();
-  DBUG_RETURN(FALSE);
+  return false;
 
 err:
   UNLOCK_QUEUE_DATA();
-  DBUG_RETURN(TRUE);
+  return true;
 }
-
 
 /*
   Deinits the queue. Remove all elements from it and destroys them
@@ -163,66 +140,55 @@ err:
     Event_queue::deinit_queue()
 */
 
-void
-Event_queue::deinit_queue()
-{
-  DBUG_ENTER("Event_queue::deinit_queue");
+void Event_queue::deinit_queue() {
+  DBUG_TRACE;
 
   LOCK_QUEUE_DATA();
   empty_queue();
-  delete_queue(&queue);
   UNLOCK_QUEUE_DATA();
-
-  DBUG_VOID_RETURN;
 }
-
 
 /**
   Adds an event to the queue.
 
   Compute the next execution time for an event, and if it is still
-  active, add it to the queue. Otherwise delete it.
+  active, add it to the queue.
   The object is left intact in case of an error. Otherwise
   the queue container assumes ownership of it.
 
   @param[in]  thd      thread handle
   @param[in]  new_element a new element to add to the queue
-  @param[out] created  set to TRUE if no error and the element is
-                       added to the queue, FALSE otherwise
+  @param[out] created  set to true if no error and the element is
+                       added to the queue, false otherwise
 
-  @retval TRUE  an error occured. The value of created is undefined,
+  @retval true  an error occurred. The value of created is undefined,
                 the element was not deleted.
-  @retval FALSE success
+  @retval false success
 */
 
-bool
-Event_queue::create_event(THD *thd, Event_queue_element *new_element,
-                          bool *created)
-{
-  DBUG_ENTER("Event_queue::create_event");
-  DBUG_PRINT("enter", ("thd: 0x%lx et=%s.%s", (long) thd,
-             new_element->dbname.str, new_element->name.str));
+bool Event_queue::create_event(THD *thd, Event_queue_element *new_element,
+                               bool *created) {
+  DBUG_TRACE;
+  DBUG_PRINT("enter", ("thd: %p et=%s.%s", thd, new_element->m_schema_name.str,
+                       new_element->m_event_name.str));
 
   /* Will do nothing if the event is disabled */
-  new_element->compute_next_execution_time();
-  if (new_element->status != Event_parse_data::ENABLED)
-  {
-    delete new_element;
-    *created= FALSE;
-    DBUG_RETURN(FALSE);
+  new_element->compute_next_execution_time(thd);
+  if (new_element->m_status != Event_parse_data::ENABLED) {
+    *created = false;
+    return false;
   }
 
-  DBUG_PRINT("info", ("new event in the queue: 0x%lx", (long) new_element));
+  DBUG_PRINT("info", ("new event in the queue: %p", new_element));
 
   LOCK_QUEUE_DATA();
-  *created= (queue_insert_safe(&queue, (uchar *) new_element) == FALSE);
-  dbug_dump_queue(thd->query_start());
+  *created = (queue.push(new_element) == false);
+  dbug_dump_queue(thd->query_start_in_secs());
   mysql_cond_broadcast(&COND_queue_state);
   UNLOCK_QUEUE_DATA();
 
-  DBUG_RETURN(!*created);
+  return !*created;
 }
-
 
 /*
   Updates an event from the scheduler queue
@@ -236,44 +202,36 @@ Event_queue::create_event(THD *thd, Event_queue_element *new_element,
       new_name   New name, in case of RENAME TO, otherwise NULL
 */
 
-void
-Event_queue::update_event(THD *thd, LEX_STRING dbname, LEX_STRING name,
-                          Event_queue_element *new_element)
-{
-  DBUG_ENTER("Event_queue::update_event");
-  DBUG_PRINT("enter", ("thd: 0x%lx  et=[%s.%s]", (long) thd, dbname.str, name.str));
+void Event_queue::update_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name,
+                               Event_queue_element *new_element) {
+  DBUG_TRACE;
+  DBUG_PRINT("enter", ("thd: %p  et=[%s.%s]", thd, dbname.str, name.str));
 
-  if ((new_element->status == Event_parse_data::DISABLED) ||
-      (new_element->status == Event_parse_data::SLAVESIDE_DISABLED))
-  {
+  if ((new_element->m_status == Event_parse_data::DISABLED) ||
+      (new_element->m_status == Event_parse_data::SLAVESIDE_DISABLED)) {
     DBUG_PRINT("info", ("The event is disabled."));
     /*
       Destroy the object but don't skip to end: because we may have to remove
       object from the cache.
     */
     delete new_element;
-    new_element= NULL;
-  }
-  else
-    new_element->compute_next_execution_time();
+    new_element = nullptr;
+  } else
+    new_element->compute_next_execution_time(thd);
 
   LOCK_QUEUE_DATA();
   find_n_remove_event(dbname, name);
 
   /* If not disabled event */
-  if (new_element)
-  {
-    DBUG_PRINT("info", ("new event in the queue: 0x%lx", (long) new_element));
-    queue_insert_safe(&queue, (uchar *) new_element);
+  if (new_element) {
+    DBUG_PRINT("info", ("new event in the queue: %p", new_element));
+    queue.push(new_element);
     mysql_cond_broadcast(&COND_queue_state);
   }
 
-  dbug_dump_queue(thd->query_start());
+  dbug_dump_queue(thd->query_start_in_secs());
   UNLOCK_QUEUE_DATA();
-
-  DBUG_VOID_RETURN;
 }
-
 
 /*
   Drops an event from the queue
@@ -285,26 +243,20 @@ Event_queue::update_event(THD *thd, LEX_STRING dbname, LEX_STRING name,
       name    Name of the event to drop
 */
 
-void
-Event_queue::drop_event(THD *thd, LEX_STRING dbname, LEX_STRING name)
-{
-  DBUG_ENTER("Event_queue::drop_event");
-  DBUG_PRINT("enter", ("thd: 0x%lx  db :%s  name: %s", (long) thd,
-                       dbname.str, name.str));
+void Event_queue::drop_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name) {
+  DBUG_TRACE;
+  DBUG_PRINT("enter", ("thd: %p  db :%s  name: %s", thd, dbname.str, name.str));
 
   LOCK_QUEUE_DATA();
   find_n_remove_event(dbname, name);
-  dbug_dump_queue(thd->query_start());
+  dbug_dump_queue(thd->query_start_in_secs());
   UNLOCK_QUEUE_DATA();
 
   /*
     We don't signal here because the scheduler will catch the change
     next time it wakes up.
   */
-
-  DBUG_VOID_RETURN;
 }
-
 
 /*
   Drops all events from the in-memory queue and disk that match
@@ -312,7 +264,6 @@ Event_queue::drop_event(THD *thd, LEX_STRING dbname, LEX_STRING name)
 
   SYNOPSIS
     Event_queue::drop_matching_events()
-      thd            THD
       pattern        A pattern string
       comparator     The function to use for comparing
 
@@ -323,47 +274,47 @@ Event_queue::drop_event(THD *thd, LEX_STRING dbname, LEX_STRING name)
     Expected is the caller to acquire lock on LOCK_event_queue
 */
 
-void
-Event_queue::drop_matching_events(THD *thd, LEX_STRING pattern,
-                           bool (*comparator)(LEX_STRING, Event_basic *))
-{
-  uint i= 0;
-  DBUG_ENTER("Event_queue::drop_matching_events");
+void Event_queue::drop_matching_events(LEX_CSTRING pattern,
+                                       bool (*comparator)(LEX_CSTRING,
+                                                          Event_basic *)) {
+  size_t i = 0;
+  DBUG_TRACE;
   DBUG_PRINT("enter", ("pattern=%s", pattern.str));
 
-  while (i < queue.elements)
-  {
-    Event_queue_element *et= (Event_queue_element *) queue_element(&queue, i);
-    DBUG_PRINT("info", ("[%s.%s]?", et->dbname.str, et->name.str));
-    if (comparator(pattern, et))
-    {
+  while (i < queue.size()) {
+    Event_queue_element *et = queue[i];
+    DBUG_PRINT("info",
+               ("[%s.%s]?", et->m_schema_name.str, et->m_event_name.str));
+    if (comparator(pattern, et)) {
       /*
         The queue is ordered. If we remove an element, then all elements
         after it will shift one position to the left, if we imagine it as
         an array from left to the right. In this case we should not
         increment the counter and the (i < queue.elements) condition is ok.
       */
-      queue_remove(&queue, i);
+      queue.remove(i);
+#ifdef HAVE_PSI_SP_INTERFACE
+      /* Drop statistics for this stored program from performance schema. */
+      MYSQL_DROP_SP(to_uint(enum_sp_type::EVENT), et->m_schema_name.str,
+                    et->m_schema_name.length, et->m_event_name.str,
+                    et->m_event_name.length);
+#endif
       delete et;
-    }
-    else
+    } else
       i++;
   }
   /*
     We don't call mysql_cond_broadcast(&COND_queue_state);
     If we remove the top event:
     1. The queue is empty. The scheduler will wake up at some time and
-       realize that the queue is empty. If create_event() comes inbetween
+       realize that the queue is empty. If create_event() comes in between
        it will signal the scheduler
     2. The queue is not empty, but the next event after the previous top,
        won't be executed any time sooner than the element we removed. Hence,
        we may not notify the scheduler and it will realize the change when it
        wakes up from timedwait.
   */
-
-  DBUG_VOID_RETURN;
 }
-
 
 /*
   Drops all events from the in-memory queue and disk that are from
@@ -371,20 +322,15 @@ Event_queue::drop_matching_events(THD *thd, LEX_STRING pattern,
 
   SYNOPSIS
     Event_queue::drop_schema_events()
-      thd        HD
       schema    The schema name
 */
 
-void
-Event_queue::drop_schema_events(THD *thd, LEX_STRING schema)
-{
-  DBUG_ENTER("Event_queue::drop_schema_events");
+void Event_queue::drop_schema_events(LEX_CSTRING schema) {
+  DBUG_TRACE;
   LOCK_QUEUE_DATA();
-  drop_matching_events(thd, schema, event_basic_db_equal);
+  drop_matching_events(schema, event_basic_db_equal);
   UNLOCK_QUEUE_DATA();
-  DBUG_VOID_RETURN;
 }
-
 
 /*
   Searches for an event in the queue
@@ -399,28 +345,20 @@ Event_queue::drop_schema_events(THD *thd, LEX_STRING schema)
     actual signalling in case an event is removed from the queue.
 */
 
-void
-Event_queue::find_n_remove_event(LEX_STRING db, LEX_STRING name)
-{
-  uint i;
-  DBUG_ENTER("Event_queue::find_n_remove_event");
+void Event_queue::find_n_remove_event(LEX_CSTRING db, LEX_CSTRING name) {
+  DBUG_TRACE;
 
-  for (i= 0; i < queue.elements; ++i)
-  {
-    Event_queue_element *et= (Event_queue_element *) queue_element(&queue, i);
+  for (size_t i = 0; i < queue.size(); ++i) {
+    Event_queue_element *et = queue[i];
     DBUG_PRINT("info", ("[%s.%s]==[%s.%s]?", db.str, name.str,
-                        et->dbname.str, et->name.str));
-    if (event_basic_identifier_equal(db, name, et))
-    {
-      queue_remove(&queue, i);
+                        et->m_schema_name.str, et->m_event_name.str));
+    if (event_basic_identifier_equal(db, name, et)) {
+      queue.remove(i);
       delete et;
       break;
     }
   }
-
-  DBUG_VOID_RETURN;
 }
-
 
 /*
   Recalculates activation times in the queue. There is one reason for
@@ -435,19 +373,23 @@ Event_queue::find_n_remove_event(LEX_STRING db, LEX_STRING name)
       thd  Thread
 */
 
-void
-Event_queue::recalculate_activation_times(THD *thd)
-{
-  uint i;
-  DBUG_ENTER("Event_queue::recalculate_activation_times");
+void Event_queue::recalculate_activation_times(THD *thd) {
+  DBUG_TRACE;
 
   LOCK_QUEUE_DATA();
-  DBUG_PRINT("info", ("%u loaded events to be recalculated", queue.elements));
-  for (i= 0; i < queue.elements; i++)
-  {
-    ((Event_queue_element*)queue_element(&queue, i))->compute_next_execution_time();
+  DBUG_PRINT("info", ("%u loaded events to be recalculated",
+                      static_cast<unsigned>(queue.size())));
+  for (size_t i = 0; i < queue.size(); i++) {
+    queue[i]->compute_next_execution_time(thd);
   }
-  queue_fix(&queue);
+  queue.build_heap();
+
+  /*
+    Prevent InnoDB from automatically committing the InnoDB transaction after
+    updating the data-dictionary table.
+  */
+  Disable_autocommit_guard autocommit_guard(thd);
+
   /*
     The disabled elements are moved to the end during the `fix`.
     Start from the end and remove all of the elements which are
@@ -455,30 +397,70 @@ Event_queue::recalculate_activation_times(THD *thd)
     have removed all. The queue has been ordered in a way the disabled
     events are at the end.
   */
-  for (i= queue.elements; i > 0; i--)
-  {
-    Event_queue_element *element = (Event_queue_element*)queue_element(&queue, i - 1);
-    if (element->status != Event_parse_data::DISABLED)
-      break;
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  Implicit_substatement_state_guard substatement_guard(thd);
+  std::vector<std::unique_ptr<Event_queue_element>> events_to_drop;
+  for (size_t i = queue.size(); i > 0; i--) {
+    Event_queue_element *element = queue[i - 1];
+    if (element->m_status != Event_parse_data::DISABLED) break;
     /*
       This won't cause queue re-order, because we remove
       always the last element.
     */
-    queue_remove(&queue, i - 1);
-    delete element;
+    queue.remove(i - 1);
+    /*
+      Dropping the event from Data Dictionary.
+    */
+    if (element->m_dropped)
+      events_to_drop.push_back(std::unique_ptr<Event_queue_element>(element));
+    else
+      delete element;
   }
   UNLOCK_QUEUE_DATA();
 
+  for (const auto &element : events_to_drop) {
+    bool ret;
+    bool event_exists;
+
+    if (lock_object_name(thd, MDL_key::EVENT, element->m_schema_name.str,
+                         element->m_event_name.str)) {
+      continue;
+    }
+    if (!(ret = Event_db_repository::drop_event(thd, element->m_schema_name,
+                                                element->m_event_name, false,
+                                                &event_exists))) {
+      String sp_sql;
+      if ((ret = construct_drop_event_sql(thd, &sp_sql, element->m_schema_name,
+                                          element->m_event_name))) {
+        LogErr(WARNING_LEVEL, ER_FAILED_TO_CONSTRUCT_DROP_EVENT_QUERY);
+      } else {
+        // Write drop event to bin log.
+        thd->add_to_binlog_accessed_dbs(element->m_schema_name.str);
+        if ((ret = write_bin_log(thd, true, sp_sql.c_ptr_safe(),
+                                 sp_sql.length(), event_exists))) {
+          LogErr(WARNING_LEVEL, ER_FAILED_TO_BINLOG_DROP_EVENT,
+                 element->m_schema_name.str, element->m_event_name.str);
+        }
+      }
+    }
+
+    if (!ret)
+      ret = trans_commit_stmt(thd) || trans_commit(thd);
+    else {
+      trans_rollback_stmt(thd);
+      trans_rollback(thd);
+    }
+  }
+  // Release locks taken before drop_event()
+  thd->mdl_context.release_transactional_locks();
+
   /*
     XXX: The events are dropped only from memory and not from disk
-         even if `drop_list[j]->dropped` is TRUE. There will be still on the
+         even if `drop_list[j]->dropped` is true. There will be still on the
          disk till next server restart.
          Please add code here to do it.
   */
-
-  DBUG_VOID_RETURN;
 }
-
 
 /*
   Empties the queue and destroys the Event_queue_element objects in the
@@ -491,24 +473,15 @@ Event_queue::recalculate_activation_times(THD *thd)
     Should be called with LOCK_event_queue locked
 */
 
-void
-Event_queue::empty_queue()
-{
-  uint i;
-  DBUG_ENTER("Event_queue::empty_queue");
-  DBUG_PRINT("enter", ("Purging the queue. %u element(s)", queue.elements));
-  sql_print_information("Event Scheduler: Purging the queue. %u events",
-                        queue.elements);
+void Event_queue::empty_queue() {
+  DBUG_TRACE;
+  DBUG_PRINT("enter", ("Purging the queue. %u element(s)",
+                       static_cast<unsigned>(queue.size())));
+  LogErr(INFORMATION_LEVEL, ER_EVENT_PURGING_QUEUE,
+         static_cast<unsigned>(queue.size()));
   /* empty the queue */
-  for (i= 0; i < queue.elements; ++i)
-  {
-    Event_queue_element *et= (Event_queue_element *) queue_element(&queue, i);
-    delete et;
-  }
-  resize_queue(&queue, 0);
-  DBUG_VOID_RETURN;
+  queue.delete_elements();
 }
-
 
 /*
   Dumps the queue to the trace log.
@@ -518,29 +491,25 @@ Event_queue::empty_queue()
       now  Current timestamp
 */
 
-void
-Event_queue::dbug_dump_queue(time_t now)
-{
-#ifndef DBUG_OFF
-  Event_queue_element *et;
-  uint i;
-  DBUG_ENTER("Event_queue::dbug_dump_queue");
-  DBUG_PRINT("info", ("Dumping queue . Elements=%u", queue.elements));
-  for (i = 0; i < queue.elements; i++)
-  {
-    et= ((Event_queue_element*)queue_element(&queue, i));
-    DBUG_PRINT("info", ("et: 0x%lx  name: %s.%s", (long) et,
-                        et->dbname.str, et->name.str));
-    DBUG_PRINT("info", ("exec_at: %lu  starts: %lu  ends: %lu  execs_so_far: %u  "
-                        "expr: %ld  et.exec_at: %ld  now: %ld  "
-                        "(et.exec_at - now): %d  if: %d",
-                        (long) et->execute_at, (long) et->starts,
-                        (long) et->ends, et->execution_count,
-                        (long) et->expression, (long) et->execute_at,
-                        (long) now, (int) (et->execute_at - now),
-                        et->execute_at <= now));
+void Event_queue::dbug_dump_queue(time_t now [[maybe_unused]]) {
+#ifndef NDEBUG
+  DBUG_TRACE;
+  DBUG_PRINT("info", ("Dumping queue . Elements=%u",
+                      static_cast<unsigned>(queue.size())));
+  for (size_t i = 0; i < queue.size(); i++) {
+    Event_queue_element *et = queue[i];
+    DBUG_PRINT("info", ("et: %p  name: %s.%s", et, et->m_schema_name.str,
+                        et->m_event_name.str));
+    DBUG_PRINT(
+        "info",
+        ("exec_at: %lu  starts: %lu  ends: %lu  execs_so_far: %u  "
+         "expr: %ld  et.exec_at: %ld  now: %ld  "
+         "(et.exec_at - now): %d  if: %d",
+         (long)et->m_execute_at, (long)et->m_starts, (long)et->m_ends,
+         et->m_execution_count, (long)et->m_expression, (long)et->m_execute_at,
+         (long)now, (int)(et->m_execute_at - now), et->m_execute_at <= now));
   }
-  DBUG_VOID_RETURN;
+  return;
 #endif
 }
 
@@ -555,126 +524,126 @@ Event_queue::dbug_dump_queue(time_t now)
       event_name [out] The object to execute
 
   RETURN VALUE
-    FALSE  No error. event_name != NULL
-    TRUE   Serious error
+    false  No error. event_name != NULL
+    true   Serious error
 */
 
-bool
-Event_queue::get_top_for_execution_if_time(THD *thd,
-                Event_queue_element_for_exec **event_name)
-{
-  bool ret= FALSE;
-  *event_name= NULL;
-  my_time_t UNINIT_VAR(last_executed);
-  int UNINIT_VAR(status);
-  DBUG_ENTER("Event_queue::get_top_for_execution_if_time");
+bool Event_queue::get_top_for_execution_if_time(
+    THD *thd, Event_queue_element_for_exec **event_name) {
+  bool ret = false;
+  *event_name = nullptr;
+  my_time_t last_executed = 0;
+  int status = 0;
+  DBUG_TRACE;
 
   LOCK_QUEUE_DATA();
-  for (;;)
-  {
-    Event_queue_element *top= NULL;
+  for (;;) {
+    Event_queue_element *top = nullptr;
 
     /* Break loop if thd has been killed */
-    if (thd->killed)
-    {
-      DBUG_PRINT("info", ("thd->killed=%d", thd->killed));
+    if (thd->killed) {
+      DBUG_PRINT("info", ("thd->killed=%d", thd->killed.load()));
       goto end;
     }
 
-    if (!queue.elements)
-    {
+    if (queue.empty()) {
       /* There are no events in the queue */
-      next_activation_at= 0;
+      next_activation_at = 0;
 
       /* Release any held audit resources before waiting */
       mysql_audit_release(thd);
 
       /* Wait on condition until signaled. Release LOCK_queue while waiting. */
-      cond_wait(thd, NULL, & stage_waiting_on_empty_queue, SCHED_FUNC, __FILE__, __LINE__);
+      cond_wait(thd, nullptr, &stage_waiting_on_empty_queue, __func__, __FILE__,
+                __LINE__);
 
       continue;
     }
 
-    top= ((Event_queue_element*) queue_element(&queue, 0));
+    top = queue.top();
 
-    thd->set_current_time(); /* Get current time */
+    thd->set_time(); /* Get current time */
 
-    next_activation_at= top->execute_at;
-    if (next_activation_at > thd->query_start())
-    {
+    next_activation_at = top->m_execute_at;
+    if (next_activation_at > thd->query_start_in_secs()) {
       /*
         Not yet time for top event, wait on condition with
         time or until signaled. Release LOCK_queue while waiting.
       */
       struct timespec top_time;
-      set_timespec(top_time, next_activation_at - thd->query_start());
+      set_timespec(&top_time, next_activation_at - thd->query_start_in_secs());
 
       /* Release any held audit resources before waiting */
       mysql_audit_release(thd);
 
-      cond_wait(thd, &top_time, &stage_waiting_for_next_activation, SCHED_FUNC, __FILE__, __LINE__);
+      cond_wait(thd, &top_time, &stage_waiting_for_next_activation, __func__,
+                __FILE__, __LINE__);
 
       continue;
     }
-
-    if (!(*event_name= new Event_queue_element_for_exec()) ||
-        (*event_name)->init(top->dbname, top->name))
-    {
-      ret= TRUE;
+    if (!(*event_name = new Event_queue_element_for_exec()) ||
+        (*event_name)->init(top->m_schema_name, top->m_event_name)) {
+      ret = true;
       break;
     }
 
     DBUG_PRINT("info", ("Ready for execution"));
     top->mark_last_executed(thd);
-    if (top->compute_next_execution_time())
-      top->status= Event_parse_data::DISABLED;
-    DBUG_PRINT("info", ("event %s status is %d", top->name.str, top->status));
+    if (top->compute_next_execution_time(thd))
+      top->m_status = Event_parse_data::DISABLED;
+    DBUG_PRINT("info",
+               ("event %s status is %d", top->m_event_name.str, top->m_status));
 
-    top->execution_count++;
-    (*event_name)->dropped= top->dropped;
+    top->m_execution_count++;
+    (*event_name)->dropped = top->m_dropped;
     /*
       Save new values of last_executed timestamp and event status on stack
       in order to be able to update event description in system table once
       QUEUE_DATA lock is released.
     */
-    last_executed= top->last_executed;
-    status= top->status;
+    last_executed = top->m_last_executed;
+    status = top->m_status;
 
-    if (top->status == Event_parse_data::DISABLED)
-    {
+    if (top->m_status == Event_parse_data::DISABLED) {
       DBUG_PRINT("info", ("removing from the queue"));
-      sql_print_information("Event Scheduler: Last execution of %s.%s. %s",
-                            top->dbname.str, top->name.str,
-                            top->dropped? "Dropping.":"");
+      LogErr(INFORMATION_LEVEL, ER_EVENT_LAST_EXECUTION, top->m_schema_name.str,
+             top->m_event_name.str, top->m_dropped ? "Dropping." : "");
       delete top;
-      queue_remove(&queue, 0);
-    }
-    else
-      queue_replaced(&queue);
+      queue.pop();
+      /*
+       This event will get dropped from mysql.events table in
+       Event_job_data::execute() function eventually.
+       So no need add check to drop it from mysql.events table here.
+      */
+    } else
+      queue.update_top();
 
-    dbug_dump_queue(thd->query_start());
+    dbug_dump_queue(thd->query_start_in_secs());
     break;
   }
 end:
   UNLOCK_QUEUE_DATA();
 
-  DBUG_PRINT("info", ("returning %d  et_new: 0x%lx ",
-                      ret, (long) *event_name));
+  DBUG_PRINT("info", ("returning %d  et_new: %p ", ret, *event_name));
 
-  if (*event_name)
-  {
-    DBUG_PRINT("info", ("db: %s  name: %s",
-                        (*event_name)->dbname.str, (*event_name)->name.str));
+  if (*event_name) {
+    DBUG_PRINT("info", ("db: %s  name: %s", (*event_name)->dbname.str,
+                        (*event_name)->name.str));
 
-    Event_db_repository *db_repository= Events::get_db_repository();
-    (void) db_repository->update_timing_fields_for_event(thd,
-                            (*event_name)->dbname, (*event_name)->name,
-                            last_executed, (ulonglong) status);
+    // Acquire exclusive MDL lock on the event and it's parent schema.
+    if (lock_object_name(thd, MDL_key::EVENT, (*event_name)->dbname.str,
+                         (*event_name)->name.str))
+      return true;
+
+    (void)Event_db_repository::update_timing_fields_for_event(
+        thd, (*event_name)->dbname, (*event_name)->name, last_executed,
+        (ulonglong)status);
+
+    thd->mdl_context.release_transactional_locks();
   }
 
-  DBUG_RETURN(ret);
+  return ret;
 }
-
 
 /*
   Auxiliary function for locking LOCK_event_queue. Used by the
@@ -686,26 +655,21 @@ end:
       line  On which line mutex lock is requested
 */
 
-void
-Event_queue::lock_data(const char *func, uint line)
-{
-  DBUG_ENTER("Event_queue::lock_data");
+void Event_queue::lock_data(const char *func, uint line) {
+  DBUG_TRACE;
   DBUG_PRINT("enter", ("func=%s line=%u", func, line));
-  mutex_last_attempted_lock_in_func= func;
-  mutex_last_attempted_lock_at_line= line;
-  mutex_queue_data_attempting_lock= TRUE;
+  mutex_last_attempted_lock_in_func = func;
+  mutex_last_attempted_lock_at_line = line;
+  mutex_queue_data_attempting_lock = true;
   mysql_mutex_lock(&LOCK_event_queue);
-  mutex_last_attempted_lock_in_func= "";
-  mutex_last_attempted_lock_at_line= 0;
-  mutex_queue_data_attempting_lock= FALSE;
+  mutex_last_attempted_lock_in_func = "";
+  mutex_last_attempted_lock_at_line = 0;
+  mutex_queue_data_attempting_lock = false;
 
-  mutex_last_locked_in_func= func;
-  mutex_last_locked_at_line= line;
-  mutex_queue_data_locked= TRUE;
-
-  DBUG_VOID_RETURN;
+  mutex_last_locked_in_func = func;
+  mutex_last_locked_at_line = line;
+  mutex_queue_data_locked = true;
 }
-
 
 /*
   Auxiliary function for unlocking LOCK_event_queue. Used by the
@@ -717,18 +681,14 @@ Event_queue::lock_data(const char *func, uint line)
       line  On which line mutex unlock is requested
 */
 
-void
-Event_queue::unlock_data(const char *func, uint line)
-{
-  DBUG_ENTER("Event_queue::unlock_data");
+void Event_queue::unlock_data(const char *func, uint line) {
+  DBUG_TRACE;
   DBUG_PRINT("enter", ("func=%s line=%u", func, line));
-  mutex_last_unlocked_at_line= line;
-  mutex_queue_data_locked= FALSE;
-  mutex_last_unlocked_in_func= func;
+  mutex_last_unlocked_at_line = line;
+  mutex_queue_data_locked = false;
+  mutex_last_unlocked_in_func = func;
   mysql_mutex_unlock(&LOCK_event_queue);
-  DBUG_VOID_RETURN;
 }
-
 
 /*
   Wrapper for mysql_cond_wait/timedwait
@@ -742,41 +702,38 @@ Event_queue::unlock_data(const char *func, uint line)
       line    On which line cond_wait is requested
 */
 
-void
-Event_queue::cond_wait(THD *thd, struct timespec *abstime, const PSI_stage_info *stage,
-                       const char *src_func, const char *src_file, uint src_line)
-{
-  DBUG_ENTER("Event_queue::cond_wait");
-  waiting_on_cond= TRUE;
-  mutex_last_unlocked_at_line= src_line;
-  mutex_queue_data_locked= FALSE;
-  mutex_last_unlocked_in_func= src_func;
+void Event_queue::cond_wait(THD *thd, struct timespec *abstime,
+                            const PSI_stage_info *stage, const char *src_func,
+                            const char *src_file, uint src_line) {
+  DBUG_TRACE;
+  waiting_on_cond = true;
+  mutex_last_unlocked_at_line = src_line;
+  mutex_queue_data_locked = false;
+  mutex_last_unlocked_in_func = src_func;
 
-  thd->enter_cond(&COND_queue_state, &LOCK_event_queue, stage, NULL, src_func, src_file, src_line);
+  thd->enter_cond(&COND_queue_state, &LOCK_event_queue, stage, nullptr,
+                  src_func, src_file, src_line);
 
-  if (!thd->killed)
-  {
+  if (!thd->killed) {
     if (!abstime)
       mysql_cond_wait(&COND_queue_state, &LOCK_event_queue);
     else
       mysql_cond_timedwait(&COND_queue_state, &LOCK_event_queue, abstime);
   }
 
-  mutex_last_locked_in_func= src_func;
-  mutex_last_locked_at_line= src_line;
-  mutex_queue_data_locked= TRUE;
-  waiting_on_cond= FALSE;
+  mutex_last_locked_in_func = src_func;
+  mutex_last_locked_at_line = src_line;
+  mutex_queue_data_locked = true;
+  waiting_on_cond = false;
 
   /*
-    This will free the lock so we need to relock. Not the best thing to
-    do but we need to obey cond_wait()
+    Need to unlock before exit_cond, so we need to relock.
+    Not the best thing to do but we need to obey cond_wait()
   */
-  thd->exit_cond(NULL, src_func, src_file, src_line);
+  unlock_data(src_func, src_line);
+  thd->exit_cond(nullptr, src_func, src_file, src_line);
   lock_data(src_func, src_line);
-
-  DBUG_VOID_RETURN;
 }
-
 
 /*
   Dumps the internal status of the queue
@@ -785,35 +742,33 @@ Event_queue::cond_wait(THD *thd, struct timespec *abstime, const PSI_stage_info 
     Event_queue::dump_internal_status()
 */
 
-void
-Event_queue::dump_internal_status()
-{
-  DBUG_ENTER("Event_queue::dump_internal_status");
+void Event_queue::dump_internal_status() {
+  DBUG_TRACE;
 
   /* element count */
   puts("");
   puts("Event queue status:");
-  printf("Element count   : %u\n", queue.elements);
-  printf("Data locked     : %s\n", mutex_queue_data_locked? "YES":"NO");
-  printf("Attempting lock : %s\n", mutex_queue_data_attempting_lock? "YES":"NO");
+  printf("Element count   : %u\n", static_cast<unsigned>(queue.size()));
+  printf("Data locked     : %s\n", mutex_queue_data_locked ? "YES" : "NO");
+  printf("Attempting lock : %s\n",
+         mutex_queue_data_attempting_lock ? "YES" : "NO");
   printf("LLA             : %s:%u\n", mutex_last_locked_in_func,
-                                        mutex_last_locked_at_line);
+         mutex_last_locked_at_line);
   printf("LUA             : %s:%u\n", mutex_last_unlocked_in_func,
-                                        mutex_last_unlocked_at_line);
+         mutex_last_unlocked_at_line);
   if (mutex_last_attempted_lock_at_line)
-    printf("Last lock attempt at: %s:%u\n", mutex_last_attempted_lock_in_func,
-                                            mutex_last_attempted_lock_at_line);
-  printf("WOC             : %s\n", waiting_on_cond? "YES":"NO");
+    printf("Last lock attempt at: %s:%u\n",
+           mutex_last_attempted_lock_in_func.load(),
+           mutex_last_attempted_lock_at_line.load());
+  printf("WOC             : %s\n", waiting_on_cond ? "YES" : "NO");
 
   MYSQL_TIME time;
   my_tz_OFFSET0->gmt_sec_to_TIME(&time, next_activation_at);
   if (time.year != 1970)
-    printf("Next activation : %04d-%02d-%02d %02d:%02d:%02d\n",
-           time.year, time.month, time.day, time.hour, time.minute, time.second);
+    printf("Next activation : %04d-%02d-%02d %02d:%02d:%02d\n", time.year,
+           time.month, time.day, time.hour, time.minute, time.second);
   else
     printf("Next activation : never");
-
-  DBUG_VOID_RETURN;
 }
 
 /**

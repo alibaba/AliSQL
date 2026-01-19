@@ -3,10 +3,9 @@
 #       base table used within the view shows up whereas
 #       the view itself never shows up.
 
---source include/not_embedded.inc
---source include/have_perfschema.inc
+--source include/have_myisam.inc
+--source include/force_myisam_default.inc
 --source ../include/table_io_setup_helper.inc
---source include/have_QC_Disabled.inc
 
 let $engine_type= MyISAM;
 let $table_item= test.v1;
@@ -37,4 +36,3 @@ drop table test.no_index_tab;
 
 # Cleanup
 --source ../include/table_io_cleanup_helper.inc
-

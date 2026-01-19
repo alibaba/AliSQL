@@ -1,14 +1,22 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +26,8 @@
 #ifndef WAIT_GCP_HPP
 #define WAIT_GCP_HPP
 
+#define JAM_FILE_ID 49
+
 /**
  * This signal is sent by anyone to local DIH
  *
@@ -26,12 +36,11 @@
  *
  */
 class WaitGCPReq {
-  
   /**
    * Sender(s) / Reciver(s)
    */
   friend class Dbdih;
-  
+
   /**
    * Sender
    */
@@ -40,18 +49,20 @@ class WaitGCPReq {
   friend class Backup;
   friend class Trix;
 
-public:
-  STATIC_CONST( SignalLength = 3 );
-public:
+ public:
+  static constexpr Uint32 SignalLength = 3;
+
+ public:
   enum RequestType {
-    Complete = 1,           ///< Wait for a GCP to complete
-    CompleteForceStart = 2, ///< Wait for a GCP to complete start one if needed
-    CompleteIfRunning = 3,  ///< Wait for ongoing GCP
-    CurrentGCI        = 8,  ///< Immediately return current GCI
-    BlockStartGcp     = 9,
-    UnblockStartGcp   = 10,
-    WaitEpoch         = 11, // If GCP is blocked, wait for epoch to not start
-    RestartGCI        = 12  // Return restart GCI
+    Complete = 1,            ///< Wait for a GCP to complete
+    CompleteForceStart = 2,  ///< Wait for a GCP to complete start one if needed
+    CompleteIfRunning = 3,   ///< Wait for ongoing GCP
+    CurrentGCI = 8,          ///< Immediately return current GCI
+    BlockStartGcp = 9,
+    UnblockStartGcp = 10,
+    WaitEpoch = 11,    // If GCP is blocked, wait for epoch to not start
+    RestartGCI = 12,   // Return restart GCI
+    ShutdownSync = 13  // System-wide shutdown synchronisation
   };
 
   Uint32 senderRef;
@@ -60,12 +71,11 @@ public:
 };
 
 class WaitGCPConf {
-
   /**
    * Sender(s) / Reciver(s)
    */
   friend class Dbdih;
-  
+
   /**
    * Reciver(s)
    */
@@ -74,10 +84,10 @@ class WaitGCPConf {
   friend class Backup;
   friend class Trix;
 
-public:
-  STATIC_CONST( SignalLength = 4 );
-  
-public:
+ public:
+  static constexpr Uint32 SignalLength = 4;
+
+ public:
   Uint32 senderData;
   Uint32 gci_hi;
   Uint32 blockStatus;
@@ -85,12 +95,11 @@ public:
 };
 
 class WaitGCPRef {
-  
   /**
    * Sender(s) / Reciver(s)
    */
   friend class Dbdih;
-  
+
   /**
    * Reciver(s)
    */
@@ -100,8 +109,8 @@ class WaitGCPRef {
   friend class Trix;
   friend class NdbDictInterface;
 
-public:
-  STATIC_CONST( SignalLength = 2 );
+ public:
+  static constexpr Uint32 SignalLength = 2;
 
   enum ErrorCode {
     StopOK = 0,
@@ -109,10 +118,12 @@ public:
     NoWaitGCPRecords = 2,
     NF_MasterTakeOverInProgress = 3
   };
-  
-private:
+
+ private:
   Uint32 errorCode;
   Uint32 senderData;
 };
+
+#undef JAM_FILE_ID
 
 #endif

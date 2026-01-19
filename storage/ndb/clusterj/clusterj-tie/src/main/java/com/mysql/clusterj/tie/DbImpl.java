@@ -1,14 +1,22 @@
 /*
- *  Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ *  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
+ *  it under the terms of the GNU General Public License, version 2.0,
+ *  as published by the Free Software Foundation.
+ *
+ *  This program is designed to work with certain software (including
+ *  but not limited to OpenSSL) that is licensed under separate terms,
+ *  as designated in a particular file or component or in included license
+ *  documentation.  The authors of MySQL hereby grant you an additional
+ *  permission to link the program and your derivative works with the
+ *  separately licensed software that they have either included with
+ *  the program or referenced in the documentation.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  GNU General Public License, version 2.0, for more details.
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
@@ -26,14 +34,20 @@ import com.mysql.ndbjtie.ndbapi.Ndb.Key_part_ptr;
 import com.mysql.ndbjtie.ndbapi.Ndb.Key_part_ptrArray;
 
 import com.mysql.ndbjtie.ndbapi.NdbErrorConst;
+import com.mysql.ndbjtie.ndbapi.NdbInterpretedCode;
+import com.mysql.ndbjtie.ndbapi.NdbScanFilter;
 import com.mysql.ndbjtie.ndbapi.NdbTransaction;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.Dictionary;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.TableConst;
+import com.mysql.ndbjtie.ndbapi.NdbDictionary;
+import com.mysql.ndbjtie.ndbapi.NdbIndexScanOperation.IndexBound;
+import com.mysql.ndbjtie.ndbapi.NdbScanOperation.ScanOptions;
 
 import com.mysql.clusterj.ClusterJDatastoreException;
 import com.mysql.clusterj.ClusterJFatalInternalException;
-import com.mysql.clusterj.core.store.ClusterConnection;
+import com.mysql.clusterj.ClusterJUserException;
 import com.mysql.clusterj.core.store.ClusterTransaction;
+import com.mysql.clusterj.core.store.Table;
 
 import com.mysql.clusterj.core.util.I18NHelper;
 import com.mysql.clusterj.core.util.Logger;
@@ -49,31 +63,19 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
 
     /** My logger */
     static final Logger logger = LoggerFactoryService.getFactory()
-            .getInstance(com.mysql.clusterj.core.store.ClusterConnection.class);
+            .getInstance(DbImpl.class);
 
     /** The Ndb instance that this instance is wrapping */
     private Ndb ndb;
 
-    // TODO change the allocation to a constant in ndbjtie
-    private int errorBufferSize = 300;
-
     /** The ndb error detail buffer */
-    private ByteBuffer errorBuffer = ByteBuffer.allocateDirect(errorBufferSize);
+    private ByteBuffer errorBuffer;
 
-    // TODO change the allocation to a constant in ndbjtie
-    /** The size of the coordinated transaction identifier buffer */
-    private int coordinatedTransactionIdBufferSize = 26;
-
-    /** The coordinated transaction identifier buffer */
-    private ByteBuffer coordinatedTransactionIdBuffer =
-            ByteBuffer.allocateDirect(coordinatedTransactionIdBufferSize);
-
-    // TODO change the allocation to something reasonable
     /** The partition key scratch buffer */
-    private ByteBuffer partitionKeyScratchBuffer = ByteBuffer.allocateDirect(10000);
+    private ByteBuffer partitionKeyScratchBuffer;
 
     /** The BufferManager for this instance, used for all operations for the session */
-    private BufferManager bufferManager = new BufferManager();
+    private BufferManager bufferManager;
 
     /** The NdbDictionary for this Ndb */
     private Dictionary ndbDictionary;
@@ -82,20 +84,101 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
     private DictionaryImpl dictionary;
 
     /** The ClusterConnection */
-    private ClusterConnection clusterConnection;
+    private ClusterConnectionImpl clusterConnection;
 
-    public DbImpl(ClusterConnection clusterConnection, Ndb ndb, int maxTransactions) {
+    /** This db is closing */
+    private boolean closing = false;
+
+    /** The ClusterTransaction */
+    private ClusterTransaction clusterTransaction;
+
+    /** The number of IndexBound created */
+    private int numberOfIndexBoundCreated;
+
+    /** The number of IndexBound deleted */
+    private int numberOfIndexBoundDeleted;
+
+    /** The number of InterpretedCode created */
+    private int numberOfNdbInterpretedCodeCreated;
+
+    /** The number of InterpretedCode deleted */
+    private int numberOfNdbInterpretedCodeDeleted;
+
+    /** The number of NdbScanFilters created */
+    private int numberOfNdbScanFilterCreated;
+
+    /** The number of NdbScanFilters deleted */
+    private int numberOfNdbScanFilterDeleted;
+
+    /** The number of ScanOptions created */
+    private int numberOfScanOptionsCreated;
+
+    /** The number of ScanOptions deleted */
+    private int numberOfScanOptionsDeleted;
+
+    /** The autoincrement batch size */
+    private int autoIncrementBatchSize;
+
+    /** The autoincrement step */
+    private long autoIncrementStep;
+
+    /** The autoincrement start */
+    private long autoIncrementStart;
+
+    public DbImpl(ClusterConnectionImpl clusterConnection, Ndb ndb, int maxTransactions) {
         this.clusterConnection = clusterConnection;
         this.ndb = ndb;
+        this.errorBuffer =
+                this.clusterConnection.byteBufferPoolForDBImplError.borrowBuffer();
+        this.partitionKeyScratchBuffer =
+                this.clusterConnection.byteBufferPoolForPartitionKey.borrowBuffer();
+        this.bufferManager = new BufferManager(this.clusterConnection.byteBufferPool);
         int returnCode = ndb.init(maxTransactions);
         handleError(returnCode, ndb);
         ndbDictionary = ndb.getDictionary();
         handleError(ndbDictionary, ndb);
-        this.dictionary = new DictionaryImpl(ndbDictionary);
+        this.dictionary = new DictionaryImpl(ndbDictionary, clusterConnection);
+    }
+
+    public void assertNotClosed(String where) {
+        if (closing || ndb == null) {
+            throw new ClusterJUserException(local.message("ERR_Db_Is_Closing", where));
+        }
+    }
+
+    protected void closing() {
+        closing = true;
     }
 
     public void close() {
-        Ndb.delete(ndb);
+        // check the counts of interface objects created versus deleted
+        if (numberOfIndexBoundCreated != numberOfIndexBoundDeleted) {
+            logger.warn("numberOfIndexBoundCreated " + numberOfIndexBoundCreated + 
+                    " != numberOfIndexBoundDeleted " + numberOfIndexBoundDeleted);
+        }
+        if (numberOfNdbInterpretedCodeCreated != numberOfNdbInterpretedCodeDeleted) {
+            logger.warn("numberOfNdbInterpretedCodeCreated " + numberOfNdbInterpretedCodeCreated +
+                    " != numberOfNdbInterpretedCodeDeleted " + numberOfNdbInterpretedCodeDeleted);
+        }
+        if (numberOfNdbScanFilterCreated != numberOfNdbScanFilterDeleted) {
+            logger.warn("numberOfNdbScanFilterCreated " + numberOfNdbScanFilterCreated + 
+                    " != numberOfNdbScanFilterDeleted " + numberOfNdbScanFilterDeleted);
+        }
+        if (numberOfScanOptionsCreated != numberOfScanOptionsDeleted) {
+            logger.warn("numberOfScanOptionsCreated " + numberOfScanOptionsCreated + 
+                    " != numberOfScanOptionsDeleted " + numberOfScanOptionsDeleted);
+        }
+        if (clusterTransaction != null) {
+            clusterTransaction.close();
+            clusterTransaction = null;
+        }
+        if (ndb != null) {
+            Ndb.delete(ndb);
+            ndb = null;
+        }
+        this.clusterConnection.byteBufferPoolForDBImplError.returnBuffer(this.errorBuffer);
+        this.clusterConnection.byteBufferPoolForPartitionKey.returnBuffer(this.partitionKeyScratchBuffer);
+        this.bufferManager.release();
         clusterConnection.close(this);
     }
 
@@ -103,8 +186,14 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
         return dictionary;
     }
 
-    public ClusterTransaction startTransaction(String joinTransactionId) {
-        return new ClusterTransactionImpl(this, ndbDictionary, joinTransactionId);
+    public Dictionary getNdbDictionary() {
+        return ndbDictionary;
+    }
+
+    public ClusterTransaction startTransaction() {
+        assertNotClosed("DbImpl.startTransaction()");
+        clusterTransaction = new ClusterTransactionImpl(clusterConnection, this, ndbDictionary);
+        return clusterTransaction;
     }
 
     protected void handleError(int returnCode, Ndb ndb) {
@@ -127,6 +216,16 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
         }
     }
 
+    protected void handleError(Object object, Dictionary ndbDictionary) {
+        if (object != null) {
+            return;
+        } else {
+            NdbErrorConst ndbError = ndbDictionary.getNdbError();
+            String detail = getNdbErrorDetail(ndbError);
+            Utility.throwError(null, ndbError, detail);
+        }
+    }
+
     public boolean isRetriable(ClusterJDatastoreException ex) {
         return Utility.isRetriable(ex);
     }
@@ -138,7 +237,7 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
     /** Enlist an NdbTransaction using table and key data to specify 
      * the transaction coordinator.
      * 
-     * @param table the table
+     * @param tableName the name of the table
      * @param keyParts the list of partition key parts
      * @return the ndbTransaction
      */
@@ -151,20 +250,8 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
         int keyPartsSize = keyParts.size();
         NdbTransaction ndbTransaction = null;
         TableConst table = ndbDictionary.getTable(tableName);
-        handleError(table, ndb);
+        handleError(table, ndbDictionary);
         Key_part_ptrArray key_part_ptrArray = null;
-        if (keyPartsSize == 1) {
-            // extract the ByteBuffer and length from the keyPart
-            ByteBuffer buffer = keyParts.get(0).buffer;
-            int length = keyParts.get(0).length;
-            ndbTransaction = ndb.startTransaction(table, buffer, length);
-            if (ndbTransaction == null) {
-                logger.warn(local.message("ERR_Transaction_Start_Failed",
-                        tableName, buffer.position(), buffer.limit(), buffer.capacity(), length));
-            }
-            handleError (ndbTransaction, ndb);
-            return ndbTransaction;
-        }
         key_part_ptrArray = Key_part_ptrArray.create(keyPartsSize + 1);
         try {
             // the key part pointer array has one entry for each key part
@@ -188,6 +275,11 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
         } finally {
             // even if error, delete the key part array to avoid memory leaks
             Key_part_ptrArray.delete(key_part_ptrArray);
+            // return the borrowed buffers for the partition key
+            for (int i = 0; i < keyPartsSize; ++i) {
+                KeyPart keyPart = keyParts.get(i);
+                bufferManager.returnPartitionKeyPartBuffer(keyPart.buffer);
+            }
         }
     }
 
@@ -195,8 +287,8 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
      * the transaction coordinator. This method is also used if
      * the key data is null.
      * 
-     * @param table the table
-     * @param keyParts the list of partition key parts
+     * @param tableName the name of the table
+     * @param partitionId the partition id
      * @return the ndbTransaction
      */
     public NdbTransaction enlist(String tableName, int partitionId) {
@@ -209,32 +301,6 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
         }
         handleError (result, ndb);
         return result;
-    }
-
-    /** Return the coordinated transaction id buffer. 
-     * The buffer is allocated here because there is only one buffer 
-     * ever needed and it is only needed in one place, after the
-     * transaction is enlisted.
-     * @return the coordinated transaction id buffer
-     */
-    public ByteBuffer getCoordinatedTransactionIdBuffer() {
-        return coordinatedTransactionIdBuffer;
-    }
-
-    /** Join a transaction already in progress. The transaction might be
-     * on the same or a different node from this node. The usual case is
-     * for the transaction to be joined is on a different node.
-     * @param coordinatedTransactionId
-     * (from ClusterTransaction.getCoordinatedTransactionId())
-     * @return a transaction joined to the existing transaction
-     */
-    public NdbTransaction joinTransaction(String coordinatedTransactionId) {
-        if (logger.isDetailEnabled()) logger.detail("CoordinatedTransactionId: "
-                + coordinatedTransactionId);
-//        NdbTransaction result = ndb.joinTransaction(coordinatedTransactionId);
-//        handleError(result, ndb);
-//        return result;
-        throw new ClusterJFatalInternalException("Not Implemented");
     }
 
     /** Get the buffer manager for this DbImpl. All operations that need byte buffers
@@ -260,14 +326,36 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
         /** String storage buffer initial size (used for non-primitive output data) */
         public static final int STRING_STORAGE_BUFFER_INITIAL_SIZE = 500;
 
-        /** Shared buffer for string output operations */
-        private ByteBuffer stringStorageBuffer = ByteBuffer.allocateDirect(STRING_STORAGE_BUFFER_INITIAL_SIZE);
+        /** String storage buffer current size */
+        private int stringStorageBufferCurrentSize = STRING_STORAGE_BUFFER_INITIAL_SIZE;
 
-        /** Result data buffer initial size */
-        private static final int RESULT_DATA_BUFFER_INITIAL_SIZE = 8000;
+        /** Shared buffer for string output operations */
+        private ByteBuffer stringStorageBuffer;
+
+        /** Result data buffer initial size; only needed for non-NdbRecord operations */
+        private int resultDataBufferCurrentSize = 0;
 
         /** Buffer to hold result data */
-        private ByteBuffer resultDataBuffer = ByteBuffer.allocateDirect(RESULT_DATA_BUFFER_INITIAL_SIZE);
+        private ByteBuffer resultDataBuffer;
+
+        /** Buffer pool */
+        private VariableByteBufferPoolImpl pool;
+
+        protected BufferManager(VariableByteBufferPoolImpl pool) {
+            this.pool = pool;
+            this.stringStorageBuffer = pool.borrowBuffer(STRING_STORAGE_BUFFER_INITIAL_SIZE);
+            this.stringByteBuffer = pool.borrowBuffer(STRING_BYTE_BUFFER_INITIAL_SIZE);
+            this.stringCharBuffer = stringByteBuffer.asCharBuffer();
+        }
+
+        /** Release resources for this buffer manager. */
+        protected void release() {
+            if (this.resultDataBuffer != null) {
+                pool.returnBuffer(this.resultDataBuffer);
+            }
+            pool.returnBuffer(stringStorageBuffer);
+            pool.returnBuffer(stringByteBuffer);
+        }
 
         /** Guarantee the size of the string storage buffer to be a minimum size. If the current
          * string storage buffer is not big enough, allocate a bigger one. The current buffer
@@ -275,13 +363,15 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
          * @param size the minimum size required
          */
         public void guaranteeStringStorageBufferSize(int sizeNeeded) {
-            if (sizeNeeded > stringStorageBuffer.capacity()) {
+            if (sizeNeeded > stringStorageBufferCurrentSize) {
                 if (logger.isDebugEnabled()) logger.debug(local.message("MSG_Reallocated_Byte_Buffer",
-                        "string storage", stringStorageBuffer.capacity(), sizeNeeded));
-                // the existing shared buffer will be garbage collected
-                stringStorageBuffer = ByteBuffer.allocateDirect(sizeNeeded);
+                        "string storage", stringStorageBufferCurrentSize, sizeNeeded));
+                // return the existing shared buffer to the pool
+                pool.returnBuffer(stringStorageBuffer);
+                stringStorageBuffer = pool.borrowBuffer(sizeNeeded);
+                stringStorageBufferCurrentSize = sizeNeeded;
             }
-            stringStorageBuffer.limit(stringStorageBuffer.capacity());
+            stringStorageBuffer.limit(stringStorageBufferCurrentSize);
         }
 
         /** Copy the contents of the parameter String into a reused string buffer.
@@ -319,24 +409,34 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
             return stringByteBuffer;
         }
 
+        /** Borrow a buffer */
+        public ByteBuffer borrowBuffer(int length) {
+            return pool.borrowBuffer(length);
+         }
+
+        /** Return a buffer */
+        public void returnBuffer(ByteBuffer buffer) {
+            pool.returnBuffer(buffer);
+        }
+
         /** Guarantee the size of the string byte buffer to be a minimum size. If the current
-         * string byte buffer is not big enough, allocate a bigger one. The current buffer
-         * will be garbage collected.
+         * string byte buffer is not big enough, return the current buffer to the pool and get 
+         * another buffer.
          * @param size the minimum size required
          */
         protected void guaranteeStringByteBufferSize(int sizeNeeded) {
             if (sizeNeeded > stringByteBufferCurrentSize) {
+                pool.returnBuffer(stringByteBuffer);
                 stringByteBufferCurrentSize = sizeNeeded;
-                stringByteBuffer = ByteBuffer.allocateDirect(stringByteBufferCurrentSize);
+                stringByteBuffer = pool.borrowBuffer(sizeNeeded);
                 stringCharBuffer = stringByteBuffer.asCharBuffer();
             }
-            if (stringByteBuffer == null) {
-                stringByteBuffer = ByteBuffer.allocateDirect(stringByteBufferCurrentSize);
-                stringCharBuffer = stringByteBuffer.asCharBuffer();
-            } else {
-                stringByteBuffer.clear();
-                stringCharBuffer.clear();
-            }
+            // reset the buffers to the proper position and limit
+            stringByteBuffer.limit(stringByteBufferCurrentSize);
+            stringByteBuffer.position(0);
+            // characters in java are always two bytes (UCS-16)
+            stringCharBuffer.limit(stringByteBufferCurrentSize / 2);
+            stringCharBuffer.position(0);
         }
 
         /** Get the string char buffer. This buffer is paired with the string byte buffer.
@@ -353,16 +453,182 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
          * @return the result data buffer
          */
         public ByteBuffer getResultDataBuffer(int sizeNeeded) {
-            if (sizeNeeded > resultDataBuffer.capacity()) {
+            if (sizeNeeded > resultDataBufferCurrentSize) {
                 if (logger.isDebugEnabled()) logger.debug(local.message("MSG_Reallocated_Byte_Buffer",
-                        "result data", resultDataBuffer.capacity(), sizeNeeded));
-                // the existing result data buffer will be garbage collected
-                resultDataBuffer = ByteBuffer.allocateDirect(sizeNeeded);
+                        "result data", resultDataBufferCurrentSize, sizeNeeded));
+                // return the existing result data buffer to the pool
+                if (resultDataBuffer != null) {
+                    pool.returnBuffer(resultDataBuffer);
+                }
+                resultDataBuffer = pool.borrowBuffer(sizeNeeded);
+                resultDataBufferCurrentSize = sizeNeeded;
             }
-            resultDataBuffer.clear();
+            resultDataBuffer.limit(resultDataBufferCurrentSize);
+            resultDataBuffer.position(0);
             return resultDataBuffer;
         }
 
+        /** Borrow a buffer for a partition key part */
+        public ByteBuffer borrowPartitionKeyPartBuffer(int length) {
+            return pool.borrowBuffer(length);
+        }
+
+        /** Return a buffer used for a partition key part */
+        public void returnPartitionKeyPartBuffer(ByteBuffer buffer) {
+            pool.returnBuffer(buffer);
+        }
+    }
+
+    public NdbRecordOperationImpl newNdbRecordOperationImpl(Table storeTable) {
+        return clusterConnection.newNdbRecordOperationImpl(this, storeTable);
+    }
+
+    public IndexBound createIndexBound() {
+        IndexBound result = null;
+        int attempts = 0;
+        Object syncObject = null;
+        if (syncObject != null) {
+            attempts++;
+            synchronized(syncObject) {
+                result = IndexBound.create();
+            }
+        } else {
+            while (result == null && attempts++ < 10) {
+                result = IndexBound.create();
+            }
+        }
+        if (result == null) {
+            throw new ClusterJFatalInternalException(local.message(
+                    "ERR_Constructor", "IndexBound", "failed", attempts));
+        }
+        if (attempts != 1) {
+            logger.warn(local.message(
+                    "ERR_Constructor", "IndexBound", "succeeded", attempts));
+        }
+        ++numberOfIndexBoundCreated;
+        return result;
+    }
+
+    public void delete(IndexBound ndbIndexBound) {
+        ++numberOfIndexBoundDeleted;
+        IndexBound.delete(ndbIndexBound);
+    }
+
+    public NdbInterpretedCode createInterpretedCode(TableConst ndbTable, int i) {
+        NdbInterpretedCode result = null;
+        int attempts = 0;
+        Object syncObject = null;
+        if (syncObject != null) {
+            attempts++;
+            synchronized(syncObject) {
+                result = NdbInterpretedCode.create(ndbTable, null, i);
+            }
+        } else {
+            while (result == null && attempts++ < 10) {
+                result = NdbInterpretedCode.create(ndbTable, null, i);
+            }
+        }
+        if (result == null) {
+            throw new ClusterJFatalInternalException(local.message(
+                    "ERR_NdbInterpretedCode_Constructor", "failed", attempts));
+        }
+        if (attempts != 1) {
+            logger.warn(local.message(
+                    "ERR_Constructor", "NdbInterpretedCode", "succeeded", attempts));
+        }
+        ++numberOfNdbInterpretedCodeCreated;
+        return result;
+    }
+
+    public void delete(NdbInterpretedCode ndbInterpretedCode) {
+        ++numberOfNdbInterpretedCodeDeleted;
+        NdbInterpretedCode.delete(ndbInterpretedCode);
+    }
+
+    public NdbScanFilter createScanFilter(NdbInterpretedCode ndbInterpretedCode) {
+        NdbScanFilter result = null;
+        int attempts = 0;
+        Object syncObject = null;
+        if (syncObject != null) {
+            attempts++;
+            synchronized(syncObject) {
+                result = NdbScanFilter.create(ndbInterpretedCode);
+            }
+        } else {
+            while (result == null && attempts++ < 10) {
+                result = NdbScanFilter.create(ndbInterpretedCode);
+            }
+        }
+        if (result == null) {
+            throw new ClusterJFatalInternalException(local.message(
+                    "ERR_Constructor", "NdbScanFilter", "failed", attempts));
+        }
+        if (attempts != 1) {
+            logger.warn(local.message(
+                    "ERR_Constructor", "NdbScanFilter", "succeeded", attempts));
+        }
+        ++numberOfNdbScanFilterCreated;
+        return result;
+    }
+
+    public void delete(NdbScanFilter ndbScanFilter) {
+        ++numberOfNdbScanFilterDeleted;
+        NdbScanFilter.delete(ndbScanFilter);
+    }
+
+    public ScanOptions createScanOptions() {
+        ScanOptions result = null;
+        int attempts = 0;
+        Object syncObject = null;
+        if (syncObject != null) {
+            attempts++;
+            synchronized(syncObject) {
+                result = ScanOptions.create();
+            }
+        } else {
+            while (result == null && attempts++ < 10) {
+                result = ScanOptions.create();
+            }
+        }
+        if (result == null) {
+            throw new ClusterJFatalInternalException(local.message(
+                    "ERR_Constructor", "ScanOptions", "failed", attempts));
+        }
+        if (attempts != 1) {
+            logger.warn(local.message(
+                    "ERR_Constructor", "ScanOptions", "succeeded", attempts));
+        }
+        ++numberOfScanOptionsCreated;
+        return result;
+    }
+
+    public void delete(ScanOptions scanOptions) {
+        ++numberOfScanOptionsDeleted;
+        ScanOptions.delete(scanOptions);
+    }
+
+    /** Get the autoincrement value for the table. This method is called from NdbRecordOperationImpl.insert
+     * to get the next autoincrement value.
+     */
+    public long getAutoincrementValue(Table table) {
+        long autoIncrementValue;
+        // get a new autoincrement value
+        long[] ret = new long[] {0L, autoIncrementBatchSize, autoIncrementStep, autoIncrementStart};
+        int returnCode = ndb.getAutoIncrementValue(((TableImpl)table).ndbTable, ret,
+                autoIncrementBatchSize, autoIncrementStep, autoIncrementStart);
+        handleError(returnCode, ndb);
+        autoIncrementValue = ret[0];
+        if (logger.isDetailEnabled()) {
+            logger.detail("getAutoIncrementValue(...batchSize: " + autoIncrementBatchSize +
+                " step: " + autoIncrementStep + " start: " + autoIncrementStart + ") returned " + autoIncrementValue);
+        }
+        return autoIncrementValue;
+    }
+
+    public void initializeAutoIncrement(long[] autoIncrement) {
+        this.autoIncrementBatchSize = (int)autoIncrement[0];
+        this.autoIncrementStep = autoIncrement[1];
+        this.autoIncrementStart = autoIncrement[2];
     }
 
 }

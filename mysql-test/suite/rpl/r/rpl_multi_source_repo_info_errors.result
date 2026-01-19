@@ -1,0 +1,69 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+CALL mtr.add_suppression("Got fatal error .* from source .* replica with the same server_uuid/server_id");
+CALL mtr.add_suppression("Error during --relay-log-recovery.*");
+CALL mtr.add_suppression("Server was not able to find a rotate event from source server.*");
+include/stop_slave.inc
+RESET SLAVE ALL;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PORT=MASTER_MYPORT FOR CHANNEL 'ch1';
+#
+# RESTART SLAVE SERVER
+#
+include/rpl_restart_server.inc [server_number=2 parameters: --relay-log-recovery --skip-replica-start --replica-parallel-workers=4 --relay-log-purge=0]
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PORT=MASTER_MYPORT FOR CHANNEL 'ch1';
+include/start_slave.inc
+include/stop_slave.inc
+RESET SLAVE ALL FOR CHANNEL 'ch1';
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PORT=MASTER_MYPORT FOR CHANNEL 'ch1';
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PORT=MASTER_MYPORT FOR CHANNEL '';
+START SLAVE;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
+include/stop_slave.inc
+RESET SLAVE ALL;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
+SET @@global.replica_parallel_workers=SAVE_PARALLEL_WORKERS;
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_USER='root', SOURCE_PORT=MASTER_MYPORT;
+include/start_slave.inc
+include/rpl_restart_server.inc [server_number=2]
+[connection master]
+[connection slave]
+call mtr.add_suppression("Replica: Failed to initialize the connection metadata structure for channel");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped");
+call mtr.add_suppression("Recovery from source pos");
+call mtr.add_suppression("It is not possible to change the type of the relay log repository because there are workers repositories with possible");
+include/stop_slave.inc
+Warnings:
+Note	3084	Replication thread(s) for channel '' are already stopped.
+RESET SLAVE ALL;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
+SET @@global.replica_parallel_workers=5;
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PORT=MASTER_MYPORT FOR CHANNEL 'ch_trunk';
+include/start_slave.inc
+=== RESTART SLAVE SERVER ===
+include/rpl_restart_server.inc [server_number=2 parameters: --relay-log-recovery --skip-replica-start --replica-parallel-workers=5]
+[connection slave]
+START SLAVE;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
+include/stop_slave.inc
+RESET SLAVE ALL;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
+SET @@global.replica_parallel_workers=SAVE_PARALLEL_WORKERS;
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_USER='root', SOURCE_PORT=MASTER_MYPORT;
+include/start_slave.inc
+include/rpl_restart_server.inc [server_number=2]
+include/start_slave.inc
+[connection master]
+include/rpl_end.inc

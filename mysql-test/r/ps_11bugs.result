@@ -21,6 +21,11 @@ c_01 char(6), c_02 integer, c_03 real, c_04 int(3), c_05 varchar(20),
 c_06 date,    c_07 char(1), c_08 real, c_09 int(11), c_10 time,
 c_11 char(6), c_12 integer, c_13 real, c_14 int(3), c_15 varchar(20),
 c_16 date,    c_17 char(1), c_18 real, c_19 int(11), c_20 text);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
 prepare st_1644 from 'insert into t1 values ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 set @arg01= 'row_1';
 set @arg02= 1;
@@ -119,11 +124,13 @@ drop table t1, t2;
 create table t1 (a int primary key);
 insert into t1 values (1);
 explain select * from t1 where 3 in (select (1+1) union select 1);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
-2	DEPENDENT SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
-3	DEPENDENT UNION	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
-NULL	UNION RESULT	<union2,3>	ALL	NULL	NULL	NULL	NULL	NULL	Using temporary
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+2	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+3	UNION	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+4	UNION RESULT	<union2,3>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` where false
 select * from t1 where 3 in (select (1+1) union select 1);
 a
 prepare st_18492 from 'select * from t1 where 3 in (select (1+1) union select 1)';
@@ -191,3 +198,87 @@ Warnings:
 Warning	1292	Truncated incorrect INTEGER value: '+ -><()~*:""&|'
 SET @@sort_buffer_size=DEFAULT;
 End of 5.0 tests.
+#
+# Bug#29387041: "SET PASSWORD FOR... " in PS throws error 1295
+#
+CREATE USER test_user1@'localhost';
+PREPARE stmt FROM "SET PASSWORD FOR test_user1@'localhost' = 'SoSecret'";
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET PASSWORD FOR @'localhost' = 'SoSecret';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '@'localhost' = 'SoSecret'' at line 1
+PREPARE stmt FROM "SET PASSWORD FOR @'localhost' = 'SoSecret'";
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '@'localhost' = 'SoSecret'' at line 1
+SET PASSWORD FOR test_user1@'localhost' = NULL;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NULL' at line 1
+PREPARE stmt FROM "SET PASSWORD FOR test_user1@'localhost' = NULL";
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NULL' at line 1
+PREPARE stmt FROM "SET PASSWORD FOR test_user2@'localhost' = 'SoSecret'";
+EXECUTE stmt;
+ERROR 42000: Can't find any matching row in the user table
+DEALLOCATE PREPARE stmt;
+DROP USER test_user1@'localhost';
+#
+# Test that when Item_cache wraps a PS parameter, it is reset
+# between executions
+#
+create table t6(a decimal(3,2));
+prepare s from 'select a<cast(? as signed) from t6';
+insert into t6 values(6.2);
+set @a=8;
+execute s using @a;
+a<cast(? as signed)
+1
+set @a=5;
+execute s using @a;
+a<cast(? as signed)
+0
+drop table t6;
+#
+# Bug#31769242 DUPLICATE WARNING WITH PS-PROTOCOL FOR
+#              CREATE TABLE ... SELECT READING ACL TABLE
+#
+# This test uses ACL table for read purpose in SELECT, DDL and DML's
+# in prepared statement and make sure we do not see warning during
+# PREPARE.
+#
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+PREPARE stmt FROM "SELECT * FROM mysql.user LIMIT 0";
+EXECUTE stmt;
+Host	User	Select_priv	Insert_priv	Update_priv	Delete_priv	Create_priv	Drop_priv	Reload_priv	Shutdown_priv	Process_priv	File_priv	Grant_priv	References_priv	Index_priv	Alter_priv	Show_db_priv	Super_priv	Create_tmp_table_priv	Lock_tables_priv	Execute_priv	Repl_slave_priv	Repl_client_priv	Create_view_priv	Show_view_priv	Create_routine_priv	Alter_routine_priv	Create_user_priv	Event_priv	Trigger_priv	Create_tablespace_priv	ssl_type	ssl_cipher	x509_issuer	x509_subject	max_questions	max_updates	max_connections	max_user_connections	plugin	authentication_string	password_expired	password_last_changed	password_lifetime	account_locked	Create_role_priv	Drop_role_priv	Password_reuse_history	Password_reuse_time	Password_require_current	User_attributes
+Warnings:
+Warning	4009	Reads with serializable isolation/SELECT FOR SHARE are not supported for ACL tables.
+DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM "CREATE TABLE t1 AS SELECT * FROM mysql.user LIMIT 0";
+EXECUTE stmt;
+Warnings:
+Warning	4009	Reads with serializable isolation/SELECT FOR SHARE are not supported for ACL tables.
+DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM "INSERT INTO t1 SELECT * FROM mysql.user LIMIT 1";
+EXECUTE stmt;
+Warnings:
+Warning	4009	Reads with serializable isolation/SELECT FOR SHARE are not supported for ACL tables.
+DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM "UPDATE t1 SET user='mno'
+                   WHERE EXISTS (SELECT * FROM mysql.user LIMIT 1)";
+EXECUTE stmt;
+Warnings:
+Warning	4009	Reads with serializable isolation/SELECT FOR SHARE are not supported for ACL tables.
+DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM "DELETE FROM t1
+                   WHERE EXISTS (SELECT * FROM mysql.user LIMIT 1)";
+EXECUTE stmt;
+Warnings:
+Warning	4009	Reads with serializable isolation/SELECT FOR SHARE are not supported for ACL tables.
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+# Make sure that we do not get warning during PREPARE phase even with
+# SELECT ... LOCK IN SHARE MODE.
+PREPARE stmt FROM "SELECT * FROM mysql.user LIMIT 0 LOCK IN SHARE MODE";
+EXECUTE stmt;
+Host	User	Select_priv	Insert_priv	Update_priv	Delete_priv	Create_priv	Drop_priv	Reload_priv	Shutdown_priv	Process_priv	File_priv	Grant_priv	References_priv	Index_priv	Alter_priv	Show_db_priv	Super_priv	Create_tmp_table_priv	Lock_tables_priv	Execute_priv	Repl_slave_priv	Repl_client_priv	Create_view_priv	Show_view_priv	Create_routine_priv	Alter_routine_priv	Create_user_priv	Event_priv	Trigger_priv	Create_tablespace_priv	ssl_type	ssl_cipher	x509_issuer	x509_subject	max_questions	max_updates	max_connections	max_user_connections	plugin	authentication_string	password_expired	password_last_changed	password_lifetime	account_locked	Create_role_priv	Drop_role_priv	Password_reuse_history	Password_reuse_time	Password_require_current	User_attributes
+Warnings:
+Warning	4009	Reads with serializable isolation/SELECT FOR SHARE are not supported for ACL tables.
+DEALLOCATE PREPARE stmt;
+End of 8.0 tests.

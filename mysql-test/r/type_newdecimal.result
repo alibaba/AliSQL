@@ -1,4 +1,5 @@
 drop table if exists t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 select 1.1 IN (1.0, 1.2);
 1.1 IN (1.0, 1.2)
 0
@@ -59,7 +60,7 @@ t1	CREATE TABLE `t1` (
   `if(0, NULL, 1.2)` decimal(2,1) DEFAULT NULL,
   `if(1, 0.22e1, 1.1)` double NOT NULL DEFAULT '0',
   `if(1E0, 1.1, 1.2)` decimal(2,1) NOT NULL DEFAULT '0.0'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 select nullif(1.1, 1.1), nullif(1.1, 1.2), nullif(1.1, 0.11e1), nullif(1.0, 1), nullif(1, 1.0), nullif(1, 1.1);
 select * from t1;
@@ -72,9 +73,9 @@ t1	CREATE TABLE `t1` (
   `nullif(1.1, 1.2)` decimal(2,1) DEFAULT NULL,
   `nullif(1.1, 0.11e1)` decimal(2,1) DEFAULT NULL,
   `nullif(1.0, 1)` decimal(2,1) DEFAULT NULL,
-  `nullif(1, 1.0)` int(1) DEFAULT NULL,
-  `nullif(1, 1.1)` int(1) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `nullif(1, 1.0)` int DEFAULT NULL,
+  `nullif(1, 1.1)` int DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (a decimal(4,2));
 insert into t1 value (10000), (1.1e10), ("11111"), (100000.1);
@@ -101,6 +102,8 @@ a
 -99.99
 drop table t1;
 create table t1 (a decimal(4,2) unsigned);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 insert into t1 value (10000), (1.1e10), ("11111"), (100000.1);
 Warnings:
 Warning	1264	Out of range value for column 'a' at row 1
@@ -176,9 +179,9 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `round(15.4,-1)` decimal(3,0) NOT NULL DEFAULT '0',
   `truncate(-5678.123451,-3)` decimal(4,0) NOT NULL DEFAULT '0',
-  `abs(-1.1)` decimal(3,1) NOT NULL DEFAULT '0.0',
+  `abs(-1.1)` decimal(2,1) NOT NULL DEFAULT '0.0',
   `-(-1.1)` decimal(2,1) NOT NULL DEFAULT '0.0'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 set session sql_mode='traditional';
 select 1e10/0e0;
@@ -760,7 +763,7 @@ round(-99999999999999999.999,3)
 -99999999999999999.999
 select truncate(99999999999999999999999999999999999999,31);
 truncate(99999999999999999999999999999999999999,31)
-99999999999999999999999999999999999999.000000000000000000000000000000
+99999999999999999999999999999999999999
 select truncate(99.999999999999999999999999999999999999,31);
 truncate(99.999999999999999999999999999999999999,31)
 99.999999999999999999999999999999
@@ -772,7 +775,7 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `0.5` decimal(2,1) NOT NULL DEFAULT '0.0'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 select round(1.5),round(2.5);
 round(1.5)	round(2.5)
@@ -838,12 +841,12 @@ select 9999999999999999999999999999999999999999999999999999999999999999999999999
 x
 99999999999999999999999999999999999999999999999999999999999999999
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '999999999999999999999999999999999999999999999999999999999999999999999999999999999'
 select 9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999 + 1 as x;
 x
 100000000000000000000000000000000000000000000000000000000000000000
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '999999999999999999999999999999999999999999999999999999999999999999999999999999999'
 select 0.190287977636363637 + 0.040372670 * 0 -  0;
 0.190287977636363637 + 0.040372670 * 0 -  0
 0.190287977636363637
@@ -871,6 +874,10 @@ abs(NULL)
 NULL
 set @@sql_mode='traditional';
 create table t1( d1 decimal(18) unsigned, d2 decimal(20) unsigned, d3 decimal (22) unsigned);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 insert into t1 values(1,-1,-1);
 ERROR 22003: Out of range value for column 'd2' at row 1
 drop table t1;
@@ -923,7 +930,7 @@ ERROR 42000: For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column
 select cast(ln(14000) as decimal(2,3)) c1;
 ERROR 42000: For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '').
 create table t1 (sl decimal(70,30));
-ERROR 42000: Too big precision 70 specified for column 'sl'. Maximum is 65.
+ERROR 42000: Too-big precision 70 specified for 'sl'. Maximum is 65.
 create table t1 (sl decimal(32,31));
 ERROR 42000: Too big scale 31 specified for column 'sl'. Maximum is 30.
 create table t1 (sl decimal(0,38));
@@ -935,14 +942,14 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `sl` decimal(5,5) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (sl decimal(65, 30));
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `sl` decimal(65,30) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (
 f1 decimal unsigned not null default 17.49, 
@@ -954,6 +961,14 @@ f6 decimal unsigned not null default 199.91,
 f7 decimal unsigned not null default 999.9, 
 f8 decimal unsigned not null default 9999.99);
 Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 Note	1265	Data truncated for column 'f1' at row 1
 Note	1265	Data truncated for column 'f2' at row 1
 Note	1265	Data truncated for column 'f3' at row 1
@@ -970,12 +985,15 @@ drop table t1;
 create table t1 (
 f0 decimal (30,30) zerofill not null DEFAULT 0,
 f1 decimal (0,0) zerofill not null default 0);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `f0` decimal(30,30) unsigned zerofill NOT NULL DEFAULT '0.000000000000000000000000000000',
   `f1` decimal(10,0) unsigned zerofill NOT NULL DEFAULT '0000000000'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 drop procedure if exists wg2;
 create procedure wg2()
@@ -1025,7 +1043,7 @@ t1	CREATE TABLE `t1` (
   `my_double` double DEFAULT NULL,
   `my_varchar` varchar(50) DEFAULT NULL,
   `my_decimal` decimal(65,30) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 INSERT INTO t1 SET my_float = 1.175494345e-32,
 my_double = 1.175494345e-32,
 my_varchar = '1.175494345e-32';
@@ -1380,7 +1398,7 @@ create table t1 (c1 decimal(64));
 insert into t1 values(
 89000000000000000000000000000000000000000000000000000000000000000000000000000000000000000);
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '0'
 Warning	1264	Out of range value for column 'c1' at row 1
 insert into t1 values(
 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999 *
@@ -1417,6 +1435,8 @@ i2	count(distinct j)
 drop table t1;
 create table t1(f1 decimal(20,6));
 insert into t1 values (CAST('10:11:12' AS date) + interval 14 microsecond);
+Warnings:
+Warning	4095	Delimiter ':' in position 2 in datetime value '10:11:12' at row 1 is deprecated. Prefer the standard '-'.
 insert into t1 values (CAST('10:11:12' AS time));
 select * from t1;
 f1
@@ -1427,7 +1447,7 @@ select cast(19999999999999999999 as unsigned);
 cast(19999999999999999999 as unsigned)
 18446744073709551615
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '19999999999999999999'
 create table t1(a decimal(18));
 insert into t1 values(123456789012345678);
 alter table t1 modify column a decimal(19);
@@ -1480,7 +1500,7 @@ SELECT CAST(1 AS decimal(65,10));
 CAST(1 AS decimal(65,10))
 1.0000000000
 SELECT CAST(1 AS decimal(66,10));
-ERROR 42000: Too big precision 66 specified for column '1'. Maximum is 65.
+ERROR 42000: Too-big precision 66 specified for '1'. Maximum is 65.
 SELECT CAST(1 AS decimal(65,30));
 CAST(1 AS decimal(65,30))
 1.000000000000000000000000000000
@@ -1502,7 +1522,8 @@ SET @a= CAST(1 AS decimal);
 SELECT 1 FROM t1 GROUP BY @b := @a, @b;
 1
 1
-1
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 DROP TABLE t1;
 CREATE TABLE t1 SELECT 0.123456789012345678901234567890123456 AS f1;
 Warnings:
@@ -1539,7 +1560,7 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `5.05 / 0.014` decimal(10,6) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 select * from t1;
 5.05 / 0.014
 360.714286
@@ -1552,16 +1573,13 @@ SELECT substring(('M') FROM (999999999999999999999999999999999999999999999999999
 foo
 
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '999999999999999999999999999999999999999999999999999999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '999999999999999999999999999999999999999999999999999999999999999999999999999999999'
 SELECT min(999999999999999999999999999999999999999999999999999999999999999999999999999999999) AS foo;
 foo
 999999999999999999999999999999999999999999999999999999999999999999999999999999999
-SELECT multipolygonfromtext(('4294967294.1'),(999999999999999999999999999999999999999999999999999999999999999999999999999999999)) AS foo;
-foo
-NULL
-Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+SELECT st_multipolygonfromtext(('4294967294.1'),(999999999999999999999999999999999999999999999999999999999999999999999999999999999)) AS foo;
+ERROR 22003: SRID value is out of range in 'st_multipolygonfromtext'
 SELECT convert((999999999999999999999999999999999999999999999999999999999999999999999999999999999), decimal(30,30)) AS foo;
 foo
 0.999999999999999999999999999999
@@ -1571,7 +1589,7 @@ SELECT bit_xor(99999999999999999999999999999999999999999999999999999999999999999
 foo
 9223372036854775807
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '999999999999999999999999999999999999999999999999999999999999999999999999999999999'
 SELECT -(999999999999999999999999999999999999999999999999999999999999999999999999999999999) AS foo;
 foo
 -999999999999999999999999999999999999999999999999999999999999999999999999999999999
@@ -1712,7 +1730,7 @@ CREATE TABLE t1 SELECT
 /* 82 */ 1000000000000000000000000000000000000000000000000000000000000000000000000000000001
 AS c1;
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '1'
 DESC t1;
 Field	Type	Null	Key	Default	Extra
 c1	decimal(65,0)	NO		0	
@@ -1837,7 +1855,7 @@ CREATE TABLE t1 (a DECIMAL(30,30));
 INSERT INTO t1 VALUES (0.1),(0.2),(0.3);
 CREATE TABLE t2 SELECT MIN(a + 0.0000000000000000000000000000001) AS c1 FROM t1;
 Warnings:
-Note	1265	Data truncated for column 'c1' at row 4
+Note	1265	Data truncated for column 'c1' at row 1
 DESC t2;
 Field	Type	Null	Key	Default	Extra
 c1	decimal(32,30)	YES		NULL	
@@ -1851,7 +1869,7 @@ Note	1265	Data truncated for column 'c1' at row 2
 Note	1265	Data truncated for column 'c1' at row 3
 DESC t2;
 Field	Type	Null	Key	Default	Extra
-c1	decimal(34,0)	YES		NULL	
+c1	decimal(63,30)	YES		NULL	
 DROP TABLE t1,t2;
 CREATE TABLE t1 (a DECIMAL(30,30));
 INSERT INTO t1 VALUES (0.1),(0.2),(0.3);
@@ -1955,6 +1973,8 @@ DROP TABLE currencies, payments, sub_tasks;
 # BUG#52171: distinct aggregates on unsigned decimal fields trigger assertions
 #
 CREATE TABLE t1 (a DECIMAL(4,4) UNSIGNED);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
 INSERT INTO t1 VALUES (0);
 SELECT AVG(DISTINCT a) FROM t1;
 AVG(DISTINCT a)
@@ -1963,19 +1983,6 @@ SELECT SUM(DISTINCT a) FROM t1;
 SUM(DISTINCT a)
 0.0000
 DROP TABLE t1;
-#
-# Bug#55436: buffer overflow in debug binary of dbug_buff in
-#            Field_new_decimal::store_value
-#
-SET SQL_MODE='';
-CREATE TABLE t1(f1 DECIMAL(44,24)) ENGINE=MYISAM;
-INSERT INTO t1 SET f1 = -64878E-85;
-Warnings:
-Note	1265	Data truncated for column 'f1' at row 1
-SELECT f1 FROM t1;
-f1
-0.000000000000000000000000
-DROP TABLE IF EXISTS t1;
 End of 5.1 tests
 #
 # BUG#12911710 - VALGRIND FAILURE IN 
@@ -2012,3 +2019,444 @@ DROP TABLE t1;
 #
 # End of 5.6 tests
 #
+#
+# Bug#18335446 DECIMAL_ROUND: ASSERTION FAILED: FROM->LEN == TO->LEN
+#
+CREATE TABLE t1 (b INT, KEY(b));
+INSERT INTO t1 VALUES (1),(2);
+UPDATE  IGNORE t1 SET b = 1
+WHERE b NOT IN (NULL, -3333333333333333333333);
+DROP TABLE t1;
+#
+# Bug#18486249 ASSERTION FAILED:
+#              BUF == BUFFER IN MY_DECIMAL::SANITY_CHECK
+#
+CREATE TABLE t1(b INT, KEY(b));
+INSERT INTO t1 VALUES (0);
+SELECT 1 FROM t1 WHERE b NOT IN (0.1,-0.1);
+1
+1
+DROP TABLE t1;
+#
+# Bug#18563112 SELECT INTO VARIABLE CRASH IN USER_VAR_ENTRY::STORE
+#
+CREATE TABLE t1(
+a DECIMAL(25,20) UNSIGNED, KEY(a)
+);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+INSERT INTO t1 VALUES (1), (NULL);
+SELECT a FROM t1 GROUP BY 1 IN(1) INTO @b;
+DROP TABLE t1;
+SET sql_mode = default;
+#
+# Bug#18509896: 0.00000000042 MOD 10 = 0.42000000000
+#
+CREATE TABLE t (id SERIAL, d DECIMAL(65,30));
+INSERT INTO t VALUES (),(),(),(),(),(),(),(),();
+INSERT INTO t VALUES (),(),(),(),(),(),(),(),();
+INSERT INTO t VALUES (),(),(),(),(),(),(),(),();
+UPDATE t SET d = CONCAT('1e-', id);
+SELECT d, d MOD 1 FROM t;
+d	d MOD 1
+0.100000000000000000000000000000	0.100000000000000000000000000000
+0.010000000000000000000000000000	0.010000000000000000000000000000
+0.001000000000000000000000000000	0.001000000000000000000000000000
+0.000100000000000000000000000000	0.000100000000000000000000000000
+0.000010000000000000000000000000	0.000010000000000000000000000000
+0.000001000000000000000000000000	0.000001000000000000000000000000
+0.000000100000000000000000000000	0.000000100000000000000000000000
+0.000000010000000000000000000000	0.000000010000000000000000000000
+0.000000001000000000000000000000	0.000000001000000000000000000000
+0.000000000100000000000000000000	0.000000000100000000000000000000
+0.000000000010000000000000000000	0.000000000010000000000000000000
+0.000000000001000000000000000000	0.000000000001000000000000000000
+0.000000000000100000000000000000	0.000000000000100000000000000000
+0.000000000000010000000000000000	0.000000000000010000000000000000
+0.000000000000001000000000000000	0.000000000000001000000000000000
+0.000000000000000100000000000000	0.000000000000000100000000000000
+0.000000000000000010000000000000	0.000000000000000010000000000000
+0.000000000000000001000000000000	0.000000000000000001000000000000
+0.000000000000000000100000000000	0.000000000000000000100000000000
+0.000000000000000000010000000000	0.000000000000000000010000000000
+0.000000000000000000001000000000	0.000000000000000000001000000000
+0.000000000000000000000100000000	0.000000000000000000000100000000
+0.000000000000000000000010000000	0.000000000000000000000010000000
+0.000000000000000000000001000000	0.000000000000000000000001000000
+0.000000000000000000000000100000	0.000000000000000000000000100000
+0.000000000000000000000000010000	0.000000000000000000000000010000
+0.000000000000000000000000001000	0.000000000000000000000000001000
+DROP TABLE t;
+# End of test for Bug#18509896
+#
+# Bug#18408499 UNSIGNED BIGINT HIGH VALUES 
+#              WRONG NUMERICAL COMPARISON RESULTS
+#
+CREATE TABLE t1(value DECIMAL(24,0) NOT NULL);
+INSERT INTO t1(value) 
+VALUES('100000000000000000000001'),
+('100000000000000000000002'), 
+('100000000000000000000003');
+SELECT * FROM t1 WHERE value = '100000000000000000000002';
+value
+100000000000000000000002
+SELECT * FROM t1 WHERE '100000000000000000000002' = value;
+value
+100000000000000000000002
+SELECT * FROM t1 WHERE value + 0 = '100000000000000000000002';
+value
+100000000000000000000002
+SELECT * FROM t1 WHERE value = 100000000000000000000002;
+value
+100000000000000000000002
+SELECT * FROM t1 WHERE value + 0 = 100000000000000000000002;
+value
+100000000000000000000002
+PREPARE stmt FROM 'SELECT * FROM t1 WHERE value = ?';
+set @a="100000000000000000000002";
+EXECUTE stmt using @a;
+value
+100000000000000000000002
+set @a=100000000000000000000002;
+EXECUTE stmt using @a;
+value
+100000000000000000000002
+DEALLOCATE PREPARE stmt;
+ALTER TABLE t1 ADD INDEX value (value);
+SELECT * FROM t1 WHERE value = '100000000000000000000002';
+value
+100000000000000000000002
+DROP TABLE t1;
+SELECT CAST(-0.0e0 AS DECIMAL) = 0;
+CAST(-0.0e0 AS DECIMAL) = 0
+1
+#
+# Bug#21139707 ASSERTION FAILED: !(DECIMAL_IS_ZERO(FROM1) && FROM1->SIGN)
+#
+SET sql_mode="";
+CREATE TABLE t1(a time);
+INSERT INTO t1 VALUES('00:00:01');
+SELECT 1 FROM t1 WHERE EXISTS
+(SELECT 1 FROM t1 HAVING (a / -7777777777) in ("a"));
+1
+1
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'a'
+DROP TABLE t1;
+SET sql_mode=default;
+#
+# Bug#21383896 DECIMAL FIELD TAKES IN VALUES FROM OTHER FIELDS
+#
+CREATE TABLE t1 (
+d decimal(18,2) unsigned DEFAULT NULL,
+i int unsigned DEFAULT NULL
+)
+SELECT
+1000 AS d,
+3 AS i;
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SELECT * FROM t1;
+d	i
+1000.00	3
+DROP TABLE t1;
+#
+# Bug#21616585 ASSERTION FAILED: !(DECIMAL_IS_ZERO(FROM2) && FROM2->SIGN)
+#
+CREATE TABLE t(a DECIMAL(56,13) NOT NULL);
+INSERT INTO t VALUES(0);
+SELECT 1 FROM t WHERE a<=>time('-t');
+1
+Warnings:
+Warning	1292	Truncated incorrect time value: '-t'
+DROP TABLE t;
+#
+# Bug#22839915 UNINTIALIZED VALUE IN DECIMAL_ROUND
+#               WITH DECIMAL CONVERSIONS
+#
+select maketime(1,1.1,1);
+maketime(1,1.1,1)
+01:01:01
+#
+# Bug#21462523 RETURNED VALUE OVERFLOWS DECIMAL DATA TYPE
+#
+CREATE TABLE t1
+(
+f1 INT(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+INSERT INTO t1 VALUES (1), (2);
+CREATE TABLE t2
+(
+f1 SMALLINT(6) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+INSERT INTO t2 VALUES (84), (126), (36), (36);
+SELECT DISTINCT q1.f1 / 3 FROM (SELECT SUM(f1) AS f1 FROM t2  ) q1, (SELECT 0 FROM t1) q2;
+q1.f1 / 3
+94.0000
+SELECT DISTINCT q1.f1 / 3 FROM (SELECT SUM(f1) AS f1 FROM t2  ) q1;
+q1.f1 / 3
+94.0000
+DROP TABLE t1, t2;
+#
+# Bug#22083757 FLAGS INFO IN RESULT META DATA IS INCORRECT
+#              ( NEGATIVE NUM W/ "UNSIGNED")
+#
+CREATE TABLE t1(a INT UNSIGNED, b DECIMAL(10,2) UNSIGNED);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+INSERT INTO t1 VALUES (2015, 123456.78);
+CREATE TABLE t2(a INT UNSIGNED, b INT UNSIGNED);
+INSERT INTO t2 VALUES (2015, 123456);
+CREATE TABLE t3(a DECIMAL(10,2) UNSIGNED, b DECIMAL(10,2) UNSIGNED);
+Warnings:
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+INSERT INTO t3 VALUES (2015, 123456);
+SELECT a - b FROM t1;
+ERROR 22003: DECIMAL UNSIGNED value is out of range in '(`test`.`t1`.`a` - `test`.`t1`.`b`)'
+SELECT a - b FROM t2;
+ERROR 22003: BIGINT UNSIGNED value is out of range in '(`test`.`t2`.`a` - `test`.`t2`.`b`)'
+SELECT a - b FROM t3;
+ERROR 22003: DECIMAL UNSIGNED value is out of range in '(`test`.`t3`.`a` - `test`.`t3`.`b`)'
+SET sql_mode=NO_UNSIGNED_SUBTRACTION;
+SELECT a - b FROM t1;
+a - b
+-121441.78
+SELECT a - b FROM t2;
+a - b
+-121441
+SELECT a - b FROM t3;
+a - b
+-121441.00
+DROP TABLE t1, t2, t3;
+SET sql_mode=DEFAULT;
+#
+# Bug#22188058 CRASH IN MY_DECIMAL::SANITY_CHECK AND MY_DECIMAL2BINARY
+#
+SET sql_mode="";
+CREATE TABLE t(
+a YEAR NOT NULL,
+b DECIMAL(29,5) UNSIGNED ZEROFILL NOT NULL
+) ENGINE=INNODB;
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+INSERT INTO t VALUES (2000,1),(2000,1),(2000,9999);
+SELECT * FROM t ORDER BY (a-b);
+ERROR 22003: DECIMAL UNSIGNED value is out of range in '(`test`.`t`.`a` - `test`.`t`.`b`)'
+DROP TABLE t;
+SET sql_mode= DEFAULT;
+#
+# Bug#22782948 ASSERTION: SCALE >= 0 && PRECISION > 0 &&
+#              SCALE <= PRECISION, JSON THINGIES
+#
+CREATE TABLE t1(a DATETIME(4));
+INSERT INTO t1 VALUES(NOW()),(NOW()),(NOW()),(NOW()),(NOW());
+SELECT SQL_BUFFER_RESULT JSON_OBJECT('a', a MOD 1) FROM t1;
+JSON_OBJECT('a', a MOD 1)
+{"a": 0}
+{"a": 0}
+{"a": 0}
+{"a": 0}
+{"a": 0}
+DROP TABLE t1;
+#
+# Bug#22883278 UNINITIALIZED SIGN:DECIMAL_CMP WHEN DIVIDING BY
+#              RESULT OF FAILED LEAST()
+SELECT -1 DIV LEAST(1,JSON_INSERT(1, '$[1]','','',''));
+ERROR 22032: Invalid data type for JSON data in argument 1 to function json_insert; a JSON string or JSON type is required.
+SELECT -1 DIV LEAST(1, JSON_EXTRACT('1', '$.abc'));
+-1 DIV LEAST(1, JSON_EXTRACT('1', '$.abc'))
+NULL
+Warnings:
+Warning	1235	This version of MySQL doesn't yet support 'comparison of JSON in the LEAST and GREATEST operators'
+#
+# Bug#22828692 PRECISION MATH: MULTIPLICATION WITH
+#              64 DECIMALS LEADS TO RESULT ZERO ( 0 )
+#
+SELECT 1.056448745601382294204817708678199647327125723403005048300399553 *
+CAST(0.996 AS DECIMAL(14,3)) AS RESULT;
+RESULT
+1.052222950618976765027998437843
+SELECT 1.0564487456013822942048177086781996473271257234030050483003995531 *
+CAST(0.996 AS DECIMAL(14,3)) AS RESULT;
+RESULT
+1.052222950618976765027998437843
+SELECT CAST(0.996 AS DECIMAL(14,3)) *
+1.056448745601382294204817708678199647327125723403005048300399553 AS RESULT;
+RESULT
+1.052222950618976765027998437843
+SELECT CAST(0.996 AS DECIMAL(14,3)) *
+1.0564487456013822942048177086781996473271257234030050483003995531 AS RESULT;
+RESULT
+1.052222950618976765027998437843
+# Bug#25685958 ASSERTION FAILED:
+#              RETVAL == 0 IN ITEM_SUM_HYBRID::VAL_DECIMAL()
+#
+do 1 div nullif(min(from_days(1)),_utf8mb4'2000-01-01');
+Warnings:
+Warning	1365	Division by 0
+#
+# Bug#26497007 ASSERTION(0) IN DIV_BY_POW10 WITH LARGE NUMBER
+#
+CREATE TABLE t2 (i DECIMAL (30,27));
+INSERT INTO t2 VALUES (6.8926822182388193469056146);
+DROP TABLE t2;
+SET sql_mode="";
+CREATE TABLE t (a int);
+INSERT INTO t() VALUES(),(),(),();
+SELECT
+lag(1,96,
+-66812354762147309124165421419678600705366236356475480.892682218238819346905614650696)
+over()
+FROM t;
+lag(1,96,
+-66812354762147309124165421419678600705366236356475480.892682218238819346905614650696)
+over()
+-99999999999999999999999999999999999999.999999999999999999999999999
+-99999999999999999999999999999999999999.999999999999999999999999999
+-99999999999999999999999999999999999999.999999999999999999999999999
+-99999999999999999999999999999999999999.999999999999999999999999999
+DROP TABLE t;
+SET sql_mode = default;
+#
+# Bug#30031103 ASSERTION `SCALE >= 0 && PRECISION > 0 &&
+#                         SCALE <= PRECISION' FAILED
+#
+CREATE TABLE t1(a DECIMAL(10,0));
+INSERT INTO t1 VALUES(0);
+SELECT * FROM t1 AS alias1 NATURAL JOIN t1 AS alias2;
+a
+0
+DROP TABLE t1;
+# Bug#32785804: Failure in decimal_intg
+CREATE TABLE t(a DECIMAL(10,4));
+INSERT INTO t VALUES(-1),(1),(100);
+SET @d:=' ';
+WITH RECURSIVE cte1 AS (
+SELECT a AS a1 FROM  t
+),
+cte2 AS (
+SELECT (0xfa > @d) AS a2 FROM t
+)
+SELECT cte1.a1
+FROM cte1,cte2
+WHERE cte1.a1 >= cte2.a2;
+ERROR HY000: Cannot convert string '\xFA' from binary to utf8mb4
+DROP TABLE t;
+# Bug#32802251: decimal_bin_size_inline: assertion `scale >= 0 &&
+#               precision > 0 && scale <= precision' failed
+CREATE TABLE t(a DECIMAL(14,14) DEFAULT NULL);
+INSERT INTO t VALUES
+(-0.99999999999999), (-0.99999999999999), (0.15610000000000);
+SELECT WEIGHT_STRING(TRUNCATE((SELECT a FROM t), -17410));
+WEIGHT_STRING(TRUNCATE((SELECT a FROM t), -17410))
+NULL
+DROP TABLE t;
+#
+# Bug#32345941 SELECT RESULT IS MISMATCH WHEN USE COALESCE AND NOT
+#
+SET sql_mode=default;
+SELECT 1.0 div (@a:='xx');
+1.0 div (@a:='xx')
+NULL
+SELECT 1.0 div (@a:='1xx');
+1.0 div (@a:='1xx')
+1
+CREATE TABLE t1 (a DECIMAL(10,0), b DECIMAL(10,0), KEY(a)) ENGINE=INNODB;
+INSERT INTO t1 VALUES (0,0),(1,1);
+SELECT a FROM t1 FORCE INDEX(a) WHERE a='m';
+a
+0
+SELECT a FROM t1 FORCE INDEX(a) WHERE a=CONCAT('m');
+a
+0
+SELECT a FROM t1 FORCE INDEX(a) WHERE a=COALESCE('m');
+a
+0
+SELECT * FROM t1 WHERE b='m';
+a	b
+0	0
+SELECT * FROM t1 WHERE b=CONCAT('m');
+a	b
+0	0
+SELECT * FROM t1 WHERE b=COALESCE('m');
+a	b
+0	0
+SELECT a FROM t1 FORCE INDEX(a) WHERE a='';
+a
+0
+SELECT a FROM t1 FORCE INDEX(a) WHERE a=CONCAT('');
+a
+0
+SELECT a FROM t1 FORCE INDEX(a) WHERE a=COALESCE('');
+a
+0
+SELECT * FROM t1 WHERE b='';
+a	b
+0	0
+SELECT * FROM t1 WHERE b=CONCAT('');
+a	b
+0	0
+SELECT * FROM t1 WHERE b=COALESCE('');
+a	b
+0	0
+CREATE TEMPORARY TABLE tt1 AS SELECT * FROM t1 FORCE INDEX(a) WHERE a='m';
+ERROR 22007: Truncated incorrect DECIMAL value: 'm'
+CREATE TEMPORARY TABLE tt1 AS SELECT * FROM t1 FORCE INDEX(a) WHERE a=CONCAT('m');
+ERROR HY000: Incorrect decimal value: 'm' for column 'a' at row 1
+CREATE TEMPORARY TABLE tt1 AS SELECT * FROM t1 FORCE INDEX(a) WHERE a=COALESCE('m');
+ERROR HY000: Incorrect decimal value: 'm' for column 'a' at row 1
+CREATE TEMPORARY TABLE tt1 AS SELECT * FROM t1 WHERE b='m';
+ERROR 22007: Truncated incorrect DECIMAL value: 'm'
+CREATE TEMPORARY TABLE tt1 AS SELECT * FROM t1 WHERE b=CONCAT('m');
+ERROR HY000: Incorrect DECIMAL value: '0' for column '' at row -1
+CREATE TEMPORARY TABLE tt1 AS SELECT * FROM t1 WHERE b=COALESCE('m');
+ERROR HY000: Incorrect DECIMAL value: '0' for column '' at row -1
+CREATE TABLE t2 (a char(10), b varchar(10));
+INSERT INTO t2 VALUES('x1 y ', 'x1 y ');
+SELECT maketime(1, 2, a) FROM t2;
+maketime(1, 2, a)
+01:02:00.000000
+Warnings:
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
+Warning	1292	Truncated incorrect DECIMAL value: 'x1 y'
+SELECT maketime(1, 2, b) FROM t2;
+maketime(1, 2, b)
+01:02:00.000000
+Warnings:
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
+Warning	1292	Truncated incorrect DECIMAL value: 'x1 y '
+DROP TABLE t1, t2;
+#
+# Bug #34479194 Query not returning result for given DECIMAL
+#               data type filter condittion
+#
+CREATE TABLE t1 (d DECIMAL(20,10));
+INSERT INTO t1 VALUES (93.33);
+SELECT * FROM t1 WHERE
+d<0000000000000000000000000000000000000000000000000000000000000000000000000000000020.01
+;
+d
+SELECT * FROM t1 WHERE
+d>0000000000000000000000000000000000000000000000000000000000000000000000000000000020.01
+;
+d
+93.3300000000
+SELECT * FROM t1 WHERE
+d<000000000000000000000000000000000000000000000000000000000000000000000000000000000.01
+;
+d
+SELECT * FROM t1 WHERE
+d>000000000000000000000000000000000000000000000000000000000000000000000000000000000.01
+;
+d
+93.3300000000
+DROP TABLE t1;

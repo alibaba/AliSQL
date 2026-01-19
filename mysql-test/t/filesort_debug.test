@@ -2,6 +2,8 @@
 --source include/have_debug_sync.inc
 --source include/count_sessions.inc
 
+let GREP_START=`SELECT DATE_FORMAT(CONVERT_TZ(SYSDATE(6),'SYSTEM','UTC'),'%Y%m%d%H%i%s%f');`;
+
 SET @old_debug= @@session.debug;
 
 --echo #
@@ -105,7 +107,25 @@ CREATE TABLE t1 (
 ) ENGINE=InnoDB
 ;
 
+INSERT INTO t1 VALUES (REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), 1, REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096));
+INSERT INTO t1 VALUES (REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), 2, REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096));
+INSERT INTO t1 VALUES (REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), 3, REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096),
+REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096), REPEAT('x', 4096));
+
 CALL mtr.add_suppression("Out of sort memory");
+
+SET SESSION sort_buffer_size=32768;
 
 --error ER_OUT_OF_SORTMEMORY
 DELETE IGNORE FROM t1 ORDER BY c26,c7,c23,c4,c25,c5,c20,
@@ -117,4 +137,70 @@ DELETE FROM t1 ORDER BY c26,c7,c23,c4,c25,c5,c20,
 c19,c21,c8,c1,c27,c28,c3,c9,c22,c24,c6,c2,pk LIMIT 2; 
 SHOW WARNINGS;
 
+SET SESSION sort_buffer_size=DEFAULT;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#21611270 ASSERTION IN FILESORT::MAKE_SORTORDER()
+--echo #
+
+CREATE TABLE g(b INT NOT NULL, UNIQUE(b)) ENGINE=INNODB;
+CREATE TABLE t(a int, c int) ENGINE=INNODB;
+INSERT INTO t VALUES(1,1);
+
+SELECT 1
+FROM t
+GROUP BY a
+HAVING (SELECT a
+      FROM g
+      GROUP BY b, a);
+
+DROP TABLE t, g;
+
+--echo #
+--echo # Bug #22200984 ASSERTION IN FILESORT::MAKE_SORTORDER()
+--echo #
+
+# group by d below is incompatible with sql_mode=only_full_group_by
+SET sql_mode="";
+
+CREATE TABLE t1(a_t1 INT, c INT, d INT) ENGINE=INNODB;
+CREATE TABLE t2(a_t2 INT NOT NULL, UNIQUE KEY (a_t2)) ENGINE=INNODB;
+INSERT INTO t1 VALUES();
+SELECT (SELECT 1 FROM t2 GROUP BY d, a_t2 HAVING c) FROM t1 GROUP BY (1=2);
+DROP TABLE t1, t2;
+
+SET sql_mode=default;
+
+--echo #
+--echo # Bug #27041420: ASSERTION `LENGTH == 3' FAILED.
+--echo #
+CREATE TABLE t1(a DATE);
+INSERT INTO t1 VALUES('1000-01-01'), ('2017-10-31');
+# Date field uses latin1_swedish_ci as default collation.
+SELECT HEX(WEIGHT_STRING(a)) FROM t1;
+# Force date field use uca collation to get weight string,
+# and get odd number's weight.
+SELECT HEX(WEIGHT_STRING(a COLLATE utf8mb4_0900_ai_ci, 3, 3, 0xC0)) FROM t1;
+# Force date field use uca collation to get weight string,
+# and get even number's weight.
+SELECT HEX(WEIGHT_STRING(a COLLATE utf8mb4_0900_ai_ci, 4, 3, 0xC0)) FROM t1;
+DROP TABLE t1;
+--echo #
+--echo # Bug #27041543: ASSERTION `MAX_LENGTH >= LENGTH' FAILED.
+--echo #
+SET NAMES utf8,@@character_set_results=NULL;
+CREATE TEMPORARY TABLE t1(a INT);
+INSERT INTO t1 VALUES(1);
+SELECT 1 FROM t1 ORDER BY @x:=makedate(a,a);
+DROP TABLE t1;
+
+CREATE TABLE t1 AS SELECT 1 AS a WHERE false;
+CREATE TABLE t2 AS SELECT @x:=makedate(a,a) FROM t1;
+SHOW CREATE TABLE t2;
+DROP TABLE t2;
+CREATE TABLE t2 AS SELECT @a:=@b:=@x:=makedate(a,a) FROM t1;
+SHOW CREATE TABLE t2;
+DROP TABLE t2;
 DROP TABLE t1;

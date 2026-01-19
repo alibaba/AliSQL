@@ -11,6 +11,7 @@
 
 # Includes
 -- source include/have_binlog_format_row.inc
+-- source include/set_privilege_checks_user_as_system_user.inc
 -- source include/master-slave.inc
 
 
@@ -84,7 +85,7 @@ connection master;
 CALL test.p1();
 
 let $wait_condition= SELECT COUNT(*) = 4 FROM t3;
---source include/wait_condition.inc
+--source include/wait_condition_or_abort.inc
 save_master_pos;
 SELECT * FROM test.t3 ORDER BY id3;
 

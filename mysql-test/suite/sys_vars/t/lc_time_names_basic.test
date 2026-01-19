@@ -684,28 +684,34 @@ SET @@global.lc_time_names = ON;
 ##############################################################################
 #     Check if the value in GLOBAL Table matches value in variable           #
 ##############################################################################
+--disable_warnings
 SELECT @@global.lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
+--enable_warnings
 SET @@global.lc_time_names = 1;
 SELECT @@global.lc_time_names;
+--disable_warnings
 SELECT @@global.lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
+FROM performance_schema.global_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
+--enable_warnings
 
 --echo '#--------------------FN_DYNVARS_060_13-------------------------#'
 ##############################################################################
 #     Check if the value in SESSION Table matches value in variable          #
 ##############################################################################
+--disable_warnings
 SELECT @@lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
 SELECT @@local.lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
 SELECT @@session.lc_time_names = (SELECT VARIABLE_VALUE 
-FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
+FROM performance_schema.session_variables 
 WHERE VARIABLE_NAME='lc_time_names') AS res;
+--enable_warnings
 
 ####################################
 #     Restore initial value        #

@@ -1,21 +1,27 @@
-/* -*- mode: java; c-basic-offset: 4; indent-tabs-mode: nil; -*-
- *  vim:expandtab:shiftwidth=4:tabstop=4:smarttab:
- *
- *  Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
+/*
+  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License, version 2.0, for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
 
 package com.mysql.cluster.crund;
 
@@ -31,38 +37,28 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.io.InputStream;
+import java.io.StringWriter;
 
 
 /**
- * This class benchmarks standard database operations over a series
- * of transactions on an increasing data set.
+ * This class benchmarks transactions of standard database operations on
+ * different datastore implementations.
  * <p>
- * The abstract database operations are variations of: Create,
- * Read, Update, Navigate, and Delete -- hence, the benchmark's name: CRUND.
- * <p>
- * The actual operations are defined by subclasses to allow measuring the
- * operation performance across different datastore implementations.
- *
- * @see <a href="http://www.urbandictionary.com/define.php?term=crund">Urban Dictionary: crund</a>
- * <ol>
- * <li> used to debase people who torture others with their illogical
- * attempts to make people laugh;
- * <li> reference to cracking obsolete jokes;
- * <li> a dance form;
- * <li> to hit hard or smash.
- * </ol>
+ * The operations are variations of Create, Read, Update, Navigate, and
+ * Delete (hence, the benchmark's name CRUND).  Subclasses implement these
+ * operations for different datastore APIs.
  */
-abstract public class Driver {
+public abstract class Driver {
 
     // console
     static protected final PrintWriter out = new PrintWriter(System.out, true);
     static protected final PrintWriter err = new PrintWriter(System.err, true);
 
     // shortcuts
-    static protected final String endl = System.getProperty("line.separator");
+    static protected final String eol = System.getProperty("line.separator");
     static protected final Runtime rt = Runtime.getRuntime();
 
     // driver command-line arguments
@@ -71,20 +67,25 @@ abstract public class Driver {
 
     // driver settings
     protected final Properties props = new Properties();
+    protected int nRuns;
     protected boolean logRealTime;
     protected boolean logMemUsage;
+    protected boolean logSumOfOps;
     protected boolean includeFullGC;
-    protected int nRuns;
+    protected boolean failOnError;
+    protected final List<String> loadClassNames = new ArrayList<String>();
 
     // driver resources
+    protected boolean hasIgnoredSettings;
     protected PrintWriter log;
-    protected String descr = "";
-    protected boolean logHeader;
-    protected StringBuilder header;
-    protected StringBuilder rtimes;
-    protected StringBuilder musage;
+    protected boolean logHeader = true;
+    protected StringBuilder header = new StringBuilder();
+    protected StringBuilder rtimes = new StringBuilder();
+    protected StringBuilder musage = new StringBuilder();
+    protected StringBuilder errors = new StringBuilder();
     protected long t0 = 0, t1 = 0, ta = 0;
     protected long m0 = 0, m1 = 0, ma = 0;
+    protected final List<Load> loads = new ArrayList<Load>();
 
     // ----------------------------------------------------------------------
     // driver usage
@@ -95,8 +96,8 @@ abstract public class Driver {
      */
     static protected void exitUsage() {
         out.println("usage: [options]");
-        out.println("    [-p <file name>]...    a properties file name");
-        out.println("    [-l <file name>]       log file name for data output");
+        out.println("    [-p <file name>]...    properties file name");
+        out.println("    [-l <file name>]       log file name for results");
         out.println("    [-h|--help]            print usage message and exit");
         out.println();
         System.exit(1); // return an error code
@@ -147,7 +148,7 @@ abstract public class Driver {
     public void run() {
         try {
             init();
-            runTests();
+            runLoads();
             close();
         } catch (Exception ex) {
             // end the program regardless of threads
@@ -161,7 +162,7 @@ abstract public class Driver {
     // driver intializers/finalizers
     // ----------------------------------------------------------------------
 
-    // loads a dynamically linked system library and reports any failures
+    // loads a dynamically linked system library
     static protected void loadSystemLibrary(String name) {
         out.print("loading libary ...");
         out.flush();
@@ -182,7 +183,222 @@ abstract public class Driver {
                         + name + "'; caught exception: " + e);
             throw e;
         }
-        out.println("              [" + name + "]");
+        out.println("              [ok: " + name + "]");
+    }
+
+    // initializes the driver's resources
+    protected void init() throws Exception {
+        loadProperties();
+        initProperties();
+        printProperties();
+        writeProperties();
+        openLogFile();
+        clearLogBuffers();
+        initLoads();
+    }
+
+    // releases the driver's resources
+    protected void close() throws Exception {
+        closeLoads();
+        clearLogBuffers();
+        closeLogFile();
+        props.clear();
+    }
+
+    // loads the benchmark's properties from properties files
+    private void loadProperties() throws IOException {
+        out.println();
+        for (String fn : propFileNames) {
+            out.println("reading properties file:        " + fn);
+            InputStream is = null;
+            try {
+                is = new FileInputStream(fn);
+                props.load(is);
+            } finally {
+                if (is != null)
+                    is.close();
+            }
+        }
+    }
+
+    protected boolean parseBoolean(String k, boolean vdefault) {
+        final String v = props.getProperty(k);
+        return (v == null ? vdefault : Boolean.parseBoolean(v));
+    }
+
+    protected int parseInt(String k, int vdefault) {
+        final String v = props.getProperty(k);
+        try {
+            return (v == null ? vdefault : Integer.parseInt(v));
+        } catch (NumberFormatException e) {
+            final NumberFormatException nfe = new NumberFormatException(
+                "invalid value of benchmark property ('" + k + "', '"
+                + v + "').");
+            nfe.initCause(e);
+            throw nfe;
+        }
+    }
+
+    protected void initProperties() {
+        out.println();
+        out.print("reading driver properties ...");
+        out.flush();
+        final StringBuilder msg = new StringBuilder();
+
+        // allow implementations under test to use java.util.logging
+        System.setProperty("java.util.logging.config.file",
+                           "logging.properties");
+
+        nRuns = parseInt("nRuns", 1);
+        if (nRuns < 1) {
+            msg.append("[IGNORED] nRuns:                " + nRuns + eol);
+            nRuns = 1;
+        }
+
+        logRealTime = parseBoolean("logRealTime", true);
+        logMemUsage = parseBoolean("logMemUsage", false);
+        logSumOfOps = parseBoolean("logSumOfOps", true);
+        includeFullGC = parseBoolean("includeFullGC", false);
+        failOnError = parseBoolean("failOnError", true);
+
+        // initialize load classes set
+        final String[] loadsProp = props.getProperty("loads", "").split(",");
+        for (String s : loadsProp) {
+            if (s.isEmpty()) {
+                // skip
+            } else if (s.contains(".")) {
+                loadClassNames.add(s); // use qualified class name
+            } else {
+                loadClassNames.add("com.mysql.cluster.crund." + s);
+            }
+        }
+
+        if (msg.length() == 0) {
+            out.println("   [ok: nRuns=" + nRuns + "]");
+        } else {
+            hasIgnoredSettings = true;
+            out.println();
+            out.print(msg.toString());
+        }
+    }
+
+    protected void printProperties() {
+        out.println();
+        out.println("driver settings ...");
+        out.println("nRuns:                          " + nRuns);
+        out.println("logRealTime:                    " + logRealTime);
+        out.println("logMemUsage:                    " + logMemUsage);
+        out.println("logSumOfOps:                    " + logSumOfOps);
+        out.println("includeFullGC:                  " + includeFullGC);
+        out.println("failOnError:                    " + failOnError);
+        final List<String> lcn = new ArrayList<String>(loadClassNames);
+        out.println("loads:                          "
+                    + (lcn.isEmpty() ? "[]" : lcn.remove(0)));
+        for (String s : lcn)
+            out.println("                                " + s);
+    }
+
+    protected void writeProperties() {
+        final String fileName = "logging.properties";
+        final File logger = new File(fileName);
+        final OutputStream out;
+        try {
+            if (!logger.exists())
+                logger.createNewFile();
+            out = new FileOutputStream(logger);
+            props.store(out, "**** WARNING: DO NOT EDIT THIS FILE; IT IS GENERATED EACH RUN.");
+            final Properties sprops = System.getProperties();
+            sprops.store(out, "**** SYSTEM PROPERTIES:");
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException("Unexpected exception opening file logger.properties.", e);
+        } catch (IOException e) {
+            throw new RuntimeException("Unexpected exception writing file logger.properties.", e);
+        }
+    }
+
+    private void openLogFile() throws IOException {
+        out.println();
+        out.println("writing results to file:        " + logFileName);
+        log = new PrintWriter(new FileWriter(logFileName, false));
+    }
+
+    private void closeLogFile() throws IOException {
+        out.println();
+        out.print("closing files ...");
+        out.flush();
+        if (log != null) {
+            log.close();
+            log = null;
+        }
+        out.println("               [ok]");
+    }
+
+    protected void addLoad(Load load) {
+        loads.add(load);
+    }
+
+    protected Load createLoad(String className) throws Exception {
+        Load load;
+        final Class<?> a = Class.forName(className);
+        final Class<? extends Load> c = a.asSubclass(Load.class);
+        load = c.getConstructor(CrundDriver.class).newInstance(this);
+        return load;
+    }
+
+    protected void addLoads() throws Exception {
+        for (String s : loadClassNames) {
+            final StringBuilder msg = new StringBuilder();
+            out.print("instantiating load ...");
+            try {
+                createLoad(s);
+            } catch (Exception e) {
+                msg.append("caught " + e + eol);
+                msg.append("[SKIPPING] load class:          " + s + eol);
+            }
+            if (msg.length() == 0) {
+                final String c = s.replaceAll(".*\\.", "");
+                out.println("          [ok: " + c + "]");
+            } else {
+                hasIgnoredSettings = true;
+                out.println();
+                out.print(msg.toString());
+            }
+        }
+    }
+
+    protected void initLoads() throws Exception {
+        out.println();
+
+        if (loads.isEmpty())
+            addLoads();
+
+        if (loads.isEmpty())
+            out.println("++++++++++  NOTHING TO TO, NO LOAD CLASSES GIVEN  ++++++++++");
+
+        for (Load l : loads)
+            l.init();
+    }
+
+    protected void closeLoads() throws Exception {        
+        for (Load l : loads)
+            l.close();
+        loads.clear();
+    }
+
+    // ----------------------------------------------------------------------
+    // benchmark operations
+    // ----------------------------------------------------------------------
+
+    abstract protected void runLoad(Load load) throws Exception;
+
+    protected void runLoads() throws Exception {
+        if (hasIgnoredSettings) {
+            out.println();
+            out.println("++++++++++++  SOME SETTINGS IGNORED, SEE ABOVE  ++++++++++++");
+        }
+
+        for (Load l : loads)
+            runLoad(l);
     }
 
     // attempts to run the JVM's Garbage Collector
@@ -206,168 +422,99 @@ abstract public class Driver {
         }
     }
 
-    // initializes the driver's resources.
-    protected void init() throws Exception {
-        loadProperties();
-        initProperties();
-        printProperties();
-        writeProperties("logging.properties");
-        // setting this property allows implementations under test to use java.util.logging
-        System.setProperty("java.util.logging.config.file", "logging.properties");
-        openLogFile();
-        clearLogBuffers();
+    protected void logError(String load, String op, Exception e) {
+        out.println("!!! ERRORS OCCURRED, SEE LOG FILE: " + logFileName);
+        errors.append(eol + "****************************************" + eol);
+        errors.append("Error in load: " + load + eol);
+        errors.append("operation: " + op + eol);
+        errors.append("exception: " + e + eol + eol);
+        final StringWriter s = new StringWriter();
+        e.printStackTrace(new PrintWriter(s));
+        errors.append(s);
+
+        if (failOnError)
+            abortIfErrors();
     }
 
-    // releases the driver's resources.
-    protected void close() throws Exception {
-        // release log buffers
-        logHeader = false;
-        header = null;
-        rtimes = null;
-        musage = null;
-
-        closeLogFile();
-        props.clear();
-    }
-
-    // loads the benchmark's properties from properties files
-    private void loadProperties() throws IOException {
-        out.println();
-        for (String fn : propFileNames) {
-            out.println("reading properties file:        " + fn);
-            InputStream is = null;
-            try {
-                is = new FileInputStream(fn);
-                props.load(is);
-            } finally {
-                if (is != null)
-                    is.close();
-            }
-        }
-    }
-
-    // retrieves a property's value and parses it as a boolean
-    protected boolean parseBoolean(String k, boolean vdefault) {
-        final String v = props.getProperty(k);
-        return (v == null ? vdefault : Boolean.parseBoolean(v));
-    }
-
-    // retrieves a property's value and parses it as a signed decimal integer
-    protected int parseInt(String k, int vdefault) {
-        final String v = props.getProperty(k);
-        try {
-            return (v == null ? vdefault : Integer.parseInt(v));
-        } catch (NumberFormatException e) {
-            final NumberFormatException nfe = new NumberFormatException(
-                "invalid value of benchmark property ('" + k + "', '"
-                + v + "').");
-            nfe.initCause(e);
-            throw nfe;
-        }
-    }
-
-    // initializes the benchmark properties
-    protected void initProperties() {
-        //props.list(out);
-        out.print("setting driver properties ...");
-        out.flush();
-
-        final StringBuilder msg = new StringBuilder();
-        final String eol = System.getProperty("line.separator");
-
-        logRealTime = parseBoolean("logRealTime", true);
-        logMemUsage = parseBoolean("logMemUsage", false);
-        includeFullGC = parseBoolean("includeFullGC", false);
-
-        nRuns = parseInt("nRuns", 1);
-        if (nRuns < 1) {
-            msg.append("[ignored] nRuns:                " + nRuns + eol);
-            nRuns = 1;
-        }
-
-        if (msg.length() == 0) {
-            out.println("   [ok]");
-        } else {
-            out.println();
-            out.print(msg.toString());
-        }
-    }
-
-    // prints the benchmark's properties
-    protected void printProperties() {
-        out.println();
-        out.println("driver settings ...");
-        out.println("logRealTime:                    " + logRealTime);
-        out.println("logMemUsage:                    " + logMemUsage);
-        out.println("includeFullGC:                  " + includeFullGC);
-        out.println("nRuns:                          " + nRuns);
-    }
-
-    protected void writeProperties(String fileName) {
-        File logger = new File(fileName);
-        OutputStream out;
-        try {
-            if (!logger.exists()) {
-                logger.createNewFile();
-            }
-            out = new FileOutputStream(logger);
-            props.store(out, "**** WARNING: DO NOT EDIT THIS FILE; IT IS GENERATED EACH RUN.");
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException("Unexpected exception opening file logger.properties.", e);
-        } catch (IOException e) {
-            throw new RuntimeException("Unexpected exception writing file logger.properties.", e);
-        }
-    }
-    // opens the benchmark's data log file
-    private void openLogFile() throws IOException {
-        out.println();
-        out.println("writing results to file:        " + logFileName);
-        log = new PrintWriter(new FileWriter(logFileName, false));
-    }
-
-    // closes the benchmark's data log file
-    private void closeLogFile() throws IOException {
-        out.println();
-        out.print("closing files ...");
-        out.flush();
-        if (log != null) {
+    protected void abortIfErrors() {
+        if (errors.length() != 0) {
+            log.println("!!! ERRORS OCCURRED:");
+            log.println(errors.toString() + eol);
             log.close();
-            log = null;
+            String msg = "Errors occurred, see log file " + logFileName;
+            throw new RuntimeException(msg);
         }
-        out.println("               [ok]");
     }
-
-    // ----------------------------------------------------------------------
-    // benchmark operations
-    // ----------------------------------------------------------------------
-
-    abstract protected void runTests() throws Exception;
 
     protected void clearLogBuffers() {
         logHeader = true;
         header = new StringBuilder();
-        if (logRealTime) {
-            rtimes = new StringBuilder();
-        }
-        if (logMemUsage) {
-            musage = new StringBuilder();
-        }
+        rtimes = new StringBuilder();
+        musage = new StringBuilder();
+        errors = new StringBuilder();
     }
-    
-    protected void writeLogBuffers(String descr) {
+
+    protected void writeLogBuffers(String prefix) {
         if (logRealTime) {
-            log.println(descr + ", rtime[ms]"
-                        + header.toString() + endl
-                        + rtimes.toString() + endl);
+            log.println("rtime[ms]," + prefix
+                        + header.toString() + eol
+                        + rtimes.toString() + eol);
         }
         if (logMemUsage) {
-            log.println(descr + ", net musage[KiB]"
-                        + header.toString() + endl
-                        + musage.toString() + endl);
+            log.println("net_mem_usage[KiB]," + prefix
+                        + header.toString() + eol
+                        + musage.toString() + eol);
+        }
+        abortIfErrors();
+        clearLogBuffers();
+    }
+
+    protected void beginOps(int nOps) {
+        if (logRealTime) {
+            rtimes.append(nOps);
+            ta = 0;
+        }
+        if (logMemUsage) {
+            musage.append(nOps);
+            ma = 0;
         }
     }
 
-    protected void begin(String name) {
+    protected void finishOps(int nOps) {
+        if (logSumOfOps) {
+            out.println();
+            out.println("total");
+            if (logRealTime) {
+                out.println("tx real time                    "
+                            + String.format("%,9d", ta) + " ms ");
+            }
+            if (logMemUsage) {
+                out.println("net mem usage                   "
+                            + String.format("%,9d", ma) + " KiB");
+            }
+        }
+
+        if (logHeader) {
+            if (logSumOfOps) {
+                header.append("\ttotal");
+            }
+            logHeader = false;
+        }
+        if (logRealTime) {
+            if (logSumOfOps) {
+                rtimes.append("\t" + ta);
+            }
+            rtimes.append(eol);
+        }
+        if (logMemUsage) {
+            if (logSumOfOps) {
+                musage.append("\t" + ma);
+            }
+            musage.append(eol);
+        }
+    }
+
+    protected void beginOp(String name) {
         out.println();
         out.println(name);
 
@@ -377,30 +524,30 @@ abstract public class Driver {
         if (logMemUsage) {
             m0 = rt.totalMemory() - rt.freeMemory();
         }
-
         if (logRealTime) {
             //t0 = System.currentTimeMillis();
             t0 = System.nanoTime() / 1000000;
         }
     }
 
-    protected void finish(String name) {
+    protected void finishOp(String name, int nOps) {
         // attempt one full GC, before timing tx end
-        if (includeFullGC) {
+        if (includeFullGC)
             rt.gc();
-        }
 
         if (logRealTime) {
             //t1 = System.currentTimeMillis();
             t1 = System.nanoTime() / 1000000;
             final long t = t1 - t0;
-            out.println("tx real time                    " + t
-                        + "\tms");
+            final long ops = (t > 0 ? (nOps * 1000) / t : 0);
+            final String df = "%,9d";
+            out.println("tx real time                    "
+                        + String.format(df, t) + " ms "
+                        + String.format(df, ops) + " ops/s");
             //rtimes.append("\t" + (Math.round(t / 100.0) / 10.0));
             rtimes.append("\t" + t);
             ta += t;
         }
-
         if (logMemUsage) {
             // attempt max GC, after tx
             gc();
@@ -409,12 +556,11 @@ abstract public class Driver {
             final long m1K = (m1 / 1024);
             final long mK = m1K - m0K;
             out.println("net mem usage                   "
-                        + (mK >= 0 ? "+" : "") + mK
-                        + "\tKiB [" + m0K + "K->" + m1K + "K]");
+                        + String.format("%,9d", mK) + " KiB "
+                        + String.format("%14s", "["+ m0K + "->" + m1K + "]"));
             musage.append("\t" + mK);
             ma += mK;
         }
-
         if (logHeader)
             header.append("\t" + name);
     }

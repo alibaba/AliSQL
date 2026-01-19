@@ -1,6 +1,0 @@
-#
-# Bug 82026: Stack buffer overflow with --ssl-cipher=<more than 4K characters>
-#
-SELECT @ssl_cipher;
-@ssl_cipher
-NULL

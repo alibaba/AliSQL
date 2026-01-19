@@ -1,0 +1,68 @@
+-- source include/have_multi_ndb.inc
+
+# Determine if ndb_binlog_index is stored in InnoDB, in such case ALTER it
+# to other engine before running mysql_upgrade
+let $using_innodb = `select (engine = 'InnoDB') from information_schema.tables
+                        where table_name = 'ndb_binlog_index'` ;
+
+# Check that mysql.ndb_binlog_index is in InnoDB
+if (!$using_innodb)
+{
+  die The mysql.ndb_binlog_index is not in Innodb;
+}
+
+connection server2;
+# Create table mysql.ndb_binlog_index table in MyISAM engine.
+disable_query_log;
+disable_result_log;
+RENAME TABLE mysql.ndb_binlog_index TO mysql.ndb_binlog_index_bkp;
+CREATE TABLE mysql.ndb_binlog_index ENGINE='MyISAM' AS SELECT * FROM mysql.ndb_binlog_index_bkp;
+ALTER TABLE mysql.ndb_binlog_index ADD PRIMARY KEY (epoch, orig_server_id, orig_epoch);
+enable_query_log;
+enable_result_log;
+
+call mtr.add_suppression("Can't create database 'performance_schema'; database exists");
+--let $MYSQLD_LOG= $MYSQLTEST_VARDIR/log/mysql_2_upgrade.log
+--let $restart_parameters= restart:--upgrade=FORCE --log-error=$MYSQLD_LOG
+--let $mysqld_name=mysqld.2.1
+--let $wait_counter= 10000
+--replace_result $MYSQLD_LOG MYSQLD_LOG $MYSQLD MYSQLD
+--source include/restart_mysqld.inc
+
+connection server1;
+# Create table mysql.ndb_binlog_index table in MyISAM engine.
+disable_query_log;
+disable_result_log;
+RENAME TABLE mysql.ndb_binlog_index TO mysql.ndb_binlog_index_bkp;
+CREATE TABLE mysql.ndb_binlog_index ENGINE='MyISAM' AS SELECT * FROM mysql.ndb_binlog_index_bkp;
+ALTER TABLE mysql.ndb_binlog_index ADD PRIMARY KEY (epoch, orig_server_id, orig_epoch);
+enable_query_log;
+enable_result_log;
+
+call mtr.add_suppression("Can't create database 'performance_schema'; database exists");
+--let $MYSQLD_LOG= $MYSQLTEST_VARDIR/log/mysql_1_upgrade.log
+--let $restart_parameters= restart:--upgrade=FORCE --log-error=$MYSQLD_LOG
+--let $mysqld_name=mysqld.1.1
+--let $wait_counter= 10000
+disconnect default;
+--replace_result $MYSQLD_LOG MYSQLD_LOG $MYSQLD MYSQLD
+--source include/restart_mysqld.inc
+
+connect (default,127.0.0.1,root,,test,$MASTER_MYPORT,);
+--source suite/ndb_binlog/t/ndb_binlog_purge_lock.inc
+
+connection server2;
+disable_query_log;
+disable_result_log;
+DROP TABLE mysql.ndb_binlog_index;
+RENAME TABLE mysql.ndb_binlog_index_bkp TO mysql.ndb_binlog_index;
+enable_query_log;
+enable_result_log;
+
+connection server1;
+disable_query_log;
+disable_result_log;
+DROP TABLE mysql.ndb_binlog_index;
+RENAME TABLE mysql.ndb_binlog_index_bkp TO mysql.ndb_binlog_index;
+enable_query_log;
+enable_result_log;
