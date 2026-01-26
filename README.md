@@ -28,7 +28,7 @@ AliSQL is Alibaba's MySQL branch, forked from official MySQL and used extensivel
 
 - **[RTO Optimization](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/best-practices-for-rto-optimization-in-alisql?spm=a3c0i.36496430.J_TlTAa0s_LXHOq4tuiO-gv.1.43c56e9bd5YdDQ&scm=20140722.S_help@@%E6%96%87%E6%A1%A3@@2880006._.ID_help@@%E6%96%87%E6%A1%A3@@2880006-RL_RDSMySQLRTO-LOC_2024SPAllResult-OR_ser-PAR1_0bc3b4af17685488697221621e29f2-V_4-PAR3_r-RE_new5-P0_0-P1_0)** *(planned)*:AliSQL deeply optimizes the end-to-end crash recovery path to accelerate instance startup, shorten RTO, and restore service quickly.
 
-- **[Replication Optimization](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/replication-optimization/?spm=a2c63.p38356.help-menu-26090.d_2_6.48a125033Ze9gw)** *(palned)*: AliSQL significantly boosts replication throughput and minimizes lag by implementing Binlog Parallel Flush, Binlog in Redo, and specialized optimizations for large transactions and DDL operations.
+- **[Replication Optimization](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/replication-optimization/?spm=a2c63.p38356.help-menu-26090.d_2_6.48a125033Ze9gw)** *(planned)*: AliSQL significantly boosts replication throughput and minimizes lag by implementing Binlog Parallel Flush, Binlog in Redo, and specialized optimizations for large transactions and DDL operations.
 
 ## Getting Started
 **Prerequisites**:
