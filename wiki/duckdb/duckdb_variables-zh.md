@@ -1,4 +1,7 @@
 # AliSQL 中 DuckDB 引擎相关参数
+
+[ [DuckDB Engine Variables in AliSQL](./duckdb_variables-en.md) | [AliSQL DuckDB 引擎参数](./duckdb_variables-zh.md) ]
+
 ### `duckdb_mode`
 - **参数范围**: 全局参数
 - **修改形式**: 静态修改（需重启生效）

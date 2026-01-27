@@ -3,6 +3,7 @@
 AliSQL is Alibaba's MySQL branch, forked from official MySQL and used extensively in Alibaba Group's production environment. It includes various performance optimizations, stability improvements, and features tailored for large-scale applications.
 
 - [AliSQL](#alisql)
+  - [🚀 Quick Start (DuckDB)](#-quick-start-duckdb)
   - [Version Information](#version-information)
   - [Features](#features)
   - [Roadmap](#roadmap)
@@ -12,6 +13,10 @@ AliSQL is Alibaba's MySQL branch, forked from official MySQL and used extensivel
   - [License](#license)
   - [See Also](#see-also)
 
+## 🚀 Quick Start (DuckDB)
+
+> **Quickly build your DuckDB node:** **[How to set up a DuckDB node](./wiki/duckdb/how-to-setup-duckdb-node-en.md)**
+
 ## Version Information
 
 - **AliSQL Version**: 8.0.44 (LTS)
@@ -19,9 +24,9 @@ AliSQL is Alibaba's MySQL branch, forked from official MySQL and used extensivel
 
 ## Features
 
-- **[DuckDB Storage Engine](./wiki/duckdb/duckdb.md)**:AliSQL integrates DuckDB as a native storage engine, allowing users to operate DuckDB with the same experience as MySQL. By leveraging AliSQL for rapid deployment of DuckDB service nodes, users can easily achieve lightweight analytical capabilities.
+- **[DuckDB Storage Engine](./wiki/duckdb/duckdb-en.md)**:AliSQL integrates DuckDB as a native storage engine, allowing users to operate DuckDB with the same experience as MySQL. By leveraging AliSQL for rapid deployment of DuckDB service nodes, users can easily achieve lightweight analytical capabilities.
 
-- **[Vector Storage](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/vector-storage-1?spm=a2c63.p38356.help-menu-26090.d_3_3_0.6bb8d111D06xOW)**:AliSQL natively supports enterprise-grade vector processing for up to 16,383 dimensions. By integrating a highly optimized HNSW algorithm for high-performance Approximate Nearest Neighbor (ANN) search, AliSQL empowers users to build AI-driven applications—such as semantic search and recommendation systems—seamlessly using standard SQL interfaces.
+- **[Vector Storage](./wiki/vidx/vidx_readme.md)**:AliSQL natively supports enterprise-grade vector processing for up to 16,383 dimensions. By integrating a highly optimized HNSW algorithm for high-performance Approximate Nearest Neighbor (ANN) search, AliSQL empowers users to build AI-driven applications—such as semantic search and recommendation systems—seamlessly using standard SQL interfaces.
 
 ## Roadmap
 
@@ -88,7 +93,7 @@ AliSQL is based on MySQL, which is licensed under GPL-2.0. The DuckDB integratio
 
 ## See Also
 - [AliSQL Release Notes](./wiki/changes-in-alisql-8.0.44.md)
-- [DuckDB Storage Engine in AliSQL](./wiki/duckdb/duckdb.md)
+- [DuckDB Storage Engine in AliSQL](./wiki/duckdb/duckdb-en.md)
 - [Vector Index in AliSQL](./wiki/vidx/vidx_readme.md)
 - [MySQL 8.0 Documentation](https://dev.mysql.com/doc/refman/8.0/en/)
 - [MySQL 8.0 Github Repository](https://github.com/mysql/mysql-server)
