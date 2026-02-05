@@ -1,40 +1,100 @@
-# DuckDB in AliSQL
-[DuckDB](https://github.com/duckdb/duckdb) 是一个开源的在线分析处理（OLAP）和数据分析工作负载而设计。因其轻量、高性能、零配置和易集成的特性，正在迅速成为数据科学、BI 工具和嵌入式分析场景中的热门选择。DuckDB主要有以下几个特点：
-- 卓越的查询性能：单机DuckDB的性能不但远高于InnoDB，甚至比ClickHouse和SelectDB的性能更好。
-- 优秀的压缩比：DuckDB采用列式存储，根据类型自动选择合适的压缩算法，具有非常高的压缩率。
-- 嵌入式设计：DuckDB是一个嵌入式的数据库系统，天然的适合被集成到MySQL中。
-- 插件化设计：DuckDB采用了插件式的设计，非常方便进行第三方的开发和功能扩展。
-- 友好的License：DuckDB的License允许任何形式的使用DuckDB的源代码，包括商业行为。
+# AliSQL 中的 DuckDB
+![MySQL with DuckDB](./pic/mysql_with_duckdb.png)
 
-基于以上的几个原因，我们认为DuckDB非常适合成为MySQL的AP存储引擎。因此我们将DuckDB集成到了AliSQL中，将强大的分析能力带给 MySQL 用户，**用户可以像使用 MySQL 一样来操作 DuckDB**。目前，您可以通过 AliSQL 快速部署一个 DuckDB  服务节点，从而实现轻量级的分析能力。
+[ [DuckDB in AliSQL](./duckdb-en.md) | [AliSQL DuckDB 引擎](./duckdb-zh.md) ]
 
-## DuckDB 引擎的实现
-### DuckDB 查询链路
-InnoDB仅用来保存元数据和系统信息，如账号、配置等。所有的用户数据都存在DuckDB引擎中，InnoDB仅用来保存元数据和系统信息，如账号、配置等。
+## 什么是 DuckDB？
 
-用户通过MySQL客户端连接到实例。查询到达后，MySQL首先进行解析和必要的处理。然后将SQL发送到DuckDB引擎执行。DuckDB执行完成后，将结果返回到Server层，server层将结果集转换成MySQL的结果集返回给客户。
+[DuckDB](https://github.com/duckdb/duckdb) 是一个开源的嵌入式分析型数据库系统（OLAP），面向数据分析工作负载。凭借以下关键特性，DuckDB 正在数据科学、BI 工具以及嵌入式分析等场景中快速流行：
 
-查询链路最重要的工作就是兼容性的工作。DuckDB和MySQL的数据类型基本上是兼容的，但在语法和函数的支持上都和MySQL有比较大的差异，为此我们扩展了DuckDB的语法解析器，使其兼容MySQL特有的语法；重写了大量的DuckDB函数并新增了大量的MySQL函数，让常见的MySQL函数都可以准确运行。自动化兼容性测试平台大约17万SQL测试，显示兼容率达到99%。详细的兼容性情况见[《DuckDB 分析实例兼容性说明》](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/compatibility-of-duckdb-based-analytical-instances?spm=a2c4g.11186623.help-menu-26090.d_3_4_2.37e117e8adKlF2&scm=20140722.H_2964962._.OR_help-T_cn~zh-V_1)
+- **卓越的查询性能**：单机 DuckDB 的性能不仅远超 InnoDB，甚至可超过 ClickHouse 和 SelectDB
+- **优秀的压缩能力**：DuckDB 采用列式存储，并会根据数据类型自动选择合适的压缩算法，压缩率非常高
+- **嵌入式设计**：DuckDB 是嵌入式数据库系统，天然适合与 MySQL 集成
+- **插件化架构**：DuckDB 采用插件式设计，便于第三方开发和功能扩展
+- **友好的许可证**：DuckDB 的许可证允许任何形式的使用，包括商业用途
 
-### Binlog 幂等回放
-DuckDB 节点可以作为主节点的备节点，主节点通过 Binlog 将数据同步至 DuckDB 节点。由于DuckDB不支持两阶段提交，因此无法利用两阶段提交来保证 Binlog GTID 和数据之间的一致性，也无法保证DDL操作中InnoDB的元数据和DuckDB的一致性。因此我们对事务提交的过程和 Binlog 的回放过程进行了改造，从而保证实例异常宕机重启后的数据一致性。
+## 为什么在 AliSQL 中集成 DuckDB？
 
-### DML 优化
-由于DuckDB本身的实现上，有利于大事务的执行。频繁小事务的执行效率非常低迟。针对 DuckDB 引擎，我们专门设计了攒批(Batch)写入的方式，来提供更高的写入性能。
+MySQL 长期缺少分析型查询引擎。InnoDB 天然面向 OLTP，在 TP 场景表现优秀，但在分析型工作负载下查询效率较低。本次集成带来：
 
-在 DuckDB 节点作为备库的场景下我们对 Binlog 回放做了优化，采用攒批的方式进行事务重放。优化后可以达到 30w rows/s的回放能力。在Sysbench压力测试中，能够做到没有复制延迟，比InnoDB的回放性能还高。
+- **混合负载**：在同一个数据库系统中同时运行 OLTP（MySQL/InnoDB）与 OLAP（DuckDB）查询
+- **高性能分析**：相较 InnoDB，分析查询性能最高可提升 **200x**
+- **降低存储成本**：由于高压缩率，DuckDB 只读从库通常仅需主实例 **20%** 的存储空间
+- **100% MySQL 语法兼容**：无学习成本——DuckDB 以存储引擎方式集成，用户仍然使用 MySQL 语法
+- **零额外管理成本**：DuckDB 实例的管理、运维和监控方式与普通 RDS MySQL 实例完全一致
+- **一键部署**：可创建 DuckDB 只读实例，并支持将 InnoDB 数据自动转换为 DuckDB
 
-### DDL优化
-DuckDB 作为独立的存储引擎接入到 ALiSQL 内核中，ALiSQL 实现了绝大部分 DuckDB 引擎的 DDL 操作。
+**AliSQL** 将 **DuckDB** 作为原生 AP 引擎集成，在保持 MySQL 兼容与无缝体验的同时，为用户提供高性能、轻量级的分析能力。
 
-对于 DuckDB 原生支持的 DDL 类型，ALiSQL 通过重新定义引擎层的 prepare_inplace_alter_table、inplace_alter_table 和 commit_inplace_alter_table 等接口 ，以 inplace/instant 的方式来实现；对于 DuckDB 原生无法支持的 DDL 类型，AliSQL 通过重新定义引擎层的 rnd_init、 rnd_next、rnd_end 等接口，以重建表的方式来实现。
+## 架构
 
-将 InnoDB 表转为 DuckDB 引擎的操作是以重建表的方式进行的。在 InnoDB 引擎转为 DuckDB 的过程中，AlISQL 优化了重建表的过程，采用多线程并行读 InnoDB、多线程并行攒批写 DuckDB 的方式实现了高效的数据转换。
+### MySQL 可插拔存储引擎架构
+MySQL 的可插拔存储引擎架构允许其通过不同的存储引擎扩展能力：
 
+![MySQL Architecture](./pic/mysql_arch.png)
 
-## DuckDB 引擎的性能
-在 TPC-H sf100场景下，DuckDB 引擎的性能远超 InnoDB 引擎，相比 ClickHouse 有明显优势，
-| Query ID | DuckDB | InnoDB | InnoDB |
+该架构主要由四层组成：
+- **运行时层（Runtime Layer）**：处理通信、访问控制、系统配置、监控等 MySQL 运行时任务
+- **Binlog 层（Binlog Layer）**：负责 Binlog 生成、复制与应用
+- **SQL 层（SQL Layer）**：负责 SQL 解析、优化与执行
+- **存储引擎层（Storage Engine Layer）**：负责数据存储与访问
+
+### DuckDB 只读实例架构
+
+![DuckDB Architecture](./pic/duckdb_arch.png)
+
+DuckDB 分析型只读实例采用读写分离架构：
+- 分析类负载与主实例隔离，互不影响
+- 通过 Binlog 机制从主实例复制数据（类似普通只读从库）
+- InnoDB 仅存储元数据和系统信息（账号、配置等）
+- 所有用户数据均存放在 DuckDB 引擎中
+
+### 查询路径（Query Path）
+
+![Query Path](./pic/query_path.png)
+
+1. 用户通过 MySQL 客户端连接
+2. MySQL 解析查询并进行必要处理
+3. 将 SQL 发送到 DuckDB 引擎执行
+4. DuckDB 将结果返回给服务端层
+5. 服务端层将结果转换为 MySQL 格式并返回给客户端
+
+**兼容性**：
+- 扩展 DuckDB 的语法解析器以支持 MySQL 特有语法
+- 重写大量 DuckDB 函数并新增许多 MySQL 函数
+- 自动化兼容性测试平台包含约 170,000 条 SQL 测试，显示 **[99% 兼容率](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/compatibility-of-duckdb-based-analytical-instances?spm=a2c63.p38356.help-menu-26090.d_3_4_2.6a97448exEuaFG)**
+
+### Binlog 复制路径（Replication Path）
+
+![Binlog Replication](./pic/binlog_replication.png)
+
+AliSQL 允许 DuckDB 节点通过 Binlog 同步作为从库使用。通过重新设计事务提交与回放流程，AliSQL 弥补了 DuckDB 不支持 2PC 的不足，即使发生异常宕机也能确保数据与元数据的完全一致。
+
+**幂等回放（Idempotent Replay）**：
+- 由于 DuckDB 不支持两阶段提交（2PC），通过定制化的事务提交与 Binlog 回放流程，保证实例异常崩溃后数据一致性
+
+**DML 回放优化（DML Replay Optimization）**：
+- DuckDB 更偏好大事务；频繁的小事务会导致严重的复制延迟
+- 实现批量回放机制，回放能力可达 **300K 行/秒**
+- Sysbench 测试中可实现零复制延迟，甚至高于 InnoDB 的回放性能
+- 批量写入优化同样适用于主库：借助 DML 优化，主库上的 INSERT 与 DELETE 也可能获得优秀性能
+![Batch commit](./pic/batch_commit.png)
+
+### DDL 兼容性与优化
+
+![DDL Compatibility](./pic/ddl_support.png)
+
+- 原生支持的 DDL 使用 Inplace/Instant 执行
+- 对于 DuckDB 原生不支持的 DDL（例如列重排），实现了 Copy DDL 机制
+- InnoDB 转 DuckDB 支持多线程并行转换，执行时间降低 **7x**
+![Copy DDL from InnoDB](./pic/parallel_copy_from_innodb.png)
+
+## 性能基准测试（Performance Benchmarks）
+**测试环境**：
+- ECS 规格：32 CPU，128GB 内存，ESSD PL1 云盘 500GB
+- Benchmark：TPC-H SF100
+
+| Query ID | DuckDB | InnoDB | ClickHouse |
 | --- | --- | --- | --- |
 |q1|0.92|1134.25|3.47|
 |q2|0.15|1800|1.52|
@@ -56,6 +116,21 @@ DuckDB 作为独立的存储引擎接入到 ALiSQL 内核中，ALiSQL 实现了�
 |q18|1.59|1800|3.11|
 |q19|0.8|1800|2.96|
 |q20|0.51|1800|3.38|
-|q21|1.64|1800|内存不足|
+|q21|1.64|1800|OOM|
 |q22|0.33|361.4|4|
-|总计|15.31|25234.31|80.01
+|total|15.31|25234.31|80.01|
+
+DuckDB 在分析查询场景中展现出显著的性能优势，相比 InnoDB 最高可提升 **200x**。
+
+## 在阿里云上体验
+你可以在阿里云上体验集成 DuckDB 引擎的 RDS MySQL：
+
+https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-based-analytical-instance/
+
+## 相关链接（See also）
+
+- [DuckDB 参数参考](./duckdb_variables-zh.md)
+- [如何搭建 DuckDB 节点](./how-to-setup-duckdb-node-zh.md)
+- [DuckDB GitHub 仓库](https://github.com/duckdb/duckdb)
+- [详细文章（中文）](https://mp.weixin.qq.com/s/_YmlV3vPc9CksumXvXWBEw)
+- [AliSQL](https://github.com/alibaba/AliSQL.git)

@@ -1,4 +1,7 @@
 # AliSQL 中 DuckDB 引擎相关参数
+
+[ [DuckDB Engine Variables in AliSQL](./duckdb_variables-en.md) | [AliSQL DuckDB 引擎参数](./duckdb_variables-zh.md) ]
+
 ### `duckdb_mode`
 - **参数范围**: 全局参数
 - **修改形式**: 静态修改（需重启生效）
@@ -147,14 +150,6 @@
 - **取值范围**: 0 ~ 100000
 - **含义**: 延迟事务提交的超时时间（毫秒），用于等待更多事务进入同一批次。该参数仅在备节点生效。
 
-### `duckdb_multi_trx_max_batch_length`
-- **参数范围**: 全局参数
-- **修改形式**: 动态修改
-- **参数类型**: 整型（字节）
-- **默认值**: 256MB
-- **取值范围**: 0 ~ ULLONG_MAX
-- **含义**: 延迟提交批次的最大长度（以字节为单位），达到后立即触发提交。该参数仅在备节点生效。
-
 ### `duckdb_commit_multi_trx_due_to_reader`
 - **参数范围**: 全局参数
 - **修改形式**: 动态修改
@@ -169,15 +164,7 @@
 - **参数类型**: 布尔类型
 - **默认值**: ON
 - **取值范围**: ON \| OFF
-- **含义**: 是否在接收到主库的 Rotate Event 时提交多个事务。该参数仅在备节点生效。
-
-### `duckdb_copy_ddl_threads`
-- **参数范围**: 会话参数
-- **修改形式**: 动态修改
-- **参数类型**: 整型
-- **默认值**: 4
-- **取值范围**: 0 ~ 64
-- **含义**: 在执行 DDL 将 InnoDB 表转换为 DuckDB 引擎时，用于执行 DDL 操作的线程数量。并行转换过程使用了 InnoDB 的 parallel read 的框架，但是这一过程中并行线程数不受参数 `innodb_parallel_read_threads`的控制。
+- **含义**: **已弃用**。是否在接收到主库的 Rotate Event 时提交多个事务。该参数仅在备节点生效。
 
 ### `duckdb_checkpoint_threshold`
 - **参数范围**: 全局参数
@@ -246,9 +233,8 @@
 - **含义**: 是否启用批处理模式来加速 INSERT/UPDATE/DELETE 等 DML 操作。开启后，多个变更操作会被合并为批次提交，提高吞吐量并减少事务开销。
 > 说明：
 > 1. 开启此参数后，DuckDB 节点作为从节点且当主节点的 binlog 格式为 row 时，DuckDB 引擎会自动完成所有 DML 操作的攒批。
-> 2. 开启此参数后，DuckDB 主节点上的插入操作可以攒批，删除操作能否攒批依赖参数`duckdb_data_import_mode`的开关及其限制，更新操作无法攒批。
 
-### `update_modified_column_only`
+### `duckdb_update_modified_column_only`
 - **参数范围**: 全局参数
 - **修改形式**: 动态修改
 - **参数类型**: 布尔类型

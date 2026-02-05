@@ -1,43 +1,39 @@
-# 快速部署 AliSQL DuckDB 节点
-[ [How to setup DuckDB node in AliSQL](./how-to-setup-duckdb-node-en.md) | [快速部署 AliSQL DuckDB 节点](./how-to-setup-duckdb-node-zh.md) ]
+# How to setup DuckDB node in AliSQL
 
-## 概述
+[ [快速部署 AliSQL DuckDB 节点](./how-to-setup-duckdb-node-zh.md) | [How to setup DuckDB node in AliSQL](./how-to-setup-duckdb-node-en.md) ]
 
-AliSQL 集成 DuckDB 作为分析型存储引擎。典型用法是：
+## Overview
 
-- **用户数据**：存入 **DuckDB 引擎**
-- **系统表与元数据**：仍由 **InnoDB** 保存（例如 `mysql.*`、数据字典等）
+AliSQL integrates DuckDB as an analytical storage engine.
 
-你可以：
-1) 从零初始化一个 **DuckDB 为默认引擎** 的新实例
-2) 将现有 **InnoDB 实例一键转换** 为 DuckDB
-3) 构建 **DuckDB 从节点（HTAP/读写分离）**，从主库复制数据用于分析
+- **User data** is stored in **DuckDB**
+- **System tables and metadata** remain in **InnoDB** (e.g., `mysql.*`, data dictionary)
+
+You can:
+1) bootstrap a **brand-new instance** where new tables default to DuckDB
+2) **convert an existing InnoDB instance** to DuckDB at startup
+3) build a **DuckDB replica (HTAP)** to replay binlogs from an OLTP primary
 
 ---
 
-## 1. 从零开始构建 DuckDB 实例（推荐新建实例）
+## 1. Bootstrap a Brand-New DuckDB Instance
 
-适用于：初始化一个全新实例，后续新建表默认落入 DuckDB.
+Use this when you are creating a fresh instance and want newly created tables to land in DuckDB by default.
 
-### 1.1 安装 AliSQL 5.7.44
+### 1.1 Install AliSQL 5.7.44
 
-#### 方式 A：从源码编译安装
+#### Option A: Build from source
 ```bash
 git clone https://github.com/alibaba/AliSQL.git
 cd AliSQL
 
-# Build (release)
 sh build.sh -t release -d /opt/alisql
-
-# Install
 make install
 ```
 
 ---
 
-### 1.2 初始化目录与生成配置文件脚本
-
-> 说明：脚本要求传入**绝对路径**，并生成目录结构与 `alisql.cnf`。
+### 1.2 Directory bootstrap + config generator script
 
 ```bash
 cat > init_alisql_dir.sh <<'EOF'
@@ -46,8 +42,6 @@ set -euo pipefail
 
 # Usage:
 #   ./init_alisql_dir.sh <absolute_path>
-# Example:
-#   ./init_alisql_dir.sh /root/alisql_8044
 
 if [[ $# -ne 1 ]]; then
   echo "Usage: $0 <absolute_path>"
@@ -57,12 +51,10 @@ fi
 DIR="$1"
 if [[ "$DIR" != /* ]]; then
   echo "Error: Argument must be an ABSOLUTE PATH (starting with /)."
-  echo "Current input: $DIR"
   exit 1
 fi
 
 DIR="${DIR%/}"
-echo "Initializing AliSQL directories at: $DIR"
 
 mkdir -p \
   "$DIR/data/dbs" \
@@ -88,7 +80,7 @@ core-file
 # --- Logs ---
 log-error = ${DIR}/log/mysql/error.log
 
-# Binary logging (optional; enable if you need replication/point-in-time recovery)
+# Binary logging (optional)
 log-bin = ${DIR}/log/mysql/mysql-bin
 binlog_format = ROW
 
@@ -106,20 +98,19 @@ duckdb_threads=0
 duckdb_temp_directory=${DIR}/tmp
 EOF2
 
-echo "OK: Directory structure created."
-echo "Config file: $DIR/alisql.cnf"
+echo "OK: created $DIR and $DIR/alisql.cnf"
 EOF
 
 chmod +x init_alisql_dir.sh
 ```
 
-> 更多配置参数可参考：
-> - MySQL 5.7 官方文档：[MySQL 5.7 Reference Manual](https://dev.mysql.com/doc/refman/5.7/en/)
-> - DuckDB 参数参考： [AliSQL DuckDB 参数](./duckdb_variables-zh.md)
+References:
+- MySQL 5.7 manual: https://dev.mysql.com/doc/refman/5.7/en/
+- DuckDB variables: [AliSQL DuckDB variables](./duckdb_variables-zh.md)
 
 ---
 
-### 1.3 初始化并启动实例
+### 1.3 Initialize and start
 
 ```bash
 # Example: store all data under $HOME/alisql_8044
@@ -134,21 +125,19 @@ chmod +x init_alisql_dir.sh
 
 ---
 
-### 1.4 验证与使用
-
-> 即使不显式写 `ENGINE=DuckDB`，当 `force_innodb_to_duckdb=ON` 时，用户侧创建/变更 InnoDB 表将被自动转换为 DuckDB 引擎。
+### 1.4 Validate and use
 
 ```sql
 CREATE DATABASE test;
 USE test;
 
--- 创建 DuckDB 表
+-- Create DuckDB table
 CREATE TABLE t (
   id INT PRIMARY KEY,
   name VARCHAR(255)
 ) ENGINE = DuckDB;
 
--- 引擎转换
+-- Convert
 ALTER TABLE t ENGINE = InnoDB;
 ALTER TABLE t ENGINE = DuckDB;
 
@@ -165,16 +154,15 @@ ALTER TABLE t RENAME TO t_new;
 
 ---
 
-## 2. 从现有 InnoDB 实例一键转换为 DuckDB
+## 2. One-Click Conversion from an Existing InnoDB Instance
 
-适用于：希望将历史数据整体迁移到 DuckDB 以提升分析性能。
+Use this when you want to migrate existing InnoDB tables to DuckDB to boost analytical performance.
 
-### 步骤
+### Steps
 
-1) **停止现有实例**
-确保 MySQL 实例已 clean shutdown。
+1) **Stop the existing instance** (clean shutdown)
 
-1) **在 `my.cnf` 增加参数**
+2) **Update `my.cnf`**
 ```ini
 [mysqld]
 duckdb_mode=ON
@@ -184,45 +172,44 @@ duckdb_memory_limit=2147483648
 duckdb_threads=0
 duckdb_temp_directory=/path/to/duckdb_temp_dir
 
-# Convert all InnoDB tables at startup
 duckdb_convert_all_at_startup=ON
 duckdb_convert_all_at_startup_threads=32
 duckdb_convert_all_at_startup_ignore_error=ON
 ```
 
-3) **启动实例**
+3) **Start the instance**
 
-4) **验证转换状态与结果**
+4) **Verify**
 ```sql
--- 检查转换阶段
+-- Check the conversion stage
 SHOW GLOBAL STATUS LIKE 'DuckDB_convert_stage_at_startup';
 
--- 查询 DuckDB 表
+-- Check the converted tables
 SELECT table_schema, table_name, engine
 FROM information_schema.tables
 WHERE engine = 'DuckDB';
 ```
 
-### 注意事项
+### Notes
 
-1. 启动自动转换会大量读写数据并占用 CPU/IO；建议通过 error log 观察进度与报错。
-2. 转换过程中可能需要额外磁盘空间（建议预留 ≥ 原始数据大小）。
-3. 转换前务必备份（推荐使用备份集拉起 DuckDB 节点）。
+- Startup conversion is resource-intensive (CPU/IO). Monitor the error log for progress and failures.
+- Ensure enough free disk space (recommended: ≥ original data size).
+- Backup before conversion (backup set + cnf).
 
 ---
 
-## 3. 构建 DuckDB 从节点（HTAP / 读写分离）
+## 3. DuckDB Replica (HTAP)
 
-适用于：主库（InnoDB/OLTP）负责事务，从库（DuckDB/AP）负责复杂分析；通过 binlog 复制同步数据。
+A common pattern is OLTP on the primary and OLAP on a DuckDB replica, fed by row-based binlogs.
 
-### 步骤
+### Steps
 
-1) **准备主库**
-- 开启 binlog
+1) **Prepare the primary**
+- enable binlog
 - `binlog_format=ROW`
-- 开启 GTID
+- enable GTID
 
-1) **配置从节点 `my.cnf`**
+1) **Configure the replica `my.cnf`**
 ```ini
 [mysqld]
 duckdb_mode=ON
@@ -236,10 +223,10 @@ duckdb_multi_trx_timeout=5000
 duckdb_multi_trx_max_batch_length=268435456
 ```
 
-3) **初始化从节点实例**
-参考第 2 节（可选启用启动转换）或按第 1 节新建实例。
+3) **Initialize the replica**
+Follow section 1 (new instance) or section 2 (optional startup conversion), depending on your scenario.
 
-4) **建立主从复制**
+4) **Set up replication**
 ```sql
 CHANGE MASTER TO
   MASTER_HOST='your-master-ip',
@@ -250,5 +237,5 @@ CHANGE MASTER TO
 START SLAVE;
 ```
 
-5) **完成**
-复制建立后，将分析/报表查询路由到 DuckDB 从节点。
+5) **Done**
+Route analytics/reporting queries to the DuckDB replica.

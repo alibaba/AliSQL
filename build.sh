@@ -1,26 +1,26 @@
 #!/bin/bash
 #
 # Script for Dev's daily work. It uses the same build options as the released version.
- 
+
 set -euo pipefail
- 
+
 # --- Helper Functions ---
- 
+
 version_ge() {
     [[ "$(printf '%s\n' "$@" | sort -rV | head -n1)" == "$1" ]]
 }
- 
+
 get_mach_type() {
     mach_type=$(uname -m)
 }
- 
+
 get_os_type() {
     os_type=$(uname)
     if [[ "$os_type" == MINGW* ]]; then
         os_type="WIN"
     fi
 }
- 
+
 get_linux_version() {
     local kernel=$(uname -r)
     case "$kernel" in
@@ -30,28 +30,28 @@ get_linux_version() {
         *) linux_version="not_alios" ;;
     esac
 }
- 
+
 get_key_value() {
     echo "${1#*=}"
 }
- 
+
 usage() {
 cat <<EOF
 Usage: $0 [-t debug|release] [-d <dest_dir>] [-s <server_suffix>] [-g asan|tsan]
        Or
        $0 [-h | --help]
- 
+
   -t                      Build type: debug or release (default: debug)
-  -d                      Destination directory (default: /usr/local/rds_mysql or \$HOME/rds_mysql)
-  -s                      Server suffix (default: rds-dev)
+  -d                      Destination directory (default: /usr/local/alisql or \$HOME/alisql)
+  -s                      Server suffix (default: alisql-dev)
   -g                      Sanitizer: asan or tsan
   -c                      Enable GCC coverage (gcov)
   -p                      Enable perf-related code
   -h, --help              Show this help
- 
+
 EOF
 }
- 
+
 parse_options() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -71,7 +71,7 @@ parse_options() {
         shift
     done
 }
- 
+
 dump_options() {
     cat <<EOF
 === Build Configuration ===
@@ -90,33 +90,33 @@ CXXFLAGS:        $CXXFLAGS
 ===========================
 EOF
 }
- 
+
 # --- Main Logic ---
- 
+
 if [[ ! -f sql/mysqld.cc ]]; then
     echo "Error: Must run from MySQL top-level directory." >&2
     exit 1
 fi
- 
+
 # Default values
 build_type="debug"
 if [[ -w /usr/local ]]; then
-    dest_dir="/usr/local/rds_mysql"
+    dest_dir="/usr/local/alisql"
 else
-    dest_dir="$HOME/rds_mysql"
+    dest_dir="$HOME/alisql"
 fi
-server_suffix="rds-dev"
+server_suffix="alisql-dev"
 san_type=""
 enable_gcov=0
- 
+
 # Parse CLI args
 parse_options "$@"
- 
+
 # Detect system info
 get_mach_type
 get_os_type
 get_linux_version
- 
+
 # Normalize build type
 case "$build_type" in
     debug)
@@ -134,16 +134,16 @@ case "$build_type" in
         exit 1
         ;;
 esac
- 
+
 server_suffix="-$server_suffix"
- 
+
 # Set compiler flags
 if [[ "$cmake_build_type" == "RelWithDebInfo" ]]; then
     COMMON_FLAGS="-O3 -g -fexceptions -fno-strict-aliasing"
 elif [[ "$cmake_build_type" == "Debug" ]]; then
     COMMON_FLAGS="-O0 -g3 -gdwarf-2 -fexceptions -fno-strict-aliasing"
 fi
- 
+
 # Architecture-specific flags
 case "$mach_type" in
     x86_64)
@@ -156,7 +156,7 @@ case "$mach_type" in
         echo "Warning: Unknown machine type '$mach_type', using generic flags." >&2
         ;;
 esac
- 
+
 # Sanitizer handling
 asan=0; tsan=0
 if [[ -n "$san_type" ]]; then
@@ -175,26 +175,26 @@ if [[ -n "$san_type" ]]; then
             ;;
     esac
 fi
- 
+
 # Compiler detection: use system default unless already set
 : ${CC:=$(which gcc 2>/dev/null || echo "gcc")}
 : ${CXX:=$(which g++ 2>/dev/null || echo "g++")}
- 
+
 export CC CXX
 CFLAGS="$COMMON_FLAGS"
 CXXFLAGS="$COMMON_FLAGS"
 export CFLAGS CXXFLAGS
- 
+
 gcc_version=$($CC --version | awk 'NR==1{print $3}')
 cmake_version=$(cmake --version | awk 'NR==1{print $3}')
- 
+
 # Cleanup CMake cache only (avoid make clean which may be dangerous)
 rm -f CMakeCache.txt
 rm -rf CMakeFiles/
- 
+
 # Dump config
 dump_options
- 
+
 # Shared CMake args
 cmake_args=(
     -DFORCE_INSOURCE_BUILD=ON
@@ -230,22 +230,19 @@ cmake_args=(
     -DWITH_BOOST="extra/boost/boost_1_59_0"
     -DMYSQL_SERVER_SUFFIX="$server_suffix"
 )
- 
+
 # Run CMake
 cmake . "${cmake_args[@]}"
- 
+
 # Parallel build: use nproc if available, fallback to /proc/cpuinfo
 if command -v nproc >/dev/null 2>&1; then
     JOBS=$(nproc)
 else
     JOBS=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 4)
 fi
- 
+
 make -j"$JOBS"
- 
+
 make_result=$?
- 
-# Patch Makefile to skip re-make during install (as in original)
-sed -i 's/^preinstall:\ all$/preinstall:/' Makefile
- 
+
 exit "$make_result"
